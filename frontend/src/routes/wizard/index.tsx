@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router"
+import { createFileRoute } from "@tanstack/react-router"
 import { useTimetableStore } from "@/store/timetableStore"
 import { WizardSidebar } from "@/components/layout/WizardSidebar"
 import { Step1Org }      from "./step1-org"

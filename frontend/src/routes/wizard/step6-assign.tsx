@@ -42,7 +42,7 @@ export function Step6Assign() {
     <div>
       <h1 className="font-serif text-3xl mb-2">Assign {org.subjectsLabel} & {org.staffsLabel}</h1>
       <p className="text-gray-500 text-[13px] mb-4 leading-relaxed">
-        Map {org.subjectsLabel.toLowerCase()} to {org.sectionsLabel.toLowerCase()}, then assign {org.staffsLabel.toLowerCase()} to teach them. Or let AI do it all.
+        Map {org.subjectsLabel.toLowerCase()} to {org.sectionLabelsLabel.toLowerCase()}, then assign {org.staffsLabel.toLowerCase()} to teach them. Or let AI do it all.
       </p>
 
       <div className="flex items-start gap-2 bg-indigo-50 border-l-4 border-indigo-400 px-4 py-3 rounded-r-lg mb-5 text-[12px] text-indigo-800">
@@ -63,7 +63,7 @@ export function Step6Assign() {
           <button key={t} onClick={() => setTab(t)}
             className={`px-4 py-2.5 text-[12px] font-medium border-b-2 transition-colors
               ${tab === t ? "border-indigo-600 text-indigo-700" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
-            {t === "matrix" ? `${org.subjectLabel} → ${org.section} Matrix` : "Staff Assignments"}
+            {t === "matrix" ? `${org.subjectLabel} → ${org.sectionLabel} Matrix` : "Staff Assignments"}
           </button>
         ))}
       </div>
@@ -127,7 +127,7 @@ export function Step6Assign() {
                   </select>
                 </div>
                 <div>
-                  <div className="text-[10px] text-gray-400 mb-1">{org.sectionsLabel} (Ctrl=multi)</div>
+                  <div className="text-[10px] text-gray-400 mb-1">{org.sectionLabelsLabel} (Ctrl=multi)</div>
                   <select multiple className="border border-gray-200 rounded text-[10.5px] w-full h-14 px-1"
                     value={st.classes ?? []}
                     onChange={e => {const n=[...staff];n[i]={...n[i],classes:Array.from(e.target.selectedOptions).map(o=>o.value)};setStaff(n)}}>

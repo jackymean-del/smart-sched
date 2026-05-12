@@ -1,37 +1,28 @@
 import { create } from 'zustand'
 import { devtools } from 'zustand/middleware'
 import type {
-  OrgType, Section, Staff, Subject, Period,
+  Section, Staff, Subject, Period,
   ClassTimetable, TeacherSchedule, WizardConfig, Conflict,
 } from '@/types'
 
 interface TimetableState {
-  // Wizard
   step: number
   config: WizardConfig
-
-  // Data
   sections: Section[]
   staff: Staff[]
   subjects: Subject[]
   breaks: Period[]
   periods: Period[]
-
-  // Generated
   classTT: ClassTimetable
   teacherTT: Record<string, TeacherSchedule>
   substitutions: Record<string, string>
   conflicts: Conflict[]
-
-  // UI
   viewTab: 'class' | 'teacher'
   transposed: boolean
   showTeacher: boolean
   showRoom: boolean
   editMode: boolean
   sidebarTab: 'legend' | 'staff' | 'shifts'
-
-  // Actions
   setStep: (n: number) => void
   setConfig: (c: Partial<WizardConfig>) => void
   setSections: (s: Section[]) => void
@@ -55,7 +46,7 @@ interface TimetableState {
 
 export const useTimetableStore = create<TimetableState>()(
   devtools(
-    (set, get) => ({
+    (set) => ({
       step: 1,
       config: {
         orgType: null,
@@ -85,7 +76,6 @@ export const useTimetableStore = create<TimetableState>()(
       showRoom: false,
       editMode: false,
       sidebarTab: 'legend',
-
       setStep: (n) => set({ step: n }),
       setConfig: (c) => set((s) => ({ config: { ...s.config, ...c } })),
       setSections: (sections) => set({ sections }),
@@ -103,13 +93,11 @@ export const useTimetableStore = create<TimetableState>()(
       setShowRoom: (showRoom) => set({ showRoom }),
       setEditMode: (editMode) => set({ editMode }),
       setSidebarTab: (sidebarTab) => set({ sidebarTab }),
-
       togglePeriodShiftable: (periodId) => set((s) => ({
         periods: s.periods.map(p =>
           p.id === periodId ? { ...p, shiftable: !p.shiftable } : p
         ),
       })),
-
       updateCell: (section, day, periodId, cell) => set((s) => ({
         classTT: {
           ...s.classTT,

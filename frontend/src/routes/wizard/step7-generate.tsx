@@ -143,7 +143,7 @@ export function Step7Generate() {
         )}
         {status === "done" && (
           <>
-            <Button onClick={() => navigate({ to: "/timetable" })} className="gap-2 text-base px-6">
+            <Button onClick={() => window.location.href = "/timetable"} className="gap-2 text-base px-6">
               View Timetable →
             </Button>
             <Button variant="outline" onClick={() => setStep(6)}>← Back</Button>

@@ -24,7 +24,7 @@ export function Step5Data() {
   }, [])
 
   const TAB_LABELS: { key: Tab; label: string }[] = [
-    { key: "sections", label: `📚 ${org.sectionsLabel}` },
+    { key: "sections", label: `📚 ${org.sectionLabelsLabel}` },
     { key: "staff",    label: `👤 ${org.staffsLabel}` },
     { key: "subjects", label: `📖 ${org.subjectsLabel}` },
     { key: "breaks",   label: "⏱ Periods & Breaks" },
@@ -34,7 +34,7 @@ export function Step5Data() {
     <div>
       <h1 className="font-serif text-3xl mb-2">Review & edit generated data</h1>
       <p className="text-gray-500 text-[13px] mb-4 leading-relaxed">
-        AI generated {sections.length} {org.sectionsLabel.toLowerCase()}, {staff.length} {org.staffsLabel.toLowerCase()},
+        AI generated {sections.length} {org.sectionLabelsLabel.toLowerCase()}, {staff.length} {org.staffsLabel.toLowerCase()},
         {" "}{subjects.length} {org.subjectsLabel.toLowerCase()}, and {breaks.length} break slots based on {country.name} norms.
         Edit anything inline.
       </p>
@@ -57,7 +57,7 @@ export function Step5Data() {
       {/* Sections table */}
       {tab === "sections" && (
         <DataTable
-          headers={["#", org.section, org.roomLabel, "Grade/Type", "Class Teacher", ""]}
+          headers={["#", org.sectionLabel, org.roomLabel, "Grade/Type", "Class Teacher", ""]}
           cols="40px 1fr 110px 100px 1fr 32px"
           rows={sections.map((s, i) => [
             <span className="text-[10px] text-gray-400 font-mono">{i+1}</span>,
@@ -70,8 +70,8 @@ export function Step5Data() {
             </select>,
             <DelBtn onClick={() => setSections(sections.filter((_,j)=>j!==i))} />,
           ])}
-          onAdd={() => setSections([...sections, {id:crypto.randomUUID(),name:`New ${org.section}`,room:`${country.roomPrefix} ${country.roomStart+sections.length}`,grade:"",classTeacher:""}])}
-          addLabel={`Add ${org.section}`}
+          onAdd={() => setSections([...sections, {id:crypto.randomUUID(),name:`New ${org.sectionLabel}`,room:`${country.roomPrefix} ${country.roomStart+sections.length}`,grade:"",classTeacher:""}])}
+          addLabel={`Add ${org.sectionLabel}`}
         />
       )}
 

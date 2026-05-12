@@ -230,7 +230,7 @@ function TimetablePage() {
           onSubstitution={() => setSubModalOpen(true)}
           onExportExcel={exportXLSX}
           onPrint={() => window.print()}
-          onBack={() => navigate({ to: "/wizard" })}
+          onBack={() => window.location.href = "/wizard"}
         />
 
         <div className="flex-1 overflow-auto p-4">
