@@ -150,28 +150,47 @@ export function Step2Country() {
   const displayName = selected?.name ?? selectedWorld?.name ?? (config.countryCode === "CUSTOM" ? search : "")
   const displayFlag = selected?.flag ?? selectedWorld?.flag ?? "🌍"
 
-  const Field = ({ label, fieldKey, unit, readOnly = false }: {
-    label: string; fieldKey: keyof OrgStandard; unit: string; readOnly?: boolean
+  const Field = ({ label, fieldKey, unit, readOnly = false, wide = false }: {
+    label: string; fieldKey: keyof OrgStandard; unit: string; readOnly?: boolean; wide?: boolean
   }) => {
     const val = standard?.[fieldKey]
     const isNum = typeof val === "number"
+    if (wide) {
+      // Wide field: label on top, value below (for notes)
+      return (
+        <div style={{ padding:"8px 0", borderBottom:"1px solid #f0ede7" }}>
+          <div style={{ fontSize:11, color:"#a8a59e", marginBottom:4 }}>{label}</div>
+          {editingStd ? (
+            <input
+              type="text"
+              defaultValue={String(val ?? "")}
+              key={String(val ?? "")}
+              onBlur={e => handleFieldChange(fieldKey, e.target.value)}
+              style={{ width:"100%", padding:"6px 10px", border:"1.5px solid #4f46e5", borderRadius:6, fontSize:12, outline:"none", background:"#fff", boxSizing:"border-box" as const }}
+            />
+          ) : (
+            <div style={{ fontSize:12, color:"#1c1b18", lineHeight:1.5, fontWeight:500 }}>{String(val ?? "—")}</div>
+          )}
+        </div>
+      )
+    }
     return (
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 130px 60px", alignItems:"center", gap:8, padding:"7px 0", borderBottom:"1px solid #f0ede7" }}>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 100px 50px", alignItems:"center", gap:8, padding:"7px 0", borderBottom:"1px solid #f0ede7" }}>
         <span style={{ fontSize:12, color:"#1c1b18" }}>{label}</span>
         {editingStd && !readOnly ? (
           <input
-            type={isNum ? "number" : "text"}
+            type="number"
             defaultValue={String(val ?? "")}
             key={String(val ?? "")}
-            onBlur={e => handleFieldChange(fieldKey, isNum ? +e.target.value : e.target.value)}
-            style={{ padding:"5px 8px", border:"1.5px solid #4f46e5", borderRadius:6, fontSize:12, fontFamily: isNum?"'DM Mono',monospace":"inherit", textAlign: isNum?"right":"left", outline:"none", width:"100%", background:"#fff" }}
+            onBlur={e => handleFieldChange(fieldKey, +e.target.value)}
+            style={{ padding:"5px 8px", border:"1.5px solid #4f46e5", borderRadius:6, fontSize:12, fontFamily:"'DM Mono',monospace", textAlign:"right", outline:"none", width:"100%", background:"#fff" }}
           />
         ) : (
           <div style={{ display:"flex", alignItems:"center", justifyContent:"flex-end", gap:4 }}>
             {readOnly && editingStd && (
               <span style={{ fontSize:9, background:"#f0fdf4", color:"#059669", padding:"1px 5px", borderRadius:4, fontWeight:600 }}>AUTO</span>
             )}
-            <span style={{ fontSize:12, fontFamily: isNum?"'DM Mono',monospace":"inherit", fontWeight:600, color: readOnly&&editingStd?"#059669":"#1c1b18" }}>
+            <span style={{ fontSize:12, fontFamily:"'DM Mono',monospace", fontWeight:700, color: readOnly&&editingStd?"#059669":"#1c1b18" }}>
               {String(val ?? "—")}
             </span>
           </div>
@@ -282,7 +301,7 @@ export function Step2Country() {
             <Field label="Lunch break"          fieldKey="lunchMinutes"    unit="min" />
             <Field label="Short break duration" fieldKey="breakMinutes"    unit="min" />
             <Field label="Number of breaks"     fieldKey="numBreaks"       unit="total" />
-            <Field label="Notes / regulation"   fieldKey="notes"           unit="" />
+            <Field label="Notes / regulation" fieldKey="notes" unit="" wide={true} />
 
           </div>
 
