@@ -57,6 +57,8 @@ const defaultConfig: WizardConfig = {
   numSubjects: 8,
   periodsPerDay: 8,
   numBreaks: 4,
+  shifts: [],
+  defaultSessionDuration: 40,
 }
 
 export const useTimetableStore = create<TimetableState>()(

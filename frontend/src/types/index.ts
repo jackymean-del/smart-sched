@@ -9,6 +9,7 @@ export const SectionSchema = z.object({
   room: z.string(),
   grade: z.string(),
   classTeacher: z.string().optional().default(''),
+  shiftId: z.string().optional(), // which shift this class belongs to
 })
 export type Section = z.infer<typeof SectionSchema>
 
@@ -23,12 +24,28 @@ export const StaffSchema = z.object({
 })
 export type Staff = z.infer<typeof StaffSchema>
 
+// ── Subject with class-wise settings ──
+export interface SubjectClassConfig {
+  sectionName: string      // e.g. "Nursery" or "I" (base class)
+  periodsPerWeek: number
+  maxPeriodsPerDay: number // max slots per day for this subject in this class
+  sessionDuration: number  // minutes per period
+}
+
 export const SubjectSchema = z.object({
   id: z.string(),
   name: z.string().min(1),
-  periodsPerWeek: z.number().int().positive(),
+  periodsPerWeek: z.number().int().positive(),   // default/global
+  sessionDuration: z.number().default(40),        // default duration
+  maxPeriodsPerDay: z.number().default(2),        // default max per day
   color: z.string(),
   sections: z.array(z.string()),
+  classConfigs: z.array(z.object({               // class-wise overrides
+    sectionName: z.string(),
+    periodsPerWeek: z.number(),
+    maxPeriodsPerDay: z.number(),
+    sessionDuration: z.number(),
+  })).default([]),
 })
 export type Subject = z.infer<typeof SubjectSchema>
 
@@ -43,6 +60,15 @@ export const PeriodSchema = z.object({
   shiftable: z.boolean(),
 })
 export type Period = z.infer<typeof PeriodSchema>
+
+// ── Shift: a named start/end time block ──
+export interface Shift {
+  id: string
+  name: string        // e.g. "Morning Shift", "Afternoon Shift"
+  startTime: string   // "09:00"
+  endTime: string     // "13:30"
+  assignedClasses: string[] // base class names assigned to this shift
+}
 
 export interface TimetableCell {
   subject: string
@@ -108,6 +134,8 @@ export interface WizardConfig {
   numSubjects: number
   periodsPerDay: number
   numBreaks: number
+  shifts: Shift[]           // multiple shifts support
+  defaultSessionDuration: number // global default minutes per period
 }
 
 export interface Conflict {
