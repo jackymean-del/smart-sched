@@ -1,99 +1,109 @@
 import { useState } from "react"
 import { useTimetableStore } from "@/store/timetableStore"
 import { ORG_CONFIGS, getCountry } from "@/lib/orgData"
-import { autoAssign } from "@/lib/aiEngine"
 
 type Tab = "matrix" | "staff"
 
-// Get unique class names (without sections) e.g. ["Nursery","LKG","I","II"...]
 function getBaseClasses(sections: { name: string }[]): string[] {
   const bases = sections.map(s => {
-    const match = s.name.match(/^(.+?)[-\s][A-E]$/)
+    const match = s.name.match(/^(.+?)[-\s][A-E]$/i)
     return match ? match[1].trim() : s.name
   })
   return [...new Set(bases)]
 }
 
-// Get sections for a base class
 function getSectionsForClass(sections: { name: string }[], baseClass: string): string[] {
   return sections
     .filter(s => s.name === baseClass || s.name.startsWith(baseClass + '-') || s.name.startsWith(baseClass + ' '))
     .map(s => s.name)
 }
 
+// Get subjects assigned to a specific class
+function getSubjectsForClass(subjects: { name: string; sections: string[]; periodsPerWeek: number }[], sections: { name: string }[], baseClass: string) {
+  const classSecs = getSectionsForClass(sections, baseClass)
+  return subjects.filter(sub => classSecs.some(s => (sub.sections ?? []).includes(s)) || (sub.sections ?? []).length === 0)
+}
+
 export function Step6Assign() {
-  const { config, sections, staff, subjects, setSections, setStaff, setSubjects, setStep } = useTimetableStore()
+  const { config, sections, staff, subjects, setStaff, setSubjects, setStep } = useTimetableStore()
   const [tab, setTab] = useState<Tab>("matrix")
   const [allocated, setAllocated] = useState(false)
-  const org     = ORG_CONFIGS[config.orgType ?? "school"]
-  const country = getCountry(config.countryCode ?? "IN")
+  const org      = ORG_CONFIGS[config.orgType ?? "school"]
+  const country  = getCountry(config.countryCode ?? "IN")
   const baseClasses = getBaseClasses(sections)
 
-  // ── Matrix: toggle subject for ALL sections of a class ──
-  const toggleSubForAllSections = (subIdx: number, baseClass: string, checked: boolean) => {
-    const classSections = getSectionsForClass(sections, baseClass)
+  // ── Matrix helpers ──
+  const toggleSubForAllSections = (si: number, baseClass: string, checked: boolean) => {
+    const classSecs = getSectionsForClass(sections, baseClass)
     const updated = [...subjects]
-    const current = updated[subIdx].sections ?? []
-    if (checked) {
-      const newSecs = [...new Set([...current, ...classSections])]
-      updated[subIdx] = { ...updated[subIdx], sections: newSecs }
-    } else {
-      updated[subIdx] = { ...updated[subIdx], sections: current.filter(s => !classSections.includes(s)) }
-    }
+    const cur = updated[si].sections ?? []
+    updated[si] = { ...updated[si], sections: checked ? [...new Set([...cur, ...classSecs])] : cur.filter(s => !classSecs.includes(s)) }
     setSubjects(updated)
   }
+  const isAllChecked  = (si: number, cls: string) => { const secs = getSectionsForClass(sections, cls); return secs.length > 0 && secs.every(s => (subjects[si].sections ?? []).includes(s)) }
+  const isSomeChecked = (si: number, cls: string) => { const secs = getSectionsForClass(sections, cls); const asgn = subjects[si].sections ?? []; return secs.some(s => asgn.includes(s)) && !isAllChecked(si, cls) }
 
-  // Check if subject is assigned to ALL sections of a class
-  const isAllChecked = (subIdx: number, baseClass: string) => {
-    const classSections = getSectionsForClass(sections, baseClass)
-    const assigned = subjects[subIdx].sections ?? []
-    return classSections.length > 0 && classSections.every(s => assigned.includes(s))
-  }
-  const isSomeChecked = (subIdx: number, baseClass: string) => {
-    const classSections = getSectionsForClass(sections, baseClass)
-    const assigned = subjects[subIdx].sections ?? []
-    return classSections.some(s => assigned.includes(s)) && !isAllChecked(subIdx, baseClass)
-  }
-
-  // ── Staff: get subjects available for a teacher based on their assigned classes ──
-  const getSubjectsForTeacher = (stIdx: number) => {
-    const teacherClasses = staff[stIdx].classes ?? []
-    if (!teacherClasses.length) return subjects
-    // Show subjects assigned to any of the teacher's classes
-    return subjects.filter(sub => {
-      const subSections = sub.sections ?? []
-      return teacherClasses.some(cls => {
-        const secs = getSectionsForClass(sections, cls)
-        return secs.some(s => subSections.includes(s)) || subSections.length === 0
-      })
-    })
+  // ── Staff: toggle subject for a specific class ──
+  const toggleSubjectForClass = (stIdx: number, subName: string, baseClass: string, checked: boolean) => {
+    const key = `${baseClass}::${subName}`
+    const n = [...staff]
+    const cur = n[stIdx].subjects ?? []
+    // Store as "ClassName::SubjectName" pairs for class-specific assignment
+    if (checked) {
+      n[stIdx] = { ...n[stIdx], subjects: [...new Set([...cur, key])] }
+    } else {
+      n[stIdx] = { ...n[stIdx], subjects: cur.filter(s => s !== key) }
+    }
+    setStaff(n)
   }
 
-  // ── AI Auto-allocate sections to teachers ──
+  const isSubjectCheckedForClass = (stIdx: number, subName: string, baseClass: string) => {
+    const key = `${baseClass}::${subName}`
+    return (staff[stIdx].subjects ?? []).includes(key)
+  }
+
+  // ── AI Auto-allocate ──
   const handleAutoAllocate = () => {
-    // For each teacher, expand their class assignments to include all sections
-    const updatedStaff = staff.map(st => {
+    // 1. Auto-assign all subjects to all classes in matrix
+    const updatedSubjects = subjects.map(sub => ({
+      ...sub,
+      sections: sections.map(s => s.name)
+    }))
+    setSubjects(updatedSubjects)
+
+    // 2. Distribute teachers: each teacher gets some base classes
+    const perTeacher = Math.max(1, Math.ceil(baseClasses.length / Math.max(1, staff.length)))
+    const updatedStaff = staff.map((st, i) => {
+      const startIdx = (i * perTeacher) % baseClasses.length
+      const assignedBaseClasses = baseClasses.slice(startIdx, startIdx + perTeacher)
+      const fallback = baseClasses[i % baseClasses.length]
+      const myClasses = assignedBaseClasses.length ? assignedBaseClasses : [fallback]
+
+      // Expand to sections
       const expandedClasses: string[] = []
-      ;(st.classes ?? []).forEach(cls => {
+      myClasses.forEach(cls => {
         const secs = getSectionsForClass(sections, cls)
-        if (secs.length > 0) {
-          expandedClasses.push(...secs)
-        } else {
-          expandedClasses.push(cls)
-        }
+        expandedClasses.push(...(secs.length ? secs : [cls]))
       })
-      return { ...st, classes: [...new Set(expandedClasses)] }
+
+      // Assign all subjects for those classes
+      const mySubjectKeys: string[] = []
+      myClasses.forEach(cls => {
+        updatedSubjects.forEach(sub => {
+          mySubjectKeys.push(`${cls}::${sub.name}`)
+        })
+      })
+
+      return {
+        ...st,
+        classes: [...new Set(expandedClasses)],
+        subjects: mySubjectKeys,
+      }
     })
+
     setStaff(updatedStaff)
     setAllocated(true)
   }
-
-  const overloaded = staff.filter(st => {
-    const load = (st.subjects ?? []).reduce((a, sn) => {
-      return a + (subjects.find(x => x.name === sn)?.periodsPerWeek ?? 2)
-    }, 0) * Math.max(1, st.classes?.length ?? 1)
-    return load > (st.maxPeriodsPerWeek ?? country.maxPeriodsWeek)
-  })
 
   const thS: React.CSSProperties = { padding:"8px 10px", background:"#f7f6f2", fontSize:10, fontWeight:700, textTransform:"uppercase" as const, letterSpacing:"0.06em", color:"#a8a59e", textAlign:"left" as const, borderBottom:"1px solid #e8e5de", whiteSpace:"nowrap" as const }
   const tdS: React.CSSProperties = { padding:"7px 10px", borderBottom:"1px solid #f0ede7", verticalAlign:"middle", fontSize:11 }
@@ -104,16 +114,16 @@ export function Step6Assign() {
         Assign {org.subjectsLabel} & {org.staffsLabel}
       </h1>
       <p style={{ color:"#6a6860", fontSize:13, marginBottom:16, lineHeight:1.65 }}>
-        Step 1: Assign which {org.subjectsLabel.toLowerCase()} apply to which classes.<br />
-        Step 2: Assign {org.staffsLabel.toLowerCase()} to classes + subjects → then Auto-allocate sections.
+        Step 1: Assign which {org.subjectsLabel.toLowerCase()} apply to which classes in the matrix.<br />
+        Step 2: Assign {org.staffsLabel.toLowerCase()} to specific classes and subjects per class.
       </p>
 
       {/* Tabs */}
       <div style={{ display:"flex", borderBottom:"2px solid #e8e5de", marginBottom:16 }}>
-        {([["matrix", `Step 1: ${org.subjectLabel} → Class Matrix`],["staff",`Step 2: ${org.staffLabel} Assignments`]] as [Tab,string][]).map(([t,l]) => (
+        {([["matrix",`1️⃣ ${org.subjectLabel} → Class Matrix`],["staff",`2️⃣ ${org.staffLabel} Assignments`]] as [Tab,string][]).map(([t,l]) => (
           <button key={t} onClick={() => setTab(t)}
             style={{ padding:"9px 18px", border:"none", borderBottom: tab===t?"2px solid #4f46e5":"2px solid transparent", marginBottom:-2, background:"transparent", fontSize:12, fontWeight: tab===t?700:500, color: tab===t?"#4f46e5":"#6a6860", cursor:"pointer", whiteSpace:"nowrap" as const }}>
-            {t === "matrix" ? "1️⃣ " : "2️⃣ "}{l}
+            {l}
           </button>
         ))}
       </div>
@@ -123,90 +133,58 @@ export function Step6Assign() {
         <div>
           <div style={{ display:"flex", gap:8, marginBottom:14, flexWrap:"wrap" as const }}>
             <button onClick={() => setSubjects(subjects.map(s => ({ ...s, sections: sections.map(x => x.name) })))}
-              style={{ padding:"7px 14px", borderRadius:7, border:"1.5px solid #e8e5de", background:"#fff", fontSize:12, fontWeight:500, cursor:"pointer" }}>
-              ✅ Check All
-            </button>
+              style={{ padding:"7px 14px", borderRadius:7, border:"1.5px solid #e8e5de", background:"#fff", fontSize:12, cursor:"pointer" }}>✅ Check All</button>
             <button onClick={() => setSubjects(subjects.map(s => ({ ...s, sections: [] })))}
-              style={{ padding:"7px 14px", borderRadius:7, border:"1.5px solid #e8e5de", background:"#fff", fontSize:12, fontWeight:500, cursor:"pointer" }}>
-              ☐ Clear All
-            </button>
+              style={{ padding:"7px 14px", borderRadius:7, border:"1.5px solid #e8e5de", background:"#fff", fontSize:12, cursor:"pointer" }}>☐ Clear All</button>
             <div style={{ flex:1, background:"#eaecf8", borderRadius:7, padding:"7px 12px", fontSize:11, color:"#3730a3" }}>
-              💡 Click the subject name to assign to ALL classes at once. Use checkboxes per class column. "All" button assigns to all sections of that class.
+              💡 Check a class column = assign subject to ALL sections of that class. Use <strong>+ All</strong> to assign to every class.
             </div>
           </div>
-
           <div style={{ overflowX:"auto", border:"1.5px solid #e8e5de", borderRadius:12 }}>
             <table style={{ borderCollapse:"collapse", fontSize:11, minWidth:"100%" }}>
               <thead>
                 <tr>
-                  <th style={{ ...thS, minWidth:160, position:"sticky" as const, left:0, background:"#f7f6f2", zIndex:1 }}>
-                    {org.subjectLabel} / Freq
-                  </th>
+                  <th style={{ ...thS, minWidth:150, position:"sticky" as const, left:0, background:"#f7f6f2", zIndex:1 }}>{org.subjectLabel} / Freq</th>
                   {baseClasses.map(cls => (
                     <th key={cls} style={{ ...thS, textAlign:"center" as const, minWidth:80 }}>
-                      {cls}
-                      <div style={{ fontSize:9, color:"#c8c5bc", fontWeight:400, marginTop:2 }}>
-                        {getSectionsForClass(sections, cls).length} sec.
-                      </div>
+                      {cls}<div style={{ fontSize:9, color:"#c8c5bc", fontWeight:400, marginTop:1 }}>{getSectionsForClass(sections, cls).length} sec.</div>
                     </th>
                   ))}
-                  <th style={{ ...thS, textAlign:"center" as const, minWidth:60, background:"#f0fdf4", color:"#059669" }}>
-                    All Classes
-                  </th>
+                  <th style={{ ...thS, textAlign:"center" as const, minWidth:60, background:"#f0fdf4", color:"#059669" }}>All</th>
                 </tr>
               </thead>
               <tbody>
                 {subjects.map((sub, si) => (
                   <tr key={sub.id} style={{ background: si%2===0?"#fff":"#fafaf9" }}>
-                    <td style={{ ...tdS, position:"sticky" as const, left:0, background: si%2===0?"#fff":"#fafaf9", fontWeight:500, zIndex:1 }}>
-                      <div style={{ cursor:"pointer", color:"#1c1b18" }}
-                        onClick={() => setSubjects(subjects.map((s,i) => i===si ? { ...s, sections: sections.map(x=>x.name) } : s))}>
-                        {sub.name}
-                      </div>
-                      <div style={{ fontSize:10, fontFamily:"monospace", color:"#a8a59e" }}>{sub.periodsPerWeek}×/wk</div>
+                    <td style={{ ...tdS, position:"sticky" as const, left:0, background: si%2===0?"#fff":"#fafaf9", zIndex:1, fontWeight:500 }}>
+                      {sub.name}<div style={{ fontSize:10, fontFamily:"monospace", color:"#a8a59e" }}>{sub.periodsPerWeek}×/wk</div>
                     </td>
                     {baseClasses.map(cls => {
-                      const allChecked = isAllChecked(si, cls)
-                      const someChecked = isSomeChecked(si, cls)
-                      const secCount = getSectionsForClass(sections, cls).length
+                      const all  = isAllChecked(si, cls)
+                      const some = isSomeChecked(si, cls)
                       return (
                         <td key={cls} style={{ ...tdS, textAlign:"center" as const }}>
-                          <div style={{ display:"flex", flexDirection:"column" as const, alignItems:"center", gap:3 }}>
-                            <input type="checkbox"
-                              checked={allChecked}
-                              ref={el => { if (el) el.indeterminate = someChecked }}
-                              onChange={e => toggleSubForAllSections(si, cls, e.target.checked)}
-                              style={{ width:14, height:14, accentColor:"#059669", cursor:"pointer" }}
-                              title={`Assign ${sub.name} to all ${secCount} ${cls} sections`}
-                            />
-                            {secCount > 1 && (
-                              <span style={{ fontSize:8, color: allChecked?"#059669":someChecked?"#d97706":"#a8a59e" }}>
-                                {allChecked ? "All" : someChecked ? "Some" : ""}
-                              </span>
-                            )}
-                          </div>
+                          <input type="checkbox" checked={all}
+                            ref={el => { if (el) el.indeterminate = some }}
+                            onChange={e => toggleSubForAllSections(si, cls, e.target.checked)}
+                            style={{ width:14, height:14, accentColor:"#059669", cursor:"pointer" }} />
+                          {some && <div style={{ fontSize:8, color:"#d97706" }}>partial</div>}
                         </td>
                       )
                     })}
-                    {/* Assign to ALL classes */}
                     <td style={{ ...tdS, textAlign:"center" as const, background: si%2===0?"#f0fdf4":"#ecfdf5" }}>
-                      <button
-                        onClick={() => setSubjects(subjects.map((s,i) => i===si ? { ...s, sections: sections.map(x=>x.name) } : s))}
-                        style={{ fontSize:10, padding:"2px 8px", borderRadius:4, border:"1px solid #86efac", background:"#fff", color:"#059669", cursor:"pointer", fontWeight:600, whiteSpace:"nowrap" as const }}>
-                        + All
-                      </button>
+                      <button onClick={() => setSubjects(subjects.map((s,i) => i===si ? { ...s, sections: sections.map(x=>x.name) } : s))}
+                        style={{ fontSize:10, padding:"2px 8px", borderRadius:4, border:"1px solid #86efac", background:"#fff", color:"#059669", cursor:"pointer", fontWeight:600 }}>+ All</button>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-
           <div style={{ marginTop:12, padding:"8px 12px", background:"#f7f6f2", borderRadius:8, fontSize:11, color:"#6a6860" }}>
-            ℹ️ Checking a class column assigns the subject to <strong>all sections</strong> of that class (e.g. checking "I" assigns to I-A, I-B, I-C automatically). Use indeterminate (—) state to check some sections manually.
+            ℹ️ Checking a class assigns the subject to all sections of that class (e.g. "I" → I-A, I-B, I-C).
           </div>
-
-          <div style={{ display:"flex", justifyContent:"flex-end", marginTop:16 }}>
+          <div style={{ display:"flex", justifyContent:"flex-end", marginTop:14 }}>
             <button onClick={() => setTab("staff")}
               style={{ padding:"9px 20px", borderRadius:8, border:"none", background:"#4f46e5", color:"#fff", fontSize:13, fontWeight:600, cursor:"pointer" }}>
               Continue to {org.staffLabel} Assignments →
@@ -218,161 +196,148 @@ export function Step6Assign() {
       {/* ── STAFF TAB ── */}
       {tab === "staff" && (
         <div>
-          {/* Workflow explanation */}
-          <div style={{ background:"#f0fdf4", border:"1.5px solid #86efac", borderRadius:10, padding:"12px 16px", marginBottom:16, fontSize:12, color:"#14532d" }}>
-            <div style={{ fontWeight:700, marginBottom:6 }}>📋 How to assign:</div>
-            <div style={{ lineHeight:1.7 }}>
-              1. For each {org.staffLabel.toLowerCase()}: select <strong>Classes</strong> (e.g. "I", "II") — not sections<br/>
-              2. The <strong>Subjects</strong> column will show only subjects assigned to those classes<br/>
-              3. Select which subjects this {org.staffLabel.toLowerCase()} teaches<br/>
-              4. Click <strong>🤖 Auto-allocate Sections</strong> — AI assigns specific sections (I-A, I-B etc.)<br/>
-              5. Review and edit final allocations, then generate timetable
-            </div>
+          <div style={{ background:"#f0fdf4", border:"1.5px solid #86efac", borderRadius:10, padding:"12px 16px", marginBottom:12, fontSize:12, color:"#14532d" }}>
+            <strong>How to assign:</strong> Select classes for each {org.staffLabel.toLowerCase()} → subjects for those classes appear as separate columns → check which subjects they teach per class → click <strong>🤖 Auto-allocate</strong> to auto-fill everything, then fine-tune.
           </div>
 
-          {/* Auto-allocate button */}
-          {!allocated ? (
-            <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:16, padding:"12px 16px", background:"#eaecf8", borderRadius:10, border:"1.5px solid #c7d2fe" }}>
-              <div style={{ flex:1 }}>
-                <div style={{ fontSize:13, fontWeight:600, color:"#3730a3" }}>🤖 Auto-allocate Sections</div>
-                <div style={{ fontSize:11, color:"#4f46e5", marginTop:2 }}>
-                  After assigning classes (without sections) to {org.staffsLabel.toLowerCase()}, click to let AI distribute specific sections automatically.
-                </div>
+          {/* Auto-allocate */}
+          <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:14, padding:"12px 16px", background: allocated?"#f0fdf4":"#eaecf8", borderRadius:10, border:`1.5px solid ${allocated?"#86efac":"#c7d2fe"}` }}>
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:13, fontWeight:600, color: allocated?"#14532d":"#3730a3" }}>
+                {allocated ? "✅ Sections auto-allocated!" : "🤖 AI Auto-allocate Everything"}
               </div>
-              <button onClick={handleAutoAllocate}
-                style={{ padding:"9px 18px", borderRadius:8, border:"none", background:"#4f46e5", color:"#fff", fontSize:13, fontWeight:600, cursor:"pointer", whiteSpace:"nowrap" as const }}>
-                🤖 Auto-allocate Sections
-              </button>
-            </div>
-          ) : (
-            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16, padding:"10px 14px", background:"#f0fdf4", borderRadius:10, border:"1px solid #86efac" }}>
-              <span style={{ fontSize:16 }}>✅</span>
-              <div style={{ flex:1 }}>
-                <div style={{ fontSize:12, fontWeight:600, color:"#14532d" }}>Sections auto-allocated!</div>
-                <div style={{ fontSize:11, color:"#059669" }}>AI has distributed sections to {org.staffsLabel.toLowerCase()}. Review below and edit as needed.</div>
+              <div style={{ fontSize:11, color: allocated?"#059669":"#4f46e5", marginTop:2 }}>
+                {allocated ? "Classes, sections and subjects auto-assigned. Review and edit below." : "AI will assign all classes, sections and subjects to teachers optimally. You can edit after."}
               </div>
-              <button onClick={() => { handleAutoAllocate() }}
-                style={{ padding:"5px 12px", borderRadius:6, border:"1px solid #86efac", background:"#fff", fontSize:11, color:"#059669", cursor:"pointer", fontWeight:600 }}>
-                Re-allocate
-              </button>
             </div>
-          )}
+            <button onClick={handleAutoAllocate}
+              style={{ padding:"9px 18px", borderRadius:8, border:"none", background: allocated?"#059669":"#4f46e5", color:"#fff", fontSize:13, fontWeight:600, cursor:"pointer", whiteSpace:"nowrap" as const }}>
+              {allocated ? "Re-allocate" : "🤖 Auto-allocate"}
+            </button>
+          </div>
 
           {/* Staff cards */}
-          <div style={{ display:"flex", flexDirection:"column" as const, gap:10 }}>
+          <div style={{ display:"flex", flexDirection:"column" as const, gap:12 }}>
             {staff.map((st, i) => {
-              const availableSubjects = getSubjectsForTeacher(i)
-              const load = (st.subjects ?? []).reduce((a, sn) => a + (subjects.find(x=>x.name===sn)?.periodsPerWeek??2), 0) * Math.max(1, (st.classes??[]).length)
+              const assignedBaseClasses = baseClasses.filter(cls =>
+                (st.classes ?? []).some(c => c === cls || getSectionsForClass(sections, cls).includes(c))
+              )
+              const load = assignedBaseClasses.reduce((total, cls) => {
+                const clsSubs = subjects.filter(sub => isSubjectCheckedForClass(i, sub.name, cls))
+                return total + clsSubs.reduce((a, s) => a + s.periodsPerWeek, 0)
+              }, 0)
               const maxP = st.maxPeriodsPerWeek ?? country.maxPeriodsWeek
-              const pct = Math.min(150, Math.round(load / maxP * 100))
+              const pct  = Math.min(150, Math.round(load / maxP * 100))
               const barColor = pct>100?"#ef4444":pct>85?"#f59e0b":"#059669"
 
               return (
-                <div key={st.id} style={{ border:"1.5px solid #e8e5de", borderRadius:10, overflow:"hidden" }}>
+                <div key={st.id} style={{ border:"1.5px solid #e8e5de", borderRadius:12, overflow:"hidden" }}>
                   {/* Teacher header */}
                   <div style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 14px", background:"#f7f6f2", borderBottom:"1px solid #e8e5de" }}>
                     <div style={{ width:32, height:32, borderRadius:"50%", background:"#4f46e5", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:700, flexShrink:0 }}>
                       {i+1}
                     </div>
                     <div style={{ flex:1 }}>
-                      <input value={st.name}
-                        onChange={e=>{const n=[...staff];n[i]={...n[i],name:e.target.value};setStaff(n)}}
+                      <input value={st.name} onChange={e=>{const n=[...staff];n[i]={...n[i],name:e.target.value};setStaff(n)}}
                         style={{ fontSize:13, fontWeight:600, background:"transparent", border:"none", outline:"none", width:"100%", color:"#1c1b18" }} />
                       {st.isClassTeacher && <div style={{ fontSize:10, color:"#059669" }}>★ Class Teacher: {st.isClassTeacher}</div>}
                     </div>
-                    {/* Workload bar */}
                     <div style={{ textAlign:"right" as const, flexShrink:0 }}>
-                      <div style={{ fontSize:11, fontFamily:"monospace", color:"#1c1b18" }}>{load}/{maxP}</div>
-                      <div style={{ width:80, height:5, background:"#e8e5de", borderRadius:3, marginTop:3, overflow:"hidden" }}>
+                      <div style={{ fontSize:11, fontFamily:"monospace", color:"#1c1b18" }}>{load}/{maxP} {org.loadUnit}</div>
+                      <div style={{ width:90, height:5, background:"#e8e5de", borderRadius:3, marginTop:3, overflow:"hidden" }}>
                         <div style={{ height:"100%", width:`${Math.min(100,pct)}%`, background:barColor, borderRadius:3, transition:"width 0.3s" }} />
                       </div>
                       <div style={{ fontSize:9, color:"#a8a59e", marginTop:2 }}>{pct}% loaded</div>
                     </div>
                   </div>
 
-                  {/* Assignment columns */}
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:0 }}>
-                    {/* Column 1: Classes (base, no sections) */}
-                    <div style={{ padding:"10px 12px", borderRight:"1px solid #f0ede7" }}>
-                      <div style={{ fontSize:10, fontWeight:700, textTransform:"uppercase" as const, letterSpacing:"0.06em", color:"#a8a59e", marginBottom:6 }}>
-                        Classes (no sections)
-                      </div>
-                      <div style={{ fontSize:10, color:"#6a6860", marginBottom:6 }}>
-                        Select class groups. AI will assign sections later.
-                      </div>
-                      <div style={{ display:"flex", flexDirection:"column" as const, gap:3, maxHeight:120, overflowY:"auto" }}>
-                        {baseClasses.map(cls => {
-                          const checked = (st.classes ?? []).includes(cls)
-                          return (
-                            <label key={cls} style={{ display:"flex", alignItems:"center", gap:6, cursor:"pointer", padding:"3px 6px", borderRadius:5, background: checked?"#eaecf8":"transparent" }}>
-                              <input type="checkbox" checked={checked} style={{ accentColor:"#4f46e5", width:13, height:13 }}
-                                onChange={e => {
-                                  const n=[...staff]
-                                  const cur = n[i].classes ?? []
-                                  n[i] = { ...n[i], classes: e.target.checked ? [...cur, cls] : cur.filter(c=>c!==cls) }
-                                  setStaff(n)
-                                  setAllocated(false) // reset allocation when classes change
-                                }} />
-                              <span style={{ fontSize:12, fontWeight: checked?600:400, color: checked?"#3730a3":"#1c1b18" }}>{cls}</span>
-                              <span style={{ fontSize:9, color:"#a8a59e", marginLeft:"auto" }}>
-                                {getSectionsForClass(sections, cls).length} sec.
-                              </span>
-                            </label>
-                          )
-                        })}
-                      </div>
-                      {allocated && (st.classes ?? []).length > 0 && (
-                        <div style={{ marginTop:8, padding:"4px 8px", background:"#f0fdf4", borderRadius:5, fontSize:10, color:"#059669" }}>
-                          ✓ Allocated: {sections.filter(s => (st.classes??[]).some(c => s.name===c || s.name.startsWith(c+'-') || s.name.startsWith(c+' '))).map(s=>s.name).join(", ")}
-                        </div>
-                      )}
+                  {/* Body: Classes column + per-class subject columns */}
+                  <div style={{ display:"flex", overflowX:"auto" as const }}>
+                    {/* Classes column */}
+                    <div style={{ minWidth:160, borderRight:"1px solid #f0ede7", padding:"10px 12px", flexShrink:0 }}>
+                      <div style={{ fontSize:10, fontWeight:700, textTransform:"uppercase" as const, letterSpacing:"0.06em", color:"#a8a59e", marginBottom:6 }}>Classes</div>
+                      <div style={{ fontSize:10, color:"#6a6860", marginBottom:8 }}>Select class groups</div>
+                      {baseClasses.map(cls => {
+                        const secs = getSectionsForClass(sections, cls)
+                        const isChecked = (st.classes ?? []).some(c => c === cls || secs.includes(c))
+                        return (
+                          <label key={cls} style={{ display:"flex", alignItems:"center", gap:6, cursor:"pointer", padding:"4px 6px", borderRadius:5, marginBottom:2, background: isChecked?"#eaecf8":"transparent" }}>
+                            <input type="checkbox" checked={isChecked} style={{ accentColor:"#4f46e5", width:13, height:13 }}
+                              onChange={e => {
+                                const n=[...staff]
+                                const curClasses = n[i].classes ?? []
+                                if (e.target.checked) {
+                                  // Add all sections of this class
+                                  const newClasses = [...new Set([...curClasses, ...secs.length ? secs : [cls]])]
+                                  n[i] = { ...n[i], classes: newClasses }
+                                } else {
+                                  // Remove this class and all its sections
+                                  n[i] = { ...n[i], classes: curClasses.filter(c => c !== cls && !secs.includes(c)) }
+                                  // Also clear subject assignments for this class
+                                  const curSubs = n[i].subjects ?? []
+                                  n[i] = { ...n[i], subjects: curSubs.filter(s => !s.startsWith(cls + '::')) }
+                                }
+                                setStaff(n)
+                                setAllocated(false)
+                              }} />
+                            <span style={{ fontSize:12, fontWeight: isChecked?600:400, color: isChecked?"#3730a3":"#1c1b18" }}>{cls}</span>
+                            <span style={{ fontSize:9, color:"#a8a59e", marginLeft:"auto" }}>{secs.length} sec.</span>
+                          </label>
+                        )
+                      })}
                     </div>
 
-                    {/* Column 2: Subjects for those classes */}
-                    <div style={{ padding:"10px 12px" }}>
-                      <div style={{ fontSize:10, fontWeight:700, textTransform:"uppercase" as const, letterSpacing:"0.06em", color:"#a8a59e", marginBottom:6 }}>
-                        {org.subjectsLabel} to Teach
+                    {/* Per-class subject columns */}
+                    {assignedBaseClasses.length === 0 ? (
+                      <div style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", padding:"20px", color:"#a8a59e", fontSize:12, fontStyle:"italic" }}>
+                        ← Select classes to see {org.subjectsLabel.toLowerCase()} per class
                       </div>
-                      <div style={{ fontSize:10, color:"#6a6860", marginBottom:6 }}>
-                        {(st.classes??[]).length === 0 ? "← Assign classes first to see relevant subjects" : `Subjects for: ${(st.classes??[]).join(", ")}`}
-                      </div>
-                      <div style={{ display:"flex", flexDirection:"column" as const, gap:3, maxHeight:120, overflowY:"auto" }}>
-                        {((st.classes??[]).length === 0 ? subjects : availableSubjects).map(sub => {
-                          const checked = (st.subjects ?? []).includes(sub.name)
-                          return (
-                            <label key={sub.id} style={{ display:"flex", alignItems:"center", gap:6, cursor:"pointer", padding:"3px 6px", borderRadius:5, background: checked?"#f0fdf4":"transparent", opacity:(st.classes??[]).length===0?0.4:1 }}>
-                              <input type="checkbox" checked={checked} disabled={(st.classes??[]).length===0} style={{ accentColor:"#059669", width:13, height:13 }}
-                                onChange={e => {
-                                  const n=[...staff]
-                                  const cur = n[i].subjects ?? []
-                                  n[i] = { ...n[i], subjects: e.target.checked ? [...cur, sub.name] : cur.filter(s=>s!==sub.name) }
-                                  setStaff(n)
-                                }} />
-                              <span style={{ fontSize:12, fontWeight: checked?600:400, color: checked?"#14532d":"#1c1b18" }}>{sub.name}</span>
-                              <span style={{ fontSize:9, color:"#a8a59e", marginLeft:"auto", fontFamily:"monospace" }}>{sub.periodsPerWeek}×</span>
-                            </label>
-                          )
-                        })}
-                      </div>
-                    </div>
+                    ) : (
+                      assignedBaseClasses.map((cls, ci) => {
+                        const clsSubjects = getSubjectsForClass(subjects, sections, cls)
+                        return (
+                          <div key={cls} style={{ minWidth:150, borderRight: ci < assignedBaseClasses.length-1 ? "1px solid #f0ede7" : "none", padding:"10px 12px", flexShrink:0 }}>
+                            {/* Class header */}
+                            <div style={{ fontSize:11, fontWeight:700, color:"#4f46e5", marginBottom:2 }}>{cls}</div>
+                            <div style={{ fontSize:9, color:"#a8a59e", marginBottom:8 }}>
+                              {getSectionsForClass(sections, cls).join(", ")}
+                            </div>
+                            {/* Subjects for this class */}
+                            {clsSubjects.length === 0 ? (
+                              <div style={{ fontSize:10, color:"#a8a59e", fontStyle:"italic" }}>No subjects assigned to {cls} yet</div>
+                            ) : clsSubjects.map(sub => {
+                              const checked = isSubjectCheckedForClass(i, sub.name, cls)
+                              return (
+                                <label key={sub.name} style={{ display:"flex", alignItems:"center", gap:5, cursor:"pointer", padding:"3px 5px", borderRadius:4, marginBottom:2, background: checked?"#f0fdf4":"transparent" }}>
+                                  <input type="checkbox" checked={checked} style={{ accentColor:"#059669", width:12, height:12 }}
+                                    onChange={e => toggleSubjectForClass(i, sub.name, cls, e.target.checked)} />
+                                  <span style={{ fontSize:11, fontWeight: checked?600:400, color: checked?"#14532d":"#1c1b18", flex:1 }}>{sub.name}</span>
+                                  <span style={{ fontSize:9, color:"#a8a59e", fontFamily:"monospace" }}>{sub.periodsPerWeek}×</span>
+                                </label>
+                              )
+                            })}
+                            {/* Check all / clear for this class */}
+                            <div style={{ display:"flex", gap:4, marginTop:8 }}>
+                              <button onClick={() => clsSubjects.forEach(sub => toggleSubjectForClass(i, sub.name, cls, true))}
+                                style={{ flex:1, fontSize:9, padding:"2px 4px", borderRadius:3, border:"1px solid #86efac", background:"#f0fdf4", color:"#059669", cursor:"pointer" }}>All ✓</button>
+                              <button onClick={() => clsSubjects.forEach(sub => toggleSubjectForClass(i, sub.name, cls, false))}
+                                style={{ flex:1, fontSize:9, padding:"2px 4px", borderRadius:3, border:"1px solid #e8e5de", background:"#fff", color:"#6a6860", cursor:"pointer" }}>Clear</button>
+                            </div>
+                          </div>
+                        )
+                      })
+                    )}
                   </div>
                 </div>
               )
             })}
           </div>
-
-          {overloaded.length > 0 && (
-            <div style={{ background:"#fffbeb", border:"1px solid #fcd34d", borderRadius:8, padding:"10px 14px", fontSize:12, color:"#92400e", marginTop:12 }}>
-              ⚠️ <strong>{overloaded.length} overloaded:</strong> {overloaded.map(s=>s.name).join(", ")}
-            </div>
-          )}
         </div>
       )}
 
       <div style={{ display:"flex", justifyContent:"space-between", paddingTop:16, borderTop:"1px solid #e8e5de", marginTop:16 }}>
         <button onClick={() => setStep(5)} style={{ padding:"9px 18px", borderRadius:8, border:"1.5px solid #e8e5de", background:"#fff", fontSize:13, fontWeight:500, cursor:"pointer" }}>← Back</button>
-        <button onClick={() => setStep(7)}
-          style={{ padding:"9px 18px", borderRadius:8, border:"none", background:"#059669", color:"#fff", fontSize:13, fontWeight:600, cursor:"pointer", display:"flex", alignItems:"center", gap:6 }}>
+        <button onClick={() => setStep(7)} style={{ padding:"9px 18px", borderRadius:8, border:"none", background:"#059669", color:"#fff", fontSize:13, fontWeight:600, cursor:"pointer" }}>
           ✨ Generate Timetable →
         </button>
       </div>
