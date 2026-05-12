@@ -70,7 +70,7 @@ export function Step2Country() {
     if (!config.countryCode || !config.orgType) return
     localStorage.removeItem(`std_${config.orgType}_${config.countryCode}`)
     setStandard(getStandard(config.orgType, config.countryCode))
-    setEditingStd(false)
+    // Stay in edit mode so user can see the reset values and continue editing
   }
 
   const displayName = selected?.name ?? selectedW?.name ?? ""
