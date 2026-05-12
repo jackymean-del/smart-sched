@@ -1,0 +1,22 @@
+# Node
+node_modules/
+dist/
+.vite/
+
+# Go
+*.exe
+smartsched-api
+backend/vendor/
+
+# Env
+.env
+.env.local
+
+# DB
+*.sqlite
+
+# Misc
+.DS_Store
+.vercel/
+__pycache__/
+*.pyc

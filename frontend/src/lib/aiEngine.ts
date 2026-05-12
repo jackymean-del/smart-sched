@@ -1,0 +1,313 @@
+import type { Section, Staff, Subject, Period, ClassTimetable, TeacherSchedule, TimetableCell, Conflict } from '@/types'
+
+// ─── Build Period Sequence ────────────────────────────────
+export function buildPeriodSequence(breaks: Period[], periodsPerDay: number): Period[] {
+  const result: Period[] = []
+  const fixedStart = breaks.filter(b => b.type === 'fixed-start')
+  const fixedEnd = breaks.filter(b => b.type === 'fixed-end')
+  const midBreaks = breaks.filter(b => b.type === 'break' || b.type === 'lunch')
+
+  fixedStart.forEach(b => result.push({ ...b }))
+
+  const segments = midBreaks.length + 1
+  const perSegment = Math.floor(periodsPerDay / segments)
+  let periodIndex = 1
+
+  for (let seg = 0; seg < segments; seg++) {
+    const count = seg < segments - 1 ? perSegment : periodsPerDay - (periodIndex - 1)
+    for (let k = 0; k < count && periodIndex <= periodsPerDay; k++) {
+      result.push({
+        id: `p${periodIndex}`,
+        name: `Period ${periodIndex}`,
+        duration: 40,
+        type: 'class',
+        shiftable: true,
+      })
+      periodIndex++
+    }
+    if (seg < midBreaks.length) result.push({ ...midBreaks[seg] })
+  }
+
+  fixedEnd.forEach(b => result.push({ ...b }))
+  return result
+}
+
+// ─── Check Teacher Busy ───────────────────────────────────
+function isTeacherBusy(
+  teacherName: string, day: string, periodId: string,
+  classTT: ClassTimetable
+): boolean {
+  return Object.values(classTT).some(
+    sec => sec[day]?.[periodId]?.teacher === teacherName
+  )
+}
+
+// ─── Find Available Teacher ───────────────────────────────
+function findTeacher(
+  subjectName: string, day: string, periodId: string,
+  staff: Staff[], classTT: ClassTimetable
+): string {
+  const candidates = staff.filter(s => s.subjects.includes(subjectName))
+  const available = candidates.filter(s => !isTeacherBusy(s.name, day, periodId, classTT))
+  if (available.length) return available[0].name
+  if (candidates.length) return candidates[0].name
+  const free = staff.filter(s => !isTeacherBusy(s.name, day, periodId, classTT))
+  return free[0]?.name ?? (staff[0]?.name ?? '')
+}
+
+// ─── Main AI Generate ─────────────────────────────────────
+export function generateTimetable(
+  sections: Section[],
+  staff: Staff[],
+  subjects: Subject[],
+  periods: Period[],
+  workDays: string[]
+): { classTT: ClassTimetable; teacherTT: Record<string, TeacherSchedule>; conflicts: Conflict[] } {
+  const classTT: ClassTimetable = {}
+
+  // Build class teacher map: sectionName -> staffName
+  const classTeacherMap: Record<string, string> = {}
+  staff.forEach(st => { if (st.isClassTeacher) classTeacherMap[st.isClassTeacher] = st.name })
+  sections.forEach(sec => { if (sec.classTeacher) classTeacherMap[sec.name] = sec.classTeacher })
+
+  const classPeriods = periods.filter(p => p.type === 'class')
+
+  sections.forEach((sec, si) => {
+    classTT[sec.name] = {}
+    workDays.forEach((day, di) => {
+      classTT[sec.name][day] = {}
+      const ctName = classTeacherMap[sec.name] ?? ''
+
+      classPeriods.forEach((p, pi) => {
+        // RULE: Period 1 (pi === 0) → class teacher every day
+        if (pi === 0 && ctName) {
+          const ctStaff = staff.find(s => s.name === ctName)
+          const ctSubject = ctStaff?.subjects[0] ?? subjects[0]?.name ?? ''
+          classTT[sec.name][day][p.id] = {
+            subject: ctSubject,
+            teacher: ctName,
+            room: sec.room,
+            isClassTeacher: true,
+          }
+          return
+        }
+
+        // Rotate subjects for variety
+        const subIdx = (si * 7 + di * 3 + pi * 2) % Math.max(1, subjects.length)
+        const subject = subjects[subIdx] ?? subjects[0]
+        if (!subject) {
+          classTT[sec.name][day][p.id] = { subject: '', teacher: '', room: '' }
+          return
+        }
+
+        const teacher = findTeacher(subject.name, day, p.id, staff, classTT)
+        classTT[sec.name][day][p.id] = {
+          subject: subject.name,
+          teacher,
+          room: sec.room,
+        }
+      })
+    })
+  })
+
+  // Build teacher timetable
+  const teacherTT: Record<string, TeacherSchedule> = {}
+  staff.forEach(st => {
+    teacherTT[st.name] = {
+      classes: [...st.classes],
+      subjects: [...st.subjects],
+      schedule: Object.fromEntries(workDays.map(d => [d, {}])),
+    }
+  })
+
+  rebuildTeacherTT(classTT, teacherTT, workDays)
+  const conflicts = detectConflicts(classTT, classPeriods, workDays)
+
+  return { classTT, teacherTT, conflicts }
+}
+
+// ─── Rebuild Teacher TT from Class TT ────────────────────
+export function rebuildTeacherTT(
+  classTT: ClassTimetable,
+  teacherTT: Record<string, TeacherSchedule>,
+  workDays: string[]
+): void {
+  // Reset schedules
+  Object.keys(teacherTT).forEach(name => {
+    workDays.forEach(day => { teacherTT[name].schedule[day] = {} })
+  })
+
+  Object.entries(classTT).forEach(([sectionName, sectionData]) => {
+    Object.entries(sectionData).forEach(([day, dayData]) => {
+      Object.entries(dayData).forEach(([periodId, cell]) => {
+        if (!cell?.teacher) return
+        if (!teacherTT[cell.teacher]) {
+          teacherTT[cell.teacher] = { classes: [], subjects: [], schedule: Object.fromEntries(workDays.map(d => [d, {}])) }
+        }
+        const existing = teacherTT[cell.teacher].schedule[day]?.[periodId]
+        if (existing) {
+          existing.subject += ` / ${cell.subject}(${sectionName})`
+          existing.conflict = true
+        } else {
+          teacherTT[cell.teacher].schedule[day][periodId] = {
+            subject: `${cell.subject} (${sectionName})`,
+            room: cell.room,
+            sectionName,
+            isClassTeacher: cell.isClassTeacher,
+          }
+        }
+        if (!teacherTT[cell.teacher].classes.includes(sectionName)) {
+          teacherTT[cell.teacher].classes.push(sectionName)
+        }
+      })
+    })
+  })
+}
+
+// ─── Shift Period — swap A↔B in ALL class TTs ────────────
+export function shiftPeriod(
+  periods: Period[],
+  classTT: ClassTimetable,
+  indexA: number,
+  direction: -1 | 1
+): Period[] {
+  const indexB = indexA + direction
+  if (indexB < 0 || indexB >= periods.length) return periods
+  const periodA = periods[indexA]
+  const periodB = periods[indexB]
+  if (!periodA.shiftable || !periodB.shiftable) return periods
+
+  // Swap period definitions
+  const newPeriods = [...periods]
+  newPeriods[indexA] = periodB
+  newPeriods[indexB] = periodA
+
+  // Swap cell data in ALL class timetables (true column swap)
+  Object.values(classTT).forEach(sectionData => {
+    Object.values(sectionData).forEach(dayData => {
+      const tmp = dayData[periodA.id]
+      dayData[periodA.id] = dayData[periodB.id]
+      dayData[periodB.id] = tmp
+    })
+  })
+
+  return newPeriods
+}
+
+// ─── Detect Conflicts ─────────────────────────────────────
+export function detectConflicts(
+  classTT: ClassTimetable,
+  classPeriods: Period[],
+  workDays: string[]
+): Conflict[] {
+  const conflicts: Conflict[] = []
+  classPeriods.forEach(p => {
+    workDays.forEach(day => {
+      const teacherMap: Record<string, string> = {}
+      Object.entries(classTT).forEach(([sec, sd]) => {
+        const cell = sd[day]?.[p.id]
+        if (cell?.teacher) {
+          if (teacherMap[cell.teacher]) {
+            conflicts.push({
+              type: 'double-booking',
+              message: `${cell.teacher} is double-booked on ${day} ${p.name}`,
+              teacher: cell.teacher,
+              day,
+              period: p.name,
+            })
+          } else {
+            teacherMap[cell.teacher] = sec
+          }
+        }
+      })
+    })
+  })
+  return conflicts
+}
+
+// ─── AI Auto-Assign ───────────────────────────────────────
+export function autoAssign(
+  sections: Section[],
+  staff: Staff[],
+  subjects: Subject[]
+): { sections: Section[]; staff: Staff[]; subjects: Subject[] } {
+  // Assign all subjects to all sections
+  const updatedSubjects = subjects.map(sub => ({
+    ...sub, sections: sections.map(s => s.name),
+  }))
+
+  // Distribute subjects and classes among staff
+  const perStaff = Math.max(1, Math.ceil(subjects.length / Math.max(1, staff.length)))
+  const secPerStaff = Math.max(1, Math.ceil(sections.length / Math.max(1, staff.length)))
+
+  const updatedStaff = staff.map((st, i) => {
+    const subStart = (i * perStaff) % subjects.length
+    const assignedSubs = subjects.slice(subStart, subStart + perStaff).map(s => s.name)
+    const secStart = (i * secPerStaff) % sections.length
+    const assignedClasses = sections.slice(secStart, secStart + secPerStaff).map(s => s.name)
+    return {
+      ...st,
+      subjects: assignedSubs.length ? assignedSubs : [subjects[i % subjects.length]?.name ?? ''],
+      classes: assignedClasses.length ? assignedClasses : [sections[i % sections.length]?.name ?? ''],
+    }
+  })
+
+  // Assign class teachers to sections that don't have one
+  const updatedSections = sections.map((sec, si) => {
+    if (sec.classTeacher) return sec
+    const stIdx = si % staff.length
+    if (!updatedStaff[stIdx].isClassTeacher) {
+      updatedStaff[stIdx] = { ...updatedStaff[stIdx], isClassTeacher: sec.name }
+      return { ...sec, classTeacher: updatedStaff[stIdx].name }
+    }
+    return sec
+  })
+
+  return { sections: updatedSections, staff: updatedStaff, subjects: updatedSubjects }
+}
+
+// ─── Find Substitutes ─────────────────────────────────────
+export interface SubstituteResult {
+  periodId: string
+  periodName: string
+  sectionName: string
+  subject: string
+  substitute: string
+  isPerfectMatch: boolean
+}
+
+export function findSubstitutes(
+  absentStaff: Staff,
+  day: string,
+  staff: Staff[],
+  classTT: ClassTimetable,
+  periods: Period[]
+): SubstituteResult[] {
+  const absentPeriods: Array<{sectionName: string; periodId: string; periodName: string; subject: string}> = []
+
+  Object.entries(classTT).forEach(([sectionName, sectionData]) => {
+    if (!sectionData[day]) return
+    periods.filter(p => p.type === 'class').forEach(p => {
+      const cell = sectionData[day][p.id]
+      if (cell?.teacher === absentStaff.name) {
+        absentPeriods.push({ sectionName, periodId: p.id, periodName: p.name, subject: cell.subject })
+      }
+    })
+  })
+
+  return absentPeriods.map(ap => {
+    const freeStaff = staff.filter(st => {
+      if (st.name === absentStaff.name) return false
+      return !Object.values(classTT).some(
+        sec => sec[day]?.[ap.periodId]?.teacher === st.name
+      )
+    })
+    const perfectMatch = freeStaff.find(s => s.subjects.includes(ap.subject))
+    const sub = perfectMatch ?? freeStaff[0]
+    return {
+      ...ap,
+      substitute: sub?.name ?? 'Not available',
+      isPerfectMatch: !!perfectMatch,
+    }
+  })
+}
