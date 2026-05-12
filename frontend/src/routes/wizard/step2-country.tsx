@@ -121,6 +121,7 @@ export function Step2Country() {
     setEditingStd(false)
   }
 
+  // Use uncontrolled inputs with onBlur to avoid focus-stealing on every keystroke
   const Field = ({ label, fieldKey, unit, readOnly = false }: {
     label: string; fieldKey: keyof OrgStandard; unit: string; readOnly?: boolean
   }) => {
@@ -133,8 +134,9 @@ export function Step2Country() {
         {editingStd && !isDerived ? (
           <input
             type={isNum ? "number" : "text"}
-            value={String(val ?? "")}
-            onChange={e => handleFieldChange(fieldKey, isNum ? +e.target.value : e.target.value)}
+            defaultValue={String(val ?? "")}
+            key={String(val ?? "")}
+            onBlur={e => handleFieldChange(fieldKey, isNum ? +e.target.value : e.target.value)}
             style={{ padding:'5px 8px', border:'1.5px solid #4f46e5', borderRadius:6, fontSize:12, fontFamily: isNum?"'DM Mono',monospace":'inherit', textAlign: isNum?"right":'left', outline:'none', width:'100%', background:'#fff' }}
           />
         ) : (
