@@ -24,7 +24,7 @@ export function Step5Data() {
   }, [])
 
   const TAB_LABELS: { key: Tab; label: string }[] = [
-    { key: "sections", label: `📚 ${org.sectionLabelsLabel}` },
+    { key: "sections", label: `📚 ${org.sectionsLabel}` },
     { key: "staff",    label: `👤 ${org.staffsLabel}` },
     { key: "subjects", label: `📖 ${org.subjectsLabel}` },
     { key: "breaks",   label: "⏱ Periods & Breaks" },
@@ -34,7 +34,7 @@ export function Step5Data() {
     <div>
       <h1 className="font-serif text-3xl mb-2">Review & edit generated data</h1>
       <p className="text-gray-500 text-[13px] mb-4 leading-relaxed">
-        AI generated {sections.length} {org.sectionLabelsLabel.toLowerCase()}, {staff.length} {org.staffsLabel.toLowerCase()},
+        AI generated {sections.length} {org.sectionsLabel.toLowerCase()}, {staff.length} {org.staffsLabel.toLowerCase()},
         {" "}{subjects.length} {org.subjectsLabel.toLowerCase()}, and {breaks.length} break slots based on {country.name} norms.
         Edit anything inline.
       </p>
