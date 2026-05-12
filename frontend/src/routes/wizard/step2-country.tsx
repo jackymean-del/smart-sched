@@ -3,134 +3,60 @@ import { useTimetableStore } from "@/store/timetableStore"
 import { COUNTRIES, ORG_CONFIGS } from "@/lib/orgData"
 import { ALL_COUNTRIES } from "@/lib/allCountries"
 import { getStandard } from "@/lib/standardsDB"
+import type { StandardData } from "@/lib/standardsDB"
 
-interface OrgStandard {
-  maxPeriodsWeek: number
-  maxPeriodsDay: number
-  hoursPerWeek: number
-  lunchMinutes: number
-  breakMinutes: number
-  numBreaks: number
-  periodDuration: number
-  notes: string
-}
-
-function getDefaultStandard(countryCode: string, orgType: string): OrgStandard {
-  const c = COUNTRIES.find(x => x.code === countryCode)
-  const orgDefaults: Record<string, Partial<OrgStandard>> = {
-    school:    { lunchMinutes:30, breakMinutes:10, numBreaks:3, periodDuration:40, notes:"NCTE / Ministry of Education guidelines" },
-    college:   { lunchMinutes:45, breakMinutes:15, numBreaks:2, periodDuration:60, notes:"UGC guidelines" },
-    corporate: { lunchMinutes:60, breakMinutes:15, numBreaks:2, periodDuration:60, notes:"Labour Act / Factory Act" },
-    hospital:  { lunchMinutes:30, breakMinutes:20, numBreaks:3, periodDuration:60, notes:"Healthcare Staffing Standards" },
-    ngo:       { lunchMinutes:45, breakMinutes:15, numBreaks:2, periodDuration:45, notes:"Internal HR policy" },
-    factory:   { lunchMinutes:30, breakMinutes:15, numBreaks:3, periodDuration:30, notes:"Factory Act / Labour Law" },
-  }
-  const d = orgDefaults[orgType] ?? orgDefaults.school
-  const maxPeriodsDay = c?.maxPeriodsDay ?? 6
-  const periodDuration = d.periodDuration ?? 40
-  const numBreaks = d.numBreaks ?? 3
-  const lunchMinutes = d.lunchMinutes ?? 30
-  const breakMinutes = d.breakMinutes ?? 10
-  const totalBreakTime = lunchMinutes + (breakMinutes * (numBreaks - 1))
-  const hoursPerWeek = Math.round((maxPeriodsDay * periodDuration + totalBreakTime) * 5 / 60 * 10) / 10
-  return {
-    maxPeriodsWeek: c?.maxPeriodsWeek ?? 36,
-    maxPeriodsDay,
-    hoursPerWeek,
-    lunchMinutes,
-    breakMinutes,
-    numBreaks,
-    periodDuration,
-    notes: d.notes ?? "Organization standard",
-  }
-}
-
-function recalculate(std: OrgStandard, changedKey: keyof OrgStandard, value: number | string): OrgStandard {
-  const s = { ...std, [changedKey]: value }
-  if (changedKey === "maxPeriodsDay") {
-    s.maxPeriodsWeek = (value as number) * 5
-    const tb = s.lunchMinutes + s.breakMinutes * (s.numBreaks - 1)
-    s.hoursPerWeek = Math.round(((value as number) * s.periodDuration + tb) * 5 / 60 * 10) / 10
-  }
-  if (changedKey === "maxPeriodsWeek") {
-    s.maxPeriodsDay = Math.round((value as number) / 5)
-    const tb = s.lunchMinutes + s.breakMinutes * (s.numBreaks - 1)
-    s.hoursPerWeek = Math.round((s.maxPeriodsDay * s.periodDuration + tb) * 5 / 60 * 10) / 10
-  }
-  if (changedKey === "periodDuration") {
-    const tb = s.lunchMinutes + s.breakMinutes * (s.numBreaks - 1)
-    s.hoursPerWeek = Math.round((s.maxPeriodsDay * (value as number) + tb) * 5 / 60 * 10) / 10
-  }
-  if (["lunchMinutes","breakMinutes","numBreaks"].includes(changedKey)) {
-    const tb = s.lunchMinutes + s.breakMinutes * (s.numBreaks - 1)
-    s.hoursPerWeek = Math.round((s.maxPeriodsDay * s.periodDuration + tb) * 5 / 60 * 10) / 10
-  }
-  if (changedKey === "hoursPerWeek") {
-    const dailyMins = ((value as number) * 60) / 5
-    const tb = s.lunchMinutes + s.breakMinutes * (s.numBreaks - 1)
-    s.periodDuration = Math.round((dailyMins - tb) / s.maxPeriodsDay)
-  }
+function recalculate(std: StandardData, key: keyof StandardData, value: number | string): StandardData {
+  const s = { ...std, [key]: value }
+  const tb = (n: typeof s) => n.lunchMinutes + n.breakMinutes * (n.numBreaks - 1)
+  const hw = (n: typeof s) => Math.round((n.maxPeriodsDay * n.periodDuration + tb(n)) * 5 / 60 * 10) / 10
+  if (key === "maxPeriodsDay")   { s.maxPeriodsWeek = (value as number) * 5; s.hoursPerWeek = hw(s) }
+  if (key === "maxPeriodsWeek")  { s.maxPeriodsDay = Math.round((value as number) / 5); s.hoursPerWeek = hw(s) }
+  if (key === "periodDuration")  { s.hoursPerWeek = hw(s) }
+  if (["lunchMinutes","breakMinutes","numBreaks"].includes(key)) { s.hoursPerWeek = hw(s) }
+  if (key === "hoursPerWeek")    { s.periodDuration = Math.round(((value as number)*60/5 - tb(s)) / s.maxPeriodsDay) }
   return s
 }
 
 export function Step2Country() {
   const { config, setConfig, setStep } = useTimetableStore()
-  // Clear stale localStorage cache from old version (no links field)
-  useEffect(() => {
-    const version = localStorage.getItem('smartsched_std_version')
-    if (version !== '2') {
-      // Clear all old standard caches
-      Object.keys(localStorage).forEach(key => {
-        if (key.startsWith('std_')) localStorage.removeItem(key)
-      })
-      localStorage.setItem('smartsched_std_version', '2')
-    }
-  }, [])
-
   const [search, setSearch] = useState("")
   const [showDropdown, setShowDropdown] = useState(false)
   const [editingStd, setEditingStd] = useState(false)
   const [savedMsg, setSavedMsg] = useState(false)
-  const [standard, setStandard] = useState<OrgStandard | null>(null)
+  const [standard, setStandard] = useState<StandardData | null>(null)
   const searchRef = useRef<HTMLDivElement>(null)
 
-  const selected = COUNTRIES.find(c => c.code === config.countryCode)
-  const selectedWorld = ALL_COUNTRIES.find(c => c.code === config.countryCode)
-  const org = ORG_CONFIGS[config.orgType ?? "school"]
+  const selected   = COUNTRIES.find(c => c.code === config.countryCode)
+  const selectedW  = ALL_COUNTRIES.find(c => c.code === config.countryCode)
+  const org        = ORG_CONFIGS[config.orgType ?? "school"]
   const MAIN_CODES = COUNTRIES.map(c => c.code)
 
   const filteredCountries = ALL_COUNTRIES
     .filter(c => !MAIN_CODES.includes(c.code))
-    .filter(c =>
-      search === "" ||
-      c.name.toLowerCase().includes(search.toLowerCase()) ||
-      c.code.toLowerCase().includes(search.toLowerCase())
-    )
+    .filter(c => search === "" || c.name.toLowerCase().includes(search.toLowerCase()) || c.code.toLowerCase().includes(search.toLowerCase()))
     .slice(0, 20)
 
+  // Close dropdown on outside click
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
-        setShowDropdown(false)
-      }
-    }
-    document.addEventListener("mousedown", handler)
-    return () => document.removeEventListener("mousedown", handler)
+    const h = (e: MouseEvent) => { if (searchRef.current && !searchRef.current.contains(e.target as Node)) setShowDropdown(false) }
+    document.addEventListener("mousedown", h)
+    return () => document.removeEventListener("mousedown", h)
   }, [])
 
+  // ── KEY FIX: Load fresh standard from DB every time country OR orgType changes ──
   useEffect(() => {
-    if (config.countryCode && config.orgType) {
-      // ALWAYS load fresh from DB — never trust localStorage for display
-      // localStorage only used when user explicitly clicks "Save as My Standard"
-      const fresh = getStandard(config.orgType, config.countryCode)
-      setStandard(fresh)
+    if (!config.countryCode || !config.orgType) return
+    // Clear old stale localStorage
+    const v = localStorage.getItem("ss_std_v")
+    if (v !== "3") {
+      Object.keys(localStorage).filter(k => k.startsWith("std_")).forEach(k => localStorage.removeItem(k))
+      localStorage.setItem("ss_std_v", "3")
     }
+    // ALWAYS load fresh from DB — never use cached old data for display
+    const fresh = getStandard(config.orgType, config.countryCode)
+    setStandard(fresh)
+    setEditingStd(false)
   }, [config.countryCode, config.orgType])
-
-  const handleFieldChange = (key: keyof OrgStandard, value: number | string) => {
-    if (!standard) return
-    setStandard(recalculate(standard, key, value))
-  }
 
   const saveStandard = () => {
     if (!standard || !config.countryCode || !config.orgType) return
@@ -147,54 +73,24 @@ export function Step2Country() {
     setEditingStd(false)
   }
 
-  const displayName = selected?.name ?? selectedWorld?.name ?? (config.countryCode === "CUSTOM" ? search : "")
-  const displayFlag = selected?.flag ?? selectedWorld?.flag ?? "🌍"
+  const displayName = selected?.name ?? selectedW?.name ?? ""
+  const displayFlag = selected?.flag ?? selectedW?.flag ?? "🌍"
 
-  const Field = ({ label, fieldKey, unit, readOnly = false, wide = false }: {
-    label: string; fieldKey: keyof OrgStandard; unit: string; readOnly?: boolean; wide?: boolean
-  }) => {
-    const val = standard?.[fieldKey]
-    const isNum = typeof val === "number"
-    if (wide) {
-      // Wide field: label on top, value below (for notes)
-      return (
-        <div style={{ padding:"8px 0", borderBottom:"1px solid #f0ede7" }}>
-          <div style={{ fontSize:11, color:"#a8a59e", marginBottom:4 }}>{label}</div>
-          {editingStd ? (
-            <input
-              type="text"
-              defaultValue={String(val ?? "")}
-              key={String(val ?? "")}
-              onBlur={e => handleFieldChange(fieldKey, e.target.value)}
-              style={{ width:"100%", padding:"6px 10px", border:"1.5px solid #4f46e5", borderRadius:6, fontSize:12, outline:"none", background:"#fff", boxSizing:"border-box" as const }}
-            />
-          ) : (
-            <div style={{ fontSize:12, color:"#1c1b18", lineHeight:1.5, fontWeight:500 }}>{String(val ?? "—")}</div>
-          )}
-        </div>
-      )
-    }
+  // Number field row
+  const NumRow = ({ label, k, unit, ro = false }: { label: string; k: keyof StandardData; unit: string; ro?: boolean }) => {
+    const val = standard?.[k] as number
     return (
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 100px 50px", alignItems:"center", gap:8, padding:"7px 0", borderBottom:"1px solid #f0ede7" }}>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 90px 48px", alignItems:"center", gap:8, padding:"7px 0", borderBottom:"1px solid #f0ede7" }}>
         <span style={{ fontSize:12, color:"#1c1b18" }}>{label}</span>
-        {editingStd && !readOnly ? (
-          <input
-            type="number"
-            defaultValue={String(val ?? "")}
-            key={String(val ?? "")}
-            onBlur={e => handleFieldChange(fieldKey, +e.target.value)}
-            style={{ padding:"5px 8px", border:"1.5px solid #4f46e5", borderRadius:6, fontSize:12, fontFamily:"'DM Mono',monospace", textAlign:"right", outline:"none", width:"100%", background:"#fff" }}
-          />
-        ) : (
-          <div style={{ display:"flex", alignItems:"center", justifyContent:"flex-end", gap:4 }}>
-            {readOnly && editingStd && (
-              <span style={{ fontSize:9, background:"#f0fdf4", color:"#059669", padding:"1px 5px", borderRadius:4, fontWeight:600 }}>AUTO</span>
-            )}
-            <span style={{ fontSize:12, fontFamily:"'DM Mono',monospace", fontWeight:700, color: readOnly&&editingStd?"#059669":"#1c1b18" }}>
-              {String(val ?? "—")}
-            </span>
-          </div>
-        )}
+        {editingStd && !ro
+          ? <input type="number" defaultValue={val} key={val}
+              onBlur={e => standard && setStandard(recalculate(standard, k, +e.target.value))}
+              style={{ padding:"4px 8px", border:"1.5px solid #4f46e5", borderRadius:6, fontSize:12, fontFamily:"'DM Mono',monospace", textAlign:"right", outline:"none", width:"100%", background:"#fff" }} />
+          : <div style={{ display:"flex", alignItems:"center", justifyContent:"flex-end", gap:4 }}>
+              {ro && editingStd && <span style={{ fontSize:9, background:"#f0fdf4", color:"#059669", padding:"1px 5px", borderRadius:4, fontWeight:600 }}>AUTO</span>}
+              <span style={{ fontSize:13, fontFamily:"'DM Mono',monospace", fontWeight:700, color: ro&&editingStd?"#059669":"#1c1b18" }}>{val}</span>
+            </div>
+        }
         <span style={{ fontSize:11, color:"#a8a59e" }}>{unit}</span>
       </div>
     )
@@ -212,7 +108,8 @@ export function Step2Country() {
         {COUNTRIES.map(c => {
           const sel = config.countryCode === c.code
           return (
-            <button key={c.code} onClick={() => { setConfig({ countryCode: c.code }); setSearch("") }}
+            <button key={c.code}
+              onClick={() => { setConfig({ countryCode: c.code }); setSearch("") }}
               style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 14px", borderRadius:10, textAlign:"left", border: sel?"2px solid #4f46e5":"1.5px solid #e8e5de", background: sel?"#eaecf8":"#fff", cursor:"pointer", transition:"all 0.15s" }}
               onMouseEnter={e => { if(!sel){ (e.currentTarget as HTMLElement).style.borderColor="#34d399"; (e.currentTarget as HTMLElement).style.background="#f0fdf4" }}}
               onMouseLeave={e => { if(!sel){ (e.currentTarget as HTMLElement).style.borderColor="#e8e5de"; (e.currentTarget as HTMLElement).style.background="#fff" }}}
@@ -227,16 +124,12 @@ export function Step2Country() {
         })}
       </div>
 
-      {/* Searchable world countries dropdown */}
+      {/* Searchable world countries */}
       <div ref={searchRef} style={{ position:"relative", marginBottom:20 }}>
-        <input
-          value={search}
-          onChange={e => { setSearch(e.target.value); setShowDropdown(true) }}
-          onFocus={() => setShowDropdown(true)}
+        <input value={search} onChange={e => { setSearch(e.target.value); setShowDropdown(true) }} onFocus={() => setShowDropdown(true)}
           placeholder="🔍 Search all other countries of the world..."
           style={{ width:"100%", padding:"10px 14px", borderRadius:10, border: showDropdown?"1.5px solid #4f46e5":"1.5px solid #e8e5de", fontSize:13, outline:"none", boxSizing:"border-box", background:"#fff" }}
         />
-
         {showDropdown && (
           <div style={{ position:"absolute", top:"100%", left:0, right:0, zIndex:200, background:"#fff", border:"1.5px solid #4f46e5", borderRadius:10, boxShadow:"0 8px 24px rgba(0,0,0,0.12)", marginTop:4, maxHeight:260, overflowY:"auto" }}>
             {filteredCountries.length === 0
@@ -248,7 +141,7 @@ export function Step2Country() {
                       onClick={() => { setConfig({ countryCode: c.code }); setSearch(c.name); setShowDropdown(false) }}
                       style={{ width:"100%", display:"flex", alignItems:"center", gap:10, padding:"10px 14px", border:"none", background: sel?"#eaecf8":"transparent", cursor:"pointer", textAlign:"left", borderBottom:"1px solid #f0ede7" }}
                       onMouseEnter={e => { if(!sel) (e.currentTarget as HTMLElement).style.background="#f7f6f2" }}
-                      onMouseLeave={e => { if(!sel) (e.currentTarget as HTMLElement).style.background= sel?"#eaecf8":"transparent" }}
+                      onMouseLeave={e => { if(!sel) (e.currentTarget as HTMLElement).style.background="transparent" }}
                     >
                       <span style={{ fontSize:20 }}>{c.flag}</span>
                       <div style={{ flex:1 }}>
@@ -267,65 +160,72 @@ export function Step2Country() {
       {/* Standards panel */}
       {config.countryCode && standard && (
         <div style={{ border:"1.5px solid #e8e5de", borderRadius:12, overflow:"hidden", marginBottom:20 }}>
-          <div style={{ padding:"10px 14px", background: editingStd?"#eaecf8":"#f0fdf4", borderBottom:"1px solid #e8e5de", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
-            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-              <span style={{ fontSize:18 }}>{displayFlag}</span>
+
+          {/* Header */}
+          <div style={{ padding:"12px 14px", background: editingStd?"#eaecf8":"#f0fdf4", borderBottom:"1px solid #e8e5de", display:"flex", alignItems:"flex-start", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
+            <div style={{ display:"flex", alignItems:"flex-start", gap:10, flex:1 }}>
+              <span style={{ fontSize:22, marginTop:2 }}>{displayFlag}</span>
               <div>
-                <div style={{ fontSize:12, fontWeight:700, color: editingStd?"#3730a3":"#14532d" }}>
+                <div style={{ fontSize:13, fontWeight:700, color: editingStd?"#3730a3":"#14532d", marginBottom:3 }}>
                   {editingStd ? `✏️ Editing: ${displayName} · ${org.name}` : `✅ ${displayName} · ${org.name} Standard`}
                 </div>
-                <div style={{ fontSize:11, color:"#6a6860" }}>{standard.notes}</div>
+                {/* Notes shown directly in header */}
+                <div style={{ fontSize:12, color:"#374151", lineHeight:1.55, maxWidth:440 }}>{standard.notes}</div>
+                <div style={{ fontSize:11, color:"#6b7280", marginTop:4, fontStyle:"italic" }}>{standard.regulation}</div>
               </div>
             </div>
-            <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+            <div style={{ display:"flex", gap:6, flexWrap:"wrap", flexShrink:0 }}>
               {!editingStd
                 ? <button onClick={() => setEditingStd(true)} style={{ padding:"5px 12px", borderRadius:6, border:"1.5px solid #d4d1c8", background:"#fff", fontSize:11, fontWeight:600, cursor:"pointer", color:"#4f46e5" }}>✏️ Customize</button>
                 : <>
-                    <button onClick={saveStandard} style={{ padding:"5px 12px", borderRadius:6, border:"none", background:"#059669", color:"#fff", fontSize:11, fontWeight:600, cursor:"pointer" }}>💾 Save as My Standard</button>
+                    <button onClick={saveStandard} style={{ padding:"5px 12px", borderRadius:6, border:"none", background:"#059669", color:"#fff", fontSize:11, fontWeight:600, cursor:"pointer" }}>💾 Save</button>
                     <button onClick={() => setEditingStd(false)} style={{ padding:"5px 12px", borderRadius:6, border:"1.5px solid #e8e5de", background:"#fff", fontSize:11, cursor:"pointer" }}>Cancel</button>
                     <button onClick={resetStandard} style={{ padding:"5px 12px", borderRadius:6, border:"1.5px solid #fca5a5", background:"#fff", fontSize:11, cursor:"pointer", color:"#dc2626" }}>Reset</button>
                   </>
               }
             </div>
           </div>
-          <div style={{ padding:"6px 14px 10px" }}>
-            {editingStd && (
-              <div style={{ background:"#fffbeb", border:"1px solid #fcd34d", borderRadius:6, padding:"6px 10px", marginBottom:8, fontSize:11, color:"#92400e" }}>
-                💡 Edit any field — related fields update <strong>automatically</strong>. Fields marked <strong style={{ color:"#059669" }}>AUTO</strong> are calculated.
-              </div>
-            )}
-            <Field label={`Max periods / week (${org.staffsLabel})`} fieldKey="maxPeriodsWeek" unit="periods" />
-            <Field label="Max periods / day"    fieldKey="maxPeriodsDay"   unit="periods" />
-            <Field label="Period duration"      fieldKey="periodDuration"  unit="min" />
-            <Field label="Working hours / week" fieldKey="hoursPerWeek"    unit="hrs" readOnly={true} />
-            <Field label="Lunch break"          fieldKey="lunchMinutes"    unit="min" />
-            <Field label="Short break duration" fieldKey="breakMinutes"    unit="min" />
-            <Field label="Number of breaks"     fieldKey="numBreaks"       unit="total" />
-            <Field label="Notes / regulation" fieldKey="notes" unit="" wide={true} />
 
+          {/* Edit tip */}
+          {editingStd && (
+            <div style={{ background:"#fffbeb", borderBottom:"1px solid #fcd34d", padding:"6px 14px", fontSize:11, color:"#92400e" }}>
+              💡 Edit any field — related fields update <strong>automatically</strong>. <strong style={{ color:"#059669" }}>AUTO</strong> fields are calculated.
+            </div>
+          )}
+
+          {/* Fields */}
+          <div style={{ padding:"4px 14px 8px" }}>
+            <NumRow label={`Max periods / week (${org.staffsLabel})`} k="maxPeriodsWeek" unit="periods" />
+            <NumRow label="Max periods / day"    k="maxPeriodsDay"   unit="periods" />
+            <NumRow label="Period duration"      k="periodDuration"  unit="min" />
+            <NumRow label="Working hours / week" k="hoursPerWeek"    unit="hrs" ro={true} />
+            <NumRow label="Lunch break"          k="lunchMinutes"    unit="min" />
+            <NumRow label="Short break"          k="breakMinutes"    unit="min" />
+            <NumRow label="Number of breaks"     k="numBreaks"       unit="total" />
           </div>
 
-          {/* Official reference links — always visible */}
+          {/* Official Reference Links */}
           {standard.links && standard.links.length > 0 && (
-            <div style={{ padding:"10px 14px 12px", borderTop:"1px solid #f0ede7" }}>
-              <div style={{ fontSize:10, fontWeight:700, textTransform:"uppercase" as const, letterSpacing:"0.06em", color:"#a8a59e", marginBottom:8 }}>
+            <div style={{ padding:"10px 14px 14px", borderTop:"1px solid #f0ede7" }}>
+              <div style={{ fontSize:10, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em", color:"#a8a59e", marginBottom:8 }}>
                 📎 Official Reference Documents
               </div>
-              <div style={{ display:"flex", flexDirection:"column" as const, gap:5 }}>
+              <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
                 {standard.links.map((link, i) => (
                   <a key={i} href={link.url} target="_blank" rel="noopener noreferrer"
-                    style={{ display:"flex", alignItems:"center", gap:8, fontSize:12, color:"#4f46e5", textDecoration:"none", padding:"7px 10px", borderRadius:7, background:"#f7f6ff", border:"1px solid #e0e7ff", transition:"all 0.15s" }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background="#eaecf8"; (e.currentTarget as HTMLElement).style.borderColor="#a5b4fc"; }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background="#f7f6ff"; (e.currentTarget as HTMLElement).style.borderColor="#e0e7ff"; }}
+                    style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 12px", borderRadius:8, background:"#f5f3ff", border:"1px solid #ddd6fe", textDecoration:"none", color:"#4f46e5", fontSize:12, fontWeight:500, transition:"all 0.15s" }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background="#ede9fe"; (e.currentTarget as HTMLElement).style.borderColor="#a78bfa" }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background="#f5f3ff"; (e.currentTarget as HTMLElement).style.borderColor="#ddd6fe" }}
                   >
-                    <span style={{ fontSize:16 }}>🔗</span>
-                    <span style={{ flex:1, fontWeight:500, lineHeight:1.4 }}>{link.label}</span>
-                    <span style={{ fontSize:11, color:"#a8a59e", fontWeight:700 }}>↗</span>
+                    <span style={{ fontSize:16, flexShrink:0 }}>🔗</span>
+                    <span style={{ flex:1, lineHeight:1.4 }}>{link.label}</span>
+                    <span style={{ fontSize:12, color:"#7c3aed", fontWeight:700, flexShrink:0 }}>↗</span>
                   </a>
                 ))}
               </div>
             </div>
           )}
+
           {editingStd && (
             <div style={{ padding:"8px 14px", background:"#eaecf8", fontSize:11, color:"#3730a3", borderTop:"1px solid #c7d2fe" }}>
               📌 Saved per browser for <strong>{displayName} · {org.name}</strong>. Auto-loads next time.
