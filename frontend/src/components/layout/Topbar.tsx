@@ -27,7 +27,7 @@ export function Topbar({ step, totalSteps, stepLabel }: TopbarProps) {
           <CalendarDays size={16} />
         </div>
         <span style={{ fontFamily: "'DM Serif Display', Georgia, serif", fontSize: 17 }}>
-          Smart<span style={{ color: '#059669' }}>Sched</span>
+          Sche<span style={{ color: '#059669' }}>du</span>
         </span>
       </a>
 

@@ -82,7 +82,17 @@ export function Step5Data() {
                   <td style={{...tdS, color:"#a8a59e", fontSize:10, fontFamily:"monospace"}}>{i+1}</td>
                   <td style={tdS}>
                     <input style={inp()} value={s.name}
-                      onChange={e=>{const n=[...sections];n[i]={...n[i],name:e.target.value};setSections(n)}} />
+                      onChange={e=>{
+                        const name = e.target.value
+                        // Auto-extract grade from class name e.g. "VII-A" → "VII", "Grade 5-B" → "Grade 5"
+                        const gradeMatch = name.match(/^([A-Za-z]+(?:\.?\s*\d+|\s+[IVXivx]+)?)[-\s]/i)
+                          ?? name.match(/^([IVXivx]+)[-\s]/i)
+                          ?? name.match(/^(\d+)[-\s]/i)
+                        const autoGrade = gradeMatch ? gradeMatch[1].trim() : s.grade
+                        const n=[...sections]
+                        n[i]={...n[i], name, grade: autoGrade}
+                        setSections(n)
+                      }} />
                   </td>
                   <td style={tdS}>
                     <input style={inp()} value={s.room??""}
@@ -174,6 +184,7 @@ export function Step5Data() {
               <th style={thS}>Name</th>
               <th style={{...thS, width:90}}>Per./week</th>
               <th style={{...thS, width:90}}>Per./day</th>
+              <th style={{...thS, width:90}}>Min./session</th>
               <th style={{...thS, width:32}}></th>
             </tr></thead>
             <tbody>
@@ -198,6 +209,16 @@ export function Step5Data() {
                       <span style={{ fontSize:10, color:"#a8a59e", marginLeft:4 }}>avg</span>
                     </td>
                     <td style={tdS}>
+                      <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+                        <input type="number" min={10} max={180}
+                          value={(s as any).sessionDuration ?? 40}
+                          onChange={e=>{const n=[...subjects];(n[i] as any).sessionDuration=Math.max(10,+e.target.value);setSubjects(n)}}
+                          style={{ width:52, padding:"3px 6px", border:"1px solid #e8e5de", borderRadius:5, fontSize:12, fontFamily:"monospace", textAlign:"center" as const, outline:"none" }}
+                        />
+                        <span style={{ fontSize:10, color:"#a8a59e" }}>min</span>
+                      </div>
+                    </td>
+                    <td style={tdS}>
                       <button style={delBtn} onClick={()=>setSubjects(subjects.filter((_,j)=>j!==i))}>×</button>
                     </td>
                   </tr>
@@ -206,7 +227,7 @@ export function Step5Data() {
             </tbody>
           </table>
           <div style={{ padding:"6px 12px 4px", background:"#f7f6f2", borderTop:"1px solid #e8e5de", fontSize:11, color:"#6a6860" }}>
-            💡 Per/day is calculated automatically from Per/week ÷ {config.workDays.length} working days
+            💡 Per/day = Per/week ÷ {config.workDays.length} working days · Min./session = duration per class period
           </div>
           <button style={addRow} onClick={() => setSubjects([...subjects, { id:crypto.randomUUID(), name:`New ${org.subjectLabel}`, periodsPerWeek:2, color:"bg-gray-100 text-gray-700", sections:[] }])}>
             ＋ Add {org.subjectLabel}
