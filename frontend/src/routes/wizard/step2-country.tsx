@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react"
 import { useTimetableStore } from "@/store/timetableStore"
 import { COUNTRIES, ORG_CONFIGS } from "@/lib/orgData"
 import { ALL_COUNTRIES } from "@/lib/allCountries"
+import { getStandard } from "@/lib/standardsDB"
 
 interface OrgStandard {
   maxPeriodsWeek: number
@@ -108,7 +109,7 @@ export function Step2Country() {
   useEffect(() => {
     if (config.countryCode && config.orgType) {
       const saved = localStorage.getItem(`std_${config.orgType}_${config.countryCode}`)
-      setStandard(saved ? JSON.parse(saved) : getDefaultStandard(config.countryCode, config.orgType))
+      setStandard(saved ? JSON.parse(saved) : getStandard(config.orgType, config.countryCode))
     }
   }, [config.countryCode, config.orgType])
 
@@ -128,7 +129,7 @@ export function Step2Country() {
   const resetStandard = () => {
     if (!config.countryCode || !config.orgType) return
     localStorage.removeItem(`std_${config.orgType}_${config.countryCode}`)
-    setStandard(getDefaultStandard(config.countryCode, config.orgType))
+    setStandard(getStandard(config.orgType, config.countryCode))
     setEditingStd(false)
   }
 
