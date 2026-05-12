@@ -1,65 +1,21 @@
 @import "tailwindcss";
 
 @layer base {
-  :root {
-    --background: 0 0% 100%;
-    --foreground: 224 71.4% 4.1%;
-    --card: 0 0% 100%;
-    --card-foreground: 224 71.4% 4.1%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 224 71.4% 4.1%;
-    --primary: 158 64% 30%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 220 14.3% 95.9%;
-    --secondary-foreground: 220.9 39.3% 11%;
-    --muted: 220 14.3% 95.9%;
-    --muted-foreground: 220 8.9% 46.1%;
-    --accent: 220 14.3% 95.9%;
-    --accent-foreground: 220.9 39.3% 11%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 220 13% 91%;
-    --input: 220 13% 91%;
-    --ring: 158 64% 30%;
-    --radius: 0.5rem;
-    --brand: #1a7f5a;
-    --brand-light: #e0f5ec;
-    --brand-dark: #0a4f38;
-    --accent-color: #2d3a8c;
-    --accent-light: #eaecf8;
+  * {
+    box-sizing: border-box;
   }
-  .dark {
-    --background: 224 71.4% 4.1%;
-    --foreground: 210 20% 98%;
-    --card: 224 71.4% 4.1%;
-    --card-foreground: 210 20% 98%;
-    --primary: 158 64% 45%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 215 27.9% 16.9%;
-    --secondary-foreground: 210 20% 98%;
-    --muted: 215 27.9% 16.9%;
-    --muted-foreground: 217.9 10.6% 64.9%;
-    --border: 215 27.9% 16.9%;
-    --input: 215 27.9% 16.9%;
-    --ring: 158 64% 45%;
+  body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background-color: #f7f6f2;
+    color: #1c1b18;
+    line-height: 1.55;
   }
 }
 
-@layer base {
-  * { @apply border-border; }
-  body { @apply bg-background text-foreground font-sans antialiased; }
-}
-
-/* Print styles — auto-fit any paper */
 @media print {
   @page { margin: 5mm; size: auto; }
-  .no-print, nav, aside, header { display: none !important; }
-  .print-table { font-size: 7pt; table-layout: fixed; width: 100%; }
-  .print-table th, .print-table td {
-    border: 0.4pt solid #aaa;
-    word-break: break-word;
-    overflow: hidden;
-    padding: 1.5pt;
-  }
+  .no-print { display: none !important; }
   .tt-box { page-break-inside: avoid; break-inside: avoid; margin-bottom: 7mm; }
+  table { font-size: 7pt; table-layout: fixed; width: 100%; }
+  th, td { border: 0.4pt solid #aaa; word-break: break-word; padding: 1.5pt; }
 }
