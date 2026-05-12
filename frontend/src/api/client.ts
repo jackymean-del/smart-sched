@@ -1,7 +1,8 @@
+/// <reference types="vite/client" />
 import axios from 'axios'
 
 export const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_URL ?? '/api/v1',
+  baseURL: '/api/v1',
   headers: { 'Content-Type': 'application/json' },
 })
 
@@ -22,21 +23,13 @@ apiClient.interceptors.response.use(
   }
 )
 
-// Timetable API
 export const timetableApi = {
-  list: () => apiClient.get('/timetables'),
-  get: (id: string) => apiClient.get(`/timetables/${id}`),
-  create: (data: unknown) => apiClient.post('/timetables', data),
-  update: (id: string, data: unknown) => apiClient.put(`/timetables/${id}`, data),
-  delete: (id: string) => apiClient.delete(`/timetables/${id}`),
-  generate: (data: unknown) => apiClient.post('/timetables/generate', data),
-  export: (id: string, format: 'xlsx' | 'pdf') =>
-    apiClient.post(`/timetables/${id}/export?format=${format}`),
-  substitute: (id: string, data: unknown) =>
-    apiClient.post(`/timetables/${id}/substitute`, data),
-}
-
-export const orgConfigApi = {
-  get: (orgType: string, country: string) =>
-    apiClient.get(`/org-config?org_type=${orgType}&country=${country}`),
+  list:       ()           => apiClient.get('/timetables'),
+  get:        (id: string) => apiClient.get(`/timetables/${id}`),
+  create:     (data: unknown) => apiClient.post('/timetables', data),
+  update:     (id: string, data: unknown) => apiClient.put(`/timetables/${id}`, data),
+  delete:     (id: string) => apiClient.delete(`/timetables/${id}`),
+  generate:   (data: unknown) => apiClient.post('/timetables/generate', data),
+  export:     (id: string, format: 'xlsx' | 'pdf') => apiClient.post(`/timetables/${id}/export?format=${format}`),
+  substitute: (id: string, data: unknown) => apiClient.post(`/timetables/${id}/substitute`, data),
 }

@@ -1,5 +1,5 @@
 import {
-  LayoutList, LayoutColumns, Users, GraduationCap,
+  LayoutList, LayoutGrid, Users, GraduationCap,
   Eye, EyeOff, DoorOpen, Pencil, RefreshCcw,
   FileSpreadsheet, Printer, ArrowLeft, AlertCircle, CheckCircle2,
 } from 'lucide-react'
@@ -48,7 +48,7 @@ export function Toolbar({
           <LayoutList className="w-3.5 h-3.5" /> Normal
         </button>
         <button onClick={() => onTranspose(true)} className={cn('px-2.5 py-1.5 text-[11px] font-medium flex items-center gap-1 transition-colors', transposed ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:bg-gray-50')}>
-          <LayoutColumns className="w-3.5 h-3.5" /> Transposed
+          <LayoutGrid className="w-3.5 h-3.5" /> Transposed
         </button>
       </div>
 
