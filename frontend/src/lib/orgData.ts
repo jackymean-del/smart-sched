@@ -230,7 +230,7 @@ export function generateStaff(orgType: OrgType, countryCode: string, n: number) 
   const maxPeriods: Record<OrgType, number> = { school: c.maxPeriodsWeek, college: 16, corporate: 40, hospital: 42, ngo: 30, factory: 48 }
   return Array.from({ length: n }, (_, i) => ({
     id: generateId(),
-    name: pickName(c, i),
+    name: `${cfg.staffLabel} ${i + 1}`,
     role: cfg.staffLabel,
     subjects: [] as string[],
     classes: [] as string[],
