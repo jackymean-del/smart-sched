@@ -3,8 +3,6 @@ import {
   FileOutput, Settings2, Sparkles, Eye,
   GraduationCap, Building2, Briefcase, Stethoscope, HeartHandshake, Factory,
 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
 
 const ORG_PILLS = [
   { icon: GraduationCap, label: 'School' },
@@ -16,50 +14,100 @@ const ORG_PILLS = [
 ]
 
 const FEATURES = [
-  { icon: Brain,         color: 'text-emerald-600', title: 'AI Constraint Solver',   desc: 'Zero-conflict timetables via genetic optimization in seconds.' },
-  { icon: Globe,         color: 'text-indigo-600',  title: '8+ Country Standards',   desc: 'Auto-loads national labour laws, workload norms for India, US, UK, UAE and more.' },
-  { icon: RefreshCcw,    color: 'text-amber-600',   title: 'Smart Substitution',     desc: 'AI instantly finds the best available substitute by subject match.' },
-  { icon: ArrowLeftRight,color: 'text-purple-600',  title: 'All Periods Shiftable',  desc: 'Assembly, Dispersal, breaks — any slot swappable. Cascades to teacher timetable.' },
-  { icon: FileOutput,    color: 'text-orange-600',  title: 'Export Anywhere',        desc: 'PDF auto-fit (any paper/orientation), multi-sheet Excel with teacher headers.' },
-  { icon: Settings2,     color: 'text-teal-600',    title: 'Fully Editable',         desc: 'Edit any cell live. Lock/unlock any period. Toggle teacher names and rooms.' },
+  { icon: Brain,          color: 'color:#059669', title: 'AI Constraint Solver',   desc: 'Zero-conflict timetables via genetic optimization in seconds.' },
+  { icon: Globe,          color: 'color:#4f46e5', title: '8+ Country Standards',   desc: 'Auto-loads national labour laws, workload norms for India, US, UK, UAE and more.' },
+  { icon: RefreshCcw,     color: 'color:#d97706', title: 'Smart Substitution',     desc: 'AI instantly finds the best available substitute by subject match.' },
+  { icon: ArrowLeftRight, color: 'color:#7c3aed', title: 'All Periods Shiftable',  desc: 'Assembly, Dispersal, breaks — any slot swappable. Cascades to teacher timetable.' },
+  { icon: FileOutput,     color: 'color:#ea580c', title: 'Export Anywhere',        desc: 'PDF auto-fit (any paper/orientation), multi-sheet Excel with teacher headers.' },
+  { icon: Settings2,      color: 'color:#0d9488', title: 'Fully Editable',         desc: 'Edit any cell live. Lock/unlock any period. Toggle teacher names and rooms.' },
 ]
 
 export function HomePage() {
   return (
-    <main className="flex flex-col items-center justify-center min-h-[calc(100vh-52px)] px-6 py-12 text-center bg-gradient-to-b from-emerald-50/60 to-gray-50">
-      <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center text-white shadow-lg mb-7">
-        <Sparkles className="w-9 h-9" />
+    <main style={{
+      display: 'flex', flexDirection: 'column', alignItems: 'center',
+      justifyContent: 'center', minHeight: 'calc(100vh - 52px)',
+      padding: '48px 24px', textAlign: 'center',
+      background: 'linear-gradient(to bottom, rgba(209,250,229,0.4), #f7f6f2)',
+    }}>
+      {/* Icon */}
+      <div style={{
+        width: 80, height: 80, borderRadius: 22,
+        background: 'linear-gradient(135deg, #34d399, #059669)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        color: '#fff', marginBottom: 24, boxShadow: '0 10px 25px rgba(5,150,105,0.3)',
+      }}>
+        <Sparkles size={38} />
       </div>
-      <h1 className="font-serif text-5xl leading-tight mb-4 max-w-2xl">
-        AI-Powered <em className="text-emerald-600 not-italic">Timetable</em><br />Generator
+
+      {/* Title */}
+      <h1 className="font-serif" style={{ fontSize: 48, lineHeight: 1.15, marginBottom: 14, maxWidth: 640 }}>
+        AI-Powered <span style={{ color: '#059669' }}>Timetable</span><br />Generator
       </h1>
-      <p className="text-gray-500 text-[15px] max-w-xl leading-relaxed mb-9">
+      <p style={{ color: '#6a6860', fontSize: 15, maxWidth: 520, lineHeight: 1.75, marginBottom: 32 }}>
         Generate conflict-free, regulation-compliant timetables for any organization in seconds.
+        AI handles the complexity — you just review and approve.
       </p>
-      <div className="flex gap-2 flex-wrap justify-center mb-9">
+
+      {/* Org pills */}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center', marginBottom: 32 }}>
         {ORG_PILLS.map(({ icon: Icon, label }) => (
-          <span key={label} className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-full text-[11px] font-medium text-gray-500">
-            <Icon className="w-3.5 h-3.5" /> {label}
+          <span key={label} style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            padding: '5px 14px', background: '#fff',
+            border: '1px solid #e8e5de', borderRadius: 20,
+            fontSize: 11, fontWeight: 500, color: '#6a6860',
+          }}>
+            <Icon size={14} /> {label}
           </span>
         ))}
       </div>
-      <div className="flex gap-3 mb-14">
-        <Button size="lg" className="gap-2 text-[15px]" onClick={() => window.location.href='/wizard'}>
-          <Sparkles className="w-4 h-4" /> Create Timetable — Free
-        </Button>
-        <Button size="lg" variant="outline" className="gap-2 text-[15px]" onClick={() => window.location.href='/demo'}>
-          <Eye className="w-4 h-4" /> View Live Demo
-        </Button>
+
+      {/* CTA Buttons */}
+      <div style={{ display: 'flex', gap: 12, marginBottom: 52, flexWrap: 'wrap', justifyContent: 'center' }}>
+        <button
+          onClick={() => window.location.href = '/wizard'}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '13px 28px', borderRadius: 10, fontSize: 15, fontWeight: 600,
+            background: '#059669', color: '#fff', border: 'none',
+            cursor: 'pointer', transition: 'all 0.18s',
+            boxShadow: '0 4px 14px rgba(5,150,105,0.35)',
+          }}
+          onMouseEnter={e => { (e.target as HTMLElement).style.transform = 'translateY(-2px)'; (e.target as HTMLElement).style.boxShadow = '0 6px 20px rgba(5,150,105,0.45)'; }}
+          onMouseLeave={e => { (e.target as HTMLElement).style.transform = 'translateY(0)'; (e.target as HTMLElement).style.boxShadow = '0 4px 14px rgba(5,150,105,0.35)'; }}
+        >
+          <Sparkles size={18} /> Create Timetable — Free
+        </button>
+        <button
+          onClick={() => window.location.href = '/demo'}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '13px 28px', borderRadius: 10, fontSize: 15, fontWeight: 600,
+            background: '#fff', color: '#1c1b18',
+            border: '2px solid #d4d1c8', cursor: 'pointer', transition: 'all 0.18s',
+          }}
+          onMouseEnter={e => { (e.target as HTMLElement).style.borderColor = '#059669'; (e.target as HTMLElement).style.color = '#059669'; }}
+          onMouseLeave={e => { (e.target as HTMLElement).style.borderColor = '#d4d1c8'; (e.target as HTMLElement).style.color = '#1c1b18'; }}
+        >
+          <Eye size={18} /> View Live Demo
+        </button>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-w-4xl w-full">
+
+      {/* Feature cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, maxWidth: 760, width: '100%' }}>
         {FEATURES.map(({ icon: Icon, color, title, desc }) => (
-          <Card key={title} className="text-left hover:shadow-md transition-shadow">
-            <CardContent className="p-5">
-              <Icon className={`w-6 h-6 ${color} mb-3`} />
-              <h3 className="font-semibold text-[13px] mb-1.5">{title}</h3>
-              <p className="text-[11.5px] text-gray-500 leading-relaxed">{desc}</p>
-            </CardContent>
-          </Card>
+          <div key={title} style={{
+            background: '#fff', borderRadius: 12, padding: '20px 18px',
+            border: '1px solid #e8e5de', textAlign: 'left', transition: 'all 0.18s',
+          }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = '0 8px 24px rgba(0,0,0,0.1)'; (e.currentTarget as HTMLElement).style.transform = 'translateY(-3px)'; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = 'none'; (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; }}
+          >
+            <Icon size={24} style={{ marginBottom: 10, ...Object.fromEntries([color.split(':')]) }} />
+            <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{title}</h3>
+            <p style={{ fontSize: 11.5, color: '#6a6860', lineHeight: 1.55 }}>{desc}</p>
+          </div>
         ))}
       </div>
     </main>

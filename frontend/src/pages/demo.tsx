@@ -1,17 +1,16 @@
+import { useEffect } from "react"
 import { useTimetableStore } from "@/store/timetableStore"
 import { generateSections, generateStaff, generateSubjects, generateBreaks } from "@/lib/orgData"
 import { buildPeriodSequence, generateTimetable, autoAssign } from "@/lib/aiEngine"
-import { Button } from "@/components/ui/button"
 import { Sparkles } from "lucide-react"
-import type { Staff } from "@/types"
 
 export function DemoPage() {
   const store = useTimetableStore()
 
   const loadDemo = () => {
-    const orgType    = 'school' as const
+    const orgType     = 'school' as const
     const countryCode = 'IN'
-    const workDays   = ['MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY']
+    const workDays    = ['MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY']
 
     store.setConfig({ orgType, countryCode, workDays, periodsPerDay: 8, numBreaks: 4, numStaff: 8, numSections: 4, numSubjects: 8 })
 
@@ -22,7 +21,7 @@ export function DemoPage() {
 
     const assigned = autoAssign(secs, staffArr, subs)
     secs     = assigned.sections
-    staffArr = assigned.staff.map((s): Staff => ({ ...s, isClassTeacher: s.isClassTeacher ?? '' }))
+    staffArr = assigned.staff.map(s => ({ ...s, isClassTeacher: s.isClassTeacher ?? '' }))
     subs     = assigned.subjects
 
     store.setSections(secs)
@@ -37,19 +36,43 @@ export function DemoPage() {
     store.setClassTT(classTT)
     store.setTeacherTT(teacherTT)
     store.setConflicts(conflicts)
+
     window.location.href = '/timetable'
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[calc(100vh-52px)] gap-6 text-center px-6">
-      <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center text-white shadow-lg">
-        <Sparkles className="w-7 h-7" />
+    <div style={{
+      display: 'flex', flexDirection: 'column', alignItems: 'center',
+      justifyContent: 'center', minHeight: 'calc(100vh - 52px)',
+      gap: 24, textAlign: 'center', padding: '0 24px',
+    }}>
+      <div style={{
+        width: 72, height: 72, borderRadius: 18,
+        background: 'linear-gradient(135deg, #34d399, #059669)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        color: '#fff', boxShadow: '0 8px 20px rgba(5,150,105,0.3)',
+      }}>
+        <Sparkles size={32} />
       </div>
-      <h1 className="font-serif text-3xl">Live Demo</h1>
-      <p className="text-gray-500 max-w-sm leading-relaxed">India school · 4 classes · 8 teachers · 6-day week · All features enabled</p>
-      <Button onClick={loadDemo} size="lg" className="gap-2 text-base px-8">
-        <Sparkles className="w-4 h-4" /> Load Demo Timetable
-      </Button>
+
+      <h1 className="font-serif" style={{ fontSize: 32 }}>Live Demo</h1>
+      <p style={{ color: '#6a6860', maxWidth: 380, lineHeight: 1.65 }}>
+        India school · 4 classes · 8 teachers · 6-day week<br />
+        All features enabled — shifts, substitution, export
+      </p>
+
+      <button onClick={loadDemo} style={{
+        display: 'flex', alignItems: 'center', gap: 10,
+        padding: '14px 32px', borderRadius: 10, fontSize: 16, fontWeight: 600,
+        background: '#059669', color: '#fff', border: 'none',
+        cursor: 'pointer', transition: 'all 0.18s',
+        boxShadow: '0 4px 14px rgba(5,150,105,0.35)',
+      }}
+      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'; }}
+      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; }}
+      >
+        <Sparkles size={18} /> Load Demo Timetable
+      </button>
     </div>
   )
 }
