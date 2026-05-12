@@ -1,9 +1,15 @@
-import { cn } from "@/lib/utils"
 import { useTimetableStore } from "@/store/timetableStore"
-import { Button } from "@/components/ui/button"
 
 const ALL_DAYS = ["MONDAY","TUESDAY","WEDNESDAY","THURSDAY","FRIDAY","SATURDAY","SUNDAY"]
-const DAY_LABELS: Record<string,string> = { MONDAY:"Mo",TUESDAY:"Tu",WEDNESDAY:"We",THURSDAY:"Th",FRIDAY:"Fr",SATURDAY:"Sa",SUNDAY:"Su" }
+const DAY_SHORT: Record<string,string> = { MONDAY:"Mo",TUESDAY:"Tu",WEDNESDAY:"We",THURSDAY:"Th",FRIDAY:"Fr",SATURDAY:"Sa",SUNDAY:"Su" }
+
+const btn = (active: boolean, onClick: ()=>void, children: React.ReactNode, extra?: React.CSSProperties) => (
+  <button onClick={onClick} style={{
+    padding:'12px', borderRadius:10, border: active?'2px solid #4f46e5':'1.5px solid #e8e5de',
+    background: active?'#eaecf8':'#fff', cursor:'pointer', transition:'all 0.15s',
+    textAlign:'center', ...extra,
+  }}>{children}</button>
+)
 
 export function Step3Schedule() {
   const { config, setConfig, setStep } = useTimetableStore()
@@ -15,65 +21,79 @@ export function Step3Schedule() {
     if (days.length > 0) setConfig({ workDays: days })
   }
 
+  const label = (text: string) => (
+    <div style={{ fontSize:11, fontWeight:700, textTransform:'uppercase' as const, letterSpacing:'0.06em', color:'#a8a59e', marginBottom:8 }}>
+      {text}
+    </div>
+  )
+
   return (
     <div>
-      <h1 className="font-serif text-3xl mb-2">Time format & working schedule</h1>
-      <p className="text-gray-500 text-[13px] mb-6">Configure how times are displayed and set your working week.</p>
+      <h1 style={{ fontFamily:"'DM Serif Display',Georgia,serif", fontSize:28, marginBottom:8 }}>Time format & working schedule</h1>
+      <p style={{ color:'#6a6860', fontSize:13, marginBottom:24, lineHeight:1.65 }}>Configure how times are displayed and set your working week.</p>
 
       {/* Time format */}
-      <div className="mb-6">
-        <label className="text-[10.5px] font-bold uppercase tracking-wider text-gray-400 block mb-2">Time Format</label>
-        <div className="grid grid-cols-2 gap-3 max-w-sm">
-          {(["12h","24h"] as const).map(fmt => (
+      <div style={{ marginBottom:24 }}>
+        {label("Time Format")}
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, maxWidth:360 }}>
+          {(['12h','24h'] as const).map(fmt => (
             <button key={fmt} onClick={() => setConfig({ timeFormat: fmt })}
-              className={cn("border-[1.5px] rounded-lg py-3.5 text-center transition-all",
-                config.timeFormat === fmt ? "border-indigo-500 bg-indigo-50" : "border-gray-200 bg-white hover:border-gray-300")}>
-              <div className={cn("font-mono text-xl font-bold", config.timeFormat === fmt ? "text-indigo-600" : "text-gray-700")}>
-                {fmt === "12h" ? "2:30 PM" : "14:30"}
+              style={{
+                padding:'14px', borderRadius:10, border: config.timeFormat===fmt?'2px solid #4f46e5':'1.5px solid #e8e5de',
+                background: config.timeFormat===fmt?'#eaecf8':'#fff', cursor:'pointer', textAlign:'center',
+              }}>
+              <div style={{ fontFamily:"'DM Mono',monospace", fontSize:22, fontWeight:700, color: config.timeFormat===fmt?'#4f46e5':'#1c1b18' }}>
+                {fmt==='12h'?'2:30 PM':'14:30'}
               </div>
-              <div className="text-[10px] text-gray-400 mt-1">{fmt === "12h" ? "AM/PM (12-hour)" : "Military (24-hour)"}</div>
+              <div style={{ fontSize:11, color:'#6a6860', marginTop:4 }}>
+                {fmt==='12h'?'AM/PM (12-hour)':'Military (24-hour)'}
+              </div>
             </button>
           ))}
         </div>
       </div>
 
       {/* Working days */}
-      <div className="mb-6">
-        <label className="text-[10.5px] font-bold uppercase tracking-wider text-gray-400 block mb-2">Working Days</label>
-        <div className="flex gap-2 flex-wrap">
-          {ALL_DAYS.map(day => (
-            <button key={day} onClick={() => toggleDay(day)}
-              className={cn("w-10 h-10 rounded-full border-[1.5px] text-[12px] font-bold transition-all",
-                config.workDays.includes(day)
-                  ? "bg-indigo-600 border-indigo-600 text-white"
-                  : "border-gray-300 text-gray-400 hover:border-gray-400")}>
-              {DAY_LABELS[day]}
-            </button>
-          ))}
+      <div style={{ marginBottom:24 }}>
+        {label("Working Days")}
+        <div style={{ display:'flex', gap:8, flexWrap:'wrap' as const }}>
+          {ALL_DAYS.map(day => {
+            const on = config.workDays.includes(day)
+            return (
+              <button key={day} onClick={() => toggleDay(day)}
+                style={{
+                  width:40, height:40, borderRadius:'50%', border: on?'none':'1.5px solid #d4d1c8',
+                  background: on?'#4f46e5':'#fff', color: on?'#fff':'#6a6860',
+                  fontSize:12, fontWeight:700, cursor:'pointer', transition:'all 0.15s',
+                }}>
+                {DAY_SHORT[day]}
+              </button>
+            )
+          })}
         </div>
       </div>
 
-      {/* Start / End time */}
-      <div className="grid grid-cols-2 gap-4 max-w-sm mb-6">
+      {/* Times */}
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, maxWidth:360, marginBottom:24 }}>
         <div>
-          <label className="text-[10.5px] font-bold uppercase tracking-wider text-gray-400 block mb-1.5">Start Time</label>
-          <select value={config.startTime} onChange={e => setConfig({ startTime: e.target.value })}
-            className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400">
-            {["07:00","08:00","08:30","09:00","09:05","09:30"].map(t => <option key={t} value={t}>{t}</option>)}
+          {label("Start Time")}
+          <select value={config.startTime} onChange={e=>setConfig({startTime:e.target.value})}
+            style={{ width:'100%', padding:'8px 12px', borderRadius:8, border:'1.5px solid #e8e5de', fontSize:13, background:'#fff', cursor:'pointer' }}>
+            {["07:00","08:00","08:30","09:00","09:05","09:30"].map(t=><option key={t}>{t}</option>)}
           </select>
         </div>
         <div>
-          <label className="text-[10.5px] font-bold uppercase tracking-wider text-gray-400 block mb-1.5">End Time</label>
-          <select value={config.endTime} onChange={e => setConfig({ endTime: e.target.value })}
-            className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400">
-            {["14:00","14:30","15:00","15:30","15:45","16:00","17:00","18:00"].map(t => <option key={t} value={t}>{t}</option>)}
+          {label("End Time")}
+          <select value={config.endTime} onChange={e=>setConfig({endTime:e.target.value})}
+            style={{ width:'100%', padding:'8px 12px', borderRadius:8, border:'1.5px solid #e8e5de', fontSize:13, background:'#fff', cursor:'pointer' }}>
+            {["14:00","14:30","15:00","15:30","15:45","16:00","17:00","18:00"].map(t=><option key={t}>{t}</option>)}
           </select>
         </div>
       </div>
 
-      <div className="flex justify-between pt-5 border-t border-gray-100">
-        <Button variant="outline" onClick={() => setStep(2)}>← Back</Button>
-        <Button onClick={() => setStep(4)}>Continue →</Button>
+      <div style={{ display:'flex', justifyContent:'space-between', paddingTop:16, borderTop:'1px solid #e8e5de' }}>
+        <button onClick={()=>setStep(2)} style={{ padding:'9px 18px', borderRadius:8, border:'1.5px solid #e8e5de', background:'#fff', fontSize:13, fontWeight:500, cursor:'pointer' }}>← Back</button>
+        <button onClick={()=>setStep(4)} style={{ padding:'9px 18px', borderRadius:8, border:'none', fontSize:13, fontWeight:600, cursor:'pointer', background:'#059669', color:'#fff' }}>Continue →</button>
       </div>
     </div>
   )
