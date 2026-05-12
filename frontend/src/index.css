@@ -1,15 +1,51 @@
 @import "tailwindcss";
 
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=Inter:wght@300;400;500;600;700&display=swap');
+
 @layer base {
-  * {
+  *, *::before, *::after {
     box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+  html {
+    font-size: 13px;
   }
   body {
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-family: 'Inter', system-ui, sans-serif;
     background-color: #f7f6f2;
     color: #1c1b18;
     line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
   }
+  .font-serif {
+    font-family: 'DM Serif Display', Georgia, serif;
+  }
+  .font-mono {
+    font-family: 'DM Mono', 'Courier New', monospace;
+  }
+}
+
+@layer utilities {
+  .border-border { border-color: #d4d1c8; }
+  .bg-background { background-color: #f7f6f2; }
+  .text-foreground { color: #1c1b18; }
+  .bg-card { background-color: #ffffff; }
+  .text-card-foreground { color: #1c1b18; }
+  .bg-primary { background-color: #1a7f5a; }
+  .text-primary-foreground { color: #ffffff; }
+  .bg-secondary { background-color: #f0ede7; }
+  .text-secondary-foreground { color: #1c1b18; }
+  .bg-muted { background-color: #f0ede7; }
+  .text-muted-foreground { color: #6a6860; }
+  .bg-accent { background-color: #eaecf8; }
+  .text-accent-foreground { color: #2d3a8c; }
+  .bg-destructive { background-color: #dc2626; }
+  .text-destructive-foreground { color: #ffffff; }
+  .border-input { border-color: #d4d1c8; }
+  .ring-ring { --tw-ring-color: #1a7f5a; }
+  .bg-popover { background-color: #ffffff; }
+  .text-popover-foreground { color: #1c1b18; }
 }
 
 @media print {
