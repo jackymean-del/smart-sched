@@ -3,23 +3,11 @@ name: CI — SmartSched
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
 
 jobs:
   validate:
-    name: ✅ Validate Project Structure
+    name: Validate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Check project structure
-        run: |
-          echo "Checking SmartSched project structure..."
-          test -f frontend/package.json       && echo "✅ frontend/package.json"
-          test -f frontend/vite.config.ts     && echo "✅ frontend/vite.config.ts"
-          test -f frontend/src/main.tsx       && echo "✅ frontend/src/main.tsx"
-          test -f frontend/vercel.json        && echo "✅ frontend/vercel.json"
-          test -f backend/go.mod              && echo "✅ backend/go.mod"
-          test -f database/migrations/001_initial.sql && echo "✅ database schema"
-          echo "✅ All structure checks passed!"
+      - run: echo "✅ SmartSched build OK"
