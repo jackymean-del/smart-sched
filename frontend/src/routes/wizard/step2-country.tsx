@@ -75,6 +75,18 @@ function recalculate(std: OrgStandard, changedKey: keyof OrgStandard, value: num
 
 export function Step2Country() {
   const { config, setConfig, setStep } = useTimetableStore()
+  // Clear stale localStorage cache from old version (no links field)
+  useEffect(() => {
+    const version = localStorage.getItem('smartsched_std_version')
+    if (version !== '2') {
+      // Clear all old standard caches
+      Object.keys(localStorage).forEach(key => {
+        if (key.startsWith('std_')) localStorage.removeItem(key)
+      })
+      localStorage.setItem('smartsched_std_version', '2')
+    }
+  }, [])
+
   const [search, setSearch] = useState("")
   const [showDropdown, setShowDropdown] = useState(false)
   const [editingStd, setEditingStd] = useState(false)
@@ -108,15 +120,10 @@ export function Step2Country() {
 
   useEffect(() => {
     if (config.countryCode && config.orgType) {
+      // ALWAYS load fresh from DB — never trust localStorage for display
+      // localStorage only used when user explicitly clicks "Save as My Standard"
       const fresh = getStandard(config.orgType, config.countryCode)
-      const saved = localStorage.getItem(`std_${config.orgType}_${config.countryCode}`)
-      if (saved) {
-        const parsed = JSON.parse(saved)
-        // Always merge with fresh to get latest links even if user has saved custom values
-        setStandard({ ...fresh, ...parsed, links: fresh.links })
-      } else {
-        setStandard(fresh)
-      }
+      setStandard(fresh)
     }
   }, [config.countryCode, config.orgType])
 
