@@ -3,6 +3,7 @@ import { devtools, persist } from 'zustand/middleware'
 import type {
   Section, Staff, Subject, Period,
   ClassTimetable, TeacherSchedule, WizardConfig, Conflict,
+  TeacherPool, Room, Suggestion,
 } from '@/types'
 
 interface TimetableState {
@@ -17,6 +18,11 @@ interface TimetableState {
   teacherTT: Record<string, TeacherSchedule>
   substitutions: Record<string, string>
   conflicts: Conflict[]
+  suggestions: Suggestion[]
+  teacherPools: TeacherPool[]
+  rooms: Room[]
+  schedulingMode: 'period-based' | 'duration-based'
+  workingDaysPerYear: number
   viewTab: 'class' | 'teacher'
   transposed: boolean
   showTeacher: boolean
@@ -34,6 +40,11 @@ interface TimetableState {
   setTeacherTT: (tt: Record<string, TeacherSchedule>) => void
   setSubstitutions: (s: Record<string, string>) => void
   setConflicts: (c: Conflict[]) => void
+  setSuggestions: (s: Suggestion[]) => void
+  setTeacherPools: (p: TeacherPool[]) => void
+  setRooms: (r: Room[]) => void
+  setSchedulingMode: (m: 'period-based' | 'duration-based') => void
+  setWorkingDaysPerYear: (n: number) => void
   setViewTab: (t: 'class' | 'teacher') => void
   setTransposed: (v: boolean) => void
   setShowTeacher: (v: boolean) => void
@@ -76,6 +87,11 @@ export const useTimetableStore = create<TimetableState>()(
         teacherTT: {},
         substitutions: {},
         conflicts: [],
+        suggestions: [],
+        teacherPools: [],
+        rooms: [],
+        schedulingMode: 'period-based',
+        workingDaysPerYear: 220,
         viewTab: 'class',
         transposed: false,
         showTeacher: true,
@@ -94,6 +110,11 @@ export const useTimetableStore = create<TimetableState>()(
         setTeacherTT: (teacherTT) => set({ teacherTT }),
         setSubstitutions: (substitutions) => set({ substitutions }),
         setConflicts: (conflicts) => set({ conflicts }),
+        setSuggestions: (suggestions) => set({ suggestions }),
+        setTeacherPools: (teacherPools) => set({ teacherPools }),
+        setRooms: (rooms) => set({ rooms }),
+        setSchedulingMode: (schedulingMode) => set({ schedulingMode }),
+        setWorkingDaysPerYear: (workingDaysPerYear) => set({ workingDaysPerYear }),
         setViewTab: (viewTab) => set({ viewTab }),
         setTransposed: (transposed) => set({ transposed }),
         setShowTeacher: (showTeacher) => set({ showTeacher }),
@@ -139,6 +160,10 @@ export const useTimetableStore = create<TimetableState>()(
           periods: state.periods,
           classTT: state.classTT,
           teacherTT: state.teacherTT,
+          teacherPools: state.teacherPools,
+          rooms: state.rooms,
+          schedulingMode: state.schedulingMode,
+          workingDaysPerYear: state.workingDaysPerYear,
         }),
       }
     ),

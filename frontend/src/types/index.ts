@@ -145,3 +145,51 @@ export interface Conflict {
   day?: string
   period?: string
 }
+
+// ─── Teacher Pool ─────────────────────────────────────────
+export interface TeacherPool {
+  id: string
+  name: string              // "Primary Maths Teachers"
+  subjectName: string
+  gradeRangeStart: number   // 1
+  gradeRangeEnd: number     // 5
+  teacherCount: number
+  maxPeriodsPerWeek: number
+  teachers: GeneratedTeacher[]
+}
+
+export interface GeneratedTeacher {
+  id: string
+  generatedName: string     // "Primary Maths Teacher 1" (auto)
+  actualName: string        // editable by user
+  poolId: string
+  assignedClasses: string[]
+}
+
+// ─── Room ─────────────────────────────────────────────────
+export interface Room {
+  id: string
+  generatedName: string     // "Room 1" (auto)
+  actualName: string        // editable
+  roomType: 'classroom' | 'lab' | 'hall' | 'gym' | 'other'
+  capacity: number
+  shiftId?: string
+}
+
+// ─── Scheduling Requirement (internal universal format) ───
+export interface SchedulingRequirement {
+  classId: string
+  subjectId: string
+  weeklyPeriods: number
+  maxPeriodsPerDay: number
+  sessionDuration: number
+  mode: 'period-based' | 'duration-based'
+  requiredHours?: number    // Mode 2 only
+}
+
+// ─── Suggestion from engine ───────────────────────────────
+export interface Suggestion {
+  type: 'warning' | 'info' | 'error'
+  message: string
+  action?: string
+}
