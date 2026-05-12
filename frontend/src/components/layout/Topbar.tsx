@@ -1,6 +1,4 @@
 import { CalendarDays, Sparkles, Eye } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Link } from '@tanstack/react-router'
 
 interface TopbarProps {
   step?: number
@@ -10,40 +8,68 @@ interface TopbarProps {
 
 export function Topbar({ step, totalSteps, stepLabel }: TopbarProps) {
   return (
-    <header className="h-[52px] bg-white border-b border-gray-200 flex items-center px-4 gap-3 sticky top-0 z-50 shadow-sm">
+    <header style={{
+      height: 52, background: '#fff',
+      borderBottom: '1px solid #e8e5de',
+      display: 'flex', alignItems: 'center',
+      padding: '0 16px', position: 'sticky',
+      top: 0, zIndex: 500,
+      boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+      gap: 12,
+    }}>
       {/* Logo */}
-      <Link to="/" className="flex items-center gap-2 shrink-0">
-        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center text-white">
-          <CalendarDays className="w-4 h-4" />
+      <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none', flexShrink: 0 }}>
+        <div style={{
+          width: 32, height: 32, borderRadius: 8,
+          background: 'linear-gradient(135deg, #34d399, #059669)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff',
+        }}>
+          <CalendarDays size={16} />
         </div>
-        <span className="font-serif text-[17px]">
-          Smart<span className="text-emerald-600">Sched</span>
+        <span style={{ fontFamily: "'DM Serif Display', Georgia, serif", fontSize: 17 }}>
+          Smart<span style={{ color: '#059669' }}>Sched</span>
         </span>
-      </Link>
+      </a>
 
-      {/* Step indicator */}
-      <div className="flex-1 flex justify-center">
+      {/* Step indicator - centered */}
+      <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
         {step && totalSteps && (
-          <span className="text-xs text-gray-500 px-3 py-1 bg-gray-50 border border-gray-200 rounded-full">
-            Step {step} of {totalSteps}: <strong className="text-indigo-700">{stepLabel}</strong>
+          <span style={{
+            fontSize: 11, color: '#6a6860',
+            padding: '4px 14px',
+            background: '#f7f6f2',
+            border: '1px solid #e8e5de',
+            borderRadius: 20,
+            whiteSpace: 'nowrap',
+          }}>
+            Step {step} of {totalSteps}: <strong style={{ color: '#4f46e5' }}>{stepLabel}</strong>
           </span>
         )}
       </div>
 
-      {/* Actions */}
-      <div className="flex items-center gap-2 shrink-0">
-        <Link to="/wizard">
-          <Button size="sm" className="gap-1.5">
-            <Sparkles className="w-3.5 h-3.5" />
-            Create Timetable
-          </Button>
-        </Link>
-        <Link to="/demo">
-          <Button size="sm" variant="outline" className="gap-1.5">
-            <Eye className="w-3.5 h-3.5" />
-            Demo
-          </Button>
-        </Link>
+      {/* Buttons */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+        <a href="/wizard" style={{ textDecoration: 'none' }}>
+          <button style={{
+            display: 'flex', alignItems: 'center', gap: 5,
+            padding: '6px 12px', borderRadius: 7, fontSize: 12, fontWeight: 500,
+            background: '#059669', color: '#fff', border: 'none', cursor: 'pointer',
+            whiteSpace: 'nowrap',
+          }}>
+            <Sparkles size={13} /> Create Timetable
+          </button>
+        </a>
+        <a href="/demo" style={{ textDecoration: 'none' }}>
+          <button style={{
+            display: 'flex', alignItems: 'center', gap: 5,
+            padding: '6px 12px', borderRadius: 7, fontSize: 12, fontWeight: 500,
+            background: '#fff', color: '#1c1b18',
+            border: '1px solid #d4d1c8', cursor: 'pointer',
+            whiteSpace: 'nowrap',
+          }}>
+            <Eye size={13} /> Demo
+          </button>
+        </a>
       </div>
     </header>
   )
