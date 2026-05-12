@@ -108,8 +108,15 @@ export function Step2Country() {
 
   useEffect(() => {
     if (config.countryCode && config.orgType) {
+      const fresh = getStandard(config.orgType, config.countryCode)
       const saved = localStorage.getItem(`std_${config.orgType}_${config.countryCode}`)
-      setStandard(saved ? JSON.parse(saved) : getStandard(config.orgType, config.countryCode))
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        // Always merge with fresh to get latest links even if user has saved custom values
+        setStandard({ ...fresh, ...parsed, links: fresh.links })
+      } else {
+        setStandard(fresh)
+      }
     }
   }, [config.countryCode, config.orgType])
 
@@ -270,28 +277,29 @@ export function Step2Country() {
             <Field label="Number of breaks"     fieldKey="numBreaks"       unit="total" />
             <Field label="Notes / regulation"   fieldKey="notes"           unit="" />
 
-          {/* Official reference links */}
+          </div>
+
+          {/* Official reference links — always visible */}
           {standard.links && standard.links.length > 0 && (
-            <div style={{ marginTop:10, paddingTop:10, borderTop:"1px solid #f0ede7" }}>
-              <div style={{ fontSize:10, fontWeight:700, textTransform:"uppercase" as const, letterSpacing:"0.06em", color:"#a8a59e", marginBottom:6 }}>
+            <div style={{ padding:"10px 14px 12px", borderTop:"1px solid #f0ede7" }}>
+              <div style={{ fontSize:10, fontWeight:700, textTransform:"uppercase" as const, letterSpacing:"0.06em", color:"#a8a59e", marginBottom:8 }}>
                 📎 Official Reference Documents
               </div>
               <div style={{ display:"flex", flexDirection:"column" as const, gap:5 }}>
                 {standard.links.map((link, i) => (
                   <a key={i} href={link.url} target="_blank" rel="noopener noreferrer"
-                    style={{ display:"flex", alignItems:"center", gap:6, fontSize:12, color:"#4f46e5", textDecoration:"none", padding:"5px 8px", borderRadius:6, background:"#f7f6ff", border:"1px solid #e0e7ff", transition:"all 0.15s" }}
+                    style={{ display:"flex", alignItems:"center", gap:8, fontSize:12, color:"#4f46e5", textDecoration:"none", padding:"7px 10px", borderRadius:7, background:"#f7f6ff", border:"1px solid #e0e7ff", transition:"all 0.15s" }}
                     onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background="#eaecf8"; (e.currentTarget as HTMLElement).style.borderColor="#a5b4fc"; }}
                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background="#f7f6ff"; (e.currentTarget as HTMLElement).style.borderColor="#e0e7ff"; }}
                   >
-                    <span style={{ fontSize:14 }}>🔗</span>
-                    <span style={{ flex:1, fontWeight:500 }}>{link.label}</span>
-                    <span style={{ fontSize:10, color:"#a8a59e", fontFamily:"monospace" }}>↗</span>
+                    <span style={{ fontSize:16 }}>🔗</span>
+                    <span style={{ flex:1, fontWeight:500, lineHeight:1.4 }}>{link.label}</span>
+                    <span style={{ fontSize:11, color:"#a8a59e", fontWeight:700 }}>↗</span>
                   </a>
                 ))}
               </div>
             </div>
           )}
-          </div>
           {editingStd && (
             <div style={{ padding:"8px 14px", background:"#eaecf8", fontSize:11, color:"#3730a3", borderTop:"1px solid #c7d2fe" }}>
               📌 Saved per browser for <strong>{displayName} · {org.name}</strong>. Auto-loads next time.
