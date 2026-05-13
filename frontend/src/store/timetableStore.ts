@@ -158,16 +158,19 @@ export const useTimetableStore = create<TimetableState>()(
       {
         name: 'schedu-wizard-v2',
         // Merge rehydrated state with defaults to handle missing fields from old versions
-        merge: (persisted: any, current: any) => ({
-          ...current,
-          ...persisted,
-          config: {
-            ...current.config,
-            ...(persisted?.config ?? {}),
-            shifts: persisted?.config?.shifts ?? [],
-            defaultSessionDuration: persisted?.config?.defaultSessionDuration ?? 40,
-          },
-        }),
+        merge: (persisted: unknown, current: TimetableState): TimetableState => {
+          const p = persisted as Partial<TimetableState> | null
+          return {
+            ...current,
+            ...p,
+            config: {
+              ...current.config,
+              ...(p?.config ?? {}),
+              shifts: p?.config?.shifts ?? [],
+              defaultSessionDuration: p?.config?.defaultSessionDuration ?? 40,
+            },
+          }
+        },
         partialize: (state) => ({
           // Only persist wizard data, not UI state
           step: state.step,
