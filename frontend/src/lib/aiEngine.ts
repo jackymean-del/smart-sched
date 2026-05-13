@@ -195,30 +195,11 @@ export function shiftPeriod(
     return periods
   } else {
     // CASE 2: Break ↔ Period
-    // Swap full column headers
+    // Just swap the positions in the periods array.
+    // The renderer uses period.id to look up cell data, so data automatically 
+    // follows the period to its new position — no cell data manipulation needed.
     newPeriods[indexA] = pB
     newPeriods[indexB] = pA
-
-    // The class period has cell data stored under its own ID.
-    // After the header swap:
-    //   - old break slot (indexA) now shows the class period header → needs class period's cell data
-    //   - old class period slot (indexB) now shows the break header → should show break (empty)
-    //
-    // So: move the class period's cell data to be stored under the break's old ID,
-    // and clear the class period's old ID slot (it's now a break — no data needed).
-
-    const classPeriod = pA.type === 'class' ? pA : pB   // which one is the class period
-    const breakPeriod = pA.type !== 'class' ? pA : pB   // which one is the break
-
-    Object.values(classTT).forEach(sectionData => {
-      Object.values(sectionData).forEach(dayData => {
-        // Copy class period cell data into break's slot (break's old position now has class period header)
-        dayData[breakPeriod.id] = dayData[classPeriod.id]
-        // Clear class period slot (class period's old position now has break header — no data)
-        delete dayData[classPeriod.id]
-      })
-    })
-
     return newPeriods
   }
 }
