@@ -35,19 +35,29 @@ export interface SubjectClassConfig {
 export const SubjectSchema = z.object({
   id: z.string(),
   name: z.string().min(1),
-  periodsPerWeek: z.number().int().positive(),   // default/global
-  sessionDuration: z.number().default(40),        // default duration
-  maxPeriodsPerDay: z.number().default(2),        // default max per day
+  periodsPerWeek: z.number().int().positive(),
+  sessionDuration: z.number().default(40),
+  maxPeriodsPerDay: z.number().default(2),
   color: z.string(),
   sections: z.array(z.string()),
-  classConfigs: z.array(z.object({               // class-wise overrides
+  classConfigs: z.array(z.object({
     sectionName: z.string(),
     periodsPerWeek: z.number(),
     maxPeriodsPerDay: z.number(),
     sessionDuration: z.number(),
   })).default([]),
 })
-export type Subject = z.infer<typeof SubjectSchema>
+// Use a looser type so existing code creating subjects without new fields still compiles
+export type Subject = {
+  id: string
+  name: string
+  periodsPerWeek: number
+  sessionDuration?: number
+  maxPeriodsPerDay?: number
+  color: string
+  sections: string[]
+  classConfigs?: { sectionName: string; periodsPerWeek: number; maxPeriodsPerDay: number; sessionDuration: number }[]
+}
 
 export const PeriodTypeSchema = z.enum(['class', 'fixed-start', 'break', 'lunch', 'fixed-end'])
 export type PeriodType = z.infer<typeof PeriodTypeSchema>

@@ -13,7 +13,7 @@
  * before entering the constraint engine.
  */
 
-import type { Section, Staff, Subject, Period, ClassTimetable, TeacherSchedule, Conflict } from '@/types'
+import type { Section, Staff, Subject, Period, ClassTimetable, TeacherSchedule, Conflict, Suggestion, SchedulingRequirement } from '@/types'
 
 // ─── Mode 2: Duration → Weekly Periods Formula ───────────
 export interface DurationInput {

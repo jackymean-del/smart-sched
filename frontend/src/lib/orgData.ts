@@ -254,8 +254,11 @@ export function generateSubjects(orgType: OrgType, countryCode: string, n: numbe
     id: generateId(),
     name,
     periodsPerWeek: guessFreq(name),
+    sessionDuration: 40,
+    maxPeriodsPerDay: 2,
     color: getSubjectColor(name),
     sections: [] as string[],
+    classConfigs: [] as { sectionName: string; periodsPerWeek: number; maxPeriodsPerDay: number; sessionDuration: number }[],
   }))
 }
 

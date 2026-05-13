@@ -15,7 +15,7 @@ const SHIFT_COLORS = ['#4f46e5','#059669','#d97706','#dc2626','#7c3aed','#0891b2
 
 export function Step5Data() {
   const { config, sections, staff, subjects, breaks,
-          setSections, setStaff, setSubjects, setBreaks, setStep } = useTimetableStore()
+          setSections, setStaff, setSubjects, setBreaks, setStep, setConfig } = useTimetableStore()
   const [tab, setTab] = useState<Tab>("sections")
   const [showClassWise, setShowClassWise] = useState<string|null>(null) // subject id for class-wise panel
   const org     = ORG_CONFIGS[config.orgType ?? "school"]
