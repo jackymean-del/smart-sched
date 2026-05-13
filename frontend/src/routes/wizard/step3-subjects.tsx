@@ -59,8 +59,7 @@ export function Step3Subjects() {
     const updated: any = { ...base, [key]: val }
     if (store.schedulingMode === 'duration-based' && key === 'requiredHours' && val > 0) {
       updated.periodsPerWeek = durationToWeeklyPeriods({
-        subjectName: n[si].name, className: cls,
-        requiredHours: val,
+        subjectName: n[si].name, className: cls, requiredHours: val,
         periodDurationMins: updated.sessionDuration,
         workingDaysPerYear: store.workingDaysPerYear ?? 220,
         workingDaysPerWeek: config.workDays.length,
@@ -72,21 +71,14 @@ export function Step3Subjects() {
     setSubjects(n)
   }
 
-  const addClassRow = (si: number, cls: string) => {
-    if (!cls.trim()) return
-    const n = [...subjects] as any[]
-    const configs = [...(n[si].classConfigs ?? [])]
-    if (!configs.find((c: any) => c.sectionName === cls)) {
-      configs.push({ sectionName: cls, periodsPerWeek: n[si].periodsPerWeek, maxPeriodsPerDay: n[si].maxPeriodsPerDay ?? 2, sessionDuration: n[si].sessionDuration ?? 40 })
-    }
-    n[si] = { ...n[si], classConfigs: configs }
-    setSubjects(n)
-  }
-
   const thS: React.CSSProperties = { padding:"8px 12px", background:"#f7f6f2", fontSize:10, fontWeight:700, textTransform:"uppercase" as const, letterSpacing:"0.06em", color:"#a8a59e", textAlign:"left" as const, borderBottom:"1px solid #e8e5de", whiteSpace:"nowrap" as const }
   const tdS: React.CSSProperties = { padding:"8px 12px", borderBottom:"1px solid #f0ede7", verticalAlign:"middle", fontSize:12 }
-  const numSty: React.CSSProperties = { padding:"4px 6px", border:"1px solid #e8e5de", borderRadius:6, fontSize:12, fontFamily:"monospace", textAlign:"center" as const, outline:"none" }
-  const ccNumSty: React.CSSProperties = { padding:"3px 6px", border:"1px solid #c4b5fd", borderRadius:5, fontSize:12, fontFamily:"monospace", textAlign:"center" as const, outline:"none" }
+  const nS: React.CSSProperties = { padding:"4px 6px", border:"1px solid #e8e5de", borderRadius:6, fontSize:12, fontFamily:"monospace", textAlign:"center" as const, outline:"none" }
+  const ccS: React.CSSProperties = { padding:"3px 6px", border:"1px solid #c4b5fd", borderRadius:5, fontSize:12, fontFamily:"monospace", textAlign:"center" as const, outline:"none" }
+
+  // All class groups to show in class-wise table
+  const allGroups = baseClasses.length > 0 ? baseClasses
+    : ['Pre-Primary','Primary','Upper Primary','Secondary']
 
   return (
     <div>
@@ -94,34 +86,34 @@ export function Step3Subjects() {
         {T.resources} Configuration
       </h1>
       <p style={{ color:"#6a6860", fontSize:13, marginBottom:24, lineHeight:1.65 }}>
-        Configure {T.resources.toLowerCase()} and {T.sessions.toLowerCase()}s per week.
-        Use <strong>⚙ Class-wise</strong> to set different values per class — e.g. Maths: 6/week for Class I, 10/week for Class VIII.
+        Set {T.sessions.toLowerCase()}s per week for each {T.resource.toLowerCase()}.
+        Each {T.resource.toLowerCase()} can have <strong>different values per class group</strong> — expand ⚙ to configure.
       </p>
 
-      {/* Mode selector */}
-      <div style={{ marginBottom:24 }}>
+      {/* Mode */}
+      <div style={{ marginBottom:20 }}>
         <div style={{ fontSize:11, fontWeight:700, textTransform:"uppercase" as const, letterSpacing:"0.06em", color:"#a8a59e", marginBottom:10 }}>Scheduling Mode</div>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, maxWidth:560 }}>
           {([
-            ['period-based', '📅', 'Mode 1 — Period Based', `Specify ${T.sessions.toLowerCase()}s/week directly. Simple and fast.`, '#4f46e5', '#eaecf8', '#3730a3'],
-            ['duration-based', '⏱', 'Mode 2 — Duration Based', `Specify total hours/year. Schedu calculates ${T.sessions.toLowerCase()}s/week automatically.`, '#059669', '#f0fdf4', '#14532d'],
-          ] as const).map(([mode, icon, title, desc, bdr, bg, tc]) => {
+            ['period-based','📅','Mode 1 — Period Based',`Specify ${T.sessions.toLowerCase()}s/week directly.`,'#4f46e5','#eaecf8','#3730a3'],
+            ['duration-based','⏱','Mode 2 — Duration Based',`Specify total hours/year. Auto-calculates ${T.sessions.toLowerCase()}s/week.`,'#059669','#f0fdf4','#14532d'],
+          ] as const).map(([mode,icon,title,desc,bdr,bg,tc]) => {
             const active = store.schedulingMode === mode
             return (
               <button key={mode} onClick={() => store.setSchedulingMode(mode)}
-                style={{ padding:"14px", borderRadius:10, textAlign:"left" as const, cursor:"pointer", border: active?`2px solid ${bdr}`:"1.5px solid #e8e5de", background: active?bg:"#fff" }}>
-                <div style={{ fontSize:18, marginBottom:5 }}>{icon}</div>
-                <div style={{ fontSize:13, fontWeight:700, color: active?tc:"#1c1b18", marginBottom:3 }}>{title}</div>
-                <div style={{ fontSize:11, color:"#6a6860", lineHeight:1.5 }}>{desc}</div>
+                style={{ padding:"12px", borderRadius:10, textAlign:"left" as const, cursor:"pointer", border: active?`2px solid ${bdr}`:"1.5px solid #e8e5de", background: active?bg:"#fff" }}>
+                <div style={{ fontSize:16, marginBottom:4 }}>{icon}</div>
+                <div style={{ fontSize:13, fontWeight:700, color: active?tc:"#1c1b18", marginBottom:2 }}>{title}</div>
+                <div style={{ fontSize:11, color:"#6a6860" }}>{desc}</div>
               </button>
             )
           })}
         </div>
         {store.schedulingMode === 'duration-based' && (
-          <div style={{ marginTop:12, display:"flex", alignItems:"center", gap:10, padding:"10px 14px", background:"#f0fdf4", border:"1px solid #86efac", borderRadius:8, fontSize:12, color:"#14532d", flexWrap:"wrap" as const }}>
+          <div style={{ marginTop:10, display:"flex", alignItems:"center", gap:10, padding:"8px 12px", background:"#f0fdf4", border:"1px solid #86efac", borderRadius:8, fontSize:12, color:"#14532d" }}>
             <span>📆 Working days/year:</span>
             <input type="number" min={100} max={365} defaultValue={store.workingDaysPerYear ?? 220}
-              onBlur={e => store.setWorkingDaysPerYear(Math.max(100, +e.target.value))}
+              onBlur={e => store.setWorkingDaysPerYear(Math.max(100,+e.target.value))}
               style={{ width:70, padding:"4px 8px", border:"1.5px solid #86efac", borderRadius:6, fontSize:13, fontFamily:"monospace", textAlign:"center" as const, outline:"none" }} />
             <span>÷ {config.workDays.length} days/week = <strong>{workingWeeks} weeks/year</strong></span>
           </div>
@@ -142,206 +134,162 @@ export function Step3Subjects() {
                 <th style={{...thS, width:80}}>Max/day</th>
               </> : <>
                 <th style={{...thS, width:110}}>Req hrs/year</th>
-                <th style={{...thS, width:100}}>{T.sessions}/week <span style={{ color:"#059669", fontSize:9, fontWeight:400 }}>AUTO</span></th>
+                <th style={{...thS, width:95}}>{T.sessions}/week</th>
                 <th style={{...thS, width:90}}>Min/session</th>
               </>}
-              <th style={{...thS, width:110, color:"#4f46e5"}}>⚙ Class-wise</th>
+              <th style={{...thS, width:100, color:"#4f46e5"}}>⚙ Class-wise</th>
               <th style={{...thS, width:32}}></th>
             </tr>
           </thead>
           <tbody>
             {subjects.map((s, i) => {
               const perDay = Math.ceil(s.periodsPerWeek / config.workDays.length)
-              const isExpanded = expandedId === s.id
+              const isExp = expandedId === s.id
               const hasCC = (s.classConfigs ?? []).length > 0
-
-              // Classes to show in class-wise panel
-              const ccClasses = baseClasses.length > 0
-                ? baseClasses
-                : [...new Set((s.classConfigs ?? []).map(c => c.sectionName))]
+              const colSpan = store.schedulingMode === 'period-based' ? 9 : 8
 
               return (
-                <tbody key={s.id}>
-                  {/* Main row */}
-                  <tr style={{ background: i%2===0?"#fff":"#fafaf9" }}>
+                <>
+                  <tr key={s.id} style={{ background: i%2===0?"#fff":"#fafaf9" }}>
                     <td style={{...tdS, color:"#a8a59e", fontSize:10, fontFamily:"monospace"}}>{i+1}</td>
                     <td style={tdS}>
-                      <input value={s.name} onChange={e => updateSubject(i, 'name', e.target.value)}
-                        style={{ width:"100%", padding:"4px 0", border:"none", fontSize:13, fontWeight:500, background:"transparent", outline:"none", borderBottom:"1px dashed transparent" }}
-                        onFocus={e => { (e.target as HTMLInputElement).style.borderBottomColor = "#4f46e5" }}
-                        onBlur={e => { (e.target as HTMLInputElement).style.borderBottomColor = "transparent" }} />
+                      <input value={s.name} onChange={e => updateSubject(i,'name',e.target.value)}
+                        style={{ width:"100%", padding:"3px 0", border:"none", fontSize:13, fontWeight:500, background:"transparent", outline:"none" }} />
                     </td>
-
                     {store.schedulingMode === 'period-based' ? <>
                       <td style={tdS}>
                         <input type="number" min={1} max={30} value={s.periodsPerWeek}
-                          onChange={e => updateSubject(i, 'periodsPerWeek', Math.max(1,+e.target.value))}
-                          style={{...numSty, width:54}} />
+                          onChange={e => updateSubject(i,'periodsPerWeek',Math.max(1,+e.target.value))}
+                          style={{...nS, width:54}} />
                       </td>
                       <td style={{...tdS, textAlign:"center" as const}}>
-                        <span style={{ fontSize:12, fontWeight:600, color:"#4f46e5", background:"#eaecf8", padding:"2px 8px", borderRadius:4 }}>{perDay}</span>
+                        <span style={{ fontSize:12, fontWeight:600, color:"#4f46e5", background:"#eaecf8", padding:"2px 7px", borderRadius:4 }}>{perDay}</span>
                       </td>
                       <td style={tdS}>
                         <div style={{ display:"flex", alignItems:"center", gap:3 }}>
                           <input type="number" min={10} max={180} value={s.sessionDuration ?? 40}
-                            onChange={e => updateSubject(i, 'sessionDuration', Math.max(10,+e.target.value))}
-                            style={{...numSty, width:50}} />
+                            onChange={e => updateSubject(i,'sessionDuration',Math.max(10,+e.target.value))}
+                            style={{...nS, width:50}} />
                           <span style={{ fontSize:10, color:"#a8a59e" }}>m</span>
                         </div>
                       </td>
                       <td style={tdS}>
                         <input type="number" min={1} max={6} value={s.maxPeriodsPerDay ?? 2}
-                          onChange={e => updateSubject(i, 'maxPeriodsPerDay', Math.max(1,+e.target.value))}
-                          style={{...numSty, width:44}} />
+                          onChange={e => updateSubject(i,'maxPeriodsPerDay',Math.max(1,+e.target.value))}
+                          style={{...nS, width:44}} />
                       </td>
                     </> : <>
                       <td style={tdS}>
                         <div style={{ display:"flex", alignItems:"center", gap:3 }}>
-                          <input type="number" min={0} defaultValue={(s as any).requiredHours ?? 0}
-                            key={s.id + '-rh'}
-                            onBlur={e => updateSubject(i, 'requiredHours', +e.target.value)}
-                            style={{...numSty, width:60}} />
+                          <input type="number" min={0} defaultValue={(s as any).requiredHours ?? 0} key={s.id+'-rh'}
+                            onBlur={e => updateSubject(i,'requiredHours',+e.target.value)}
+                            style={{...nS, width:60}} />
                           <span style={{ fontSize:10, color:"#a8a59e" }}>hrs</span>
                         </div>
                       </td>
                       <td style={{...tdS, textAlign:"center" as const}}>
-                        <span style={{ fontSize:12, fontWeight:600, color:"#059669", background:"#f0fdf4", padding:"2px 8px", borderRadius:4 }}>{s.periodsPerWeek}</span>
+                        <span style={{ fontSize:12, fontWeight:600, color:"#059669", background:"#f0fdf4", padding:"2px 7px", borderRadius:4 }}>{s.periodsPerWeek}</span>
                       </td>
                       <td style={tdS}>
                         <div style={{ display:"flex", alignItems:"center", gap:3 }}>
                           <input type="number" min={10} max={180} value={s.sessionDuration ?? 40}
-                            onChange={e => updateSubject(i, 'sessionDuration', Math.max(10,+e.target.value))}
-                            style={{...numSty, width:50}} />
+                            onChange={e => updateSubject(i,'sessionDuration',Math.max(10,+e.target.value))}
+                            style={{...nS, width:50}} />
                           <span style={{ fontSize:10, color:"#a8a59e" }}>m</span>
                         </div>
                       </td>
                     </>}
-
                     <td style={tdS}>
-                      <button onClick={() => setExpandedId(isExpanded ? null : s.id)}
-                        style={{ fontSize:11, padding:"3px 8px", borderRadius:5, border:`1px solid ${isExpanded?"#4f46e5":"#e8e5de"}`, background: isExpanded?"#eaecf8":hasCC?"#f0fdf4":"#fff", color: isExpanded?"#4f46e5":hasCC?"#059669":"#6a6860", cursor:"pointer", fontWeight:500, whiteSpace:"nowrap" as const }}>
-                        {isExpanded ? "▲ Hide" : hasCC ? "✓ Set" : "⚙ Set"}
+                      <button onClick={() => setExpandedId(isExp ? null : s.id)}
+                        style={{ fontSize:11, padding:"3px 8px", borderRadius:5, border:`1px solid ${isExp?"#4f46e5":"#e8e5de"}`, background: isExp?"#eaecf8":hasCC?"#f0fdf4":"#fff", color: isExp?"#4f46e5":hasCC?"#059669":"#6a6860", cursor:"pointer", fontWeight:500 }}>
+                        {isExp ? "▲ Hide" : hasCC ? "✓ Set" : "⚙ Set"}
                       </button>
                     </td>
                     <td style={tdS}>
-                      <button onClick={() => setSubjects(subjects.filter((_,j) => j!==i))}
+                      <button onClick={() => setSubjects(subjects.filter((_,j)=>j!==i))}
                         style={{ width:22, height:22, borderRadius:4, border:"none", background:"transparent", cursor:"pointer", color:"#c8c5bc", fontSize:16 }}>×</button>
                     </td>
                   </tr>
 
-                  {/* Class-wise expand panel */}
-                  {isExpanded && (
-                    <tr>
-                      <td colSpan={store.schedulingMode === 'period-based' ? 9 : 8} style={{ padding:0 }}>
-                        <div style={{ background:"#f5f3ff", borderBottom:"2px solid #4f46e5", padding:"12px 16px" }}>
+                  {/* Class-wise panel — flat rows, not nested table */}
+                  {isExp && (
+                    <tr key={s.id+'-cw'}>
+                      <td colSpan={colSpan} style={{ padding:0, background:"#f5f3ff", borderBottom:"2px solid #4f46e5" }}>
+                        <div style={{ padding:"12px 16px" }}>
                           <div style={{ fontSize:12, fontWeight:600, color:"#3730a3", marginBottom:10 }}>
                             ⚙ Class-wise settings for <strong>{s.name}</strong>
-                            <span style={{ fontWeight:400, color:"#6a6860", marginLeft:8 }}>— different values per class group</span>
+                            <span style={{ fontWeight:400, color:"#6a6860", marginLeft:8, fontSize:11 }}>— different values per class group</span>
                           </div>
-
-                          {/* Add class row input */}
-                          <div style={{ display:"flex", gap:8, marginBottom:12, alignItems:"center" }}>
-                            <input
-                              placeholder="Type class name and press Enter (e.g. Class I, Grade 8, Nursery)"
-                              style={{ flex:1, padding:"7px 10px", border:"1.5px dashed #c4b5fd", borderRadius:6, fontSize:12, outline:"none", background:"#faf5ff", color:"#3730a3" }}
-                              onKeyDown={e => {
-                                if (e.key === 'Enter') {
-                                  const val = (e.target as HTMLInputElement).value.trim()
-                                  if (val) { addClassRow(i, val); (e.target as HTMLInputElement).value = '' }
-                                }
-                              }}
-                            />
-                            <span style={{ fontSize:10, color:"#a8a59e", whiteSpace:"nowrap" as const }}>Press Enter to add</span>
-                          </div>
-
-                          {ccClasses.length === 0 ? (
-                            <div style={{ fontSize:11, color:"#a8a59e", padding:"4px 0" }}>
-                              Type class names above to configure per-class settings.
+                          <div style={{ display:"grid", gap:0, border:"1px solid #ddd6fe", borderRadius:8, overflow:"hidden" }}>
+                            {/* Header */}
+                            <div style={{ display:"grid", gridTemplateColumns:"120px 1fr 1fr 1fr 32px", background:"#ede9fe", padding:"6px 12px", fontSize:10, fontWeight:700, textTransform:"uppercase" as const, letterSpacing:"0.06em", color:"#7c3aed", gap:8 }}>
+                              <span>Class Group</span>
+                              {store.schedulingMode === 'period-based' ? <>
+                                <span>{T.sessions}/week</span>
+                                <span>Min/session</span>
+                                <span>Max/day</span>
+                              </> : <>
+                                <span>Req hrs/year</span>
+                                <span>{T.sessions}/week AUTO</span>
+                                <span>Min/session</span>
+                              </>}
+                              <span></span>
                             </div>
-                          ) : (
-                            <table style={{ borderCollapse:"collapse", fontSize:11, width:"100%" }}>
-                              <thead>
-                                <tr>
-                                  <th style={{...thS, background:"#ede9fe", minWidth:100}}>Class</th>
+                            {allGroups.map((cls, ci) => {
+                              const cc = getCC(i, cls)
+                              return (
+                                <div key={cls} style={{ display:"grid", gridTemplateColumns:"120px 1fr 1fr 1fr 32px", padding:"8px 12px", background: ci%2===0?"#faf5ff":"#f5f0ff", borderTop:"1px solid #ede9fe", alignItems:"center", gap:8 }}>
+                                  <span style={{ fontSize:12, fontWeight:600, color:"#4f46e5" }}>{cls}</span>
                                   {store.schedulingMode === 'period-based' ? <>
-                                    <th style={{...thS, background:"#ede9fe", width:110}}>{T.sessions}/week</th>
-                                    <th style={{...thS, background:"#ede9fe", width:100}}>Min/session</th>
-                                    <th style={{...thS, background:"#ede9fe", width:90}}>Max/day</th>
+                                    <div>
+                                      <input type="number" min={1} defaultValue={cc.periodsPerWeek} key={cls+'-pw-'+s.id}
+                                        onBlur={e => updateCC(i,cls,'periodsPerWeek',Math.max(1,+e.target.value))}
+                                        style={{...ccS, width:54}} />
+                                    </div>
+                                    <div style={{ display:"flex", alignItems:"center", gap:3 }}>
+                                      <input type="number" min={10} max={180} defaultValue={cc.sessionDuration} key={cls+'-sd-'+s.id}
+                                        onBlur={e => updateCC(i,cls,'sessionDuration',Math.max(10,+e.target.value))}
+                                        style={{...ccS, width:50}} />
+                                      <span style={{ fontSize:10, color:"#a8a59e" }}>m</span>
+                                    </div>
+                                    <div>
+                                      <input type="number" min={1} max={6} defaultValue={cc.maxPeriodsPerDay} key={cls+'-mpd-'+s.id}
+                                        onBlur={e => updateCC(i,cls,'maxPeriodsPerDay',Math.max(1,+e.target.value))}
+                                        style={{...ccS, width:44}} />
+                                    </div>
                                   </> : <>
-                                    <th style={{...thS, background:"#ede9fe", width:120}}>Req hrs/year</th>
-                                    <th style={{...thS, background:"#ede9fe", width:110}}>{T.sessions}/week <span style={{ color:"#059669", fontSize:9 }}>AUTO</span></th>
-                                    <th style={{...thS, background:"#ede9fe", width:100}}>Min/session</th>
+                                    <div style={{ display:"flex", alignItems:"center", gap:3 }}>
+                                      <input type="number" min={0} defaultValue={(cc as any).requiredHours ?? 0} key={cls+'-rh-'+s.id}
+                                        onBlur={e => updateCC(i,cls,'requiredHours',+e.target.value)}
+                                        style={{...ccS, width:60}} />
+                                      <span style={{ fontSize:10, color:"#a8a59e" }}>hrs</span>
+                                    </div>
+                                    <span style={{ fontSize:12, fontWeight:600, color:"#059669", background:"#f0fdf4", padding:"2px 8px", borderRadius:4, textAlign:"center" as const }}>{cc.periodsPerWeek}</span>
+                                    <div style={{ display:"flex", alignItems:"center", gap:3 }}>
+                                      <input type="number" min={10} max={180} defaultValue={cc.sessionDuration} key={cls+'-sd2-'+s.id}
+                                        onBlur={e => updateCC(i,cls,'sessionDuration',Math.max(10,+e.target.value))}
+                                        style={{...ccS, width:50}} />
+                                      <span style={{ fontSize:10, color:"#a8a59e" }}>m</span>
+                                    </div>
                                   </>}
-                                  <th style={{...thS, background:"#ede9fe", width:32}}></th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {ccClasses.map(cls => {
-                                  const cc = getCC(i, cls)
-                                  return (
-                                    <tr key={cls}>
-                                      <td style={{...tdS, fontWeight:600, color:"#4f46e5", background:"#faf5ff"}}>{cls}</td>
-                                      {store.schedulingMode === 'period-based' ? <>
-                                        <td style={{...tdS, background:"#faf5ff"}}>
-                                          <input type="number" min={1} defaultValue={cc.periodsPerWeek} key={cls+'-pw'}
-                                            onBlur={e => updateCC(i, cls, 'periodsPerWeek', Math.max(1,+e.target.value))}
-                                            style={{...ccNumSty, width:54}} />
-                                        </td>
-                                        <td style={{...tdS, background:"#faf5ff"}}>
-                                          <div style={{ display:"flex", alignItems:"center", gap:3 }}>
-                                            <input type="number" min={10} max={180} defaultValue={cc.sessionDuration} key={cls+'-sd'}
-                                              onBlur={e => updateCC(i, cls, 'sessionDuration', Math.max(10,+e.target.value))}
-                                              style={{...ccNumSty, width:50}} />
-                                            <span style={{ fontSize:10, color:"#a8a59e" }}>m</span>
-                                          </div>
-                                        </td>
-                                        <td style={{...tdS, background:"#faf5ff"}}>
-                                          <input type="number" min={1} max={6} defaultValue={cc.maxPeriodsPerDay} key={cls+'-mpd'}
-                                            onBlur={e => updateCC(i, cls, 'maxPeriodsPerDay', Math.max(1,+e.target.value))}
-                                            style={{...ccNumSty, width:44}} />
-                                        </td>
-                                      </> : <>
-                                        <td style={{...tdS, background:"#faf5ff"}}>
-                                          <div style={{ display:"flex", alignItems:"center", gap:3 }}>
-                                            <input type="number" min={0} defaultValue={(cc as any).requiredHours ?? 0} key={cls+'-rh'}
-                                              onBlur={e => updateCC(i, cls, 'requiredHours', +e.target.value)}
-                                              style={{...ccNumSty, width:60}} />
-                                            <span style={{ fontSize:10, color:"#a8a59e" }}>hrs</span>
-                                          </div>
-                                        </td>
-                                        <td style={{...tdS, background:"#faf5ff"}}>
-                                          <span style={{ fontSize:12, fontWeight:600, color:"#059669", background:"#f0fdf4", padding:"2px 8px", borderRadius:4 }}>{cc.periodsPerWeek}</span>
-                                        </td>
-                                        <td style={{...tdS, background:"#faf5ff"}}>
-                                          <div style={{ display:"flex", alignItems:"center", gap:3 }}>
-                                            <input type="number" min={10} max={180} defaultValue={cc.sessionDuration} key={cls+'-sd'}
-                                              onBlur={e => updateCC(i, cls, 'sessionDuration', Math.max(10,+e.target.value))}
-                                              style={{...ccNumSty, width:50}} />
-                                            <span style={{ fontSize:10, color:"#a8a59e" }}>m</span>
-                                          </div>
-                                        </td>
-                                      </>}
-                                      <td style={{...tdS, background:"#faf5ff"}}>
-                                        <button onClick={() => {
-                                          const n = [...subjects] as any[]
-                                          n[i] = { ...n[i], classConfigs: (n[i].classConfigs ?? []).filter((c: any) => c.sectionName !== cls) }
-                                          setSubjects(n)
-                                        }} style={{ width:18, height:18, borderRadius:3, border:"none", background:"transparent", cursor:"pointer", color:"#c8c5bc", fontSize:14 }}>×</button>
-                                      </td>
-                                    </tr>
-                                  )
-                                })}
-                              </tbody>
-                            </table>
-                          )}
+                                  <button onClick={() => {
+                                    const n = [...subjects] as any[]
+                                    n[i] = { ...n[i], classConfigs: (n[i].classConfigs ?? []).filter((c: any) => c.sectionName !== cls) }
+                                    setSubjects(n)
+                                  }} style={{ width:20, height:20, borderRadius:3, border:"none", background:"transparent", cursor:"pointer", color:"#c4b5fd", fontSize:14 }}>×</button>
+                                </div>
+                              )
+                            })}
+                          </div>
                           <div style={{ fontSize:10, color:"#7c3aed", marginTop:8 }}>
-                            💡 Default values (from main row) apply to all other classes not listed here.
+                            💡 Default values (from main row) apply to classes not listed here.
+                            Class groups auto-populate once you set up your classes.
                           </div>
                         </div>
                       </td>
                     </tr>
                   )}
-                </tbody>
+                </>
               )
             })}
           </tbody>
@@ -358,7 +306,7 @@ export function Step3Subjects() {
 
       <div style={{ fontSize:11, color:"#6a6860", marginBottom:16 }}>
         {store.schedulingMode === 'period-based'
-          ? `💡 /day auto-calculated · ⚙ Class-wise overrides default values per class group`
+          ? `💡 /day auto-calculated · Click ⚙ Set to configure different values per class group`
           : `💡 Formula: (hrs × 60) ÷ (min/session × ${workingWeeks} weeks) = ${T.sessions.toLowerCase()}s/week`}
       </div>
 
