@@ -119,17 +119,16 @@ export function Step1Org() {
               {FACILITY_TYPES.map(f => {
                 const val = facilityConfig[f.key] ?? 0
                 return (
-                  <div key={f.key} style={{ background: val>0?"#f0fdf4":"#f7f6f2", borderRadius:10, padding:"12px", textAlign:"center" as const, border:`1.5px solid ${val>0?"#86efac":"transparent"}`, transition:"all 0.15s" }}>
+                  <div key={f.key} style={{ background: val>0?"#f0fdf4":"#f7f6f2", borderRadius:10, padding:"12px", textAlign:"center" as const, border:`1.5px solid ${val>0?"#86efac":"#e8e5de"}`, transition:"all 0.15s" }}>
                     <div style={{ fontSize:20, marginBottom:4 }}>{f.icon}</div>
                     <div style={{ fontSize:11, fontWeight:600, color:"#374151", marginBottom:2, lineHeight:1.3 }}>{f.label}</div>
                     <div style={{ fontSize:9, color:"#a8a59e", marginBottom:8, lineHeight:1.3 }}>{f.sub}</div>
-                    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>
-                      <button onClick={() => setFacility(f.key, val-1)}
-                        style={{ width:22, height:22, borderRadius:6, border:"1px solid #e8e5de", background:"#fff", cursor:"pointer", fontSize:14, display:"flex", alignItems:"center", justifyContent:"center", color:"#6a6860", fontWeight:700 }}>−</button>
-                      <span style={{ fontSize:18, fontWeight:700, fontFamily:"monospace", minWidth:24, textAlign:"center" as const, color: val>0?"#059669":"#a8a59e" }}>{val}</span>
-                      <button onClick={() => setFacility(f.key, val+1)}
-                        style={{ width:22, height:22, borderRadius:6, border:"1px solid #e8e5de", background:"#fff", cursor:"pointer", fontSize:14, display:"flex", alignItems:"center", justifyContent:"center", color:"#6a6860", fontWeight:700 }}>+</button>
-                    </div>
+                    <input type="number" min={0} max={200}
+                      defaultValue={val} key={f.key+'-'+val}
+                      onBlur={e => setFacility(f.key, Math.max(0, +e.target.value))}
+                      style={{ width:"100%", padding:"6px", border:`1.5px solid ${val>0?"#86efac":"#e8e5de"}`, borderRadius:8, fontSize:20, fontWeight:700, fontFamily:"monospace", textAlign:"center" as const, outline:"none", background:"#fff", color: val>0?"#059669":"#374151" }}
+                      onFocus={e => (e.target as HTMLInputElement).style.borderColor="#4f46e5"}
+                    />
                   </div>
                 )
               })}
