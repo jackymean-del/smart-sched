@@ -227,12 +227,24 @@ export function Step3Subjects() {
                             ⚙ Class-wise settings for <strong>{s.name}</strong>
                             <span style={{ fontWeight:400, color:"#6a6860", marginLeft:8 }}>— override default values per class group</span>
                           </div>
-                          {baseClasses.length === 0 ? (
-                            <div style={{ fontSize:11, color:"#a8a59e", padding:"8px 0" }}>
-                              No classes found. Add classes in the Groups step first, or come back after.
+                          {(() => {
+                            const allCls = baseClasses.length > 0 ? baseClasses
+                              : [...new Set((s.classConfigs ?? []).map((c: any) => c.sectionName))]
+                            return (<div>
+                            <div style={{ display:"flex", gap:8, marginBottom:10, alignItems:"center" }}>
+                              <input placeholder="Add a class name (e.g. Class I, Grade 8) → press Enter"
+                                style={{ flex:1, padding:"6px 10px", border:"1.5px dashed #c4b5fd", borderRadius:6, fontSize:12, outline:"none", background:"#faf5ff", color:"#3730a3" }}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter') {
+                                    const val = (e.target as HTMLInputElement).value.trim()
+                                    if (val) { updateCC(i, val, {}); (e.target as HTMLInputElement).value = '' }
+                                  }
+                                }} />
+                              <span style={{ fontSize:10, color:"#a8a59e", whiteSpace:"nowrap" as const }}>Press Enter</span>
                             </div>
-                          ) : (
-                            <table style={{ borderCollapse:"collapse", fontSize:11, width:"100%" }}>
+                            {allCls.length === 0
+                              ? <div style={{ fontSize:11, color:"#a8a59e", padding:"4px 0 8px" }}>No classes yet — type above or complete the Groups step first.</div>
+                              : <table style={{ borderCollapse:"collapse", fontSize:11, width:"100%" }}>
                               <thead>
                                 <tr>
                                   <th style={{ ...thS, background:"#ede9fe", minWidth:100 }}>Class</th>
@@ -298,7 +310,10 @@ export function Step3Subjects() {
                                 })}
                               </tbody>
                             </table>
-                          )}
+                            )}
+                            </div>
+                            )
+                          })()}
                           <div style={{ fontSize:10, color:"#7c3aed", marginTop:8 }}>
                             💡 Leave blank to use default values above. Only set values that differ per class.
                           </div>
