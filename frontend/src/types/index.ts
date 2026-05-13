@@ -193,3 +193,32 @@ export interface Suggestion {
   message: string
   action?: string
 }
+
+// ─── Participant Pool (Spec §3.1 participant_pools) ───────
+export interface ParticipantPool {
+  id: string
+  name: string                 // "Primary Maths Pool"
+  resourceName: string         // Subject/Task this pool teaches
+  gradeRangeStart: number      // eligible from grade (1)
+  gradeRangeEnd: number        // eligible to grade (5)
+  participantCount: number     // auto-generates N participants
+  maxSessionsPerWeek: number   // workload cap per participant
+  generatedParticipants: GeneratedParticipant[]
+}
+
+export interface GeneratedParticipant {
+  id: string
+  generatedName: string        // "Primary Maths Teacher 1" (auto)
+  actualName: string           // editable by user
+  poolId: string
+}
+
+// ─── Facility (Spec §3.1 facilities) ─────────────────────
+export interface Facility {
+  id: string
+  generatedName: string        // "Room 1", "Lab 1" (auto)
+  actualName: string           // editable
+  facilityType: 'classroom' | 'lab' | 'hall' | 'gym' | 'other'
+  capacity?: number
+  shiftId?: string
+}

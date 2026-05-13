@@ -3,7 +3,7 @@ import { devtools, persist } from 'zustand/middleware'
 import type {
   Section, Staff, Subject, Period,
   ClassTimetable, TeacherSchedule, WizardConfig, Conflict,
-  TeacherPool, Room, Suggestion,
+  TeacherPool, Room, Suggestion, ParticipantPool, Facility,
 } from '@/types'
 
 interface TimetableState {
@@ -19,6 +19,8 @@ interface TimetableState {
   substitutions: Record<string, string>
   conflicts: Conflict[]
   suggestions: Suggestion[]
+  participantPools: ParticipantPool[]
+  facilities: Facility[]
   teacherPools: TeacherPool[]
   rooms: Room[]
   schedulingMode: 'period-based' | 'duration-based'
@@ -41,6 +43,8 @@ interface TimetableState {
   setSubstitutions: (s: Record<string, string>) => void
   setConflicts: (c: Conflict[]) => void
   setSuggestions: (s: Suggestion[]) => void
+  setParticipantPools: (p: ParticipantPool[]) => void
+  setFacilities: (f: Facility[]) => void
   setTeacherPools: (p: TeacherPool[]) => void
   setRooms: (r: Room[]) => void
   setSchedulingMode: (m: 'period-based' | 'duration-based') => void
@@ -88,6 +92,8 @@ export const useTimetableStore = create<TimetableState>()(
         substitutions: {},
         conflicts: [],
         suggestions: [],
+        participantPools: [],
+        facilities: [],
         teacherPools: [],
         rooms: [],
         schedulingMode: 'period-based',
@@ -111,6 +117,8 @@ export const useTimetableStore = create<TimetableState>()(
         setSubstitutions: (substitutions) => set({ substitutions }),
         setConflicts: (conflicts) => set({ conflicts }),
         setSuggestions: (suggestions) => set({ suggestions }),
+        setParticipantPools: (participantPools) => set({ participantPools }),
+        setFacilities: (facilities) => set({ facilities }),
         setTeacherPools: (teacherPools) => set({ teacherPools }),
         setRooms: (rooms) => set({ rooms }),
         setSchedulingMode: (schedulingMode) => set({ schedulingMode }),
@@ -160,6 +168,8 @@ export const useTimetableStore = create<TimetableState>()(
           periods: state.periods,
           classTT: state.classTT,
           teacherTT: state.teacherTT,
+          participantPools: state.participantPools,
+          facilities: state.facilities,
           teacherPools: state.teacherPools,
           rooms: state.rooms,
           schedulingMode: state.schedulingMode,
