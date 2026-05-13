@@ -173,32 +173,22 @@ export function shiftPeriod(
 ): Period[] {
   const indexB = indexA + direction
   if (indexB < 0 || indexB >= periods.length) return periods
-  const periodA = periods[indexA]
-  const periodB = periods[indexB]
 
+  // Always swap the full period definitions in the array (header + type)
   const newPeriods = [...periods]
+  newPeriods[indexA] = periods[indexB]
+  newPeriods[indexB] = periods[indexA]
 
-  if (periodA.type === 'class' && periodB.type === 'class') {
-    // Both class periods: swap CONTENT only, keep period headers (names/times stay)
-    // Just swap the cell data — period order in array stays the same
+  // For class periods: also swap the timetable cell CONTENT
+  // (break periods have no cell data so nothing to swap)
+  const pA = periods[indexA]
+  const pB = periods[indexB]
+  if (pA.type === 'class' || pB.type === 'class') {
     Object.values(classTT).forEach(sectionData => {
       Object.values(sectionData).forEach(dayData => {
-        const tmp = dayData[periodA.id]
-        dayData[periodA.id] = dayData[periodB.id]
-        dayData[periodB.id] = tmp
-      })
-    })
-    // No change to periods array — just content moved
-  } else {
-    // Break ↔ class period: swap full column including header
-    newPeriods[indexA] = periodB
-    newPeriods[indexB] = periodA
-    // Also swap cell data
-    Object.values(classTT).forEach(sectionData => {
-      Object.values(sectionData).forEach(dayData => {
-        const tmp = dayData[periodA.id]
-        dayData[periodA.id] = dayData[periodB.id]
-        dayData[periodB.id] = tmp
+        const tmp = dayData[pA.id]
+        dayData[pA.id] = dayData[pB.id]
+        dayData[pB.id] = tmp
       })
     })
   }

@@ -194,7 +194,81 @@ export function TimetablePage() {
     )
   }
 
-  // ── Render Teacher Timetable ────────────────────────────
+  // ── Render Class Timetable (Transposed: periods = rows, days = cols) ─
+  const renderClassTTTransposed = (sn: string) => {
+    const sd = classTT[sn]
+    if (!sd) return <div style={{ padding:40, textAlign:"center", color:"#94a3b8" }}>No data for {sn}</div>
+    const section = sections.find(s => s.name === sn)
+    const ct = section?.classTeacher ?? ""
+    const usedDays = config.workDays.filter(d => sd[d])
+    const DAY_S: Record<string,string> = { MONDAY:"Mon",TUESDAY:"Tue",WEDNESDAY:"Wed",THURSDAY:"Thu",FRIDAY:"Fri",SATURDAY:"Sat",SUNDAY:"Sun" }
+
+    return (
+      <div>
+        <div style={{ display:"flex", alignItems:"center", gap:16, padding:"12px 16px", background:"#f8fafc", borderBottom:"1px solid #e2e8f0" }}>
+          <div>
+            <div style={{ fontSize:16, fontWeight:700, color:"#1e293b", fontFamily:"'DM Serif Display',Georgia,serif" }}>{sn}</div>
+            {ct && <div style={{ fontSize:11, color:"#64748b", marginTop:2 }}>Class Teacher: <strong>{ct}</strong></div>}
+          </div>
+          <div style={{ marginLeft:"auto", fontSize:11, color:"#94a3b8" }}>Transposed view</div>
+        </div>
+        <div style={{ overflowX:"auto" }}>
+          <table style={{ borderCollapse:"collapse", width:"100%", fontSize:11 }}>
+            <thead>
+              <tr>
+                <th style={{ background:"#1e293b", color:"#fff", padding:"8px 12px", textAlign:"left", minWidth:100, fontSize:11, fontWeight:700, border:"1px solid #1e293b" }}>Period</th>
+                {usedDays.map(day => (
+                  <th key={day} style={{ background:"#1e293b", color:"#fff", padding:"8px 12px", textAlign:"center", minWidth:90, fontSize:11, fontWeight:700, border:"1px solid #1e293b" }}>
+                    {DAY_S[day] ?? day.substring(0,3)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {periods.map((p, pi) => {
+                const isBreak = p.type !== "class"
+                const times = periodTimes.get(p.id)
+                return (
+                  <tr key={p.id} style={{ background: isBreak?"#fffbeb":pi%2===0?"#fff":"#f8fafc" }}>
+                    <td style={{ padding:"6px 10px", border:"1px solid #e2e8f0", whiteSpace:"nowrap" as const }}>
+                      <div style={{ fontWeight:700, fontSize:11, color: isBreak?"#d97706":"#1e293b" }}>{p.name}</div>
+                      {times && <div style={{ fontSize:9, color:"#94a3b8" }}>{times.start} → {times.end}</div>}
+                    </td>
+                    {usedDays.map(day => {
+                      if (isBreak) return (
+                        <td key={day} style={{ background:"#fffbeb", border:"1px solid #e2e8f0", textAlign:"center" as const, fontSize:10, color:"#d97706", fontStyle:"italic", padding:"6px" }}>
+                          {p.name}
+                        </td>
+                      )
+                      const cell = sd[day]?.[p.id]
+                      if (!cell?.subject) return (
+                        <td key={day} style={{ border:"1px solid #e2e8f0", padding:2 }}>
+                          <div style={{ height:36, background:"#f8fafc", borderRadius:4, display:"flex", alignItems:"center", justifyContent:"center", color:"#cbd5e1", fontSize:10 }}>—</div>
+                        </td>
+                      )
+                      const colorClass = getSubjectColor(cell.subject)
+                      return (
+                        <td key={day} style={{ border:"1px solid #e2e8f0", padding:2 }}>
+                          <div className={colorClass}
+                            onClick={() => editMode && setEditTarget({ section:sn, day, periodId:p.id })}
+                            style={{ borderRadius:5, padding:"4px 6px", minHeight:36, cursor:editMode?"pointer":"default" }}>
+                            <div style={{ fontSize:10, fontWeight:700 }}>{cell.subject}</div>
+                            {showRoom && cell.room && <div style={{ fontSize:8, opacity:0.6 }}>{cell.room}</div>}
+                          </div>
+                        </td>
+                      )
+                    })}
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    )
+  }
+
+    // ── Render Teacher Timetable ────────────────────────────
   const renderTeacherTT = (tn: string) => {
     const tdata = teacherTT[tn]
     if (!tdata) return <div style={{ padding:40, textAlign:"center", color:"#94a3b8" }}>No data for {tn}</div>
@@ -422,7 +496,9 @@ export function TimetablePage() {
         {/* Timetable content */}
         <div style={{ flex:1, overflowY:"auto", padding:20 }}>
           <div style={{ background:"#fff", borderRadius:12, boxShadow:"0 1px 3px rgba(0,0,0,0.08)", overflow:"hidden" }}>
-            {viewTab === "class" ? renderClassTT(selectedEntity) : renderTeacherTT(selectedEntity)}
+            {viewTab === "class"
+              ? (transposed ? renderClassTTTransposed(selectedEntity) : renderClassTT(selectedEntity))
+              : renderTeacherTT(selectedEntity)}
           </div>
 
           {/* Conflicts list */}
