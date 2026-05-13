@@ -103,9 +103,7 @@ export function Step1Org() {
                   <input type="number" min={f.min} max={f.max}
                     defaultValue={f.val} key={f.key+selectedType}
                     onBlur={e => setConfig({ [f.key]: Math.max(f.min, +e.target.value) })}
-                    style={{ width:"100%", padding:"8px", border:"1.5px solid #e8e5de", borderRadius:8, fontSize:24, fontWeight:700, fontFamily:"monospace", textAlign:"center" as const, outline:"none", background:"#fff" }}
-                    onFocus={e=>(e.target as HTMLInputElement).style.borderColor="#4f46e5"}
-                    onBlur={e=>{setConfig({ [f.key]: Math.max(f.min, +(e.target as HTMLInputElement).value) });(e.target as HTMLInputElement).style.borderColor="#e8e5de"}} />
+                    style={{ width:"100%", padding:"8px", border:"1.5px solid #e8e5de", borderRadius:8, fontSize:24, fontWeight:700, fontFamily:"monospace", textAlign:"center" as const, outline:"none", background:"#fff" }} />
                 </div>
               ))}
             </div>
