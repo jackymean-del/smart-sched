@@ -5,13 +5,7 @@ import type { Shift } from "@/types"
 const ALL_DAYS = ["MONDAY","TUESDAY","WEDNESDAY","THURSDAY","FRIDAY","SATURDAY","SUNDAY"]
 const DAY_SHORT: Record<string,string> = { MONDAY:"Mo",TUESDAY:"Tu",WEDNESDAY:"We",THURSDAY:"Th",FRIDAY:"Fr",SATURDAY:"Sa",SUNDAY:"Su" }
 
-const TIME_SLOTS = [
-  "06:00","06:30","07:00","07:30","08:00","08:30",
-  "09:00","09:30","10:00","10:30","11:00","11:30",
-  "12:00","12:30","13:00","13:30","14:00","14:30",
-  "15:00","15:30","16:00","16:30","17:00","17:30",
-  "18:00","18:30","19:00","19:30","20:00",
-]
+// Free time input — no fixed slots
 
 function toDisplay(time: string, fmt: '12h'|'24h'): string {
   const [h, m] = time.split(':').map(Number)
@@ -139,21 +133,13 @@ export function Step2Schedule() {
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, maxWidth:420, marginBottom:12 }}>
             <div>
               {lbl("Start Time")}
-              <select value={config.startTime} onChange={e => setConfig({ startTime: e.target.value })}
-                style={{ width:'100%', padding:'9px 12px', borderRadius:8, border:'1.5px solid #e8e5de', fontSize:13, background:'#fff', outline:'none', cursor:'pointer' }}>
-                {TIME_SLOTS.filter(t => t < config.endTime).map(t => (
-                  <option key={t} value={t}>{toDisplay(t, fmt)}</option>
-                ))}
-              </select>
+              <input type="time" value={config.startTime} onChange={e => setConfig({ startTime: e.target.value })}
+                style={{ width:'100%', padding:'9px 12px', borderRadius:8, border:'1.5px solid #e8e5de', fontSize:13, background:'#fff', outline:'none', cursor:'pointer' }} />
             </div>
             <div>
               {lbl("End Time")}
-              <select value={config.endTime} onChange={e => setConfig({ endTime: e.target.value })}
-                style={{ width:'100%', padding:'9px 12px', borderRadius:8, border:'1.5px solid #e8e5de', fontSize:13, background:'#fff', outline:'none', cursor:'pointer' }}>
-                {TIME_SLOTS.filter(t => t > config.startTime).map(t => (
-                  <option key={t} value={t}>{toDisplay(t, fmt)}</option>
-                ))}
-              </select>
+              <input type="time" value={config.endTime} onChange={e => setConfig({ endTime: e.target.value })}
+                style={{ width:'100%', padding:'9px 12px', borderRadius:8, border:'1.5px solid #e8e5de', fontSize:13, background:'#fff', outline:'none', cursor:'pointer' }} />
             </div>
           </div>
           <div style={{ background:'#f7f6f2', borderRadius:8, padding:'10px 14px', fontSize:12, color:'#374151' }}>
@@ -194,21 +180,13 @@ export function Step2Schedule() {
                 <div style={{ padding:'12px 14px', display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, maxWidth:420 }}>
                   <div>
                     <div style={{ fontSize:10, fontWeight:700, textTransform:'uppercase' as const, color:'#a8a59e', marginBottom:5 }}>Start Time</div>
-                    <select value={shift.startTime} onChange={e => updateShift(shift.id, { startTime: e.target.value })}
-                      style={{ width:'100%', padding:'8px 10px', borderRadius:7, border:'1.5px solid #e8e5de', fontSize:12, background:'#fff', outline:'none', cursor:'pointer' }}>
-                      {TIME_SLOTS.filter(t => t < shift.endTime).map(t => (
-                        <option key={t} value={t}>{toDisplay(t, fmt)}</option>
-                      ))}
-                    </select>
+                    <input type="time" value={shift.startTime} onChange={e => updateShift(shift.id, { startTime: e.target.value })}
+                      style={{ width:'100%', padding:'8px 10px', borderRadius:7, border:'1.5px solid #e8e5de', fontSize:12, background:'#fff', outline:'none', cursor:'pointer' }} />
                   </div>
                   <div>
                     <div style={{ fontSize:10, fontWeight:700, textTransform:'uppercase' as const, color:'#a8a59e', marginBottom:5 }}>End Time</div>
-                    <select value={shift.endTime} onChange={e => updateShift(shift.id, { endTime: e.target.value })}
-                      style={{ width:'100%', padding:'8px 10px', borderRadius:7, border:'1.5px solid #e8e5de', fontSize:12, background:'#fff', outline:'none', cursor:'pointer' }}>
-                      {TIME_SLOTS.filter(t => t > shift.startTime).map(t => (
-                        <option key={t} value={t}>{toDisplay(t, fmt)}</option>
-                      ))}
-                    </select>
+                    <input type="time" value={shift.endTime} onChange={e => updateShift(shift.id, { endTime: e.target.value })}
+                      style={{ width:'100%', padding:'8px 10px', borderRadius:7, border:'1.5px solid #e8e5de', fontSize:12, background:'#fff', outline:'none', cursor:'pointer' }} />
                   </div>
                 </div>
                 {/* Summary */}
