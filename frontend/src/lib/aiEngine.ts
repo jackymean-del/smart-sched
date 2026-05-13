@@ -232,8 +232,12 @@ export function autoAssign(
   subjects: Subject[]
 ): { sections: Section[]; staff: Staff[]; subjects: Subject[] } {
   // Assign all subjects to all sections
-  const updatedSubjects = subjects.map(sub => ({
-    ...sub, sections: sections.map(s => s.name),
+  const updatedSubjects: Subject[] = subjects.map(sub => ({
+    ...sub,
+    sessionDuration: sub.sessionDuration ?? 40,
+    maxPeriodsPerDay: sub.maxPeriodsPerDay ?? 2,
+    classConfigs: sub.classConfigs ?? [],
+    sections: sections.map(s => s.name),
   }))
 
   // Distribute subjects and classes among staff

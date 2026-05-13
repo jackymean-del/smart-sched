@@ -47,16 +47,15 @@ export const SubjectSchema = z.object({
     sessionDuration: z.number(),
   })).default([]),
 })
-// Use a looser type so existing code creating subjects without new fields still compiles
 export type Subject = {
   id: string
   name: string
   periodsPerWeek: number
-  sessionDuration?: number
-  maxPeriodsPerDay?: number
+  sessionDuration: number   // always 40 by default
+  maxPeriodsPerDay: number  // always 2 by default
   color: string
   sections: string[]
-  classConfigs?: { sectionName: string; periodsPerWeek: number; maxPeriodsPerDay: number; sessionDuration: number }[]
+  classConfigs: { sectionName: string; periodsPerWeek: number; maxPeriodsPerDay: number; sessionDuration: number }[]
 }
 
 export const PeriodTypeSchema = z.enum(['class', 'fixed-start', 'break', 'lunch', 'fixed-end'])
