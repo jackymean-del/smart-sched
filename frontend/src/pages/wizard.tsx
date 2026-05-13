@@ -2,20 +2,22 @@ import { Component, type ReactNode } from "react"
 import { useTimetableStore } from "@/store/timetableStore"
 import { Step1Org }        from "@/routes/wizard/step1-org"
 import { Step2Setup }      from "@/routes/wizard/step2-setup"
-import { Step3Schedule }   from "@/routes/wizard/step3-schedule"  
+import { Step3Schedule }   from "@/routes/wizard/step3-schedule"
+import { Step3bOptionals } from "@/routes/wizard/step3b-optionals"  
 import { Step4Pools }      from "@/routes/wizard/step4-pools"
 import { Step5Facilities } from "@/routes/wizard/step5-facilities"
 import { Step6Generate }   from "@/routes/wizard/step6-generate"
 
-const STEPS = [Step1Org, Step2Setup, Step3Schedule, Step4Pools, Step5Facilities, Step6Generate]
+const STEPS = [Step1Org, Step2Setup, Step3Schedule, Step3bOptionals, Step4Pools, Step5Facilities, Step6Generate]
 
 const STEP_META = [
-  { label:"Organization",   sub:"Type, counts & spaces",    icon:"🏫" },
-  { label:"Classes & Subjects", sub:"Review & assign",      icon:"📋" },
-  { label:"Schedule",       sub:"Days, shifts & timing",    icon:"📅" },
-  { label:"Teacher Pools",  sub:"Staff groups",             icon:"👥" },
-  { label:"Facilities",     sub:"Rooms & spaces",           icon:"🏢" },
-  { label:"Generate",       sub:"Build timetable",          icon:"✨" },
+  { label:"Organization",    sub:"Type, counts & spaces",   icon:"🏫" },
+  { label:"Classes & Subjects", sub:"Review & assign",     icon:"📋" },
+  { label:"Schedule",        sub:"Days, shifts & timing",  icon:"📅" },
+  { label:"Optional Subjects", sub:"XI-XII combinations",  icon:"🔀" },
+  { label:"Teacher Pools",   sub:"Staff groups",            icon:"👥" },
+  { label:"Facilities",      sub:"Rooms & spaces",          icon:"🏢" },
+  { label:"Generate",        sub:"Build timetable",         icon:"✨" },
 ]
 
 class StepErrorBoundary extends Component<

@@ -231,3 +231,41 @@ export interface Facility {
   capacity?: number
   shiftId?: string
 }
+
+// ─── Optional Subject System (XI-XII Advanced Scheduling) ─
+
+export interface OptionalLine {
+  id: string
+  name: string           // "Optional Line A", "Optional Line B"
+  subjects: string[]     // subject names in this line (mutually exclusive)
+}
+
+export interface OptionalCombination {
+  id: string
+  // One subject from each line, e.g. ["Maths", "PED"]
+  subjects: string[]
+  label: string          // "Maths + PED"
+}
+
+export interface CombinationStrength {
+  sectionId: string
+  combinationId: string
+  studentCount: number
+}
+
+export interface SubjectPool {
+  subjectName: string
+  totalStudents: number
+  sections: string[]     // which sections contribute to this pool
+  assignedRoom?: string
+  assignedTeacher?: string
+}
+
+export interface ClassOptionalConfig {
+  classId: string        // section name e.g. "XI-C"
+  hasOptionals: boolean
+  totalStudents: number
+  optionalLines: OptionalLine[]
+  combinations: OptionalCombination[]
+  combinationStrengths: CombinationStrength[]
+}

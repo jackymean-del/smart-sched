@@ -4,6 +4,7 @@ import type {
   Section, Staff, Subject, Period,
   ClassTimetable, TeacherSchedule, TimetableCell, WizardConfig, Conflict,
   TeacherPool, Room, Suggestion, ParticipantPool, Facility,
+  ClassOptionalConfig, SubjectPool,
 } from '@/types'
 
 interface TimetableState {
@@ -23,6 +24,8 @@ interface TimetableState {
   facilities: Facility[]
   teacherPools: TeacherPool[]
   rooms: Room[]
+  optionalConfigs: ClassOptionalConfig[]
+  subjectPools: SubjectPool[]
   schedulingMode: 'period-based' | 'duration-based'
   workingDaysPerYear: number
   viewTab: 'class' | 'teacher'
@@ -47,6 +50,8 @@ interface TimetableState {
   setFacilities: (f: Facility[]) => void
   setTeacherPools: (p: TeacherPool[]) => void
   setRooms: (r: Room[]) => void
+  setOptionalConfigs: (c: ClassOptionalConfig[]) => void
+  setSubjectPools: (p: SubjectPool[]) => void
   setSchedulingMode: (m: 'period-based' | 'duration-based') => void
   setWorkingDaysPerYear: (n: number) => void
   setViewTab: (t: 'class' | 'teacher') => void
@@ -96,6 +101,8 @@ export const useTimetableStore = create<TimetableState>()(
         facilities: [],
         teacherPools: [],
         rooms: [],
+        optionalConfigs: [],
+        subjectPools: [],
         schedulingMode: 'period-based',
         workingDaysPerYear: 220,
         viewTab: 'class',
@@ -121,6 +128,8 @@ export const useTimetableStore = create<TimetableState>()(
         setFacilities: (facilities) => set({ facilities }),
         setTeacherPools: (teacherPools) => set({ teacherPools }),
         setRooms: (rooms) => set({ rooms }),
+        setOptionalConfigs: (optionalConfigs) => set({ optionalConfigs }),
+        setSubjectPools: (subjectPools) => set({ subjectPools }),
         setSchedulingMode: (schedulingMode) => set({ schedulingMode }),
         setWorkingDaysPerYear: (workingDaysPerYear) => set({ workingDaysPerYear }),
         setViewTab: (viewTab) => set({ viewTab }),
@@ -186,6 +195,8 @@ export const useTimetableStore = create<TimetableState>()(
           facilities: state.facilities,
           teacherPools: state.teacherPools,
           rooms: state.rooms,
+          optionalConfigs: state.optionalConfigs,
+          subjectPools: state.subjectPools,
           schedulingMode: state.schedulingMode,
           workingDaysPerYear: state.workingDaysPerYear,
         }),
