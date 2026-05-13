@@ -7,8 +7,27 @@ import { shiftPeriod, rebuildTeacherTT } from "@/lib/aiEngine"
 import { useExport } from "@/hooks/useExport"
 import type { Period } from "@/types"
 
+// ── Time calculator ──────────────────────────────────────
+function calcTimes(periods: any[], config: any): Map<string,{start:string;end:string}> {
+  const map = new Map<string,{start:string;end:string}>()
+  const [sh, sm] = (config.startTime ?? '09:00').split(':').map(Number)
+  let mins = sh*60+sm
+  const fmt = (h: number, m: number) => {
+    if ((config.timeFormat ?? '12h') === '24h') return h.toString().padStart(2,'0')+':'+m.toString().padStart(2,'0')
+    const ap = h>=12?'PM':'AM', h12 = h%12||12
+    return h12+':'+(m.toString().padStart(2,'0'))+' '+ap
+  }
+  periods.forEach((p: any) => {
+    const h=Math.floor(mins/60), m=mins%60
+    const start=fmt(h,m); mins+=p.duration
+    const eh=Math.floor(mins/60), em=mins%60
+    map.set(p.id,{start,end:fmt(eh,em)})
+  })
+  return map
+}
+
 // ── Period header cell ──────────────────────────────────
-function PeriodCol({ p }: { p: Period }) {
+function PeriodCol({ p, times }: { p: Period; times?: {start:string;end:string} }) {
   const isBreak = p.type !== "class"
   const bg = p.type === "fixed-start" ? "#dbeafe"
     : p.type === "lunch" ? "#fef3c7"
@@ -23,7 +42,7 @@ function PeriodCol({ p }: { p: Period }) {
   return (
     <th style={{ background:bg, color, fontSize:10, fontWeight:700, padding:"6px 4px", border:"1px solid #e2e8f0", textAlign:"center", minWidth: isBreak?60:80, whiteSpace:"nowrap" }}>
       <div>{p.name}</div>
-      <div style={{ fontSize:9, fontWeight:400, opacity:0.8 }}>{p.duration}min</div>
+      <div style={{ fontSize:8, fontWeight:600, opacity:0.95 }}>{times?.start}</div><div style={{ fontSize:8, fontWeight:400, opacity:0.7 }}>→ {times?.end}</div>
     </th>
   )
 }
@@ -51,8 +70,8 @@ export function TimetablePage() {
   const {
     config, sections, staff, subjects, periods,
     classTT, teacherTT, substitutions, conflicts,
-    viewTab, showTeacher, showRoom, editMode,
-    setViewTab, setShowTeacher, setShowRoom, setEditMode,
+    viewTab, transposed, showTeacher, showRoom, editMode,
+    setViewTab, setTransposed, setShowTeacher, setShowRoom, setEditMode,
     setPeriods, setTeacherTT,
   } = store
 
@@ -80,6 +99,8 @@ export function TimetablePage() {
   }
 
   // ── Render Class Timetable ──────────────────────────────
+  const periodTimes = calcTimes(periods, config)
+
   const renderClassTT = (sn: string) => {
     const sd = classTT[sn]
     if (!sd) return <div style={{ padding:40, textAlign:"center", color:"#94a3b8" }}>No data for {sn}</div>
@@ -109,15 +130,13 @@ export function TimetablePage() {
                 <th style={{ background:"#1e293b", color:"#fff", padding:"8px 12px", textAlign:"left", minWidth:70, fontSize:11, fontWeight:700, border:"1px solid #1e293b" }}>Day</th>
                 {periods.map((p, pi) => (
                   <th key={p.id} style={{ position:"relative" as const }}>
-                    <PeriodCol p={p} />
-                    {p.type === "class" && (
-                      <div style={{ display:"flex", justifyContent:"center", gap:2, paddingBottom:2, background:"#f1f5f9" }}>
-                        <button onClick={() => handleShift(pi, -1)} title="Move left"
-                          style={{ fontSize:8, border:"none", background:"transparent", cursor:"pointer", color:"#94a3b8", padding:"0 2px" }}>◀</button>
-                        <button onClick={() => handleShift(pi, 1)} title="Move right"
-                          style={{ fontSize:8, border:"none", background:"transparent", cursor:"pointer", color:"#94a3b8", padding:"0 2px" }}>▶</button>
+                    <PeriodCol p={p} times={periodTimes.get(p.id)} />
+                      <div style={{ display:"flex", justifyContent:"center", gap:3, padding:"2px 0", background:"#f1f5f9", borderTop:"1px solid #e2e8f0" }}>
+                        <button onClick={() => handleShift(pi, -1)} title="Shift column left"
+                          style={{ fontSize:9, border:"1px solid #e2e8f0", borderRadius:3, background:"#fff", cursor:"pointer", color:"#64748b", padding:"0 5px", lineHeight:"16px" }}>◀</button>
+                        <button onClick={() => handleShift(pi, 1)} title="Shift column right"
+                          style={{ fontSize:9, border:"1px solid #e2e8f0", borderRadius:3, background:"#fff", cursor:"pointer", color:"#64748b", padding:"0 5px", lineHeight:"16px" }}>▶</button>
                       </div>
-                    )}
                   </th>
                 ))}
               </tr>
@@ -227,7 +246,7 @@ export function TimetablePage() {
             <thead>
               <tr>
                 <th style={{ background:"#1e293b", color:"#fff", padding:"8px 12px", textAlign:"left", minWidth:70, fontSize:11, fontWeight:700, border:"1px solid #1e293b" }}>Day</th>
-                {periods.map(p => <PeriodCol key={p.id} p={p} />)}
+                {periods.map(p => <PeriodCol key={p.id} p={p} times={periodTimes.get(p.id)} />)}
               </tr>
             </thead>
             <tbody>
@@ -336,6 +355,20 @@ export function TimetablePage() {
 
         {/* Toolbar */}
         <div style={{ background:"#fff", borderBottom:"1px solid #e2e8f0", padding:"8px 16px", display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" as const }}>
+          {/* Transpose toggle */}
+          <div style={{ display:"flex", border:"1px solid #e2e8f0", borderRadius:7, overflow:"hidden" }}>
+            <button onClick={() => setTransposed(false)}
+              style={{ padding:"5px 12px", border:"none", background: !transposed?"#4f46e5":"#fff", color: !transposed?"#fff":"#64748b", fontSize:11, fontWeight:500, cursor:"pointer" }}>
+              ☰ Normal
+            </button>
+            <button onClick={() => setTransposed(true)}
+              style={{ padding:"5px 12px", border:"none", background: transposed?"#4f46e5":"#fff", color: transposed?"#fff":"#64748b", fontSize:11, fontWeight:500, cursor:"pointer" }}>
+              ⊞ Transposed
+            </button>
+          </div>
+
+          <div style={{ width:1, height:20, background:"#e2e8f0" }} />
+
           {/* View toggle */}
           <div style={{ display:"flex", border:"1px solid #e2e8f0", borderRadius:7, overflow:"hidden" }}>
             {([["class","📚",org.sectionLabel],["teacher","👤",org.staffLabel]] as const).map(([t,icon,lbl]) => (
