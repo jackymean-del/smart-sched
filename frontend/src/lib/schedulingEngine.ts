@@ -31,47 +31,6 @@ export function durationToWeeklyPeriods(input: DurationInput): number {
   return Math.round(weekly)
 }
 
-// ─── Teacher Pool ─────────────────────────────────────────
-export interface TeacherPool {
-  id: string
-  name: string           // e.g. "Primary Maths Teachers"
-  subjectName: string
-  gradeRangeStart: number
-  gradeRangeEnd: number
-  teacherCount: number
-  maxPeriodsPerWeek: number
-  teachers: GeneratedTeacher[]
-}
-
-export interface GeneratedTeacher {
-  id: string
-  generatedName: string  // "Primary Maths Teacher 1"
-  actualName: string     // editable by user
-  poolId: string
-  assignedClasses: string[]
-  schedule: Record<string, Record<string, string>> // day -> period -> class
-}
-
-export function generateTeachersFromPool(pool: TeacherPool): GeneratedTeacher[] {
-  return Array.from({ length: pool.teacherCount }, (_, i) => ({
-    id: `${pool.id}-t${i+1}`,
-    generatedName: `${pool.name} ${i+1}`,
-    actualName: `${pool.name} ${i+1}`,
-    poolId: pool.id,
-    assignedClasses: [],
-    schedule: {},
-  }))
-}
-
-// ─── Scheduling Requirement (internal universal format) ───
-export interface SchedulingRequirement {
-  classId: string
-  subjectId: string
-  weeklyPeriods: number      // always resolved before engine runs
-  maxPeriodsPerDay: number
-  sessionDuration: number
-  eligiblePoolIds: string[]  // which teacher pools can teach this
-}
 
 // ─── Hard Constraints ─────────────────────────────────────
 export interface HardConstraint {
@@ -321,11 +280,7 @@ export function solveTimetable(input: SolverInput): SolverOutput {
 }
 
 // ─── Auto Suggestions Engine ─────────────────────────────
-export interface Suggestion {
-  type: 'warning' | 'info' | 'error'
-  message: string
-  action?: string
-}
+// Suggestion type imported from @/types above
 
 export function generateSuggestions(
   classTT: ClassTimetable,
@@ -334,7 +289,7 @@ export function generateSuggestions(
   subjects: Subject[],
   workDays: string[],
   periods: Period[]
-): Suggestion[] {
+): import('@/types').Suggestion[] {
   const suggestions: Suggestion[] = []
   const classPeriods = periods.filter(p => p.type === 'class')
 
