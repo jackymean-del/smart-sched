@@ -289,7 +289,7 @@ export function generateSuggestions(
   subjects: Subject[],
   workDays: string[],
   periods: Period[]
-): import('@/types').Suggestion[] {
+): Suggestion[] {
   const suggestions: Suggestion[] = []
   const classPeriods = periods.filter(p => p.type === 'class')
 

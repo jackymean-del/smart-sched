@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { devtools, persist } from 'zustand/middleware'
 import type {
   Section, Staff, Subject, Period,
-  ClassTimetable, TeacherSchedule, WizardConfig, Conflict,
+  ClassTimetable, TeacherSchedule, TimetableCell, WizardConfig, Conflict,
   TeacherPool, Room, Suggestion, ParticipantPool, Facility,
 } from '@/types'
 
@@ -56,7 +56,7 @@ interface TimetableState {
   setEditMode: (v: boolean) => void
   setSidebarTab: (t: 'legend' | 'staff' | 'shifts') => void
   togglePeriodShiftable: (periodId: string) => void
-  updateCell: (section: string, day: string, periodId: string, cell: Partial<import('@/types').TimetableCell>) => void
+  updateCell: (section: string, day: string, periodId: string, cell: Partial<TimetableCell>) => void
   resetWizard: () => void
 }
 
@@ -143,7 +143,7 @@ export const useTimetableStore = create<TimetableState>()(
               ...s.classTT[section],
               [day]: {
                 ...s.classTT[section]?.[day],
-                [periodId]: { ...s.classTT[section]?.[day]?.[periodId], ...cell } as import('@/types').TimetableCell,
+                [periodId]: { ...s.classTT[section]?.[day]?.[periodId], ...cell } as TimetableCell,
               },
             },
           },
