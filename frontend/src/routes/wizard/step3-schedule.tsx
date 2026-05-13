@@ -39,7 +39,7 @@ const SHIFT_COLORS = ['#4f46e5','#059669','#d97706','#dc2626','#7c3aed','#0891b2
 
 export function Step3Schedule() {
   const { config, setConfig, setStep } = useTimetableStore()
-  const [multiShift, setMultiShift] = useState(config.shifts.length > 0)
+  const [multiShift, setMultiShift] = useState((config.shifts ?? []).length > 0)
   const fmt = config.timeFormat
 
   const toggleDay = (day: string) => {
@@ -61,15 +61,15 @@ export function Step3Schedule() {
       endTime: '13:00',
       assignedClasses: [],
     }
-    setConfig({ shifts: [...config.shifts, newShift] })
+    setConfig({ shifts: [...(config.shifts ?? []), newShift] })
   }
 
   const updateShift = (id: string, updates: Partial<Shift>) => {
-    setConfig({ shifts: config.shifts.map(s => s.id === id ? { ...s, ...updates } : s) })
+    setConfig({ shifts: (config.shifts ?? []).map(s => s.id === id ? { ...s, ...updates } : s) })
   }
 
   const removeShift = (id: string) => {
-    setConfig({ shifts: config.shifts.filter(s => s.id !== id) })
+    setConfig({ shifts: (config.shifts ?? []).filter(s => s.id !== id) })
   }
 
   return (
@@ -125,7 +125,7 @@ export function Step3Schedule() {
             <div style={{ fontSize:13, fontWeight:600, color: !multiShift?'#4f46e5':'#1c1b18', marginBottom:4 }}>🕐 Single Timing</div>
             <div style={{ fontSize:11, color:'#6a6860' }}>All classes have the same start & end time</div>
           </button>
-          <button onClick={() => { setMultiShift(true); if (config.shifts.length === 0) addShift() }}
+          <button onClick={() => { setMultiShift(true); if ((config.shifts ?? []).length === 0) addShift() }}
             style={{ padding:'14px', borderRadius:10, border: multiShift?'2px solid #059669':'1.5px solid #e8e5de', background: multiShift?'#f0fdf4':'#fff', cursor:'pointer', textAlign:'left' as const }}>
             <div style={{ fontSize:13, fontWeight:600, color: multiShift?'#059669':'#1c1b18', marginBottom:4 }}>🕐🕑 Multiple Shifts</div>
             <div style={{ fontSize:11, color:'#6a6860' }}>Different classes have different start/end times</div>
@@ -170,7 +170,7 @@ export function Step3Schedule() {
             💡 Create named shifts and assign class groups to each shift in <strong>Step 5</strong> (Review & Edit Data).
           </div>
           <div style={{ display:'flex', flexDirection:'column' as const, gap:10 }}>
-            {config.shifts.map((shift, si) => (
+            {(config.shifts ?? []).map((shift, si) => (
               <div key={shift.id} style={{ border:`2px solid ${SHIFT_COLORS[si % SHIFT_COLORS.length]}22`, borderRadius:12, overflow:'hidden' }}>
                 {/* Shift header */}
                 <div style={{ background:`${SHIFT_COLORS[si % SHIFT_COLORS.length]}11`, borderBottom:`1px solid ${SHIFT_COLORS[si % SHIFT_COLORS.length]}22`, padding:'10px 14px', display:'flex', alignItems:'center', gap:10 }}>
