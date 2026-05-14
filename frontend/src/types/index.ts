@@ -179,23 +179,24 @@ export const BUILT_IN_CATEGORIES: SubjectCategoryType[] = [
 
 export interface Subject {
   id: string
-  organizationId: string
+  organizationId?: string  // optional for wizard-created subjects
   name: string
-  shortName: string        // e.g. "PHY", "MATH"
-  category: SubjectCategoryType
-  isOptional: boolean
-  requiresLab: boolean
-  requiresConsecutiveSlots: boolean
+  shortName?: string
+  category?: SubjectCategoryType
+  isOptional?: boolean
+  requiresLab?: boolean
+  requiresConsecutiveSlots?: boolean
   periodsPerWeek: number
-  sessionDuration: number  // minutes
+  sessionDuration: number
   maxPeriodsPerDay: number
   color: string
-  /** Overrides per class-grade (for class-specific periods) */
+  sections?: string[]      // legacy: section names this subject applies to
   classConfigs: SubjectClassConfig[]
 }
 
 export interface SubjectClassConfig {
-  classId: string
+  classId?: string
+  sectionName?: string     // legacy alias (used by wizard steps)
   periodsPerWeek: number
   maxPeriodsPerDay: number
   sessionDuration: number
