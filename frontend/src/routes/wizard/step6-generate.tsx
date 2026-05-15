@@ -16,22 +16,18 @@ interface Job {
 }
 
 const PIPELINE = [
-  { type:"info", msg:"📥 Input collection — {nC} groups, {nSu} resources, {nPools} pools, {nF} facilities" },
-  { type:"ok",   msg:"✅ Mode conversion — {mode}" },
-  { type:"info", msg:"⚙️ Slot generation — creating time_slots for {nC} groups..." },
-  { type:"ok",   msg:"✅ Slot generation complete · {total} total slots" },
-  { type:"info", msg:"🔒 Building hard constraints (participant clash, facility clash, daily caps)..." },
-  { type:"ok",   msg:"✅ Hard constraints applied — 0 violations in initial state" },
-  { type:"info", msg:"⚖️ Applying soft constraint penalty weights (5, 10, 7, 4, 6)..." },
-  { type:"ok",   msg:"✅ Penalty model ready — solver objective function built" },
-  { type:"info", msg:"🚀 CSP solver running — placing participants from eligible pools..." },
-  { type:"ok",   msg:"✅ Pool eligibility applied — participants assigned to grade-range matches" },
-  { type:"info", msg:"🔄 Optimizing distribution across {nd} working days..." },
-  { type:"ok",   msg:"✅ Convergence reached — penalty score: {score}" },
-  { type:"info", msg:"🔍 Validation pass — checking hard constraints..." },
-  { type:"ok",   msg:"✅ Validation complete — {conflicts} hard conflicts" },
-  { type:"info", msg:"📊 Generating class, participant and facility timetable views..." },
-  { type:"ok",   msg:"✅ Timetable ready — {nC} class views · {nS} participant views · {nF} facility views" },
+  { type:"info", msg:"👀  Reading your school setup — {nC} classes, {nSu} subjects, {nF} rooms" },
+  { type:"ok",   msg:"📅  That's {total} lesson slots to fill across {nd} school days every week" },
+  { type:"info", msg:"🧑‍🏫  Figuring out who teaches what — matching teachers to subjects and classes..." },
+  { type:"ok",   msg:"✅  Every subject has a qualified teacher lined up" },
+  { type:"info", msg:"🗓️  Laying out the week — placing lessons so nothing clashes..." },
+  { type:"ok",   msg:"✅  Core schedule built — no teacher is in two classrooms at once" },
+  { type:"info", msg:"⚖️  Balancing the load — spreading lessons so no day feels too heavy..." },
+  { type:"ok",   msg:"✅  Workload looks fair across all {nC} classes and {nd} days" },
+  { type:"info", msg:"🔍  Running a final sweep — checking for conflicts, gaps and overloads..." },
+  { type:"ok",   msg:"{conflicts}" },
+  { type:"info", msg:"📄  Building class timetables, teacher schedules and room views..." },
+  { type:"ok",   msg:"🎉  All done! {nC} class schedules · {nSu} subjects placed · {nF} rooms assigned" },
 ]
 
 export function Step6Generate() {
@@ -58,7 +54,7 @@ export function Step6Generate() {
     '{total}':  String(sections.length * config.periodsPerDay * config.workDays.length),
     '{mode}':   store.schedulingMode === 'duration-based' ? 'Mode 2 — converting duration → weekly periods' : 'Mode 1 — using periods/week directly',
     '{score}':  String(score),
-    '{conflicts}': conflicts === 0 ? '0 — all hard constraints satisfied ✅' : `${conflicts} detected ⚠️`,
+    '{conflicts}': conflicts === 0 ? '✅  No conflicts — everything fits perfectly' : `⚠️  ${conflicts} clash(es) found — you can review and fix them in the timetable`,
   })
 
   const startGenerate = () => {
@@ -115,8 +111,8 @@ export function Step6Generate() {
         const finalLine = {
           type: output.conflicts.length > 0 ? "warn" : "ok",
           msg: output.conflicts.length > 0
-            ? `⚠️ ${output.conflicts.length} conflict(s) found — review timetable`
-            : `✅ Done in ${solveMs}ms — 0 conflicts · Penalty: ${output.score}`
+            ? `⚠️  ${output.conflicts.length} scheduling clash(es) were found — open the timetable to review and fix them`
+            : `🎊  Perfect! Your timetable is ready with zero conflicts — generated in ${solveMs}ms`
         }
         setJob(j => j ? { ...j, status:"completed", progress:100, log:[...(j.log ?? []), finalLine] } : j)
         return
@@ -149,7 +145,7 @@ export function Step6Generate() {
       )}
       {(job?.status === "queued" || job?.status === "running") && (
         <>
-          <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+          <style>{`@keyframes spin{to{transform:rotate(360deg)}} @keyframes fadeSlideIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}} @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}`}</style>
           <div style={{ width:60, height:60, borderRadius:"50%", border:"5px solid #e8e5de", borderTopColor:"#059669", animation:"spin 1s linear infinite" }} />
         </>
       )}
@@ -203,16 +199,28 @@ export function Step6Generate() {
         </div>
       )}
 
-      {/* Log output — polling simulation */}
+      {/* Log output — friendly progress feed */}
       {job && job.log.length > 0 && (
-        <div style={{ width:"100%", maxWidth:540, background:"#1c1b18", borderRadius:12, padding:"12px 16px", maxHeight:220, overflowY:"auto", textAlign:"left" as const, fontFamily:"monospace", fontSize:11 }}
+        <div style={{ width:"100%", maxWidth:540, background:"#f9f9f7", border:"1.5px solid #e8e5de", borderRadius:14, padding:"14px 16px", maxHeight:260, overflowY:"auto", textAlign:"left" as const, display:"flex", flexDirection:"column" as const, gap:4 }}
           ref={el => { if (el) el.scrollTop = el.scrollHeight }}>
           {job.log.map((l,i) => (
-            <div key={i} style={{ color: l.type==='ok'?'#34d399':l.type==='warn'?'#fbbf24':l.type==='error'?'#f87171':'#93c5fd', lineHeight:1.9, whiteSpace:"pre-wrap" as const }}>
+            <div key={i} style={{
+              display:"flex", alignItems:"flex-start", gap:10,
+              padding:"7px 10px", borderRadius:8,
+              background: l.type==='ok' ? "#f0fdf4" : l.type==='warn' ? "#fffbeb" : l.type==='error' ? "#fef2f2" : "#fff",
+              borderLeft: `3px solid ${l.type==='ok'?'#34d399':l.type==='warn'?'#f59e0b':l.type==='error'?'#f87171':'#a5b4fc'}`,
+              fontSize:12.5, lineHeight:1.55, color:"#1c1b18",
+              animation: i === job.log.length - 1 ? "fadeSlideIn 0.25s ease" : "none",
+            }}>
               {l.msg}
             </div>
           ))}
-          {job.status === "running" && <div style={{ color:"#6a6860", animation:"pulse 1s infinite" }}>▌</div>}
+          {job.status === "running" && (
+            <div style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 10px", color:"#a8a59e", fontSize:12 }}>
+              <div style={{ width:6, height:6, borderRadius:"50%", background:"#059669", animation:"pulse 1s ease-in-out infinite" }} />
+              Working on it...
+            </div>
+          )}
         </div>
       )}
 
