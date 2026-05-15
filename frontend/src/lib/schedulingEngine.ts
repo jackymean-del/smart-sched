@@ -178,13 +178,16 @@ export function solveTimetable(input: SolverInput): SolverOutput {
         })
 
         // Soft constraint: prefer teacher with fewer periods today
-        const sortedTeachers = eligibleTeachers.sort((a, b) => {
-          const aToday = Object.values(classTT).reduce((count, secData) =>
-            count + (secData[day]?.[period.id]?.teacher === a.name ? 1 : 0), 0)
-          const bToday = Object.values(classTT).reduce((count, secData) =>
-            count + (secData[day]?.[period.id]?.teacher === b.name ? 1 : 0), 0)
-          return aToday - bToday
+        // Pre-compute teacher load counts for this day to avoid O(n²) sort
+        const teacherLoadToday: Record<string, number> = {}
+        Object.values(classTT).forEach(secData => {
+          Object.values(secData[day] ?? {}).forEach(cell => {
+            if (cell?.teacher) teacherLoadToday[cell.teacher] = (teacherLoadToday[cell.teacher] ?? 0) + 1
+          })
         })
+        const sortedTeachers = eligibleTeachers.sort((a, b) =>
+          (teacherLoadToday[a.name] ?? 0) - (teacherLoadToday[b.name] ?? 0)
+        )
 
         const teacher = sortedTeachers[0]
         if (!teacher) {

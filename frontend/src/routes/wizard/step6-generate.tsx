@@ -61,81 +61,68 @@ export function Step6Generate() {
     '{conflicts}': conflicts === 0 ? '0 — all hard constraints satisfied ✅' : `${conflicts} detected ⚠️`,
   })
 
-  // Spec §6.2 — async job pattern: return job_id, then poll
   const startGenerate = () => {
     const jobId = crypto.randomUUID()
-    const newJob: Job = { id: jobId, status:"queued", progress:0, log:[], startedAt: Date.now() }
-    setJob(newJob)
+    const startedAt = Date.now()
+    setJob({ id: jobId, status:"running", progress: 5, log:[], startedAt })
 
-    // Simulate job queue → returns immediately with job_id
-    setTimeout(() => setJob(j => j ? { ...j, status:"running" } : j), 300)
+    // ── Run the actual solver immediately (synchronous, fast) ──
+    const periods = buildPeriodSequence(breaks, config.periodsPerDay)
+    const resolvedSubjects = store.schedulingMode === 'duration-based'
+      ? subjects.map(sub => {
+          const rh = (sub as any).requiredHours
+          if (!rh) return sub
+          const weekly = durationToWeeklyPeriods({
+            subjectName: sub.name, className: 'all',
+            requiredHours: rh,
+            periodDurationMins: (sub as any).sessionDuration ?? 45,
+            workingDaysPerYear: store.workingDaysPerYear ?? 220,
+            workingDaysPerWeek: config.workDays.length,
+          })
+          return { ...sub, periodsPerWeek: weekly }
+        })
+      : subjects
 
+    const staff = store.staff
+    const output = solveTimetable({ sections, staff, subjects: resolvedSubjects, periods, workDays: config.workDays, requirements: [] })
+    const suggestions = generateSuggestions(output.classTT, output.teacherTT, staff, resolvedSubjects, config.workDays, periods)
+
+    setPeriods(periods)
+    setClassTT(output.classTT)
+    setTeacherTT(output.teacherTT)
+    setConflicts(output.conflicts)
+    setSuggestions(suggestions)
+
+    const solveMs = Date.now() - startedAt
+
+    // ── Now replay the log animation fast (80ms/step) as visual feedback ──
     let step = 0
-    let finalScore = 0
-    let finalConflicts = 0
+    const r = replacements(output.score, output.conflicts.length)
 
-    // Poll every ~400ms — simulates GET /scheduler/status/:job_id
     pollRef.current = setInterval(() => {
       if (step >= PIPELINE.length) {
         clearInterval(pollRef.current!)
-
-        // Run actual solver
-        const periods = buildPeriodSequence(breaks, config.periodsPerDay)
-        const resolvedSubjects = store.schedulingMode === 'duration-based'
-          ? subjects.map(sub => {
-              const rh = (sub as any).requiredHours
-              if (!rh) return sub
-              const weekly = durationToWeeklyPeriods({
-                subjectName: sub.name, className: 'all',
-                requiredHours: rh,
-                periodDurationMins: (sub as any).sessionDuration ?? 40,
-                workingDaysPerYear: store.workingDaysPerYear ?? 220,
-                workingDaysPerWeek: config.workDays.length,
-              })
-              return { ...sub, periodsPerWeek: weekly }
-            })
-          : subjects
-
-        const output = solveTimetable({ sections, staff: [], subjects: resolvedSubjects, periods, workDays: config.workDays, requirements: [] })
-        const suggestions = generateSuggestions(output.classTT, output.teacherTT, [], resolvedSubjects, config.workDays, periods)
-
-        finalScore = output.score
-        finalConflicts = output.conflicts.length
-
-        setPeriods(periods)
-        setClassTT(output.classTT)
-        setTeacherTT(output.teacherTT)
-        setConflicts(output.conflicts)
-        setSuggestions(suggestions)
-
-        const r = replacements(finalScore, finalConflicts)
         const finalLine = {
-          type: finalConflicts > 0 ? "warn" : "ok",
-          msg: finalConflicts > 0
-            ? `⚠️ ${finalConflicts} hard conflict(s) detected — review timetable`
-            : `✅ Timetable generated successfully — 0 conflicts · Penalty score: ${finalScore}`
+          type: output.conflicts.length > 0 ? "warn" : "ok",
+          msg: output.conflicts.length > 0
+            ? `⚠️ ${output.conflicts.length} conflict(s) found — review timetable`
+            : `✅ Done in ${solveMs}ms — 0 conflicts · Penalty: ${output.score}`
         }
-
         setJob(j => j ? { ...j, status:"completed", progress:100, log:[...(j.log ?? []), finalLine] } : j)
         return
       }
 
-      const raw = PIPELINE[step]
-      const r = replacements()
-      let msg = raw.msg
+      let msg = PIPELINE[step].msg
       for (const [k, v] of Object.entries(r)) msg = msg.replaceAll(k, v)
 
-      setJob(j => {
-        if (!j) return j
-        return {
-          ...j,
-          status: "running",
-          progress: Math.round((step+1) / PIPELINE.length * 90),
-          log: [...j.log, { type: raw.type, msg }],
-        }
-      })
+      setJob(j => j ? {
+        ...j,
+        status: "running",
+        progress: Math.round(5 + (step + 1) / PIPELINE.length * 93),
+        log: [...j.log, { type: PIPELINE[step].type, msg }],
+      } : j)
       step++
-    }, 350)
+    }, 80)   // 80ms × 16 steps = ~1.3s total animation
   }
 
   const elapsed = job?.startedAt ? Math.round((Date.now() - job.startedAt) / 1000) : 0
