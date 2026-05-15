@@ -987,28 +987,29 @@ export function TimetablePage() {
         {/* Timetable content */}
         <div style={{ flex:1, overflowY: viewMode === "calendar" ? "hidden" : "auto", padding:20, display: viewMode === "calendar" ? "flex" : "block", flexDirection: "column" as const }}>
           {viewMode === "calendar" ? renderCalendarView(selectedEntity) : (
-          <div style={{ background:"#fff", borderRadius:12, boxShadow:"0 1px 3px rgba(0,0,0,0.08)", overflow:"hidden" }}>
-            {selectedEntity === "ALL" ? renderAllEntities() : (() => {
-                switch(viewMode) {
-                  case "class":   return transposed ? renderClassTTTransposed(selectedEntity, absentHighlightProp) : renderClassTT(selectedEntity, absentHighlightProp)
-                  case "teacher": return transposed ? renderTeacherTTTransposed(selectedEntity) : renderTeacherTT(selectedEntity)
-                  case "subject": return transposed ? renderSubjectTTTransposed(selectedEntity) : renderSubjectTT(selectedEntity)
-                  case "room":    return transposed ? renderRoomTTTransposed(selectedEntity) : renderRoomTT(selectedEntity)
-                }
-              })()
-            }
-          </div>
+            <>
+              <div style={{ background:"#fff", borderRadius:12, boxShadow:"0 1px 3px rgba(0,0,0,0.08)", overflow:"hidden" }}>
+                {selectedEntity === "ALL" ? renderAllEntities() : (() => {
+                  switch(viewMode) {
+                    case "class":   return transposed ? renderClassTTTransposed(selectedEntity, absentHighlightProp) : renderClassTT(selectedEntity, absentHighlightProp)
+                    case "teacher": return transposed ? renderTeacherTTTransposed(selectedEntity) : renderTeacherTT(selectedEntity)
+                    case "subject": return transposed ? renderSubjectTTTransposed(selectedEntity) : renderSubjectTT(selectedEntity)
+                    case "room":    return transposed ? renderRoomTTTransposed(selectedEntity) : renderRoomTT(selectedEntity)
+                  }
+                })()}
+              </div>
 
-          {/* Uncovered periods pool */}
-          {renderUncoveredPool()}
+              {/* Uncovered periods pool */}
+              {renderUncoveredPool()}
 
-          {/* Conflicts list */}
-          {conflicts.length > 0 && (
-            <div style={{ marginTop:16, background:"#fff7ed", border:"1px solid #fed7aa", borderRadius:10, padding:"12px 16px" }}>
-              <div style={{ fontSize:12, fontWeight:600, color:"#c2410c", marginBottom:8 }}>⚠️ {conflicts.length} Hard Conflicts Detected</div>
-              {conflicts.map((c, i) => <div key={i} style={{ fontSize:11, color:"#9a3412", padding:"4px 0", borderBottom:"1px solid #fed7aa" }}>{c.message}</div>)}
-            </div>
-          )}
+              {/* Conflicts list */}
+              {conflicts.length > 0 && (
+                <div style={{ marginTop:16, background:"#fff7ed", border:"1px solid #fed7aa", borderRadius:10, padding:"12px 16px" }}>
+                  <div style={{ fontSize:12, fontWeight:600, color:"#c2410c", marginBottom:8 }}>⚠️ {conflicts.length} Hard Conflicts Detected</div>
+                  {conflicts.map((c, i) => <div key={i} style={{ fontSize:11, color:"#9a3412", padding:"4px 0", borderBottom:"1px solid #fed7aa" }}>{c.message}</div>)}
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
