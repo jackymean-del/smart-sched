@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { useTimetableStore } from "@/store/timetableStore"
 import { EditCellModal } from "@/components/modals/EditCellModal"
+import { CalendarView } from "@/components/CalendarView"
 import { ORG_CONFIGS, getCountry, getSubjectColor } from "@/lib/orgData"
 import { shiftPeriod, rebuildTeacherTT } from "@/lib/aiEngine"
 import { useExport } from "@/hooks/useExport"
@@ -725,114 +726,41 @@ export function TimetablePage() {
   }
 
   // ═══════════════════════════════════════════════════════════
-  // RENDER: Calendar View (Google Calendar-style week grid)
+  // RENDER: Calendar View — real month/week/day calendar
   // ═══════════════════════════════════════════════════════════
   const renderCalendarView = (entityFilter: string) => {
-    const usedDays = config.workDays
-    const absentHL = subPanelOpen && subAbsentTeacher ? { teacher: subAbsentTeacher, day: subAbsentDay } : null
+    // Derive viewMode for the calendar entity filter
+    const calEntityMode: "class" | "teacher" | "subject" | "room" =
+      staff.some(s => s.name === entityFilter) ? "teacher" :
+      subjects.some(s => s.name === entityFilter) ? "subject" :
+      allRooms.includes(entityFilter) ? "room" : "class"
 
-    // Determine filter mode
-    const isClassFilter = entityFilter !== "ALL" && sections.some(s => s.name === entityFilter)
-    const isTeacherFilter = entityFilter !== "ALL" && staff.some(s => s.name === entityFilter)
-
-    // Collect events for a given period+day
-    const getEvents = (day: string, periodId: string) => {
-      return sections.flatMap(sec => {
-        const cell = classTT[sec.name]?.[day]?.[periodId]
-        if (!cell?.subject) return []
-        if (isClassFilter && sec.name !== entityFilter) return []
-        if (isTeacherFilter && cell.teacher !== entityFilter) return []
-        return [{ sectionName: sec.name, subject: cell.subject, teacher: cell.teacher ?? "", room: cell.room ?? "", periodId }]
-      })
-    }
-
-    const initials = (name: string) => name.split(" ").map(w => w[0]).join("").slice(0,2).toUpperCase()
-
-    const COL_W = 120
-    const TIME_W = 68
+    const absentHL = subPanelOpen && subAbsentTeacher
+      ? { teacher: subAbsentTeacher, day: subAbsentDay }
+      : null
 
     return (
-      <div>
-        <div style={{ padding:"10px 16px", background:"#f8fafc", borderBottom:"1px solid #e2e8f0", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-          <div style={{ fontSize:14, fontWeight:700, color:"#1e293b" }}>📅 Calendar View</div>
-          <div style={{ fontSize:11, color:"#94a3b8" }}>{entityFilter === "ALL" ? "All classes" : entityFilter} · {usedDays.length}-day week</div>
-        </div>
-        <div style={{ overflowX:"auto" }}>
-          <div style={{ minWidth: TIME_W + usedDays.length * COL_W }}>
-            {/* Sticky day header */}
-            <div style={{ display:"flex", position:"sticky" as const, top:0, zIndex:10, background:"#fff", borderBottom:"2px solid #e2e8f0" }}>
-              <div style={{ width:TIME_W, flexShrink:0, padding:"8px 6px", fontSize:10, color:"#94a3b8", fontWeight:600, borderRight:"1px solid #e2e8f0" }}>Time</div>
-              {usedDays.map(day => (
-                <div key={day} style={{ width:COL_W, flexShrink:0, padding:"8px 0", textAlign:"center" as const, fontSize:12, fontWeight:700, color:"#1e293b", borderRight:"1px solid #e2e8f0" }}>
-                  {DAY_SHORT[day]??day.slice(0,3)}
-                </div>
-              ))}
-            </div>
-
-            {/* Period rows */}
-            {periods.map((p, pi) => {
-              const times = periodTimes.get(p.id)
-              const isBreak = p.type !== "class"
-
-              if (isBreak) {
-                // Full-width amber divider for break periods
-                return (
-                  <div key={p.id} style={{ display:"flex", background:"#fffbeb", borderBottom:"1px solid #fde68a" }}>
-                    <div style={{ width:TIME_W, flexShrink:0, padding:"4px 6px", borderRight:"1px solid #fde68a", fontSize:9, color:"#d97706" }}>
-                      {times?.start}
-                    </div>
-                    <div style={{ flex:1, padding:"4px 10px", fontSize:10, fontWeight:600, color:"#d97706", fontStyle:"italic" }}>
-                      {p.name}{times ? ` · ${times.start} – ${times.end}` : ""}
-                    </div>
-                  </div>
-                )
-              }
-
-              return (
-                <div key={p.id} style={{ display:"flex", background:pi%2===0?"#fff":"#f8fafc", borderBottom:"1px solid #e2e8f0", minHeight:64 }}>
-                  {/* Time label */}
-                  <div style={{ width:TIME_W, flexShrink:0, padding:"6px 6px", borderRight:"1px solid #e2e8f0", display:"flex", flexDirection:"column" as const, justifyContent:"center" }}>
-                    <div style={{ fontSize:10, fontWeight:700, color:"#475569" }}>{p.name}</div>
-                    {times && <>
-                      <div style={{ fontSize:9, color:"#94a3b8" }}>{times.start}</div>
-                      <div style={{ fontSize:8, color:"#cbd5e1" }}>→ {times.end}</div>
-                    </>}
-                  </div>
-
-                  {/* Day columns */}
-                  {usedDays.map(day => {
-                    const events = getEvents(day, p.id)
-                    const isAbsentHL = !!(absentHL && day === absentHL.day && events.some(ev => ev.teacher === absentHL.teacher))
-                    return (
-                      <div key={day} style={{ width:COL_W, flexShrink:0, padding:3, borderRight:"1px solid #e2e8f0", display:"flex", flexDirection:"column" as const, gap:2, background: isAbsentHL?"#fffbeb":"transparent" }}>
-                        {events.map((ev, ei) => {
-                          const colorClass = getSubjectColor(ev.subject)
-                          const isAbsent = !!(absentHL && ev.teacher === absentHL.teacher && day === absentHL.day)
-                          return (
-                            <div key={ei} className={colorClass}
-                              onClick={() => {
-                                const sec = sections.find(s => s.name === ev.sectionName)
-                                if (sec && editMode) setEditTarget({ section: ev.sectionName, day, periodId: p.id })
-                              }}
-                              style={{ borderRadius:4, padding:"3px 5px", fontSize:9, cursor:editMode?"pointer":"default", outline:isAbsent?"2px solid #f59e0b":"none", outlineOffset:"-1px" }}>
-                              <div style={{ fontWeight:700, fontSize:9, lineHeight:1.2 }}>{ev.subject}</div>
-                              <div style={{ fontSize:8, opacity:0.8 }}>{ev.sectionName}</div>
-                              {showTeacher && ev.teacher && <div style={{ fontSize:8, opacity:0.65 }}>{initials(ev.teacher)}</div>}
-                            </div>
-                          )
-                        })}
-                        {events.length === 0 && (
-                          <div style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", color:"#e2e8f0", fontSize:10 }}>·</div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      </div>
+      <CalendarView
+        classTT={classTT}
+        teacherTT={teacherTT}
+        periods={periods}
+        workDays={config.workDays}
+        startTime={config.startTime ?? "09:00"}
+        timeFormat={config.timeFormat as "12h" | "24h" | undefined}
+        staff={staff}
+        sections={sections}
+        subjects={subjects}
+        substitutions={substitutions}
+        viewMode={calEntityMode}
+        selectedEntity={entityFilter}
+        transposed={transposed}
+        showTeacher={showTeacher}
+        showRoom={showRoom}
+        onCellClick={(section, day, periodId) => {
+          if (editMode) setEditTarget({ section, day, periodId })
+        }}
+        absentHighlight={absentHL}
+      />
     )
   }
 
@@ -1057,10 +985,10 @@ export function TimetablePage() {
         </div>
 
         {/* Timetable content */}
-        <div style={{ flex:1, overflowY:"auto", padding:20 }}>
+        <div style={{ flex:1, overflowY: viewMode === "calendar" ? "hidden" : "auto", padding:20, display: viewMode === "calendar" ? "flex" : "block", flexDirection: "column" as const }}>
+          {viewMode === "calendar" ? renderCalendarView(selectedEntity) : (
           <div style={{ background:"#fff", borderRadius:12, boxShadow:"0 1px 3px rgba(0,0,0,0.08)", overflow:"hidden" }}>
-            {viewMode === "calendar" ? renderCalendarView(selectedEntity) :
-              selectedEntity === "ALL" ? renderAllEntities() : (() => {
+            {selectedEntity === "ALL" ? renderAllEntities() : (() => {
                 switch(viewMode) {
                   case "class":   return transposed ? renderClassTTTransposed(selectedEntity, absentHighlightProp) : renderClassTT(selectedEntity, absentHighlightProp)
                   case "teacher": return transposed ? renderTeacherTTTransposed(selectedEntity) : renderTeacherTT(selectedEntity)
@@ -1080,6 +1008,7 @@ export function TimetablePage() {
               <div style={{ fontSize:12, fontWeight:600, color:"#c2410c", marginBottom:8 }}>⚠️ {conflicts.length} Hard Conflicts Detected</div>
               {conflicts.map((c, i) => <div key={i} style={{ fontSize:11, color:"#9a3412", padding:"4px 0", borderBottom:"1px solid #fed7aa" }}>{c.message}</div>)}
             </div>
+          )}
           )}
         </div>
       </div>

@@ -1,0 +1,712 @@
+/**
+ * CalendarView — Real calendar UI for SmartSched / Schedu
+ *
+ * Modes:  month | week | day
+ * Navigation: prev / next / today for each mode
+ * Transpose:  week & day views can be transposed (time on X-axis instead of Y)
+ *
+ * The timetable is a repeating weekly pattern, so every Monday
+ * always shows the same schedule as every other Monday.
+ */
+
+import { useState, useMemo } from "react"
+import type { Period, Section, Staff } from "@/types"
+import type { ClassTimetable, TeacherSchedule } from "@/types"
+import { getSubjectColor } from "@/lib/orgData"
+
+// ─────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────
+export type CalMode = "month" | "week" | "day"
+
+export interface CalendarViewProps {
+  classTT: ClassTimetable
+  teacherTT: Record<string, TeacherSchedule>
+  periods: Period[]
+  workDays: string[]           // e.g. ["MONDAY","TUESDAY",...]
+  startTime: string            // e.g. "09:00"
+  timeFormat?: "12h" | "24h"
+  staff: Staff[]
+  sections: Section[]
+  subjects: { id: string; name: string; category?: string }[]
+  substitutions: Record<string, string>
+  viewMode: "class" | "teacher" | "subject" | "room"
+  selectedEntity: string       // "ALL" or a specific name
+  transposed: boolean
+  showTeacher: boolean
+  showRoom: boolean
+  onCellClick?: (section: string, day: string, periodId: string) => void
+  absentHighlight?: { teacher: string; day: string } | null
+}
+
+// ─────────────────────────────────────────────
+// Calendar helpers
+// ─────────────────────────────────────────────
+const DOW_KEY: Record<number, string> = {
+  0: "SUNDAY", 1: "MONDAY", 2: "TUESDAY", 3: "WEDNESDAY",
+  4: "THURSDAY", 5: "FRIDAY", 6: "SATURDAY",
+}
+const MONTH_NAMES = [
+  "January","February","March","April","May","June",
+  "July","August","September","October","November","December",
+]
+const DAY_ABBR = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
+
+function getMondayOfWeek(d: Date): Date {
+  const copy = new Date(d)
+  const dow = copy.getDay() // 0=Sun
+  const diff = dow === 0 ? -6 : 1 - dow
+  copy.setDate(copy.getDate() + diff)
+  return copy
+}
+
+function getWeekDays(monday: Date): Date[] {
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(monday)
+    d.setDate(monday.getDate() + i)
+    return d
+  })
+}
+
+function getMonthGrid(year: number, month: number): Date[][] {
+  const firstDay = new Date(year, month, 1)
+  const startDow = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1
+  const start = new Date(firstDay)
+  start.setDate(firstDay.getDate() - startDow)
+
+  const weeks: Date[][] = []
+  const cur = new Date(start)
+  for (let w = 0; w < 6; w++) {
+    const week: Date[] = []
+    for (let d = 0; d < 7; d++) {
+      week.push(new Date(cur))
+      cur.setDate(cur.getDate() + 1)
+    }
+    weeks.push(week)
+    if (cur.getMonth() > month && week[6].getMonth() > month) break
+  }
+  return weeks
+}
+
+function fmtDate(d: Date, fmt: "short" | "long" = "short"): string {
+  return fmt === "long"
+    ? d.toLocaleDateString("en-GB", { weekday:"long", day:"numeric", month:"long", year:"numeric" })
+    : d.toLocaleDateString("en-GB", { day:"numeric", month:"short" })
+}
+
+function isSameDay(a: Date, b: Date): boolean {
+  return a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+}
+
+function isToday(d: Date): boolean { return isSameDay(d, new Date()) }
+
+// Parse "09:00" → minutes since midnight
+function parseTime(t: string): number {
+  const [h, m] = t.split(":").map(Number)
+  return h * 60 + m
+}
+
+// Format minutes-since-midnight
+function fmtTime(mins: number, fmt: "12h" | "24h" = "12h"): string {
+  const h = Math.floor(mins / 60), m = mins % 60
+  if (fmt === "24h") return `${h.toString().padStart(2,"0")}:${m.toString().padStart(2,"0")}`
+  const ap = h >= 12 ? "PM" : "AM", h12 = h % 12 || 12
+  return `${h12}:${m.toString().padStart(2,"0")} ${ap}`
+}
+
+const PX_PER_MIN = 1.4  // pixel height per minute of school time
+
+// ─────────────────────────────────────────────
+// Event slot helper — returns events in a given period×day
+// ─────────────────────────────────────────────
+function useSlotEvents(
+  classTT: ClassTimetable,
+  sections: Section[],
+  substitutions: Record<string, string>,
+  viewMode: CalendarViewProps["viewMode"],
+  selectedEntity: string,
+) {
+  return useMemo(() => (day: string, periodId: string) => {
+    return sections.flatMap(sec => {
+      const cell = classTT[sec.name]?.[day]?.[periodId]
+      if (!cell?.subject) return []
+      if (viewMode === "class"   && selectedEntity !== "ALL" && sec.name !== selectedEntity) return []
+      if (viewMode === "teacher" && selectedEntity !== "ALL" && cell.teacher !== selectedEntity) return []
+      if (viewMode === "subject" && selectedEntity !== "ALL" && cell.subject !== selectedEntity) return []
+      if (viewMode === "room"    && selectedEntity !== "ALL" && cell.room !== selectedEntity) return []
+      const subKey = `${sec.name}|${day}|${periodId}`
+      const isSub = !!substitutions[subKey]
+      const subTeacher = substitutions[subKey]
+      return [{
+        section: sec.name,
+        subject: cell.subject,
+        teacher: isSub ? subTeacher : (cell.teacher ?? ""),
+        room: cell.room ?? "",
+        isSub,
+        isClassTeacher: !!cell.isClassTeacher,
+      }]
+    })
+  }, [classTT, sections, substitutions, viewMode, selectedEntity])
+}
+
+// ─────────────────────────────────────────────
+// Event chip (used in all views)
+// ─────────────────────────────────────────────
+function EventChip({
+  subject, section, teacher, room, isSub, isClassTeacher,
+  showTeacher, showRoom, compact, absent,
+  onClick,
+}: {
+  subject: string; section: string; teacher: string; room: string;
+  isSub: boolean; isClassTeacher: boolean;
+  showTeacher: boolean; showRoom: boolean;
+  compact?: boolean; absent?: boolean;
+  onClick?: () => void;
+}) {
+  const cc = getSubjectColor(subject)
+  return (
+    <div
+      className={cc}
+      onClick={onClick}
+      style={{
+        borderRadius: 5, padding: compact ? "2px 5px" : "4px 7px",
+        cursor: onClick ? "pointer" : "default",
+        outline: absent ? "2px solid #f59e0b" : isSub ? "1.5px dashed #f59e0b" : "none",
+        marginBottom: 2, position: "relative" as const,
+        minWidth: 0, overflow: "hidden",
+      }}
+    >
+      {isSub && (
+        <span style={{ position:"absolute" as const, top:2, right:3, width:5, height:5, borderRadius:"50%", background:"#f59e0b" }} />
+      )}
+      <div style={{ fontSize: compact ? 9 : 10, fontWeight: 700, lineHeight: 1.2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const }}>
+        {subject}
+      </div>
+      {!compact && (
+        <div style={{ fontSize: 8, opacity: 0.8, lineHeight: 1.2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const }}>
+          {section}
+        </div>
+      )}
+      {showTeacher && teacher && !compact && (
+        <div style={{ fontSize: 8, opacity: 0.65, lineHeight: 1.2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const }}>
+          {isClassTeacher && <span style={{ color:"#059669" }}>★ </span>}
+          {isSub ? `🔄 ${teacher}` : teacher}
+        </div>
+      )}
+      {showRoom && room && !compact && (
+        <div style={{ fontSize: 7, opacity: 0.5 }}>{room}</div>
+      )}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────
+// Main CalendarView component
+// ─────────────────────────────────────────────
+export function CalendarView({
+  classTT, teacherTT, periods, workDays, startTime, timeFormat = "12h",
+  staff, sections, subjects, substitutions,
+  viewMode, selectedEntity, transposed,
+  showTeacher, showRoom,
+  onCellClick, absentHighlight,
+}: CalendarViewProps) {
+
+  const [currentDate, setCurrentDate] = useState(new Date())
+  const [calMode, setCalMode] = useState<CalMode>("week")
+
+  const today = new Date()
+  const classPeriods = periods.filter(p => p.type === "class")
+
+  // Compute period times (cumulative from startTime)
+  const periodTimes = useMemo(() => {
+    const map = new Map<string, { start: number; end: number }>()  // minutes
+    let mins = parseTime(startTime)
+    periods.forEach(p => {
+      const s = mins
+      mins += p.duration
+      map.set(p.id, { start: s, end: mins })
+    })
+    return map
+  }, [periods, startTime])
+
+  const dayStart = parseTime(startTime)
+  const dayEnd = useMemo(() => {
+    let m = parseTime(startTime)
+    periods.forEach(p => { m += p.duration })
+    return m
+  }, [periods, startTime])
+  const totalMins = dayEnd - dayStart
+
+  const getEvents = useSlotEvents(classTT, sections, substitutions, viewMode, selectedEntity)
+
+  // ── Navigation ──────────────────────────────────────────
+  const navigate = (dir: -1 | 1) => {
+    const d = new Date(currentDate)
+    if (calMode === "month") d.setMonth(d.getMonth() + dir)
+    else if (calMode === "week") d.setDate(d.getDate() + dir * 7)
+    else d.setDate(d.getDate() + dir)
+    setCurrentDate(d)
+  }
+  const goToday = () => setCurrentDate(new Date())
+
+  // ── Header label ────────────────────────────────────────
+  const headerLabel = useMemo(() => {
+    if (calMode === "month")
+      return `${MONTH_NAMES[currentDate.getMonth()]} ${currentDate.getFullYear()}`
+    if (calMode === "week") {
+      const mon = getMondayOfWeek(currentDate)
+      const sun = new Date(mon); sun.setDate(mon.getDate() + 6)
+      return `${fmtDate(mon)} – ${fmtDate(sun)}`
+    }
+    return fmtDate(currentDate, "long")
+  }, [calMode, currentDate])
+
+  // ─────────────────────────────────────────────────────────
+  // RENDER: Month view
+  // ─────────────────────────────────────────────────────────
+  const renderMonth = () => {
+    const grid = getMonthGrid(currentDate.getFullYear(), currentDate.getMonth())
+    const month = currentDate.getMonth()
+
+    return (
+      <div style={{ flex: 1, overflowY: "auto" }}>
+        {/* Day-of-week headers */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", borderBottom: "1px solid #e2e8f0" }}>
+          {DAY_ABBR.map(d => (
+            <div key={d} style={{ padding: "6px 0", textAlign: "center" as const, fontSize: 11, fontWeight: 700, color: "#64748b", borderRight: "1px solid #f1f5f9" }}>{d}</div>
+          ))}
+        </div>
+        {/* Weeks */}
+        {grid.map((week, wi) => (
+          <div key={wi} style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", borderBottom: "1px solid #e2e8f0", minHeight: 110 }}>
+            {week.map((day, di) => {
+              const dayKey = DOW_KEY[day.getDay()]
+              const isWorkDay = workDays.includes(dayKey)
+              const isCurrentMonth = day.getMonth() === month
+              const todayFlag = isToday(day)
+              const isSelected = isSameDay(day, currentDate)
+              const events: { pid: string; subject: string; section: string; teacher: string; room: string; isSub: boolean; isClassTeacher: boolean }[] = []
+
+              if (isWorkDay && isCurrentMonth) {
+                classPeriods.slice(0, 4).forEach(p => {
+                  getEvents(dayKey, p.id).slice(0, 2).forEach(ev => {
+                    events.push({ pid: p.id, ...ev })
+                  })
+                })
+              }
+
+              const absentSlot = absentHighlight && dayKey === absentHighlight.day
+
+              return (
+                <div
+                  key={di}
+                  onClick={() => { setCurrentDate(day); setCalMode("day") }}
+                  style={{
+                    borderRight: "1px solid #f1f5f9",
+                    padding: "4px 5px",
+                    background: !isCurrentMonth ? "#f8fafc" : todayFlag ? "#eff6ff" : absentSlot ? "#fffbeb" : "#fff",
+                    cursor: "pointer",
+                    opacity: isCurrentMonth ? 1 : 0.4,
+                    outline: isSelected ? "2px solid #4f46e5" : "none",
+                    outlineOffset: -2,
+                    transition: "background 0.12s",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
+                    <span style={{
+                      width: 22, height: 22, borderRadius: "50%",
+                      display: "inline-flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 11, fontWeight: 700,
+                      background: todayFlag ? "#4f46e5" : "transparent",
+                      color: todayFlag ? "#fff" : !isCurrentMonth ? "#94a3b8" : "#1e293b",
+                    }}>{day.getDate()}</span>
+                    {absentSlot && <span style={{ fontSize: 8, color: "#d97706", fontWeight: 600 }}>⚠ absent</span>}
+                    {!isWorkDay && isCurrentMonth && <span style={{ fontSize: 8, color: "#94a3b8" }}>off</span>}
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column" as const, gap: 1 }}>
+                    {events.slice(0, 3).map((ev, ei) => (
+                      <EventChip key={ei} {...ev} showTeacher={false} showRoom={false} compact absent={absentSlot && ev.teacher === absentHighlight?.teacher} />
+                    ))}
+                    {events.length > 3 && (
+                      <div style={{ fontSize: 8, color: "#94a3b8", paddingLeft: 4 }}>+{events.length - 3} more</div>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // RENDER: Week view — Normal (Y=time, X=days)
+  // ─────────────────────────────────────────────────────────
+  const renderWeekNormal = (weekDays: Date[]) => {
+    const visibleDays = weekDays.filter(d => workDays.includes(DOW_KEY[d.getDay()]))
+
+    return (
+      <div style={{ flex: 1, overflowY: "auto", overflowX: "auto" }}>
+        <table style={{ borderCollapse: "collapse", width: "100%", tableLayout: "fixed" as const }}>
+          <thead>
+            <tr>
+              {/* Time label col */}
+              <th style={{ width: 68, background: "#1e293b", borderRight: "1px solid #374151", padding: "8px 6px", fontSize: 10, color: "#94a3b8", fontWeight: 600, border: "1px solid #374151" }}>Time</th>
+              {visibleDays.map(d => {
+                const dayKey = DOW_KEY[d.getDay()]
+                const todayFlag = isToday(d)
+                const absentFlag = absentHighlight?.day === dayKey
+                return (
+                  <th key={dayKey}
+                    style={{
+                      background: todayFlag ? "#312e81" : "#1e293b",
+                      color: "#fff", border: "1px solid #374151",
+                      padding: "8px 10px", fontSize: 11, fontWeight: 700,
+                      textAlign: "center" as const, minWidth: 130,
+                      outline: absentFlag ? "2px solid #f59e0b" : "none",
+                      outlineOffset: -2,
+                    }}
+                  >
+                    <div>{DAY_ABBR[(d.getDay() + 6) % 7]}</div>
+                    <div style={{ fontSize: 14, fontWeight: 800 }}>{d.getDate()}</div>
+                    <div style={{ fontSize: 9, opacity: 0.6 }}>{MONTH_NAMES[d.getMonth()].slice(0, 3)}</div>
+                    {absentFlag && <div style={{ fontSize: 8, color: "#fcd34d", marginTop: 2 }}>⚠ absent</div>}
+                  </th>
+                )
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {periods.map((p, pi) => {
+              const times = periodTimes.get(p.id)
+              const isBreak = p.type !== "class"
+              const breakBg = p.type === "lunch" ? "#fef3c7" : p.type === "fixed-start" ? "#dbeafe" : p.type === "fixed-end" ? "#d1fae5" : "#fefce8"
+              const breakColor = p.type === "lunch" ? "#92400e" : p.type === "fixed-start" ? "#1e40af" : p.type === "fixed-end" ? "#065f46" : "#854d0e"
+              return (
+                <tr key={p.id} style={{ background: isBreak ? breakBg : pi % 2 === 0 ? "#fff" : "#f8fafc", height: `${(p.duration) * PX_PER_MIN}px` }}>
+                  <td style={{ border: "1px solid #e2e8f0", padding: "4px 6px", verticalAlign: "top" as const, background: "#f8fafc" }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: isBreak ? breakColor : "#475569" }}>{p.name}</div>
+                    {times && (
+                      <>
+                        <div style={{ fontSize: 8, color: "#94a3b8" }}>{fmtTime(times.start, timeFormat)}</div>
+                        <div style={{ fontSize: 8, color: "#94a3b8" }}>{fmtTime(times.end, timeFormat)}</div>
+                      </>
+                    )}
+                  </td>
+                  {visibleDays.map(d => {
+                    const dayKey = DOW_KEY[d.getDay()]
+                    if (isBreak) {
+                      return (
+                        <td key={dayKey} colSpan={1}
+                          style={{ border: "1px solid #e2e8f0", textAlign: "center" as const, fontSize: 9, color: breakColor, fontStyle: "italic", padding: 4, background: breakBg }}>
+                          {p.name}
+                        </td>
+                      )
+                    }
+                    const events = getEvents(dayKey, p.id)
+                    const absentFlag = absentHighlight?.day === dayKey
+                    return (
+                      <td key={dayKey} style={{ border: "1px solid #e2e8f0", padding: 3, verticalAlign: "top" as const, background: absentFlag ? "#fffbeb" : undefined }}>
+                        {events.length === 0
+                          ? <div style={{ height: "100%", minHeight: 36, display: "flex", alignItems: "center", justifyContent: "center", color: "#e2e8f0", fontSize: 9 }}>—</div>
+                          : events.map((ev, ei) => (
+                            <EventChip key={ei} {...ev} showTeacher={showTeacher} showRoom={showRoom}
+                              absent={absentFlag && ev.teacher === absentHighlight?.teacher}
+                              onClick={() => onCellClick?.(ev.section, dayKey, p.id)} />
+                          ))
+                        }
+                      </td>
+                    )
+                  })}
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // RENDER: Week view — Transposed (Y=days, X=periods)
+  // ─────────────────────────────────────────────────────────
+  const renderWeekTransposed = (weekDays: Date[]) => {
+    const visibleDays = weekDays.filter(d => workDays.includes(DOW_KEY[d.getDay()]))
+
+    return (
+      <div style={{ flex: 1, overflowY: "auto", overflowX: "auto" }}>
+        <table style={{ borderCollapse: "collapse", width: "100%" }}>
+          <thead>
+            <tr>
+              <th style={{ width: 90, background: "#1e293b", color: "#94a3b8", border: "1px solid #374151", padding: "8px 6px", fontSize: 10, fontWeight: 600 }}>Day</th>
+              {periods.map(p => {
+                const times = periodTimes.get(p.id)
+                const isBreak = p.type !== "class"
+                const bg = isBreak ? "#374151" : "#1e293b"
+                return (
+                  <th key={p.id} style={{ background: bg, color: isBreak ? "#fcd34d" : "#fff", border: "1px solid #374151", padding: "6px 8px", fontSize: 10, fontWeight: 700, minWidth: isBreak ? 56 : 110, textAlign: "center" as const }}>
+                    <div>{p.name}</div>
+                    {times && <div style={{ fontSize: 8, opacity: 0.6, fontWeight: 400 }}>{fmtTime(times.start, timeFormat)}</div>}
+                  </th>
+                )
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {visibleDays.map((d, di) => {
+              const dayKey = DOW_KEY[d.getDay()]
+              const todayFlag = isToday(d)
+              const absentFlag = absentHighlight?.day === dayKey
+              return (
+                <tr key={dayKey} style={{ background: todayFlag ? "#eff6ff" : di % 2 === 0 ? "#fff" : "#f8fafc" }}>
+                  <td style={{
+                    border: "1px solid #e2e8f0", padding: "6px 10px",
+                    fontWeight: 700, fontSize: 11, color: "#1e293b",
+                    background: todayFlag ? "#dbeafe" : absentFlag ? "#fffbeb" : "#f8fafc",
+                    whiteSpace: "nowrap" as const,
+                    outline: absentFlag ? "2px solid #f59e0b" : "none",
+                    outlineOffset: -2,
+                  }}>
+                    <div>{DAY_ABBR[(d.getDay() + 6) % 7]}</div>
+                    <div style={{ fontSize: 10, color: "#64748b", fontWeight: 500 }}>{d.getDate()} {MONTH_NAMES[d.getMonth()].slice(0,3)}</div>
+                    {absentFlag && <div style={{ fontSize: 8, color: "#d97706" }}>⚠ absent</div>}
+                  </td>
+                  {periods.map(p => {
+                    const isBreak = p.type !== "class"
+                    if (isBreak) {
+                      const breakBg = p.type === "lunch" ? "#fef3c7" : p.type === "fixed-start" ? "#eff6ff" : "#fefce8"
+                      const breakColor = p.type === "lunch" ? "#d97706" : "#ca8a04"
+                      return (
+                        <td key={p.id} style={{ border: "1px solid #e2e8f0", textAlign: "center" as const, fontSize: 9, color: breakColor, fontStyle: "italic", padding: 4, background: breakBg }}>
+                          {p.name}
+                        </td>
+                      )
+                    }
+                    const events = getEvents(dayKey, p.id)
+                    return (
+                      <td key={p.id} style={{ border: "1px solid #e2e8f0", padding: 3, verticalAlign: "top" as const, background: absentFlag ? "#fffbeb" : undefined }}>
+                        {events.length === 0
+                          ? <div style={{ minHeight: 40, display: "flex", alignItems: "center", justifyContent: "center", color: "#e2e8f0", fontSize: 9 }}>—</div>
+                          : events.map((ev, ei) => (
+                            <EventChip key={ei} {...ev} showTeacher={showTeacher} showRoom={showRoom}
+                              absent={absentFlag && ev.teacher === absentHighlight?.teacher}
+                              onClick={() => onCellClick?.(ev.section, dayKey, p.id)} />
+                          ))
+                        }
+                      </td>
+                    )
+                  })}
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // RENDER: Day view — Normal (Y=periods, single day)
+  // ─────────────────────────────────────────────────────────
+  const renderDayNormal = (date: Date) => {
+    const dayKey = DOW_KEY[date.getDay()]
+    const isWorkDay = workDays.includes(dayKey)
+    const todayFlag = isToday(date)
+
+    return (
+      <div style={{ flex: 1, overflowY: "auto", maxWidth: 600, margin: "0 auto" }}>
+        {!isWorkDay && (
+          <div style={{ padding: 40, textAlign: "center" as const, color: "#94a3b8", fontSize: 14 }}>
+            <div style={{ fontSize: 32 }}>🏖️</div>
+            <div style={{ marginTop: 8 }}>No school on {fmtDate(date, "long").split(",")[0]}</div>
+          </div>
+        )}
+        {isWorkDay && (
+          <table style={{ borderCollapse: "collapse", width: "100%" }}>
+            <thead>
+              <tr>
+                <th style={{ width: 90, background: "#1e293b", color: "#94a3b8", border: "1px solid #374151", padding: "8px 6px", fontSize: 10, fontWeight: 600 }}>Time</th>
+                <th style={{
+                  background: todayFlag ? "#312e81" : "#1e293b", color: "#fff",
+                  border: "1px solid #374151", padding: "10px 14px",
+                  fontSize: 13, fontWeight: 800,
+                }}>
+                  <div>{fmtDate(date, "long")}</div>
+                  {absentHighlight?.day === dayKey && (
+                    <div style={{ fontSize: 10, color: "#fcd34d", fontWeight: 500, marginTop: 2 }}>
+                      ⚠ {absentHighlight.teacher} absent today
+                    </div>
+                  )}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {periods.map((p, pi) => {
+                const times = periodTimes.get(p.id)
+                const isBreak = p.type !== "class"
+                const breakBg = p.type === "lunch" ? "#fef3c7" : p.type === "fixed-start" ? "#dbeafe" : p.type === "fixed-end" ? "#d1fae5" : "#fefce8"
+                const breakColor = p.type === "lunch" ? "#92400e" : p.type === "fixed-start" ? "#1e40af" : "#854d0e"
+                const events = isBreak ? [] : getEvents(dayKey, p.id)
+                const absentFlag = absentHighlight?.day === dayKey
+
+                return (
+                  <tr key={p.id} style={{ background: isBreak ? breakBg : pi % 2 === 0 ? "#fff" : "#f8fafc" }}>
+                    <td style={{ border: "1px solid #e2e8f0", padding: "6px 8px", verticalAlign: "top" as const, background: "#f8fafc" }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: isBreak ? breakColor : "#475569" }}>{p.name}</div>
+                      {times && (
+                        <>
+                          <div style={{ fontSize: 8, color: "#94a3b8" }}>{fmtTime(times.start, timeFormat)}</div>
+                          <div style={{ fontSize: 8, color: "#94a3b8" }}>→ {fmtTime(times.end, timeFormat)}</div>
+                        </>
+                      )}
+                    </td>
+                    <td style={{ border: "1px solid #e2e8f0", padding: 6, verticalAlign: "top" as const, background: absentFlag ? "#fffbeb" : undefined }}>
+                      {isBreak ? (
+                        <div style={{ color: breakColor, fontSize: 11, fontStyle: "italic", fontWeight: 600 }}>{p.name}</div>
+                      ) : events.length === 0 ? (
+                        <div style={{ color: "#cbd5e1", fontSize: 11, padding: "6px 0" }}>No classes scheduled</div>
+                      ) : (
+                        <div style={{ display: "flex", flexWrap: "wrap" as const, gap: 6 }}>
+                          {events.map((ev, ei) => (
+                            <div key={ei} style={{ minWidth: 180, maxWidth: 280 }}>
+                              <EventChip {...ev} showTeacher={showTeacher} showRoom={showRoom}
+                                absent={absentFlag && ev.teacher === absentHighlight?.teacher}
+                                onClick={() => onCellClick?.(ev.section, dayKey, p.id)} />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+    )
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // RENDER: Day view — Transposed (Y=nothing, X=periods as columns)
+  // ─────────────────────────────────────────────────────────
+  const renderDayTransposed = (date: Date) => {
+    const dayKey = DOW_KEY[date.getDay()]
+    const isWorkDay = workDays.includes(dayKey)
+    if (!isWorkDay) return renderDayNormal(date)
+
+    return (
+      <div style={{ flex: 1, overflowX: "auto", overflowY: "auto" }}>
+        <table style={{ borderCollapse: "collapse" }}>
+          <thead>
+            <tr>
+              {periods.map(p => {
+                const times = periodTimes.get(p.id)
+                const isBreak = p.type !== "class"
+                const bg = isBreak ? "#374151" : "#1e293b"
+                return (
+                  <th key={p.id} style={{ background: bg, color: isBreak ? "#fcd34d" : "#fff", border: "1px solid #374151", padding: "8px 10px", fontSize: 10, fontWeight: 700, minWidth: isBreak ? 64 : 130, textAlign: "center" as const, verticalAlign: "bottom" as const }}>
+                    <div>{p.name}</div>
+                    {times && <div style={{ fontSize: 8, opacity: 0.6, fontWeight: 400 }}>{fmtTime(times.start, timeFormat)} → {fmtTime(times.end, timeFormat)}</div>}
+                  </th>
+                )
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              {periods.map(p => {
+                const isBreak = p.type !== "class"
+                const breakBg = p.type === "lunch" ? "#fef3c7" : p.type === "fixed-start" ? "#eff6ff" : "#fefce8"
+                const breakColor = p.type === "lunch" ? "#d97706" : "#ca8a04"
+                const events = isBreak ? [] : getEvents(dayKey, p.id)
+                const absentFlag = absentHighlight?.day === dayKey
+
+                return (
+                  <td key={p.id} style={{ border: "1px solid #e2e8f0", padding: 5, verticalAlign: "top" as const, minWidth: isBreak ? 64 : 130, background: isBreak ? breakBg : absentFlag ? "#fffbeb" : undefined, maxWidth: 160 }}>
+                    {isBreak ? (
+                      <div style={{ color: breakColor, fontSize: 10, fontStyle: "italic", textAlign: "center" as const, padding: "8px 0" }}>{p.name}</div>
+                    ) : events.length === 0 ? (
+                      <div style={{ minHeight: 60, display: "flex", alignItems: "center", justifyContent: "center", color: "#e2e8f0", fontSize: 10 }}>—</div>
+                    ) : (
+                      events.map((ev, ei) => (
+                        <EventChip key={ei} {...ev} showTeacher={showTeacher} showRoom={showRoom}
+                          absent={absentFlag && ev.teacher === absentHighlight?.teacher}
+                          onClick={() => onCellClick?.(ev.section, dayKey, p.id)} />
+                      ))
+                    )}
+                  </td>
+                )
+              })}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // Main render
+  // ─────────────────────────────────────────────────────────
+  const monday = getMondayOfWeek(currentDate)
+  const weekDays = getWeekDays(monday)
+
+  const modeLabel: Record<CalMode, string> = { month: "Month", week: "Week", day: "Day" }
+  const navLabel: Record<CalMode, string> = { month: "month", week: "week", day: "day" }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column" as const, flex: 1, overflow: "hidden", background: "#fff", borderRadius: 12, boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+      {/* ── Calendar toolbar ── */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 16px", borderBottom: "1px solid #e2e8f0", flexShrink: 0, flexWrap: "wrap" as const }}>
+
+        {/* Mode switcher */}
+        <div style={{ display: "flex", border: "1px solid #e2e8f0", borderRadius: 7, overflow: "hidden" }}>
+          {(["month","week","day"] as CalMode[]).map(m => (
+            <button key={m} onClick={() => setCalMode(m)}
+              style={{ padding: "5px 14px", border: "none", background: calMode === m ? "#4f46e5" : "#fff", color: calMode === m ? "#fff" : "#64748b", fontSize: 11, fontWeight: 500, cursor: "pointer" }}>
+              {modeLabel[m]}
+            </button>
+          ))}
+        </div>
+
+        {/* Navigation */}
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <button onClick={() => navigate(-1)}
+            style={{ width: 28, height: 28, border: "1px solid #e2e8f0", borderRadius: 6, background: "#fff", cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", color: "#374151" }}>
+            ‹
+          </button>
+          <button onClick={goToday}
+            style={{ padding: "4px 12px", border: "1px solid #e2e8f0", borderRadius: 6, background: "#fff", cursor: "pointer", fontSize: 11, color: "#374151", fontWeight: 500 }}>
+            Today
+          </button>
+          <button onClick={() => navigate(1)}
+            style={{ width: 28, height: 28, border: "1px solid #e2e8f0", borderRadius: 6, background: "#fff", cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", color: "#374151" }}>
+            ›
+          </button>
+        </div>
+
+        {/* Current range label */}
+        <div style={{ fontSize: 14, fontWeight: 700, color: "#1e293b", minWidth: 200 }}>{headerLabel}</div>
+
+        <div style={{ flex: 1 }} />
+
+        {/* Transposed hint */}
+        {calMode !== "month" && (
+          <div style={{ fontSize: 10, color: "#94a3b8" }}>
+            {transposed ? "⊞ Transposed" : "☰ Normal"} · toggle with toolbar button
+          </div>
+        )}
+      </div>
+
+      {/* ── Calendar body ── */}
+      <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" as const }}>
+        {calMode === "month" && renderMonth()}
+        {calMode === "week" && (transposed ? renderWeekTransposed(weekDays) : renderWeekNormal(weekDays))}
+        {calMode === "day"  && (transposed ? renderDayTransposed(currentDate) : renderDayNormal(currentDate))}
+      </div>
+    </div>
+  )
+}
