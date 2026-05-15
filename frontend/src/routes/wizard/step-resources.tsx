@@ -89,10 +89,11 @@ export function StepResources() {
   // Generate all data fresh using current config counts
   const regen = () => {
     const o = config.orgType ?? "school", c = config.countryCode ?? "IN"
-    const newSections = generateSections(o, c, config.numSections)
+    const gradeGroups = (config as any).gradeGroups as string[] | undefined
+    const newSections = generateSections(o, c, config.numSections, gradeGroups)
     setSections(newSections)
     setStaff(generateStaff(o, c, config.numStaff))
-    setSubjects(generateSubjects(o, c, config.numSubjects) as Subject[])
+    setSubjects(generateSubjects(o, c, config.numSubjects, gradeGroups) as Subject[])
     setBreaks(generateBreaks(o, config.numBreaks))
     // Reset rooms to match new sections
     setRooms(newSections.map((s: any, i: number) => ({

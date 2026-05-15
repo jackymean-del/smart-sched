@@ -196,25 +196,65 @@ function guessFreq(subject: string): number {
   return 2
 }
 
-export function generateSections(orgType: OrgType, countryCode: string, n: number) {
+// ── Grade group → actual grade names ─────────────────────────
+const GRADE_GROUP_GRADES: Record<string, string[]> = {
+  pre:       ['Nursery', 'LKG', 'UKG'],
+  primary:   ['I', 'II', 'III', 'IV', 'V'],
+  middle:    ['VI', 'VII', 'VIII'],
+  secondary: ['IX', 'X'],
+  senior:    ['XI', 'XII'],
+}
+
+// Grade-appropriate CBSE subjects
+const SUBJECTS_BY_GROUP: Record<string, string[]> = {
+  pre:       ['English', 'Hindi', 'Rhymes & Stories', 'Drawing & Colouring', 'Play Activity', 'Numbers', 'EVS'],
+  primary:   ['Mathematics', 'English', 'Hindi', 'EVS', 'Art & Craft', 'Physical Education', 'Music', 'G.K.'],
+  middle:    ['Mathematics', 'English', 'Hindi', 'Science', 'Social Studies', 'Computer', 'Physical Education', 'Art & Craft'],
+  secondary: ['Mathematics', 'English', 'Hindi', 'Science', 'Social Studies', 'Computer', 'Physical Education'],
+  senior:    ['English', 'Physics', 'Chemistry', 'Mathematics', 'Biology', 'Computer Science', 'Physical Education', 'Economics', 'Business Studies', 'Accountancy'],
+}
+
+// Periods/week suggestions per subject (CBSE norms)
+const CBSE_PW: Record<string, number> = {
+  'Mathematics': 6, 'English': 5, 'Hindi': 5, 'Science': 6, 'Social Studies': 5,
+  'Computer': 3, 'Computer Science': 4, 'Physical Education': 3, 'Art & Craft': 2,
+  'Music': 2, 'Dance': 2, 'EVS': 4, 'G.K.': 1, 'Odia': 4, 'Drawing & Colouring': 2,
+  'Rhymes & Stories': 3, 'Play Activity': 3, 'Numbers': 4,
+  'Physics': 6, 'Chemistry': 6, 'Biology': 6,
+  'Economics': 5, 'Business Studies': 5, 'Accountancy': 5,
+}
+
+export function generateSections(orgType: OrgType, countryCode: string, n: number, gradeGroups?: string[]) {
   const c = getCountry(countryCode)
   const result = []
   let i = 0
+
   if (orgType === 'school') {
-    outer: for (const grade of c.grades) {
+    // Determine which grades to iterate based on selected grade groups
+    const selectedGrades = (gradeGroups && gradeGroups.length > 0)
+      ? gradeGroups.flatMap(g => GRADE_GROUP_GRADES[g] ?? [])
+      : c.grades   // fallback: all country grades
+
+    outer: for (const grade of selectedGrades) {
       for (const sec of c.sections) {
         if (i >= n) break outer
-        result.push({ id: generateId(), name: `${grade}-${sec}`, room: `${c.roomPrefix} ${c.roomStart + i}`, grade, classTeacher: '' })
+        result.push({
+          id: generateId(),
+          name: `${grade}-${sec}`,
+          room: `${c.roomPrefix} ${c.roomStart + i}`,
+          grade,
+          classTeacher: '',
+        })
         i++
       }
     }
   } else {
     const names: Record<string, string[]> = {
-      college: ['CS-A','CS-B','BBA-A','BBA-B','MCA-A','EEE-A','MECH-A','CIVIL-A','BCA-A','MBA-A'],
+      college:   ['CS-A','CS-B','BBA-A','BBA-B','MCA-A','EEE-A','MECH-A','CIVIL-A','BCA-A','MBA-A'],
       corporate: ['Engineering','Product','Design','Marketing','Sales','Operations','Finance','HR','Legal','DevOps'],
-      hospital: ['General Ward A','General Ward B','ICU','Emergency','OPD','Paediatrics','Gynaecology','Orthopaedics'],
-      ngo: ['Community Outreach','Field Operations','Education Program','Health Program','Women Empowerment','Environment'],
-      factory: ['Assembly Line A','Assembly Line B','Packaging Line 1','Quality Control','Maintenance Bay','Welding Station'],
+      hospital:  ['General Ward A','General Ward B','ICU','Emergency','OPD','Paediatrics','Gynaecology','Orthopaedics'],
+      ngo:       ['Community Outreach','Field Operations','Education Program','Health Program','Women Empowerment','Environment'],
+      factory:   ['Assembly Line A','Assembly Line B','Packaging Line 1','Quality Control','Maintenance Bay','Welding Station'],
     }
     const list = names[orgType] ?? []
     for (let k = 0; k < Math.min(n, list.length); k++) {
@@ -227,10 +267,14 @@ export function generateSections(orgType: OrgType, countryCode: string, n: numbe
 export function generateStaff(orgType: OrgType, countryCode: string, n: number) {
   const c = getCountry(countryCode)
   const cfg = ORG_CONFIGS[orgType]
-  const maxPeriods: Record<OrgType, number> = { school: c.maxPeriodsWeek, college: 16, corporate: 40, hospital: 42, ngo: 30, factory: 48 }
+  const maxPeriods: Record<OrgType, number> = {
+    school: c.maxPeriodsWeek, college: 16, corporate: 40, hospital: 42, ngo: 30, factory: 48,
+  }
+  // Use real country names instead of "Teacher 1, Teacher 2"
   return Array.from({ length: n }, (_, i) => ({
     id: generateId(),
-    name: `${cfg.staffLabel} ${i + 1}`,
+    name: pickName(c, i),
+    shortName: '',
     role: cfg.staffLabel,
     subjects: [] as string[],
     classes: [] as string[],
@@ -239,22 +283,37 @@ export function generateStaff(orgType: OrgType, countryCode: string, n: number) 
   }))
 }
 
-export function generateSubjects(orgType: OrgType, countryCode: string, n: number) {
+export function generateSubjects(orgType: OrgType, countryCode: string, n: number, gradeGroups?: string[]) {
   const c = getCountry(countryCode)
-  const extras: Record<OrgType, string[]> = {
-    school: [],
-    college: ['Advanced Mathematics','Physics','Chemistry','Biology','English Communication','Computer Programming','Data Structures','Electronics','Economics','Management'],
-    corporate: ['Sprint Planning','Daily Standup','Code Review','Design Review','Client Presentation','Team Sync','Training Session','Retrospective'],
-    hospital: ['Ward Round','OT Assistance','Emergency Duty','OPD Consultation','ICU Monitoring','Patient Admission','Nursing Care','Night Duty'],
-    ngo: ['Field Visit','Community Meeting','Training Session','Documentation','Awareness Campaign','Survey','Workshop','Beneficiary Assessment'],
-    factory: ['Assembly Operation','Quality Inspection','Packaging','Machine Setup','Maintenance','Safety Check','Material Handling','Loading/Unloading'],
+
+  let subjectPool: string[]
+  if (orgType === 'school') {
+    if (gradeGroups && gradeGroups.length > 0) {
+      // Merge subjects for all selected grade groups, deduplicate, keep order
+      const seen = new Set<string>()
+      subjectPool = gradeGroups
+        .flatMap(g => SUBJECTS_BY_GROUP[g] ?? [])
+        .filter(s => { if (seen.has(s)) return false; seen.add(s); return true })
+    } else {
+      subjectPool = c.subjects
+    }
+  } else {
+    const extras: Record<string, string[]> = {
+      college:   ['Advanced Mathematics','Physics','Chemistry','Biology','English Communication','Computer Programming','Data Structures','Electronics','Economics','Management'],
+      corporate: ['Sprint Planning','Daily Standup','Code Review','Design Review','Client Presentation','Team Sync','Training Session','Retrospective'],
+      hospital:  ['Ward Round','OT Assistance','Emergency Duty','OPD Consultation','ICU Monitoring','Patient Admission','Nursing Care','Night Duty'],
+      ngo:       ['Field Visit','Community Meeting','Training Session','Documentation','Awareness Campaign','Survey','Workshop','Beneficiary Assessment'],
+      factory:   ['Assembly Operation','Quality Inspection','Packaging','Machine Setup','Maintenance','Safety Check','Material Handling','Loading/Unloading'],
+    }
+    subjectPool = extras[orgType] ?? []
   }
-  const subjectList = orgType === 'school' ? c.subjects : extras[orgType]
-  return subjectList.slice(0, n).map(name => ({
+
+  return subjectPool.slice(0, n).map(name => ({
     id: generateId(),
     name,
-    periodsPerWeek: guessFreq(name),
-    sessionDuration: 40,
+    shortName: name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 4),
+    periodsPerWeek: CBSE_PW[name] ?? guessFreq(name),
+    sessionDuration: 45,
     maxPeriodsPerDay: 2,
     color: getSubjectColor(name),
     sections: [] as string[],
