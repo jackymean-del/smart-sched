@@ -1,22 +1,20 @@
 import { Component, type ReactNode } from "react"
 import { useTimetableStore } from "@/store/timetableStore"
+import { useAuthStore } from "@/store/authStore"
 import { Step1Org }        from "@/routes/wizard/step1-org"
 import { StepBell }        from "@/routes/wizard/step-bell"
 import { StepResources }   from "@/routes/wizard/step-resources"
-import { StepHours }       from "@/routes/wizard/step-hours"
-import { Step5Data }       from "@/routes/wizard/step5-data"
 import { Step6Generate }   from "@/routes/wizard/step6-generate"
+import { CheckCircle2 } from "lucide-react"
 
-// ── New 6-step school-specific wizard ─────────────────────────
-const STEPS = [Step1Org, StepBell, StepResources, StepHours, Step5Data, Step6Generate]
+// ── 4-step, no-redundancy wizard ─────────────────────────────
+const STEPS = [Step1Org, StepBell, StepResources, Step6Generate]
 
 const STEP_META = [
-  { label:"School Setup",     sub:"Board, grades & scale",          icon:"🏫" },
-  { label:"Bell Schedule",    sub:"Days, periods & breaks",         icon:"🔔" },
-  { label:"Resources",        sub:"Classes, teachers, subjects",    icon:"📋" },
-  { label:"Subject Hours",    sub:"Periods/week per class",         icon:"📊" },
-  { label:"Review & Assign",  sub:"Edit data, assign teachers",     icon:"✏️" },
-  { label:"Generate",         sub:"Build timetable",                icon:"✨" },
+  { label:"School",      sub:"Board, grades & scale",       icon:"🏫", color:"#4f46e5" },
+  { label:"Schedule",    sub:"Days, periods & breaks",      icon:"🔔", color:"#0891b2" },
+  { label:"Resources",   sub:"Classes, teachers & subjects",icon:"📋", color:"#059669" },
+  { label:"Generate",    sub:"Build & review timetable",    icon:"✨", color:"#7c3aed" },
 ]
 
 // ── Error boundary ────────────────────────────────────────────
@@ -28,120 +26,137 @@ class StepErrorBoundary extends Component<
   static getDerivedStateFromError(e: Error) { return { error: e.message } }
   render() {
     if (this.state.error) return (
-      <div style={{ padding:24, background:"#fef2f2", border:"1px solid #fca5a5", borderRadius:12 }}>
-        <div style={{ fontSize:16, fontWeight:600, color:"#991b1b", marginBottom:8 }}>⚠️ Step {this.props.step} error</div>
-        <div style={{ fontSize:11, color:"#7f1d1d", fontFamily:"monospace", marginBottom:16, whiteSpace:"pre-wrap" }}>{this.state.error}</div>
-        <button onClick={() => { this.setState({ error:null }); useTimetableStore.getState().resetWizard() }}
-          style={{ padding:"8px 16px", borderRadius:8, border:"none", background:"#dc2626", color:"#fff", cursor:"pointer", marginRight:10 }}>
-          Reset Wizard
-        </button>
-        <button onClick={() => this.setState({ error: null })}
-          style={{ padding:"8px 16px", borderRadius:8, border:"1.5px solid #fca5a5", background:"#fff", color:"#991b1b", cursor:"pointer" }}>
-          Try Again
-        </button>
+      <div style={{ padding:28, background:"#fef2f2", border:"1px solid #fecaca", borderRadius:12, margin:24 }}>
+        <div style={{ fontSize:14, fontWeight:700, color:"#dc2626", marginBottom:8 }}>⚠️ Step {this.props.step} error</div>
+        <div style={{ fontSize:11, color:"#7f1d1d", fontFamily:"monospace", marginBottom:16, whiteSpace:"pre-wrap", maxHeight:120, overflow:'auto' }}>{this.state.error}</div>
+        <div style={{ display:'flex', gap:8 }}>
+          <button onClick={() => { this.setState({ error:null }); useTimetableStore.getState().resetWizard() }}
+            style={{ padding:"7px 14px", borderRadius:7, border:"none", background:"#dc2626", color:"#fff", cursor:"pointer", fontSize:12 }}>
+            Reset Wizard
+          </button>
+          <button onClick={() => this.setState({ error:null })}
+            style={{ padding:"7px 14px", borderRadius:7, border:"1px solid #fecaca", background:"#fff", color:"#dc2626", cursor:"pointer", fontSize:12 }}>
+            Try Again
+          </button>
+        </div>
       </div>
     )
     return this.props.children
   }
 }
 
-// ── Main wizard page ──────────────────────────────────────────
+// ── Main ─────────────────────────────────────────────────────
 export function WizardPage() {
   const { step, setStep } = useTimetableStore()
+  const { isAuthenticated, user } = useAuthStore()
   const CurrentStep = STEPS[step - 1] ?? Step1Org
-  const totalSteps  = STEPS.length
+  const total = STEPS.length
 
   return (
-    <div style={{ display:"flex", flex:1, minHeight:"calc(100vh - 52px)" }}>
+    <div style={{ display:"flex", height:"calc(100vh - 52px)", overflow:"hidden" }}>
 
       {/* ── Sidebar ─────────────────────────────────────────── */}
-      <div style={{ width:228, background:"#1c1b18", flexShrink:0, display:"flex", flexDirection:"column" }}>
-        <div style={{ padding:"20px 16px 14px", borderBottom:"1px solid #2a2926" }}>
-          <div style={{ fontSize:10, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.1em", color:"#6a6860" }}>
-            Setup Wizard
-          </div>
-          <div style={{ fontSize:11, color:"#4a4844", marginTop:4 }}>
-            Step {step} of {totalSteps}
-          </div>
+      <aside style={{
+        width: 220, background:"#111827", flexShrink:0,
+        display:"flex", flexDirection:"column", borderRight:"1px solid #1f2937",
+      }}>
+        {/* School / user info */}
+        <div style={{ padding:"16px 16px", borderBottom:"1px solid #1f2937" }}>
+          {isAuthenticated && user ? (
+            <>
+              <div style={{ fontSize:11, fontWeight:600, color:"#9ca3af", textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:4 }}>Setup Wizard</div>
+              <div style={{ fontSize:12, color:"#fff", fontWeight:500 }}>{user.schoolName || user.name}</div>
+              <div style={{ fontSize:10, color:"#6b7280", marginTop:2 }}>Step {step} of {total}</div>
+            </>
+          ) : (
+            <div>
+              <div style={{ fontSize:11, fontWeight:600, color:"#9ca3af", textTransform:"uppercase", letterSpacing:"0.06em" }}>Setup Wizard</div>
+              <div style={{ fontSize:10, color:"#6b7280", marginTop:4 }}>Step {step} of {total}</div>
+            </div>
+          )}
         </div>
 
-        <nav style={{ flex:1 }}>
+        {/* Steps list */}
+        <nav style={{ flex:1, padding:"12px 0" }}>
           {STEP_META.map((s, i) => {
-            const n      = i + 1
+            const n = i + 1
             const active = step === n
             const done   = step > n
-
             return (
               <button key={n}
-                onClick={() => (done || n === step) && setStep(n)}
+                onClick={() => done && setStep(n)}
                 style={{
-                  width:"100%", display:"flex", alignItems:"center", gap:10,
-                  padding:"11px 16px", border:"none",
-                  background: active ? "#2a2926" : "transparent",
-                  cursor: done ? "pointer" : "default",
-                  textAlign:"left",
-                  borderLeft: active ? "3px solid #4f46e5" : "3px solid transparent",
-                }}>
+                  width:"100%", display:"flex", alignItems:"center", gap:12,
+                  padding:"10px 16px", border:"none", background:"transparent",
+                  cursor: done ? "pointer" : "default", textAlign:"left",
+                  borderLeft: active ? `3px solid ${s.color}` : "3px solid transparent",
+                  transition:"background 0.12s",
+                }}
+                onMouseEnter={e => { if (done) (e.currentTarget as HTMLButtonElement).style.background="rgba(255,255,255,0.04)" }}
+                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background="transparent" }}>
+
+                {/* Step indicator */}
                 <div style={{
-                  width:26, height:26, borderRadius:"50%", flexShrink:0,
+                  width:28, height:28, borderRadius:"50%", flexShrink:0,
                   display:"flex", alignItems:"center", justifyContent:"center",
-                  fontSize: done ? 12 : 11, fontWeight:700,
-                  background: done ? "#059669" : active ? "#4f46e5" : "#2a2926",
-                  color: done || active ? "#fff" : "#4a4844",
-                  border: done || active ? "none" : "1px solid #3a3834",
+                  background: done ? "#059669" : active ? s.color : "#1f2937",
+                  border: done || active ? "none" : "1px solid #374151",
                 }}>
-                  {done ? "✓" : n}
+                  {done
+                    ? <CheckCircle2 size={14} color="#fff" />
+                    : <span style={{ fontSize:11, fontWeight:700, color: active?"#fff":"#6b7280" }}>{n}</span>}
                 </div>
-                <div style={{ minWidth:0 }}>
-                  <div style={{
-                    fontSize:12, fontWeight: active ? 600 : 400,
-                    color: active ? "#fff" : done ? "#d4d1c8" : "#6a6860",
-                    whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis",
-                  }}>
+
+                {/* Label */}
+                <div>
+                  <div style={{ fontSize:12, fontWeight: active?600:400, color: active?"#fff": done?"#e5e7eb":"#6b7280" }}>
                     {s.label}
                   </div>
-                  <div style={{ fontSize:10, color:"#4a4844", marginTop:1 }}>{s.sub}</div>
+                  <div style={{ fontSize:10, color:"#4b5563", marginTop:1 }}>{s.sub}</div>
                 </div>
               </button>
             )
           })}
         </nav>
 
-        {/* Progress bar at bottom */}
-        <div style={{ padding:"14px 16px", borderTop:"1px solid #2a2926" }}>
-          <div style={{ height:4, background:"#2a2926", borderRadius:2 }}>
-            <div style={{ height:"100%", borderRadius:2, background:"linear-gradient(90deg,#4f46e5,#7c3aed)", width:`${((step - 1) / (totalSteps - 1)) * 100}%`, transition:"width 0.3s" }} />
+        {/* Progress bar */}
+        <div style={{ padding:"14px 16px", borderTop:"1px solid #1f2937" }}>
+          <div style={{ height:3, background:"#1f2937", borderRadius:2, marginBottom:6, overflow:"hidden" }}>
+            <div style={{
+              height:"100%", borderRadius:2,
+              background:`linear-gradient(90deg, ${STEP_META[0].color}, ${STEP_META[Math.min(step-1, total-1)].color})`,
+              width:`${((step-1) / (total-1)) * 100}%`,
+              transition:"width 0.35s ease",
+            }} />
           </div>
-          <div style={{ fontSize:10, color:"#4a4844", marginTop:6 }}>
-            {Math.round(((step - 1) / (totalSteps - 1)) * 100)}% complete
-          </div>
-        </div>
-      </div>
-
-      {/* ── Content area ────────────────────────────────────── */}
-      <div style={{ flex:1, overflowY:"auto", background:"#fafaf9", padding:"28px 40px", maxHeight:"calc(100vh - 52px)" }}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
-          <div style={{ fontSize:11, color:"#059669", display:"flex", alignItems:"center", gap:5 }}>
-            <span>💾</span> Progress auto-saved
-          </div>
-          <div style={{ display:"flex", alignItems:"center", gap:8, fontSize:11, color:"#a8a59e" }}>
-            {STEP_META.map((s, i) => {
-              const n = i + 1
-              const done = step > n
-              const active = step === n
-              return (
-                <span key={n} style={{
-                  width:6, height:6, borderRadius:"50%",
-                  background: done ? "#059669" : active ? "#4f46e5" : "#e8e5de",
-                  display:"inline-block",
-                }} />
-              )
-            })}
-            <span style={{ marginLeft:4 }}>Step {step} of {totalSteps}</span>
+          <div style={{ fontSize:10, color:"#4b5563" }}>
+            {Math.round(((step-1)/(total-1))*100)}% complete
           </div>
         </div>
+      </aside>
 
-        <div style={{ maxWidth:860, margin:"0 auto" }}>
+      {/* ── Content ─────────────────────────────────────────── */}
+      <div style={{ flex:1, overflowY:"auto", background:"#f9fafb" }}>
+
+        {/* Step header bar */}
+        <div style={{
+          height:44, background:"#fff", borderBottom:"1px solid #e5e7eb",
+          display:"flex", alignItems:"center", padding:"0 28px",
+          position:"sticky", top:0, zIndex:10, gap:12,
+        }}>
+          <span style={{ fontSize:18 }}>{STEP_META[step-1]?.icon}</span>
+          <div>
+            <span style={{ fontSize:13, fontWeight:700, color:"#111827" }}>{STEP_META[step-1]?.label}</span>
+            <span style={{ fontSize:12, color:"#9ca3af", marginLeft:8 }}>— {STEP_META[step-1]?.sub}</span>
+          </div>
+          <div style={{ marginLeft:"auto", fontSize:11, color:"#9ca3af", display:'flex', alignItems:'center', gap:6 }}>
+            <span style={{ width:6, height:6, borderRadius:'50%', background:'#22c55e', display:'inline-block' }} />
+            Auto-saved
+          </div>
+        </div>
+
+        {/* Step content — full width */}
+        <div style={{ padding:"24px 28px" }}>
           <StepErrorBoundary step={step}>
             <CurrentStep />
           </StepErrorBoundary>

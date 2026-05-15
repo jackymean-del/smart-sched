@@ -3,23 +3,27 @@ import { Topbar } from "@/components/layout/Topbar"
 import { useTimetableStore } from "@/store/timetableStore"
 
 const STEP_LABELS = [
-  'Organization type',
-  'Country & standards',
-  'Schedule settings',
-  'How many of each?',
-  'Review & edit data',
-  'Assign subjects & staff',
-  'Generate timetable',
+  'School Setup',
+  'Bell Schedule',
+  'Resources',
+  'Generate',
 ]
 
 export function RootLayout() {
   const step = useTimetableStore(s => s.step)
-  const isWizard = window.location.pathname.startsWith('/wizard')
+  const path = window.location.pathname
+  const isWizard   = path.startsWith('/wizard')
+  const isAuthPage = path === '/login' || path === '/register'
+  const isDashboard = path === '/dashboard'
+
+  // Auth and dashboard pages render their own full-screen layout — no topbar wrapper
+  if (isAuthPage || isDashboard) return <Outlet />
+
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div style={{ minHeight:'100vh', background:'#f9fafb', display:'flex', flexDirection:'column' }}>
       <Topbar
         step={isWizard ? step : undefined}
-        totalSteps={isWizard ? 7 : undefined}
+        totalSteps={isWizard ? 4 : undefined}
         stepLabel={isWizard ? STEP_LABELS[step - 1] : undefined}
       />
       <Outlet />
