@@ -19,7 +19,7 @@ function getSectionsForClass(sections: { name: string }[], baseClass: string): s
 }
 
 // Get subjects assigned to a specific class
-function getSubjectsForClass(subjects: { name: string; sections: string[]; periodsPerWeek: number }[], sections: { name: string }[], baseClass: string) {
+function getSubjectsForClass(subjects: { name: string; sections?: string[]; periodsPerWeek: number }[], sections: { name: string }[], baseClass: string) {
   const classSecs = getSectionsForClass(sections, baseClass)
   return subjects.filter(sub => classSecs.some(s => (sub.sections ?? []).includes(s)) || (sub.sections ?? []).length === 0)
 }
