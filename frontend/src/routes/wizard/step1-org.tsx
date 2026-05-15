@@ -33,11 +33,15 @@ export function Step1Org() {
   const { config, setConfig, setStep } = useTimetableStore()
   const cfg = config as any
 
-  const [name,    setName]    = useState<string>(cfg.schoolName ?? "")
-  const [board,   setBoard]   = useState<string>(cfg.board ?? "CBSE")
-  const [year,    setYear]    = useState<string>(cfg.academicYear ?? "2025-26")
-  const [tz,      setTz]      = useState<string>(cfg.timezone ?? "Asia/Kolkata")
-  const [groups,  setGroups]  = useState<string[]>(cfg.gradeGroups ?? ["primary","middle","secondary"])
+  const [name,        setName]        = useState<string>(cfg.schoolName ?? "")
+  const [board,       setBoard]       = useState<string>(cfg.board ?? "CBSE")
+  const [year,        setYear]        = useState<string>(cfg.academicYear ?? "2025-26")
+  const [tz,          setTz]          = useState<string>(cfg.timezone ?? "Asia/Kolkata")
+  const [groups,      setGroups]      = useState<string[]>(cfg.gradeGroups ?? ["primary","middle","secondary"])
+  // Controlled count inputs — always reflect exactly what will be generated
+  const [numSections, setNumSections] = useState<number>(cfg.numSections ?? 20)
+  const [numStaff,    setNumStaff]    = useState<number>(cfg.numStaff ?? 10)
+  const [numSubjects, setNumSubjects] = useState<number>(cfg.numSubjects ?? 8)
 
   const toggle = (id: string) =>
     setGroups(g => g.includes(id) ? g.filter(x => x !== id) : [...g, id])
@@ -49,6 +53,8 @@ export function Step1Org() {
     setConfig({
       orgType: "school",
       schoolName: name, board, academicYear: year, timezone: tz, gradeGroups: groups,
+      // Save counts here — guaranteed regardless of blur state
+      numSections, numStaff, numSubjects,
     } as any)
     setStep(2)
   }
@@ -155,18 +161,20 @@ export function Step1Org() {
         <div style={{ fontSize:13, fontWeight:700, color:"#1c1b18", marginBottom:16 }}>📊 Academic Scale — How many?</div>
         <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16 }}>
           {[
-            { label:"Class Sections",  sub:"Total sections (e.g. I-A, I-B = 2)", key:"numSections",  icon:"📚", def:20, min:1, max:500 },
-            { label:"Teaching Staff",  sub:"Total teachers across all grades",     key:"numStaff",     icon:"👤", def:10, min:1, max:1000 },
-            { label:"Subjects",        sub:"Unique subjects across all grades",    key:"numSubjects",  icon:"📖", def:8,  min:1, max:100 },
+            { label:"Class Sections",  sub:"Total sections (e.g. I-A, I-B = 2)", icon:"📚", value:numSections, set:setNumSections, min:1, max:500 },
+            { label:"Teaching Staff",  sub:"Total teachers across all grades",     icon:"👤", value:numStaff,    set:setNumStaff,    min:1, max:1000 },
+            { label:"Subjects",        sub:"Unique subjects across all grades",    icon:"📖", value:numSubjects, set:setNumSubjects, min:1, max:100 },
           ].map(f => (
-            <div key={f.key} style={{ textAlign:"center" as const }}>
+            <div key={f.label} style={{ textAlign:"center" as const }}>
               <div style={{ fontSize:22, marginBottom:8 }}>{f.icon}</div>
               <div style={{ fontSize:12, fontWeight:600, color:"#374151", marginBottom:2 }}>{f.label}</div>
               <div style={{ fontSize:10, color:"#a8a59e", marginBottom:10, lineHeight:1.4 }}>{f.sub}</div>
               <input type="number" min={f.min} max={f.max}
-                defaultValue={(cfg[f.key] as number) ?? f.def}
-                onBlur={e => setConfig({ [f.key]: Math.max(f.min, +e.target.value) } as any)}
-                style={{ width:"100%", padding:"8px", border:"1.5px solid #e8e5de", borderRadius:9, fontSize:26, fontWeight:700, fontFamily:"'DM Mono',monospace", textAlign:"center" as const, outline:"none", background:"#fff" }} />
+                value={f.value}
+                onChange={e => f.set(Math.max(f.min, Math.min(f.max, +e.target.value || f.min)))}
+                style={{ width:"100%", padding:"8px", border:"1.5px solid #e8e5de", borderRadius:9, fontSize:26, fontWeight:700, fontFamily:"'DM Mono',monospace", textAlign:"center" as const, outline:"none", background:"#fff" }}
+                onFocus={e => (e.target as HTMLInputElement).style.borderColor="#4f46e5"}
+                onBlur={e => (e.target as HTMLInputElement).style.borderColor="#e8e5de"} />
             </div>
           ))}
         </div>

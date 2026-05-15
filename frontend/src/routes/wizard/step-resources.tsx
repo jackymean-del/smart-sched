@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { useTimetableStore } from "@/store/timetableStore"
 import { generateSections, generateStaff, generateSubjects, generateBreaks } from "@/lib/orgData"
 import type { Subject } from "@/types"
@@ -64,7 +64,11 @@ export function StepResources() {
 
   const [tab, setTab] = useState<Tab>("classes")
   const [rooms, setRooms] = useState<RoomRow[]>(() =>
-    sections.map((s,i) => ({ id:makeId(), name:s.room ?? `Room ${101+i}`, type:"Classroom", capacity:40, building:"Main Block", floor:"Ground" }))
+    // Initialize from existing sections; useEffect will regenerate if counts mismatch
+    (sections.length > 0 ? sections : []).map((s: any, i: number) => ({
+      id: makeId(), name: s.room ?? `Room ${101 + i}`,
+      type: "Classroom", capacity: 40, building: "Main Block", floor: "Ground"
+    }))
   )
   // Subject hours panel: which subject rows are expanded
   const [expandedSubs, setExpandedSubs] = useState<Set<string>>(new Set())
@@ -82,14 +86,32 @@ export function StepResources() {
     return [...seen.values()]
   }, [sections])
 
-  // Generate all data fresh
+  // Generate all data fresh using current config counts
   const regen = () => {
     const o = config.orgType ?? "school", c = config.countryCode ?? "IN"
-    setSections(generateSections(o, c, config.numSections))
+    const newSections = generateSections(o, c, config.numSections)
+    setSections(newSections)
     setStaff(generateStaff(o, c, config.numStaff))
     setSubjects(generateSubjects(o, c, config.numSubjects) as Subject[])
     setBreaks(generateBreaks(o, config.numBreaks))
+    // Reset rooms to match new sections
+    setRooms(newSections.map((s: any, i: number) => ({
+      id: makeId(), name: s.room ?? `Room ${101 + i}`,
+      type: "Classroom", capacity: 40, building: "Main Block", floor: "Ground"
+    })))
   }
+
+  // Auto-generate on first load if store is empty OR counts don't match what user entered
+  useEffect(() => {
+    const countsMismatch =
+      sections.length !== config.numSections ||
+      staff.length    !== config.numStaff    ||
+      subjects.length !== config.numSubjects
+    if (sections.length === 0 || countsMismatch) {
+      regen()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Persist class-wise overrides into subjects then advance
   const handleContinue = () => {
