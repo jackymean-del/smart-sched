@@ -787,6 +787,11 @@ export interface WizardConfig {
   schedulingMode: ProfileType
   hasOptionals: boolean      // XI/XII optional subject mode
   workingDaysPerYear: number
+
+  // Step 6 — Timetable identity
+  timetableName: string
+  timetableStartDate: string   // YYYY-MM-DD
+  timetableEndDate: string     // YYYY-MM-DD
 }
 
 export const defaultWizardConfig: WizardConfig = {
@@ -811,6 +816,9 @@ export const defaultWizardConfig: WizardConfig = {
   schedulingMode: 'standard',
   hasOptionals: false,
   workingDaysPerYear: 220,
+  timetableName: '',
+  timetableStartDate: '',
+  timetableEndDate: '',
 }
 
 // ─────────────────────────────────────────────────────────────

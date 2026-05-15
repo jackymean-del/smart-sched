@@ -30,13 +30,31 @@ const STEPS = [
   { pct: 98, label: "Building class and teacher views…" },
 ]
 
+// Default academic year boundaries
+function defaultStartDate(): string {
+  const now = new Date()
+  const year = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1
+  return `${year}-06-01`
+}
+function defaultEndDate(): string {
+  const now = new Date()
+  const year = now.getMonth() >= 3 ? now.getFullYear() + 1 : now.getFullYear()
+  return `${year}-03-31`
+}
+
 export function Step6Generate() {
   const store = useTimetableStore()
   const { config, sections, participantPools, facilities, subjects, breaks,
-          setPeriods, setClassTT, setTeacherTT, setConflicts, setSuggestions, setStep } = store
+          setPeriods, setClassTT, setTeacherTT, setConflicts, setSuggestions,
+          setStep, setConfig, setTimetableStatus } = store
   const T = useTerminology()
   const [job, setJob] = useState<Job | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Timetable identity — pre-filled with sensible defaults
+  const [ttName, setTtName]         = useState(config.timetableName       || `${config.schoolName || "School"} Timetable`)
+  const [ttStart, setTtStart]       = useState(config.timetableStartDate  || defaultStartDate())
+  const [ttEnd, setTtEnd]           = useState(config.timetableEndDate    || defaultEndDate())
 
   useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current) }, [])
 
@@ -54,6 +72,10 @@ export function Step6Generate() {
 
   // ── Start generation ─────────────────────────────────────────
   const startGenerate = () => {
+    // Persist timetable identity into config before running
+    setConfig({ timetableName: ttName.trim() || "My Timetable", timetableStartDate: ttStart, timetableEndDate: ttEnd })
+    setTimetableStatus('generating')
+
     const jobId    = crypto.randomUUID()
     const startedAt = Date.now()
     setJob({ id: jobId, status: "running", progress: 3, currentStep: "Starting…", startedAt })
@@ -101,6 +123,7 @@ export function Step6Generate() {
     pollRef.current = setInterval(() => {
       if (step >= STEPS.length) {
         clearInterval(pollRef.current!)
+        setTimetableStatus('draft')   // saved as draft — user must publish
         const conflicts = output.conflicts.length
         setJob(j => j ? {
           ...j, status: "completed", progress: 100,
@@ -237,6 +260,48 @@ export function Step6Generate() {
         ))}
       </div>
 
+      {/* ── Timetable identity form (shown before generate) ── */}
+      {!job && (
+        <div style={{ width:"100%", maxWidth:460, background:"#f7f6f2", borderRadius:12, border:"1.5px solid #e8e5de", padding:"20px 24px", animation:"fade-up 0.4s ease 0.25s both", textAlign:"left" as const }}>
+          <div style={{ fontSize:11, fontWeight:700, textTransform:"uppercase" as const, letterSpacing:"0.08em", color:"#a8a59e", marginBottom:14 }}>📋 Timetable Details</div>
+          <div style={{ display:"flex", flexDirection:"column" as const, gap:12 }}>
+
+            {/* Name */}
+            <div>
+              <label style={{ fontSize:11, fontWeight:600, color:"#374151", display:"block", marginBottom:4 }}>Timetable Name</label>
+              <input
+                value={ttName} onChange={e => setTtName(e.target.value)}
+                placeholder="e.g. Annual Timetable 2025-26"
+                style={{ width:"100%", padding:"9px 12px", border:"1.5px solid #e8e5de", borderRadius:8, fontSize:13, outline:"none", boxSizing:"border-box" as const, background:"#fff" }}
+              />
+            </div>
+
+            {/* Dates */}
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+              <div>
+                <label style={{ fontSize:11, fontWeight:600, color:"#374151", display:"block", marginBottom:4 }}>Start Date</label>
+                <input
+                  type="date" value={ttStart} onChange={e => setTtStart(e.target.value)}
+                  style={{ width:"100%", padding:"8px 10px", border:"1.5px solid #e8e5de", borderRadius:8, fontSize:12, outline:"none", boxSizing:"border-box" as const, background:"#fff", cursor:"pointer" }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize:11, fontWeight:600, color:"#374151", display:"block", marginBottom:4 }}>End Date</label>
+                <input
+                  type="date" value={ttEnd} onChange={e => setTtEnd(e.target.value)}
+                  style={{ width:"100%", padding:"8px 10px", border:"1.5px solid #e8e5de", borderRadius:8, fontSize:12, outline:"none", boxSizing:"border-box" as const, background:"#fff", cursor:"pointer" }}
+                />
+              </div>
+            </div>
+
+            <div style={{ fontSize:10, color:"#a8a59e", display:"flex", alignItems:"center", gap:6 }}>
+              <span style={{ fontSize:14 }}>💡</span>
+              The timetable is saved as a <strong>Draft</strong> after generation. Review it, then publish when ready.
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── CTA buttons ── */}
       <div style={{ display:"flex", gap:10, flexWrap:"wrap" as const, justifyContent:"center", animation:"fade-up 0.4s ease 0.35s both" }}>
         {!job && (
@@ -256,7 +321,7 @@ export function Step6Generate() {
           <>
             <button onClick={() => window.location.href='/timetable'}
               style={{ padding:"13px 32px", borderRadius:10, border:"none", background:"#059669", color:"#fff", fontSize:15, fontWeight:700, cursor:"pointer", boxShadow:"0 4px 20px rgba(5,150,105,0.3)" }}>
-              View {T.schedule} →
+              View {T.schedule} (Draft) →
             </button>
             <button onClick={() => setJob(null)}
               style={{ padding:"13px 18px", borderRadius:10, border:"1.5px solid #e8e5de", background:"#fff", fontSize:13, color:"#374151", cursor:"pointer" }}>

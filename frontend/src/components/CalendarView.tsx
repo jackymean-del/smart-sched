@@ -32,7 +32,6 @@ export interface CalendarViewProps {
   substitutions: Record<string, string>
   viewMode: "class" | "teacher" | "subject" | "room"
   selectedEntity: string       // "ALL" or a specific name
-  transposed: boolean
   showTeacher: boolean
   showRoom: boolean
   onCellClick?: (section: string, day: string, periodId: string) => void
@@ -208,13 +207,15 @@ function EventChip({
 export function CalendarView({
   classTT, teacherTT, periods, workDays, startTime, timeFormat = "12h",
   staff, sections, subjects, substitutions,
-  viewMode, selectedEntity, transposed,
+  viewMode, selectedEntity,
   showTeacher, showRoom,
   onCellClick, absentHighlight,
 }: CalendarViewProps) {
 
   const [currentDate, setCurrentDate] = useState(new Date())
   const [calMode, setCalMode] = useState<CalMode>("week")
+  // Calendar manages its own transpose — defaults to true (transposed = periods as columns)
+  const [transposed, setTransposed] = useState(true)
 
   const today = new Date()
   const classPeriods = periods.filter(p => p.type === "class")
@@ -693,10 +694,17 @@ export function CalendarView({
 
         <div style={{ flex: 1 }} />
 
-        {/* Transposed hint */}
+        {/* Transpose toggle — only for week/day */}
         {calMode !== "month" && (
-          <div style={{ fontSize: 10, color: "#94a3b8" }}>
-            {transposed ? "⊞ Transposed" : "☰ Normal"} · toggle with toolbar button
+          <div style={{ display: "flex", border: "1px solid #e2e8f0", borderRadius: 7, overflow: "hidden" }}>
+            <button onClick={() => setTransposed(false)}
+              style={{ padding: "4px 12px", border: "none", background: !transposed ? "#4f46e5" : "#fff", color: !transposed ? "#fff" : "#64748b", fontSize: 11, fontWeight: 500, cursor: "pointer" }}>
+              ☰ Normal
+            </button>
+            <button onClick={() => setTransposed(true)}
+              style={{ padding: "4px 12px", border: "none", background: transposed ? "#4f46e5" : "#fff", color: transposed ? "#fff" : "#64748b", fontSize: 11, fontWeight: 500, cursor: "pointer" }}>
+              ⊞ Transposed
+            </button>
           </div>
         )}
       </div>

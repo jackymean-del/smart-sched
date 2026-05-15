@@ -105,6 +105,7 @@ export function TimetablePage() {
     config, sections, staff, subjects, periods,
     classTT, teacherTT, substitutions, conflicts,
     showTeacher, showRoom, editMode,
+    timetableStatus, setTimetableStatus,
     setShowTeacher, setShowRoom, setEditMode,
     setPeriods, setTeacherTT, setSubstitutions,
   } = store
@@ -116,6 +117,7 @@ export function TimetablePage() {
   const [uncoveredOpen, setUncoveredOpen] = useState(false)
   const [dragItem, setDragItem] = useState<{section:string;day:string;periodId:string}|null>(null)
   const [dragOverCell, setDragOverCell] = useState<string|null>(null) // key = "sec|day|pid"
+  const [publishConfirm, setPublishConfirm] = useState(false)
 
   // ── Substitution panel state ─────────────────────────────
   const [subPanelOpen, setSubPanelOpen] = useState(false)
@@ -753,7 +755,6 @@ export function TimetablePage() {
         substitutions={substitutions}
         viewMode={calEntityMode}
         selectedEntity={entityFilter}
-        transposed={transposed}
         showTeacher={showTeacher}
         showRoom={showRoom}
         onCellClick={(section, day, periodId) => {
@@ -927,6 +928,25 @@ export function TimetablePage() {
       {/* ── Main area ─────────────────────────────────────── */}
       <div style={{ flex:1, display:"flex", flexDirection:"column" as const, overflow:"hidden" }}>
 
+        {/* Timetable name + date banner */}
+        {(config.timetableName || config.timetableStartDate) && (
+          <div style={{ background: timetableStatus==="published"?"#f0fdf4":"#fffbeb", borderBottom:`1px solid ${timetableStatus==="published"?"#bbf7d0":"#fde68a"}`, padding:"6px 16px", display:"flex", alignItems:"center", gap:12, flexShrink:0 }}>
+            <span style={{ fontSize:13, fontWeight:700, color: timetableStatus==="published"?"#065f46":"#92400e" }}>
+              {config.timetableName || "Timetable"}
+            </span>
+            {config.timetableStartDate && config.timetableEndDate && (
+              <span style={{ fontSize:11, color:"#64748b" }}>
+                {new Date(config.timetableStartDate).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"})}
+                {" – "}
+                {new Date(config.timetableEndDate).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"})}
+              </span>
+            )}
+            <span style={{ fontSize:10, fontWeight:600, padding:"2px 8px", borderRadius:10, background: timetableStatus==="published"?"#dcfce7":"#fef9c3", color: timetableStatus==="published"?"#166534":"#854d0e", border:`1px solid ${timetableStatus==="published"?"#86efac":"#fde047"}` }}>
+              {timetableStatus === "published" ? "🔒 Published" : "📋 Draft"}
+            </span>
+          </div>
+        )}
+
         {/* Toolbar row 1 — view mode + entity selector */}
         <div style={{ background:"#fff", borderBottom:"1px solid #e2e8f0", padding:"8px 16px", display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" as const }}>
 
@@ -972,6 +992,18 @@ export function TimetablePage() {
           </button>
 
           <div style={{ flex:1 }} />
+
+          {/* Draft / Publish status */}
+          {timetableStatus === "published" ? (
+            <span style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 12px", borderRadius:6, border:"1px solid #86efac", background:"#f0fdf4", color:"#059669", fontSize:11, fontWeight:700 }}>
+              🔒 Published
+            </span>
+          ) : (
+            <button onClick={() => setPublishConfirm(true)}
+              style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 12px", borderRadius:6, border:"1px solid #fcd34d", background:"#fffbeb", color:"#92400e", fontSize:11, fontWeight:700, cursor:"pointer" }}>
+              📋 Draft · Publish
+            </button>
+          )}
 
           {/* Export */}
           <button onClick={exportXLSX} style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 12px", borderRadius:6, border:"1px solid #e2e8f0", background:"#fff", color:"#64748b", fontSize:11, cursor:"pointer" }}>📊 Excel</button>
@@ -1185,6 +1217,49 @@ export function TimetablePage() {
       )}
 
       {editTarget && <EditCellModal target={editTarget} onClose={() => setEditTarget(null)} />}
+
+      {/* ── Publish confirmation overlay ── */}
+      {publishConfirm && (
+        <div style={{ position:"fixed" as const, inset:0, background:"rgba(0,0,0,0.45)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:2000 }}
+          onClick={e => { if (e.target===e.currentTarget) setPublishConfirm(false) }}>
+          <div style={{ background:"#fff", borderRadius:14, padding:"28px 32px", maxWidth:420, width:"100%", boxShadow:"0 20px 60px rgba(0,0,0,0.2)", animation:"ecmSlideIn 0.18s ease" }}>
+            <div style={{ fontSize:22, marginBottom:6 }}>📣</div>
+            <div style={{ fontSize:17, fontWeight:700, color:"#1e293b", marginBottom:6 }}>Publish Timetable?</div>
+
+            {/* Timetable summary */}
+            <div style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:8, padding:"12px 14px", marginBottom:16, fontSize:12 }}>
+              <div style={{ fontWeight:700, color:"#1e293b", marginBottom:4 }}>{config.timetableName || "Timetable"}</div>
+              {config.timetableStartDate && config.timetableEndDate && (
+                <div style={{ color:"#64748b" }}>
+                  {new Date(config.timetableStartDate).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"})}
+                  {" – "}
+                  {new Date(config.timetableEndDate).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"})}
+                </div>
+              )}
+              <div style={{ color:"#64748b", marginTop:4 }}>
+                {sections.length} classes · {staff.length} teachers · {subjects.length} subjects
+              </div>
+              {conflicts.length > 0 && (
+                <div style={{ color:"#dc2626", marginTop:6, fontWeight:600 }}>⚠️ {conflicts.length} conflict{conflicts.length>1?"s":""} still unresolved</div>
+              )}
+            </div>
+
+            <div style={{ fontSize:12, color:"#64748b", marginBottom:20, lineHeight:1.5 }}>
+              Publishing makes this timetable the active schedule. You can still edit individual cells after publishing. This action can be reversed by regenerating.
+            </div>
+            <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+              <button onClick={() => setPublishConfirm(false)}
+                style={{ padding:"9px 20px", borderRadius:8, border:"1px solid #e2e8f0", background:"#fff", fontSize:13, color:"#64748b", cursor:"pointer" }}>
+                Cancel
+              </button>
+              <button onClick={() => { setTimetableStatus("published"); setPublishConfirm(false) }}
+                style={{ padding:"9px 24px", borderRadius:8, border:"none", background:"#059669", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer", boxShadow:"0 4px 14px rgba(5,150,105,0.3)" }}>
+                ✅ Publish
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
