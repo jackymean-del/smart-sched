@@ -22,7 +22,7 @@ export function DemoPage() {
 
     const assigned = autoAssign(secs, staffArr, subs)
     secs     = assigned.sections
-    staffArr = assigned.staff.map(s => ({ ...s, isClassTeacher: s.isClassTeacher ?? '' }))
+    staffArr = assigned.staff.map(s => ({ ...s, shortName: s.shortName ?? '', isClassTeacher: s.isClassTeacher ?? '' }))
     subs     = assigned.subjects
 
     store.setSections(secs)
