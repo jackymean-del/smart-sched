@@ -121,7 +121,10 @@ export function StepResources() {
       s => (s as any).grade && !validGrades.has((s as any).grade)
     )
 
-    if (sections.length === 0 || countsMismatch || gradesMismatch) {
+    // If any staff name doesn't match "Teacher N" pattern → stale data (e.g. old realistic names)
+    const staffNamesStale = staff.length > 0 && staff.some(s => !/^.+\s\d+$/.test(s.name))
+
+    if (sections.length === 0 || countsMismatch || gradesMismatch || staffNamesStale) {
       regen()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
