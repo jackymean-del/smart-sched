@@ -110,7 +110,7 @@ export function EditCellModal({ target, onClose }: Props) {
     const opts: string[] = []
     const add = (r?: string) => { if (r && !seen.has(r)) { seen.add(r); opts.push(r) } }
     add(section?.room)
-    facilities.forEach(f => add(f.name))
+    facilities.forEach(f => add(f.actualName || f.generatedName))
     sections.forEach(s => add(s.room))
     return opts
   }, [section, facilities, sections])
