@@ -378,6 +378,47 @@ export function generateSuggestions(
   return suggestions
 }
 
+// ─── Standalone Conflict Detector ────────────────────────
+// Call this after any cell edit to keep the conflicts badge accurate.
+// Derives workDays from the classTT keys so no extra parameter needed.
+export function detectConflicts(
+  classTT: ClassTimetable,
+  periods: Period[]
+): Conflict[] {
+  const conflicts: Conflict[] = []
+  const classPeriods = periods.filter(p => p.type === 'class')
+
+  // Derive the full day set from the timetable itself
+  const workDays = new Set<string>()
+  Object.values(classTT).forEach(secData =>
+    Object.keys(secData).forEach(d => workDays.add(d))
+  )
+
+  classPeriods.forEach(p => {
+    workDays.forEach(day => {
+      const teacherMap: Record<string, string> = {}
+      Object.entries(classTT).forEach(([sec, sd]) => {
+        const cell = sd[day]?.[p.id]
+        if (cell?.teacher) {
+          if (teacherMap[cell.teacher]) {
+            conflicts.push({
+              type: 'double-booking',
+              message: `${cell.teacher} double-booked: ${teacherMap[cell.teacher]} & ${sec} on ${day} ${p.name}`,
+              teacher: cell.teacher,
+              day,
+              period: p.name,
+            })
+          } else {
+            teacherMap[cell.teacher] = sec
+          }
+        }
+      })
+    })
+  })
+
+  return conflicts
+}
+
 // ─── Re-optimization after drag/drop ─────────────────────
 export function reoptimizeAfterSwap(
   classTT: ClassTimetable,
