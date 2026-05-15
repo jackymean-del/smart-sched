@@ -39,9 +39,9 @@ export function Step1Org() {
   const [tz,          setTz]          = useState<string>(config.timezone ?? "Asia/Kolkata")
   const [groups,      setGroups]      = useState<string[]>(config.gradeGroups ?? ["primary","middle","secondary"])
   // Controlled count inputs — always reflect exactly what will be generated
-  const [numSections, setNumSections] = useState<number>(cfg.numSections ?? 20)
-  const [numStaff,    setNumStaff]    = useState<number>(cfg.numStaff ?? 10)
-  const [numSubjects, setNumSubjects] = useState<number>(cfg.numSubjects ?? 8)
+  const [numSections, setNumSections] = useState<number>(config.numSections ?? 20)
+  const [numStaff,    setNumStaff]    = useState<number>(config.numStaff ?? 10)
+  const [numSubjects, setNumSubjects] = useState<number>(config.numSubjects ?? 8)
 
   const toggle = (id: string) =>
     setGroups(g => g.includes(id) ? g.filter(x => x !== id) : [...g, id])
