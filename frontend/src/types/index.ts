@@ -773,6 +773,11 @@ export interface WizardConfig {
   defaultSessionDuration: number
   shifts: Shift[]
 
+  // Step 1 — Grade groups selected (e.g. ["primary","middle"])
+  gradeGroups: string[]
+  schoolName: string
+  academicYear: string
+
   // Step 3 — Resources (counts for quick generation)
   numStaff: number
   numSections: number
@@ -790,6 +795,9 @@ export const defaultWizardConfig: WizardConfig = {
   board: 'CBSE',
   timeFormat: '12h',
   timezone: 'Asia/Kolkata',
+  gradeGroups: ['primary', 'middle', 'secondary'],
+  schoolName: '',
+  academicYear: '2025-26',
   workDays: ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY'],
   startTime: '09:00',
   endTime: '15:30',

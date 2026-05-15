@@ -52,10 +52,10 @@ export function Step1Org() {
   const handleContinue = () => {
     setConfig({
       orgType: "school",
-      schoolName: name, board, academicYear: year, timezone: tz, gradeGroups: groups,
-      // Save counts here — guaranteed regardless of blur state
+      schoolName: name, board, academicYear: year, timezone: tz,
+      gradeGroups: groups,
       numSections, numStaff, numSubjects,
-    } as any)
+    })
     setStep(2)
   }
 

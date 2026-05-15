@@ -504,6 +504,9 @@ export const useTimetableStore = create<ScheduState>()(
               ...(p?.config ?? {}),
               shifts: p?.config?.shifts ?? [],
               defaultSessionDuration: p?.config?.defaultSessionDuration ?? 45,
+              gradeGroups: p?.config?.gradeGroups ?? current.config.gradeGroups,
+              schoolName: p?.config?.schoolName ?? '',
+              academicYear: p?.config?.academicYear ?? '2025-26',
             },
           }
         },
