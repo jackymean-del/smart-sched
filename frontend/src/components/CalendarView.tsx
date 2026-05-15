@@ -327,7 +327,7 @@ export function CalendarView({
                   </div>
                   <div style={{ display: "flex", flexDirection: "column" as const, gap: 1 }}>
                     {events.slice(0, 3).map((ev, ei) => (
-                      <EventChip key={ei} {...ev} showTeacher={false} showRoom={false} compact absent={absentSlot && ev.teacher === absentHighlight?.teacher} />
+                      <EventChip key={ei} {...ev} showTeacher={false} showRoom={false} compact absent={!!(absentSlot && ev.teacher === absentHighlight?.teacher)} />
                     ))}
                     {events.length > 3 && (
                       <div style={{ fontSize: 8, color: "#94a3b8", paddingLeft: 4 }}>+{events.length - 3} more</div>
