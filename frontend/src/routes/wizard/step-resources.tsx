@@ -1,8 +1,8 @@
-import { useState, useMemo, useEffect } from "react"
+import { useState, useEffect } from "react"
 import { useTimetableStore } from "@/store/timetableStore"
 import { generateSections, generateStaff, generateSubjects, generateBreaks, GRADE_GROUP_GRADES } from "@/lib/orgData"
 import type { Subject } from "@/types"
-import { ChevronDown, ChevronRight, RefreshCw, Plus, Trash2 } from "lucide-react"
+import { RefreshCw, Plus, Trash2 } from "lucide-react"
 
 // ─── Shared styles ────────────────────────────────────────────
 const th: React.CSSProperties = {
@@ -70,21 +70,8 @@ export function StepResources() {
       type: "Classroom", capacity: 40, building: "Main Block", floor: "Ground"
     }))
   )
-  // Subject hours panel: which subject rows are expanded
-  const [expandedSubs, setExpandedSubs] = useState<Set<string>>(new Set())
-  // Class-wise overrides: subjectId → classId → periodsPerWeek
+  // Class-wise overrides: subjectId → sectionId → periodsPerWeek
   const [classOverrides, setClassOverrides] = useState<Record<string, Record<string, number>>>({})
-
-  // Base classes for overrides column
-  const baseClasses = useMemo(() => {
-    const seen = new Map<string,{id:string;name:string}>()
-    sections.forEach(s => {
-      const m = s.name.match(/^(.+?)[\s\-–]?([A-E\d])$/i)
-      const base = m ? m[1].trim() : s.name
-      if (!seen.has(base)) seen.set(base, { id:s.id, name:base })
-    })
-    return [...seen.values()]
-  }, [sections])
 
   // Generate all data fresh using current config counts
   const regen = () => {
@@ -135,9 +122,9 @@ export function StepResources() {
     setSubjects(subjects.map(s => {
       const ov = classOverrides[s.id]
       if (!ov || Object.keys(ov).length === 0) return s
-      const classConfigs = Object.entries(ov).map(([classId, pw]) => ({
-        classId,
-        sectionName: baseClasses.find(c => c.id === classId)?.name ?? classId,
+      const classConfigs = Object.entries(ov).map(([sectionId, pw]) => ({
+        classId: sectionId,
+        sectionName: sections.find((sec: any) => sec.id === sectionId)?.name ?? sectionId,
         periodsPerWeek: pw,
         sessionDuration: s.sessionDuration ?? 45,
         maxPeriodsPerDay: s.maxPeriodsPerDay ?? 2,
@@ -198,8 +185,7 @@ export function StepResources() {
         {tab === "subjects" && (
           <SubjectsTable
             subjects={subjects} setSubjects={setSubjects}
-            baseClasses={baseClasses}
-            expandedSubs={expandedSubs} setExpandedSubs={setExpandedSubs}
+            sections={sections}
             classOverrides={classOverrides} setClassOverrides={setClassOverrides}
             periodsPerDay={config.periodsPerDay ?? 8}
             workDaysCount={config.workDays?.length ?? 6}
@@ -294,174 +280,276 @@ function ClassesTable({ sections, setSections, staff }: { sections:any[]; setSec
 }
 
 // ════════════════════════════════════════════════════════════════
-// SUBJECTS TABLE — with inline class-wise hours expansion
+// SUBJECTS TABLE — Excel-style allocation matrix
+// Rows = subjects · Fixed left cols = properties · Scrollable cols = class sections
 // ════════════════════════════════════════════════════════════════
 function SubjectsTable({
-  subjects, setSubjects, baseClasses,
-  expandedSubs, setExpandedSubs,
+  subjects, setSubjects, sections,
   classOverrides, setClassOverrides,
   periodsPerDay, workDaysCount,
 }: {
   subjects: any[]; setSubjects:(s:any[])=>void;
-  baseClasses: {id:string;name:string}[];
-  expandedSubs: Set<string>; setExpandedSubs: (s:Set<string>)=>void;
+  sections: any[];
   classOverrides: Record<string,Record<string,number>>;
   setClassOverrides: (o:Record<string,Record<string,number>>)=>void;
   periodsPerDay: number; workDaysCount: number;
 }) {
-  const upd = (id:string, k:string, v:any) => setSubjects(subjects.map(s => s.id===id ? {...s,[k]:v} : s))
-  const add = () => setSubjects([...subjects, { id:makeId(), name:`Subject ${subjects.length+1}`, shortName:`S${subjects.length+1}`, category:"Core", periodsPerWeek:4, sessionDuration:45, maxPeriodsPerDay:2, isOptional:false, requiresLab:false }])
-  const del = (id:string) => setSubjects(subjects.filter(s=>s.id!==id))
+  const [activeCell, setActiveCell] = useState<{r:number;c:number}|null>(null)
 
-  const toggleExpand = (id:string) => {
-    const next = new Set(expandedSubs)
-    next.has(id) ? next.delete(id) : next.add(id)
-    setExpandedSubs(next)
-  }
+  const updSub = (id:string, k:string, v:any) =>
+    setSubjects(subjects.map(s => s.id===id ? {...s,[k]:v} : s))
 
-  const setOv = (subId:string, classId:string, pw:number) =>
-    setClassOverrides({ ...classOverrides, [subId]: { ...(classOverrides[subId]??{}), [classId]: pw } })
+  const getVal = (subId:string, secId:string, globalPW:number) =>
+    classOverrides[subId]?.[secId] ?? globalPW
 
-  const clearOv = (subId:string, classId:string) => {
+  const isOverridden = (subId:string, secId:string, globalPW:number) =>
+    classOverrides[subId]?.[secId] !== undefined &&
+    classOverrides[subId][secId] !== globalPW
+
+  const setVal = (subId:string, secId:string, val:number) =>
+    setClassOverrides({ ...classOverrides, [subId]: { ...(classOverrides[subId]??{}), [secId]: val } })
+
+  const clearVal = (subId:string, secId:string) => {
     const next = { ...classOverrides }
-    if (next[subId]) { next[subId] = {...next[subId]}; delete next[subId][classId] }
+    if (next[subId]) { next[subId] = {...next[subId]}; delete next[subId][secId] }
     setClassOverrides(next)
   }
 
+  const handleKey = (e:React.KeyboardEvent, r:number, c:number) => {
+    const maxR = subjects.length - 1, maxC = sections.length - 1
+    if (e.key==='Tab')        { e.preventDefault(); setActiveCell({r, c: c<maxC ? c+1 : c}) }
+    else if (e.key==='Enter') { e.preventDefault(); setActiveCell({r: r<maxR ? r+1 : r, c}) }
+    else if (e.key==='Escape') setActiveCell(null)
+    else if (e.key==='ArrowRight') { e.preventDefault(); setActiveCell({r, c:Math.min(c+1,maxC)}) }
+    else if (e.key==='ArrowLeft')  { e.preventDefault(); setActiveCell({r, c:Math.max(c-1,0)}) }
+    else if (e.key==='ArrowDown')  { e.preventDefault(); setActiveCell({r:Math.min(r+1,maxR),c}) }
+    else if (e.key==='ArrowUp')    { e.preventDefault(); setActiveCell({r:Math.max(r-1,0),c}) }
+  }
+
   const slotsPerWeek = periodsPerDay * workDaysCount
-  const totalGlobal = subjects.reduce((s,x) => s + (x.periodsPerWeek ?? suggestPW(x.name)), 0)
+  const totalGlobal  = subjects.reduce((s,x) => s + (x.periodsPerWeek ?? suggestPW(x.name)), 0)
+
+  // Fixed column definitions
+  const FCOLS = [
+    { label:'#',        w:36,  align:'center' as const },
+    { label:'SUBJECT',  w:172, align:'left'   as const },
+    { label:'SHORT',    w:58,  align:'center' as const },
+    { label:'CATEGORY', w:100, align:'left'   as const },
+    { label:'PER/WK',   w:66,  align:'center' as const, title:'Global periods/week — default for all classes' },
+    { label:'SESS.MIN', w:64,  align:'center' as const },
+    { label:'MAX/DAY',  w:64,  align:'center' as const },
+    { label:'OPT',      w:44,  align:'center' as const },
+    { label:'LAB',      w:44,  align:'center' as const },
+    { label:'',         w:32,  align:'center' as const },
+  ]
+  const leftOf = FCOLS.reduce((acc,col,i) => { acc.push(i===0?0:acc[i-1]+FCOLS[i-1].w); return acc }, [] as number[])
+  const totalFixed = FCOLS.reduce((s,c) => s+c.w, 0)
+  const CELL_W = 62
+
+  const stickyTh = (i:number): React.CSSProperties => ({
+    ...th, position:'sticky' as const, left:leftOf[i], zIndex:3,
+    background:'#f9fafb', width:FCOLS[i].w, minWidth:FCOLS[i].w, maxWidth:FCOLS[i].w,
+    textAlign: FCOLS[i].align,
+    boxShadow: i===FCOLS.length-1 ? '3px 0 6px -2px rgba(0,0,0,0.08)' : 'none',
+  })
+
+  const stickyTd = (i:number, bg:string): React.CSSProperties => ({
+    ...td, position:'sticky' as const, left:leftOf[i], zIndex:1,
+    background:bg, width:FCOLS[i].w, minWidth:FCOLS[i].w, maxWidth:FCOLS[i].w,
+    boxShadow: i===FCOLS.length-1 ? '3px 0 6px -2px rgba(0,0,0,0.08)' : 'none',
+  })
 
   return (
-    <div>
-      {/* Hints bar */}
-      <div style={{ padding:"8px 14px", background:"#eff6ff", borderBottom:"1px solid #dbeafe", fontSize:11, color:"#3730a3", display:"flex", gap:24, alignItems:"center" }}>
+    <div style={{ display:'flex', flexDirection:'column', height:'100%' }}>
+
+      {/* ── Info bar ── */}
+      <div style={{ padding:'8px 16px', background:'#eff6ff', borderBottom:'1px solid #dbeafe', fontSize:11, color:'#3730a3', display:'flex', gap:20, alignItems:'center', flexShrink:0 }}>
         <span>🗓 {workDaysCount} days/week · {periodsPerDay} periods/day · <strong>{slotsPerWeek} total slots/class/week</strong></span>
-        <span style={{ color: totalGlobal > slotsPerWeek ? "#dc2626" : "#059669" }}>
-          Σ global: <strong>{totalGlobal}/{slotsPerWeek}</strong> {totalGlobal > slotsPerWeek ? "⚠ over" : "✓"}
+        <span style={{ color: totalGlobal > slotsPerWeek ? '#dc2626' : '#059669' }}>
+          Σ global: <strong>{totalGlobal}/{slotsPerWeek}</strong> {totalGlobal > slotsPerWeek ? '⚠ over' : '✓'}
         </span>
+        <span style={{ color:'#6b7280', fontSize:10 }}>💡 Click cell to override · ⌨ Arrow / Tab / Enter to navigate · Double-click to reset</span>
         <button onClick={() => setSubjects(subjects.map(s => ({...s, periodsPerWeek: suggestPW(s.name)})))}
-          style={{ marginLeft:"auto", padding:"4px 10px", borderRadius:5, border:"1px solid #c7d2fe", background:"#e0e7ff", color:"#3730a3", fontSize:11, fontWeight:600, cursor:"pointer" }}>
+          style={{ marginLeft:'auto', padding:'4px 10px', borderRadius:5, border:'1px solid #c7d2fe', background:'#e0e7ff', color:'#3730a3', fontSize:11, fontWeight:600, cursor:'pointer' }}>
           🏫 Auto-fill CBSE norms
         </button>
       </div>
 
-      <table style={{ width:"100%", borderCollapse:"collapse" }}>
-        <thead><tr>
-          <th style={{...th,width:30}}></th>
-          <th style={{...th,width:36,textAlign:"center"}}>#</th>
-          <th style={th}>Subject Name</th>
-          <th style={{...th,width:72}}>Short</th>
-          <th style={{...th,width:110}}>Category</th>
-          <th style={{...th,width:80,textAlign:"center"}}>Per/wk</th>
-          <th style={{...th,width:80,textAlign:"center"}}>Sess.min</th>
-          <th style={{...th,width:72,textAlign:"center"}}>Max/day</th>
-          <th style={{...th,width:70,textAlign:"center"}}>Optional</th>
-          <th style={{...th,width:56,textAlign:"center"}}>Lab</th>
-          <th style={{...th,width:36}}></th>
-        </tr></thead>
-        <tbody>
-          {subjects.map((s,i) => {
-            const expanded = expandedSubs.has(s.id)
-            const hasOv = classOverrides[s.id] && Object.keys(classOverrides[s.id]).length > 0
-            return (
-              <>
-                <tr key={s.id}
-                  style={{ background: expanded?"#f5f3ff": i%2===0?"#fff":"#fafafa" }}
-                  onMouseEnter={e => { if (!expanded) (e.currentTarget as HTMLElement).style.background="#fdf4ff" }}
-                  onMouseLeave={e => { if (!expanded) (e.currentTarget as HTMLElement).style.background=i%2===0?"#fff":"#fafafa" }}>
+      {/* ── Excel grid ── */}
+      <div style={{ overflowX:'auto', overflowY:'auto', flex:1 }}>
+        <table style={{ borderCollapse:'collapse', minWidth: totalFixed + sections.length * CELL_W, tableLayout:'fixed' }}>
 
-                  {/* Expand toggle */}
-                  <td style={{...td,textAlign:"center",paddingRight:0}}>
-                    <button onClick={() => toggleExpand(s.id)}
-                      style={{ background:"none",border:"none",cursor:"pointer",color: hasOv?"#7c3aed":"#d1d5db",padding:2,display:"flex",alignItems:"center" }}>
-                      {expanded ? <ChevronDown size={14}/> : <ChevronRight size={14}/>}
-                    </button>
+          {/* ── Column widths ── */}
+          <colgroup>
+            {FCOLS.map((c,i) => <col key={i} style={{ width:c.w }} />)}
+            {sections.map(s => <col key={s.id} style={{ width:CELL_W }} />)}
+          </colgroup>
+
+          {/* ── Header ── */}
+          <thead>
+            <tr>
+              {FCOLS.map((col,i) => (
+                <th key={i} title={col.title} style={stickyTh(i)}>{col.label}</th>
+              ))}
+              {sections.map(sec => (
+                <th key={sec.id} style={{
+                  ...th, textAlign:'center', background:'#f0f9ff', color:'#0369a1',
+                  borderLeft:'1px solid #e0f2fe', fontSize:10, padding:'6px 4px',
+                }}>
+                  {sec.name}
+                </th>
+              ))}
+            </tr>
+          </thead>
+
+          {/* ── Body ── */}
+          <tbody>
+            {subjects.map((sub, r) => {
+              const gPW  = sub.periodsPerWeek ?? suggestPW(sub.name)
+              const rowBg = r % 2 === 0 ? '#fff' : '#fafafa'
+              return (
+                <tr key={sub.id}
+                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.background='#f8faff'}
+                  onMouseLeave={e => (e.currentTarget as HTMLElement).style.background=rowBg}
+                >
+                  {/* # */}
+                  <td style={{...stickyTd(0,rowBg), textAlign:'center', color:'#d1d5db', fontSize:10, fontFamily:'monospace'}}>{r+1}</td>
+
+                  {/* Subject name */}
+                  <td style={stickyTd(1,rowBg)}>
+                    <input style={inp({fontWeight:600})} value={sub.name}
+                      onChange={e=>updSub(sub.id,'name',e.target.value)} onFocus={onFocus} onBlur={onBlur} />
                   </td>
 
-                  <td style={{...td,textAlign:"center",color:"#d1d5db",fontSize:10,fontFamily:"monospace"}}>{i+1}</td>
-                  <td style={td}>
-                    <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                      <input style={inp({fontWeight:600})} value={s.name} onChange={e=>upd(s.id,"name",e.target.value)} onFocus={onFocus} onBlur={onBlur} />
-                      {hasOv && <span style={{ fontSize:9, padding:"1px 5px", borderRadius:10, background:"#f5f3ff", color:"#7c3aed", fontWeight:700, flexShrink:0 }}>class overrides</span>}
-                    </div>
+                  {/* Short */}
+                  <td style={{...stickyTd(2,rowBg), textAlign:'center'}}>
+                    <input style={inp({textTransform:'uppercase',fontFamily:'monospace',fontSize:11,textAlign:'center'})}
+                      value={sub.shortName??''} maxLength={6}
+                      onChange={e=>updSub(sub.id,'shortName',e.target.value.toUpperCase())} onFocus={onFocus} onBlur={onBlur} />
                   </td>
-                  <td style={td}><input style={inp({textTransform:"uppercase",fontFamily:"monospace",fontSize:11})} value={s.shortName??""} onChange={e=>upd(s.id,"shortName",e.target.value.toUpperCase())} maxLength={6} onFocus={onFocus} onBlur={onBlur} /></td>
-                  <td style={td}>
-                    <select style={inp({fontSize:11})} value={s.category??"Core"} onChange={e=>upd(s.id,"category",e.target.value)} onFocus={onFocus} onBlur={onBlur}>
+
+                  {/* Category */}
+                  <td style={stickyTd(3,rowBg)}>
+                    <select style={inp({fontSize:11})} value={sub.category??'Core'}
+                      onChange={e=>updSub(sub.id,'category',e.target.value)} onFocus={onFocus} onBlur={onBlur}>
                       {SUBJECT_CATS.map(c=><option key={c}>{c}</option>)}
                     </select>
                   </td>
-                  <td style={{...td,textAlign:"center"}}>
-                    <input type="number" min={0} max={14} style={inp({textAlign:"center",fontFamily:"monospace",fontWeight:700})} value={s.periodsPerWeek??suggestPW(s.name)} onChange={e=>upd(s.id,"periodsPerWeek",Math.max(0,+e.target.value))} onFocus={onFocus} onBlur={onBlur} />
-                  </td>
-                  <td style={{...td,textAlign:"center"}}>
-                    <input type="number" min={20} max={120} style={inp({textAlign:"center",fontFamily:"monospace"})} value={s.sessionDuration??45} onChange={e=>upd(s.id,"sessionDuration",+e.target.value)} onFocus={onFocus} onBlur={onBlur} />
-                  </td>
-                  <td style={{...td,textAlign:"center"}}>
-                    <input type="number" min={1} max={4} style={inp({textAlign:"center",fontFamily:"monospace"})} value={s.maxPeriodsPerDay??2} onChange={e=>upd(s.id,"maxPeriodsPerDay",+e.target.value)} onFocus={onFocus} onBlur={onBlur} />
-                  </td>
-                  <td style={{...td,textAlign:"center"}}><Toggle on={s.isOptional??false} onChange={v=>upd(s.id,"isOptional",v)} color="#7c3aed"/></td>
-                  <td style={{...td,textAlign:"center"}}><Toggle on={s.requiresLab??false} onChange={v=>upd(s.id,"requiresLab",v)} color="#0891b2"/></td>
-                  <td style={td}><button onClick={()=>del(s.id)} style={{ background:"none",border:"none",cursor:"pointer",color:"#d1d5db",padding:0,display:"flex",alignItems:"center" }}><Trash2 size={13}/></button></td>
-                </tr>
 
-                {/* ── Expanded: class-wise hours override ── */}
-                {expanded && (
-                  <tr key={`${s.id}-ov`}>
-                    <td colSpan={11} style={{ background:"#f5f3ff", padding:"0 0 0 46px", borderBottom:"1px solid #ede9fe" }}>
-                      <div style={{ padding:"12px 16px 12px 0" }}>
-                        <div style={{ fontSize:11, fontWeight:600, color:"#7c3aed", marginBottom:8 }}>
-                          Class-wise periods/week overrides — global: <strong>{s.periodsPerWeek ?? suggestPW(s.name)}</strong>
-                        </div>
-                        <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
-                          {baseClasses.map(c => {
-                            const ov = classOverrides[s.id]?.[c.id]
-                            const hasThis = ov !== undefined
-                            return (
-                              <div key={c.id} style={{
-                                display:"flex", flexDirection:"column", alignItems:"center", gap:4,
-                                padding:"8px 10px", borderRadius:8, border: hasThis?"1.5px solid #a78bfa":"1px solid #e5e7eb",
-                                background: hasThis?"#ede9fe":"#fff", minWidth:70,
-                              }}>
-                                <div style={{ fontSize:10, fontWeight:600, color: hasThis?"#7c3aed":"#374151" }}>{c.name}</div>
-                                <input type="number" min={0} max={14}
-                                  value={ov ?? (s.periodsPerWeek ?? suggestPW(s.name))}
-                                  onChange={e => setOv(s.id, c.id, Math.max(0,+e.target.value))}
-                                  style={{ width:48, padding:"4px", border:"1px solid #e5e7eb", borderRadius:5, fontSize:14, fontWeight:700, fontFamily:"monospace", textAlign:"center", outline:"none", background:"#fff" }}
-                                  onFocus={e => { e.target.style.borderColor="#7c3aed" }}
-                                  onBlur={e => { e.target.style.borderColor="#e5e7eb" }}
-                                />
-                                {hasThis && (
-                                  <button onClick={() => clearOv(s.id,c.id)}
-                                    style={{ fontSize:9, color:"#a78bfa", background:"none", border:"none", cursor:"pointer", padding:0, textDecoration:"underline" }}>
-                                    reset
-                                  </button>
-                                )}
-                              </div>
-                            )
-                          })}
-                          {baseClasses.length === 0 && (
-                            <span style={{ fontSize:11, color:"#9ca3af" }}>No classes added yet — add classes in the Classes tab first.</span>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </>
-            )
-          })}
-        </tbody>
-        <tfoot>
-          <tr>
-            <td colSpan={11} style={{ padding:0 }}>
-              <button onClick={add} style={{ width:"100%",padding:"9px 16px",border:"none",borderTop:"1.5px dashed #e5e7eb",background:"transparent",cursor:"pointer",fontSize:12,color:"#9ca3af",textAlign:"left",display:"flex",alignItems:"center",gap:6 }}>
-                <Plus size={14}/> Add subject
-              </button>
-            </td>
-          </tr>
-        </tfoot>
-      </table>
+                  {/* Per/Wk global */}
+                  <td style={{...stickyTd(4,rowBg), textAlign:'center'}}>
+                    <input type="number" min={0} max={14}
+                      style={inp({textAlign:'center',fontFamily:'monospace',fontWeight:700,color:'#111827'})}
+                      value={gPW} onChange={e=>updSub(sub.id,'periodsPerWeek',Math.max(0,+e.target.value))}
+                      onFocus={onFocus} onBlur={onBlur} />
+                  </td>
+
+                  {/* Sess.min */}
+                  <td style={{...stickyTd(5,rowBg), textAlign:'center'}}>
+                    <input type="number" min={20} max={120}
+                      style={inp({textAlign:'center',fontFamily:'monospace'})}
+                      value={sub.sessionDuration??45} onChange={e=>updSub(sub.id,'sessionDuration',+e.target.value)}
+                      onFocus={onFocus} onBlur={onBlur} />
+                  </td>
+
+                  {/* Max/day */}
+                  <td style={{...stickyTd(6,rowBg), textAlign:'center'}}>
+                    <input type="number" min={1} max={6}
+                      style={inp({textAlign:'center',fontFamily:'monospace'})}
+                      value={sub.maxPeriodsPerDay??2} onChange={e=>updSub(sub.id,'maxPeriodsPerDay',+e.target.value)}
+                      onFocus={onFocus} onBlur={onBlur} />
+                  </td>
+
+                  {/* Optional */}
+                  <td style={{...stickyTd(7,rowBg), textAlign:'center'}}>
+                    <Toggle on={sub.isOptional??false} onChange={v=>updSub(sub.id,'isOptional',v)} color="#7c3aed"/>
+                  </td>
+
+                  {/* Lab */}
+                  <td style={{...stickyTd(8,rowBg), textAlign:'center'}}>
+                    <Toggle on={sub.requiresLab??false} onChange={v=>updSub(sub.id,'requiresLab',v)} color="#0891b2"/>
+                  </td>
+
+                  {/* Delete */}
+                  <td style={{...stickyTd(9,rowBg), textAlign:'center'}}>
+                    <button onClick={()=>setSubjects(subjects.filter(s=>s.id!==sub.id))}
+                      style={{ background:'none',border:'none',cursor:'pointer',color:'#d1d5db',padding:0,display:'flex',alignItems:'center',justifyContent:'center' }}>
+                      <Trash2 size={13}/>
+                    </button>
+                  </td>
+
+                  {/* ── Class-section cells ── */}
+                  {sections.map((sec, c) => {
+                    const val       = getVal(sub.id, sec.id, gPW)
+                    const overridden = isOverridden(sub.id, sec.id, gPW)
+                    const isActive  = activeCell?.r===r && activeCell?.c===c
+                    const cellBg    = isActive ? '#eef2ff' : overridden ? '#eff6ff' : rowBg
+
+                    return (
+                      <td key={sec.id}
+                        onClick={() => setActiveCell({r,c})}
+                        onDoubleClick={() => clearVal(sub.id, sec.id)}
+                        title={overridden
+                          ? `${sec.name}: ${val} periods/week (global: ${gPW}) — double-click to reset`
+                          : `${sec.name}: ${val} periods/week (inherited from global) — click to override`}
+                        style={{
+                          ...td,
+                          textAlign:'center', cursor:'pointer',
+                          background: cellBg,
+                          borderLeft:'1px solid #f0f0f0',
+                          outline: isActive ? '2px solid #4f46e5' : 'none',
+                          outlineOffset: -2,
+                          padding:'3px 4px',
+                        }}>
+                        {isActive ? (
+                          <input type="number" min={0} max={14} autoFocus value={val}
+                            onChange={e => setVal(sub.id, sec.id, Math.max(0,+e.target.value))}
+                            onKeyDown={e => handleKey(e, r, c)}
+                            onBlur={() => setActiveCell(null)}
+                            style={{ width:'100%', border:'none', outline:'none', textAlign:'center', fontSize:13, fontWeight:700, fontFamily:'monospace', background:'transparent', color:'#4f46e5' }}
+                          />
+                        ) : (
+                          <span style={{ fontSize:12, fontWeight: overridden?700:400, fontFamily:'monospace', color: overridden?'#1d4ed8':'#9ca3af' }}>
+                            {val}
+                          </span>
+                        )}
+                      </td>
+                    )
+                  })}
+                </tr>
+              )
+            })}
+          </tbody>
+
+          {/* ── Footer: Σ per class ── */}
+          <tfoot>
+            <tr style={{ background:'#f9fafb' }}>
+              <td colSpan={FCOLS.length} style={{ ...td, position:'sticky' as const, left:0, zIndex:1, background:'#f9fafb', fontSize:10, fontWeight:700, color:'#6b7280', textAlign:'right', paddingRight:10, borderTop:'1.5px solid #e5e7eb', boxShadow:'3px 0 6px -2px rgba(0,0,0,0.08)' }}>
+                Σ per class / week →
+              </td>
+              {sections.map(sec => {
+                const total = subjects.reduce((sum,sub) => sum + getVal(sub.id, sec.id, sub.periodsPerWeek ?? suggestPW(sub.name)), 0)
+                const over  = total > slotsPerWeek
+                return (
+                  <td key={sec.id} style={{ ...td, textAlign:'center', background:'#f9fafb', borderLeft:'1px solid #e5e7eb', borderTop:'1.5px solid #e5e7eb', fontFamily:'monospace', fontWeight:700, fontSize:12, color: over?'#dc2626':'#059669', padding:'6px 4px' }}>
+                    {total}
+                    {over && <div style={{ fontSize:8, color:'#dc2626', fontWeight:600 }}>OVER</div>}
+                  </td>
+                )
+              })}
+            </tr>
+            <tr>
+              <td colSpan={FCOLS.length + sections.length} style={{ padding:0 }}>
+                <button
+                  onClick={() => setSubjects([...subjects, { id:makeId(), name:`Subject ${subjects.length+1}`, shortName:`S${subjects.length+1}`, category:'Core', periodsPerWeek:4, sessionDuration:45, maxPeriodsPerDay:2, isOptional:false, requiresLab:false, color:'#6366f1', sections:[], classConfigs:[] }])}
+                  style={{ width:'100%', padding:'9px 16px', border:'none', borderTop:'1.5px dashed #e5e7eb', background:'transparent', cursor:'pointer', fontSize:12, color:'#9ca3af', textAlign:'left' as const, display:'flex', alignItems:'center', gap:6 }}>
+                  <Plus size={14}/> Add subject
+                </button>
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
     </div>
   )
 }
