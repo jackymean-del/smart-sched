@@ -917,6 +917,7 @@ export const StaffSchema = z.object({
   classes: z.array(z.string()),
   isClassTeacher: z.string().default(''),
   maxPeriodsPerWeek: z.number().int().positive(),
+  gender: z.enum(['male', 'female', 'other']).optional(),
 })
 export type Staff = z.infer<typeof StaffSchema>
 

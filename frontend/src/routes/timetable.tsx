@@ -760,7 +760,7 @@ export function TimetablePage() {
         onCellClick={(section, day, periodId) => {
           if (editMode) setEditTarget({ section, day, periodId })
         }}
-        absentHighlight={absentHL}
+        absentHighlights={absentHL ? [absentHL] : []}
       />
     )
   }

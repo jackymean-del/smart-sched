@@ -858,6 +858,7 @@ function TeachersTable({ staff, setStaff, subjects, sections, teacherMatrix, set
               <th style={{...th,width:130}}>Role</th>
               <th style={th}>Can teach (click to toggle)</th>
               <th style={{...th,width:88,textAlign:"center"}}>Max/week</th>
+              <th style={{...th,width:90}}>Gender</th>
               <th style={{...th,width:36}}></th>
             </tr></thead>
             <tbody>
@@ -897,13 +898,21 @@ function TeachersTable({ staff, setStaff, subjects, sections, teacherMatrix, set
                     <td style={{...td,textAlign:"center"}}>
                       <input type="number" min={1} max={45} style={inp({textAlign:"center",fontFamily:"monospace",fontWeight:700})} value={t.maxPeriodsPerWeek??30} onChange={e=>upd(t.id,"maxPeriodsPerWeek",+e.target.value)} onFocus={onFocus} onBlur={onBlur} />
                     </td>
+                    <td style={td}>
+                      <select style={inp({fontSize:11})} value={t.gender??""} onChange={e=>upd(t.id,"gender",e.target.value as any || undefined)} onFocus={onFocus} onBlur={onBlur}>
+                        <option value="">Not specified</option>
+                        <option value="male">&#9794; Male</option>
+                        <option value="female">&#9792; Female</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </td>
                     <td style={td}><button onClick={()=>del(t.id)} style={{ background:"none",border:"none",cursor:"pointer",color:"#d1d5db",padding:0,display:"flex",alignItems:"center" }}><Trash2 size={13}/></button></td>
                   </tr>
                 )
               })}
             </tbody>
             <tfoot>
-              <tr><td colSpan={7} style={{ padding:0 }}>
+              <tr><td colSpan={8} style={{ padding:0 }}>
                 <button onClick={add} style={{ width:"100%",padding:"9px 16px",border:"none",borderTop:"1.5px dashed #e5e7eb",background:"transparent",cursor:"pointer",fontSize:12,color:"#9ca3af",textAlign:"left" as const,display:"flex",alignItems:"center",gap:6 }}>
                   <Plus size={14}/> Add teacher
                 </button>

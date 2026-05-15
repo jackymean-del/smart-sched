@@ -35,7 +35,7 @@ export interface CalendarViewProps {
   showTeacher: boolean
   showRoom: boolean
   onCellClick?: (section: string, day: string, periodId: string) => void
-  absentHighlight?: { teacher: string; day: string } | null
+  absentHighlights?: Array<{ teacher: string; day: string }>
 }
 
 // ─────────────────────────────────────────────
@@ -209,7 +209,7 @@ export function CalendarView({
   staff, sections, subjects, substitutions,
   viewMode, selectedEntity,
   showTeacher, showRoom,
-  onCellClick, absentHighlight,
+  onCellClick, absentHighlights,
 }: CalendarViewProps) {
 
   const [currentDate, setCurrentDate] = useState(new Date())
@@ -298,7 +298,7 @@ export function CalendarView({
                 })
               }
 
-              const absentSlot = absentHighlight && dayKey === absentHighlight.day
+              const absentSlot = absentHighlights?.some(h => h.day === dayKey)
 
               return (
                 <div
@@ -328,7 +328,7 @@ export function CalendarView({
                   </div>
                   <div style={{ display: "flex", flexDirection: "column" as const, gap: 1 }}>
                     {events.slice(0, 3).map((ev, ei) => (
-                      <EventChip key={ei} {...ev} showTeacher={false} showRoom={false} compact absent={!!(absentSlot && ev.teacher === absentHighlight?.teacher)} />
+                      <EventChip key={ei} {...ev} showTeacher={false} showRoom={false} compact absent={!!(absentSlot && absentHighlights?.some(h => h.day === dayKey && h.teacher === ev.teacher))} />
                     ))}
                     {events.length > 3 && (
                       <div style={{ fontSize: 8, color: "#94a3b8", paddingLeft: 4 }}>+{events.length - 3} more</div>
@@ -359,7 +359,7 @@ export function CalendarView({
               {visibleDays.map(d => {
                 const dayKey = DOW_KEY[d.getDay()]
                 const todayFlag = isToday(d)
-                const absentFlag = absentHighlight?.day === dayKey
+                const absentFlag = absentHighlights?.some(h => h.day === dayKey)
                 return (
                   <th key={dayKey}
                     style={{
@@ -408,14 +408,14 @@ export function CalendarView({
                       )
                     }
                     const events = getEvents(dayKey, p.id)
-                    const absentFlag = absentHighlight?.day === dayKey
+                    const absentFlag = absentHighlights?.some(h => h.day === dayKey)
                     return (
                       <td key={dayKey} style={{ border: "1px solid #e2e8f0", padding: 3, verticalAlign: "top" as const, background: absentFlag ? "#fffbeb" : undefined }}>
                         {events.length === 0
                           ? <div style={{ height: "100%", minHeight: 36, display: "flex", alignItems: "center", justifyContent: "center", color: "#e2e8f0", fontSize: 9 }}>—</div>
                           : events.map((ev, ei) => (
                             <EventChip key={ei} {...ev} showTeacher={showTeacher} showRoom={showRoom}
-                              absent={absentFlag && ev.teacher === absentHighlight?.teacher}
+                              absent={!!(absentFlag && absentHighlights?.some(h => h.day === dayKey && h.teacher === ev.teacher))}
                               onClick={() => onCellClick?.(ev.section, dayKey, p.id)} />
                           ))
                         }
@@ -460,7 +460,7 @@ export function CalendarView({
             {visibleDays.map((d, di) => {
               const dayKey = DOW_KEY[d.getDay()]
               const todayFlag = isToday(d)
-              const absentFlag = absentHighlight?.day === dayKey
+              const absentFlag = absentHighlights?.some(h => h.day === dayKey)
               return (
                 <tr key={dayKey} style={{ background: todayFlag ? "#eff6ff" : di % 2 === 0 ? "#fff" : "#f8fafc" }}>
                   <td style={{
@@ -493,7 +493,7 @@ export function CalendarView({
                           ? <div style={{ minHeight: 40, display: "flex", alignItems: "center", justifyContent: "center", color: "#e2e8f0", fontSize: 9 }}>—</div>
                           : events.map((ev, ei) => (
                             <EventChip key={ei} {...ev} showTeacher={showTeacher} showRoom={showRoom}
-                              absent={absentFlag && ev.teacher === absentHighlight?.teacher}
+                              absent={!!(absentFlag && absentHighlights?.some(h => h.day === dayKey && h.teacher === ev.teacher))}
                               onClick={() => onCellClick?.(ev.section, dayKey, p.id)} />
                           ))
                         }
@@ -536,9 +536,9 @@ export function CalendarView({
                   fontSize: 13, fontWeight: 800,
                 }}>
                   <div>{fmtDate(date, "long")}</div>
-                  {absentHighlight?.day === dayKey && (
+                  {absentHighlights?.some(h => h.day === dayKey) && (
                     <div style={{ fontSize: 10, color: "#fcd34d", fontWeight: 500, marginTop: 2 }}>
-                      ⚠ {absentHighlight.teacher} absent today
+                      ⚠ {absentHighlights.filter(h => h.day === dayKey).map(h => h.teacher).join(', ')} absent today
                     </div>
                   )}
                 </th>
@@ -551,7 +551,7 @@ export function CalendarView({
                 const breakBg = p.type === "lunch" ? "#fef3c7" : p.type === "fixed-start" ? "#dbeafe" : p.type === "fixed-end" ? "#d1fae5" : "#fefce8"
                 const breakColor = p.type === "lunch" ? "#92400e" : p.type === "fixed-start" ? "#1e40af" : "#854d0e"
                 const events = isBreak ? [] : getEvents(dayKey, p.id)
-                const absentFlag = absentHighlight?.day === dayKey
+                const absentFlag = absentHighlights?.some(h => h.day === dayKey)
 
                 return (
                   <tr key={p.id} style={{ background: isBreak ? breakBg : pi % 2 === 0 ? "#fff" : "#f8fafc" }}>
@@ -574,7 +574,7 @@ export function CalendarView({
                           {events.map((ev, ei) => (
                             <div key={ei} style={{ minWidth: 180, maxWidth: 280 }}>
                               <EventChip {...ev} showTeacher={showTeacher} showRoom={showRoom}
-                                absent={absentFlag && ev.teacher === absentHighlight?.teacher}
+                                absent={!!(absentFlag && absentHighlights?.some(h => h.day === dayKey && h.teacher === ev.teacher))}
                                 onClick={() => onCellClick?.(ev.section, dayKey, p.id)} />
                             </div>
                           ))}
@@ -624,7 +624,7 @@ export function CalendarView({
                 const breakBg = p.type === "lunch" ? "#fef3c7" : p.type === "fixed-start" ? "#eff6ff" : "#fefce8"
                 const breakColor = p.type === "lunch" ? "#d97706" : "#ca8a04"
                 const events = isBreak ? [] : getEvents(dayKey, p.id)
-                const absentFlag = absentHighlight?.day === dayKey
+                const absentFlag = absentHighlights?.some(h => h.day === dayKey)
 
                 return (
                   <td key={p.id} style={{ border: "1px solid #e2e8f0", padding: 5, verticalAlign: "top" as const, minWidth: isBreak ? 64 : 130, background: isBreak ? breakBg : absentFlag ? "#fffbeb" : undefined, maxWidth: 160 }}>
@@ -635,7 +635,7 @@ export function CalendarView({
                     ) : (
                       events.map((ev, ei) => (
                         <EventChip key={ei} {...ev} showTeacher={showTeacher} showRoom={showRoom}
-                          absent={absentFlag && ev.teacher === absentHighlight?.teacher}
+                          absent={!!(absentFlag && absentHighlights?.some(h => h.day === dayKey && h.teacher === ev.teacher))}
                           onClick={() => onCellClick?.(ev.section, dayKey, p.id)} />
                       ))
                     )}
