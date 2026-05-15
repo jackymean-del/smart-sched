@@ -2,6 +2,7 @@ import { useEffect } from "react"
 import { useTimetableStore } from "@/store/timetableStore"
 import { generateSections, generateStaff, generateSubjects, generateBreaks } from "@/lib/orgData"
 import { buildPeriodSequence, generateTimetable, autoAssign } from "@/lib/aiEngine"
+import type { Subject } from "@/types"
 import { Sparkles } from "lucide-react"
 
 export function DemoPage() {
@@ -16,7 +17,7 @@ export function DemoPage() {
 
     let secs     = generateSections(orgType, countryCode, 4)
     let staffArr = generateStaff(orgType, countryCode, 8)
-    let subs     = generateSubjects(orgType, countryCode, 8)
+    let subs: Subject[] = generateSubjects(orgType, countryCode, 8)
     const brks   = generateBreaks(orgType, 4)
 
     const assigned = autoAssign(secs, staffArr, subs)
