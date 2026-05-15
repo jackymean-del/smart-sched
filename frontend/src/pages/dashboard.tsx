@@ -7,6 +7,7 @@ import {
 import { useAuthStore } from '@/store/authStore'
 import { useTimetableStore } from '@/store/timetableStore'
 import { CalendarView } from '@/components/CalendarView'
+import { PageHeader } from '@/components/layout/PageHeader'
 import type { Staff } from '@/types'
 
 // ── Helpers ────────────────────────────────────────────────
@@ -160,27 +161,21 @@ export function DashboardPage() {
     <div style={{ minHeight: '100vh', background: '#f4f6fb' }}>
 
       {/* ── Page header ──────────────────────────────────────── */}
-      <div style={{
-        background: '#fff', borderBottom: '1px solid #e5e7eb',
-        padding: '20px 28px 18px', display: 'flex', alignItems: 'flex-start',
-        justifyContent: 'space-between',
-      }}>
-        <div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#111827', margin: 0, lineHeight: 1.2 }}>
-            {GREETING()}, {user.name.split(' ')[0]} 👋
-          </h1>
-          <p style={{ fontSize: 13, color: '#6b7280', marginTop: 4, marginBottom: 0 }}>
-            {user.schoolName ?? 'Welcome to Schedu'}
-          </p>
-        </div>
-        <div style={{
-          padding: '4px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600,
-          background: '#eef2ff', color: '#4f46e5', border: '1px solid #c7d2fe',
-          display: 'flex', alignItems: 'center', gap: 6,
-        }}>
-          <CheckCircle2 size={12} /> Owner
-        </div>
-      </div>
+      <PageHeader
+        icon="🏠"
+        title={`${GREETING()}, ${user.name.split(' ')[0]}`}
+        description={user.schoolName ?? 'Welcome to Schedu'}
+        status="saved"
+        actions={
+          <div style={{
+            padding: '3px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600,
+            background: '#eef2ff', color: '#4f46e5', border: '1px solid #c7d2fe',
+            display: 'flex', alignItems: 'center', gap: 5,
+          }}>
+            <CheckCircle2 size={11} /> Owner
+          </div>
+        }
+      />
 
       {/* ── Two-column body ──────────────────────────────────── */}
       <div style={{

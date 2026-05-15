@@ -45,118 +45,156 @@ class StepErrorBoundary extends Component<
   }
 }
 
+// ── Sidebar palette (matches AppSidebar) ─────────────────────
+const SB_BG     = '#111827'
+const SB_BORDER = '#1f2937'
+const SB_DIM    = '#6b7280'
+const SB_MID    = '#9ca3af'
+const SB_ON     = '#e5e7eb'
+const SB_WHITE  = '#fff'
+
 // ── Main ─────────────────────────────────────────────────────
 export function WizardPage() {
   const { step, setStep } = useTimetableStore()
   const { isAuthenticated, user } = useAuthStore()
   const CurrentStep = STEPS[step - 1] ?? Step1Org
   const total = STEPS.length
+  const pct   = Math.round(((step - 1) / (total - 1)) * 100)
 
   return (
     <div style={{ display:"flex", height:"calc(100vh - 52px)", overflow:"hidden" }}>
 
-      {/* ── Sidebar ─────────────────────────────────────────── */}
+      {/* ═══════════════════════════════════
+          DARK SIDEBAR
+      ═══════════════════════════════════ */}
       <aside style={{
-        width: 220, background:"#111827", flexShrink:0,
-        display:"flex", flexDirection:"column", borderRight:"1px solid #1f2937",
+        width: 240, flexShrink: 0,
+        background: SB_BG, borderRight: `1px solid ${SB_BORDER}`,
+        display: "flex", flexDirection: "column",
       }}>
+
         {/* School / user info */}
-        <div style={{ padding:"16px 16px", borderBottom:"1px solid #1f2937" }}>
-          {isAuthenticated && user ? (
-            <>
-              <div style={{ fontSize:11, fontWeight:600, color:"#9ca3af", textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:4 }}>Setup Wizard</div>
-              <div style={{ fontSize:12, color:"#fff", fontWeight:500 }}>{user.schoolName || user.name}</div>
-              <div style={{ fontSize:10, color:"#6b7280", marginTop:2 }}>Step {step} of {total}</div>
-            </>
-          ) : (
-            <div>
-              <div style={{ fontSize:11, fontWeight:600, color:"#9ca3af", textTransform:"uppercase", letterSpacing:"0.06em" }}>Setup Wizard</div>
-              <div style={{ fontSize:10, color:"#6b7280", marginTop:4 }}>Step {step} of {total}</div>
-            </div>
-          )}
+        <div style={{ padding: "14px 16px", borderBottom: `1px solid ${SB_BORDER}` }}>
+          <div style={{ fontSize: 9, fontWeight: 700, color: SB_DIM, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6 }}>
+            Setup Wizard
+          </div>
+          <div style={{ fontSize: 13, color: SB_WHITE, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {isAuthenticated && user ? (user.schoolName || user.name) : "New School"}
+          </div>
+          <div style={{ fontSize: 10, color: SB_DIM, marginTop: 3 }}>
+            Step {step} of {total}
+          </div>
         </div>
 
         {/* Steps list */}
-        <nav style={{ flex:1, padding:"12px 0" }}>
+        <nav style={{ flex: 1, padding: "10px 0" }}>
           {STEP_META.map((s, i) => {
-            const n = i + 1
+            const n      = i + 1
             const active = step === n
             const done   = step > n
+            const future = step < n
+
             return (
-              <button key={n}
-                onClick={() => done && setStep(n)}
-                style={{
-                  width:"100%", display:"flex", alignItems:"center", gap:12,
-                  padding:"10px 16px", border:"none", background:"transparent",
-                  cursor: done ? "pointer" : "default", textAlign:"left",
-                  borderLeft: active ? `3px solid ${s.color}` : "3px solid transparent",
-                  transition:"background 0.12s",
-                }}
-                onMouseEnter={e => { if (done) (e.currentTarget as HTMLButtonElement).style.background="rgba(255,255,255,0.04)" }}
-                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background="transparent" }}>
-
-                {/* Step indicator */}
-                <div style={{
-                  width:28, height:28, borderRadius:"50%", flexShrink:0,
-                  display:"flex", alignItems:"center", justifyContent:"center",
-                  background: done ? "#059669" : active ? s.color : "#1f2937",
-                  border: done || active ? "none" : "1px solid #374151",
-                }}>
-                  {done
-                    ? <CheckCircle2 size={14} color="#fff" />
-                    : <span style={{ fontSize:11, fontWeight:700, color: active?"#fff":"#6b7280" }}>{n}</span>}
-                </div>
-
-                {/* Label */}
-                <div>
-                  <div style={{ fontSize:12, fontWeight: active?600:400, color: active?"#fff": done?"#e5e7eb":"#6b7280" }}>
-                    {s.label}
+              <div key={n}>
+                <button
+                  onClick={() => done && setStep(n)}
+                  style={{
+                    width: "100%", display: "flex", alignItems: "center", gap: 12,
+                    padding: "10px 16px", border: "none", textAlign: "left",
+                    borderLeft: active ? `3px solid ${s.color}` : "3px solid transparent",
+                    background: active ? "rgba(255,255,255,0.06)" : "transparent",
+                    cursor: done ? "pointer" : "default",
+                    transition: "background 0.12s",
+                  }}
+                  onMouseEnter={e => { if (done) (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.04)" }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = active ? "rgba(255,255,255,0.06)" : "transparent" }}
+                >
+                  {/* Circle indicator */}
+                  <div style={{
+                    width: 28, height: 28, borderRadius: "50%", flexShrink: 0,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    background: done ? "#059669" : active ? s.color : "#1f2937",
+                    border: future ? `1.5px solid #374151` : "none",
+                    transition: "background 0.2s",
+                  }}>
+                    {done
+                      ? <CheckCircle2 size={13} color="#fff" />
+                      : <span style={{ fontSize: 11, fontWeight: 700, color: active ? "#fff" : SB_DIM }}>{n}</span>}
                   </div>
-                  <div style={{ fontSize:10, color:"#4b5563", marginTop:1 }}>{s.sub}</div>
-                </div>
-              </button>
+
+                  {/* Text */}
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{
+                      fontSize: 12, fontWeight: active ? 600 : 400,
+                      color: active ? SB_WHITE : done ? SB_ON : SB_DIM,
+                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    }}>
+                      {s.label}
+                    </div>
+                    <div style={{ fontSize: 10, color: active ? "#9ca3af" : "#374151", marginTop: 2 }}>
+                      {s.sub}
+                    </div>
+                  </div>
+                </button>
+
+                {/* Connector */}
+                {i < total - 1 && (
+                  <div style={{
+                    width: 1.5, height: 8, marginLeft: 27, marginTop: 1, marginBottom: 1,
+                    background: done ? "#059669" : SB_BORDER,
+                    transition: "background 0.3s",
+                  }} />
+                )}
+              </div>
             )
           })}
         </nav>
 
         {/* Progress bar */}
-        <div style={{ padding:"14px 16px", borderTop:"1px solid #1f2937" }}>
-          <div style={{ height:3, background:"#1f2937", borderRadius:2, marginBottom:6, overflow:"hidden" }}>
-            <div style={{
-              height:"100%", borderRadius:2,
-              background:`linear-gradient(90deg, ${STEP_META[0].color}, ${STEP_META[Math.min(step-1, total-1)].color})`,
-              width:`${((step-1) / (total-1)) * 100}%`,
-              transition:"width 0.35s ease",
-            }} />
+        <div style={{ padding: "14px 16px", borderTop: `1px solid ${SB_BORDER}` }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+            <span style={{ fontSize: 10, color: SB_DIM }}>Progress</span>
+            <span style={{ fontSize: 10, fontWeight: 700, color: pct === 100 ? "#34d399" : SB_MID }}>{pct}% complete</span>
           </div>
-          <div style={{ fontSize:10, color:"#4b5563" }}>
-            {Math.round(((step-1)/(total-1))*100)}% complete
+          <div style={{ height: 4, background: "#1f2937", borderRadius: 2, overflow: "hidden" }}>
+            <div style={{
+              height: "100%", borderRadius: 2, transition: "width 0.35s ease",
+              background: pct === 100 ? "#059669" : "linear-gradient(90deg, #4f46e5, #059669)",
+              width: `${pct}%`,
+            }} />
           </div>
         </div>
       </aside>
 
-      {/* ── Content ─────────────────────────────────────────── */}
-      <div style={{ flex:1, overflowY:"auto", background:"#f9fafb" }}>
+      {/* ═══════════════════════════════════
+          CONTENT AREA
+      ═══════════════════════════════════ */}
+      <div style={{ flex: 1, overflowY: "auto", background: "#f4f6fb", display: "flex", flexDirection: "column" }}>
 
-        {/* Step header bar */}
+        {/* ── Sticky sub-header bar ── */}
         <div style={{
-          height:44, background:"#fff", borderBottom:"1px solid #e5e7eb",
-          display:"flex", alignItems:"center", padding:"0 28px",
-          position:"sticky", top:0, zIndex:10, gap:12,
+          height: 48, background: "#fff", borderBottom: "1px solid #e5e7eb",
+          display: "flex", alignItems: "center", padding: "0 28px",
+          position: "sticky", top: 0, zIndex: 10, gap: 12,
+          flexShrink: 0,
         }}>
-          <span style={{ fontSize:18 }}>{STEP_META[step-1]?.icon}</span>
-          <div>
-            <span style={{ fontSize:13, fontWeight:700, color:"#111827" }}>{STEP_META[step-1]?.label}</span>
-            <span style={{ fontSize:12, color:"#9ca3af", marginLeft:8 }}>— {STEP_META[step-1]?.sub}</span>
+          <span style={{ fontSize: 20, flexShrink: 0 }}>{STEP_META[step - 1]?.icon}</span>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8, flex: 1, minWidth: 0 }}>
+            <span style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>
+              {STEP_META[step - 1]?.label}
+            </span>
+            <span style={{ fontSize: 12, color: "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              — {STEP_META[step - 1]?.sub}
+            </span>
           </div>
-          <div style={{ marginLeft:"auto", fontSize:11, color:"#9ca3af", display:'flex', alignItems:'center', gap:6 }}>
-            <span style={{ width:6, height:6, borderRadius:'50%', background:'#22c55e', display:'inline-block' }} />
-            Auto-saved
+          <div style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#22c55e", display: "inline-block" }} />
+            <span style={{ fontSize: 11, color: "#6b7280" }}>Auto-saved</span>
           </div>
         </div>
 
-        {/* Step content — full width */}
-        <div style={{ padding:"24px 28px" }}>
+        {/* ── Step content ── */}
+        <div style={{ padding: "24px 28px", flex: 1 }}>
           <StepErrorBoundary step={step}>
             <CurrentStep />
           </StepErrorBoundary>
