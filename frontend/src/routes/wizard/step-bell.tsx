@@ -64,6 +64,13 @@ function buildTimeline(
     breakMap.get(b.afterPeriod)!.push(b)
   }
 
+  // Breaks with afterPeriod = 0 appear BEFORE Period 1 (e.g. Assembly)
+  for (const b of breakMap.get(0) ?? []) {
+    const bend = addMinutes(cursor, b.duration)
+    entries.push({ kind: "break", label: b.name, start: cursor, end: bend, duration: b.duration, type: b.type })
+    cursor = bend
+  }
+
   for (let p = 1; p <= periodsPerDay; p++) {
     const end = addMinutes(cursor, periodDuration)
     entries.push({ kind: "period", label: `Period ${p}`, start: cursor, end, duration: periodDuration, periodNum: p })
