@@ -295,6 +295,7 @@ function SubjectsTable({
   periodsPerDay: number; workDaysCount: number;
 }) {
   const [activeCell, setActiveCell] = useState<{r:number;c:number}|null>(null)
+  const [transposed, setTransposed] = useState(false)
 
   const updSub = (id:string, k:string, v:any) =>
     setSubjects(subjects.map(s => s.id===id ? {...s,[k]:v} : s))
@@ -368,15 +369,94 @@ function SubjectsTable({
         <span style={{ color: totalGlobal > slotsPerWeek ? '#dc2626' : '#059669' }}>
           Σ global: <strong>{totalGlobal}/{slotsPerWeek}</strong> {totalGlobal > slotsPerWeek ? '⚠ over' : '✓'}
         </span>
-        <span style={{ color:'#6b7280', fontSize:10 }}>💡 Click cell to override · ⌨ Arrow / Tab / Enter to navigate · Double-click to reset</span>
-        <button onClick={() => setSubjects(subjects.map(s => ({...s, periodsPerWeek: suggestPW(s.name)})))}
-          style={{ marginLeft:'auto', padding:'4px 10px', borderRadius:5, border:'1px solid #c7d2fe', background:'#e0e7ff', color:'#3730a3', fontSize:11, fontWeight:600, cursor:'pointer' }}>
-          🏫 Auto-fill CBSE norms
-        </button>
+        <span style={{ color:'#6b7280', fontSize:10 }}>💡 Click cell to override · ⌨ Arrow / Tab / Enter · Double-click to reset</span>
+        <div style={{ marginLeft:'auto', display:'flex', gap:8, alignItems:'center' }}>
+          <button onClick={() => { setTransposed(t => !t); setActiveCell(null) }}
+            title="Transpose: swap rows and columns"
+            style={{ padding:'4px 10px', borderRadius:5, border:'1px solid #d1d5db', background: transposed?'#f0fdf4':'#fff', color: transposed?'#059669':'#374151', fontSize:11, fontWeight:600, cursor:'pointer' }}>
+            ⇄ {transposed ? 'Classes as rows' : 'Subjects as rows'}
+          </button>
+          <button onClick={() => setSubjects(subjects.map(s => ({...s, periodsPerWeek: suggestPW(s.name)})))}
+            style={{ padding:'4px 10px', borderRadius:5, border:'1px solid #c7d2fe', background:'#e0e7ff', color:'#3730a3', fontSize:11, fontWeight:600, cursor:'pointer' }}>
+            🏫 Auto-fill CBSE norms
+          </button>
+        </div>
       </div>
 
       {/* ── Excel grid ── */}
       <div style={{ overflowX:'auto', overflowY:'auto', flex:1 }}>
+      {transposed ? (
+        /* ══ TRANSPOSED: rows = sections, columns = subjects ══ */
+        <table style={{ borderCollapse:'collapse', minWidth: 220 + subjects.length * CELL_W, tableLayout:'fixed' }}>
+          <colgroup>
+            <col style={{ width:36 }} />
+            <col style={{ width:180 }} />
+            {subjects.map(s => <col key={s.id} style={{ width:CELL_W }} />)}
+          </colgroup>
+          <thead>
+            <tr>
+              <th style={{ ...th, position:'sticky' as const, left:0,  zIndex:3, background:'#f9fafb', width:36,  textAlign:'center' }}>#</th>
+              <th style={{ ...th, position:'sticky' as const, left:36, zIndex:3, background:'#f9fafb', width:180, boxShadow:'3px 0 6px -2px rgba(0,0,0,0.08)' }}>CLASS / SECTION</th>
+              {subjects.map(sub => (
+                <th key={sub.id} style={{ ...th, textAlign:'center', background:'#fdf4ff', color:'#7c3aed', borderLeft:'1px solid #ede9fe', fontSize:10, padding:'6px 4px', maxWidth:CELL_W }}>
+                  <div style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{sub.shortName || sub.name}</div>
+                  <div style={{ fontSize:8, fontWeight:400, color:'#a78bfa', marginTop:1 }}>{sub.periodsPerWeek ?? suggestPW(sub.name)}/wk</div>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {sections.map((sec, r) => {
+              const rowBg = r % 2 === 0 ? '#fff' : '#fafafa'
+              return (
+                <tr key={sec.id}
+                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.background='#f8faff'}
+                  onMouseLeave={e => (e.currentTarget as HTMLElement).style.background=rowBg}>
+                  <td style={{ ...td, position:'sticky' as const, left:0,  zIndex:1, background:rowBg, textAlign:'center', color:'#d1d5db', fontSize:10, fontFamily:'monospace' }}>{r+1}</td>
+                  <td style={{ ...td, position:'sticky' as const, left:36, zIndex:1, background:rowBg, fontWeight:600, boxShadow:'3px 0 6px -2px rgba(0,0,0,0.08)' }}>{sec.name}</td>
+                  {subjects.map((sub, c) => {
+                    const gPW = sub.periodsPerWeek ?? suggestPW(sub.name)
+                    const val = getVal(sub.id, sec.id, gPW)
+                    const overridden = isOverridden(sub.id, sec.id, gPW)
+                    const isActive = activeCell?.r === r && activeCell?.c === c
+                    return (
+                      <td key={sub.id}
+                        onClick={() => setActiveCell({r, c})}
+                        onDoubleClick={() => clearVal(sub.id, sec.id)}
+                        title={overridden ? `Override: ${val} (global: ${gPW}) — double-click to reset` : `${val}/week (inherited) — click to override`}
+                        style={{ ...td, textAlign:'center', cursor:'pointer', background: isActive?'#eef2ff': overridden?'#eff6ff':rowBg, borderLeft:'1px solid #f0f0f0', outline: isActive?'2px solid #4f46e5':'none', outlineOffset:-2, padding:'3px 4px' }}>
+                        {isActive ? (
+                          <input type="number" min={0} max={14} autoFocus value={val}
+                            onChange={e => setVal(sub.id, sec.id, Math.max(0, +e.target.value))}
+                            onKeyDown={e => handleKey(e, r, c)}
+                            onBlur={() => setActiveCell(null)}
+                            style={{ width:'100%', border:'none', outline:'none', textAlign:'center', fontSize:13, fontWeight:700, fontFamily:'monospace', background:'transparent', color:'#4f46e5' }} />
+                        ) : (
+                          <span style={{ fontSize:12, fontWeight:overridden?700:400, fontFamily:'monospace', color:overridden?'#1d4ed8':'#9ca3af' }}>{val}</span>
+                        )}
+                      </td>
+                    )
+                  })}
+                </tr>
+              )
+            })}
+          </tbody>
+          <tfoot>
+            <tr style={{ background:'#f9fafb' }}>
+              <td colSpan={2} style={{ ...td, position:'sticky' as const, left:0, zIndex:1, background:'#f9fafb', fontSize:10, fontWeight:700, color:'#6b7280', textAlign:'right', paddingRight:10, borderTop:'1.5px solid #e5e7eb', boxShadow:'3px 0 6px -2px rgba(0,0,0,0.08)' }}>Σ / week →</td>
+              {subjects.map(sub => {
+                const gPW = sub.periodsPerWeek ?? suggestPW(sub.name)
+                const total = sections.reduce((sum, sec) => sum + getVal(sub.id, sec.id, gPW), 0)
+                return (
+                  <td key={sub.id} style={{ ...td, textAlign:'center', background:'#f9fafb', borderLeft:'1px solid #e5e7eb', borderTop:'1.5px solid #e5e7eb', fontFamily:'monospace', fontWeight:700, fontSize:11, color:'#374151', padding:'5px 4px' }}>
+                    {total}
+                  </td>
+                )
+              })}
+            </tr>
+          </tfoot>
+        </table>
+      ) : (
         <table style={{ borderCollapse:'collapse', minWidth: totalFixed + sections.length * CELL_W, tableLayout:'fixed' }}>
 
           {/* ── Column widths ── */}
@@ -549,6 +629,7 @@ function SubjectsTable({
             </tr>
           </tfoot>
         </table>
+      )}
       </div>
     </div>
   )

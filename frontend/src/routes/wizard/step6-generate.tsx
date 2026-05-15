@@ -66,36 +66,46 @@ export function Step6Generate() {
     const startedAt = Date.now()
     setJob({ id: jobId, status:"running", progress: 5, log:[], startedAt })
 
-    // ── Run the actual solver immediately (synchronous, fast) ──
-    const periods = buildPeriodSequence(breaks, config.periodsPerDay)
-    const resolvedSubjects = store.schedulingMode === 'duration-based'
-      ? subjects.map(sub => {
-          const rh = (sub as any).requiredHours
-          if (!rh) return sub
-          const weekly = durationToWeeklyPeriods({
-            subjectName: sub.name, className: 'all',
-            requiredHours: rh,
-            periodDurationMins: (sub as any).sessionDuration ?? 45,
-            workingDaysPerYear: store.workingDaysPerYear ?? 220,
-            workingDaysPerWeek: config.workDays.length,
+    // ── Run the actual solver (wrapped in try/catch so we never get stuck) ──
+    let output: ReturnType<typeof solveTimetable>
+    let solveMs: number
+
+    try {
+      const workDays = config.workDays?.length ? config.workDays : ['MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY']
+      const periods  = buildPeriodSequence(breaks, config.periodsPerDay ?? 8)
+
+      const resolvedSubjects = store.schedulingMode === 'duration-based'
+        ? subjects.map(sub => {
+            const rh = (sub as any).requiredHours
+            if (!rh) return sub
+            const weekly = durationToWeeklyPeriods({
+              subjectName: sub.name, className: 'all',
+              requiredHours: rh,
+              periodDurationMins: (sub as any).sessionDuration ?? 45,
+              workingDaysPerYear: store.workingDaysPerYear ?? 220,
+              workingDaysPerWeek: workDays.length,
+            })
+            return { ...sub, periodsPerWeek: weekly }
           })
-          return { ...sub, periodsPerWeek: weekly }
-        })
-      : subjects
+        : subjects
 
-    const staff = store.staff
-    const output = solveTimetable({ sections, staff, subjects: resolvedSubjects, periods, workDays: config.workDays, requirements: [] })
-    const suggestions = generateSuggestions(output.classTT, output.teacherTT, staff, resolvedSubjects, config.workDays, periods)
+      const staff = store.staff
+      output   = solveTimetable({ sections, staff, subjects: resolvedSubjects, periods, workDays, requirements: [] })
+      solveMs  = Date.now() - startedAt
 
-    setPeriods(periods)
-    setClassTT(output.classTT)
-    setTeacherTT(output.teacherTT)
-    setConflicts(output.conflicts)
-    setSuggestions(suggestions)
+      const suggestions = generateSuggestions(output.classTT, output.teacherTT, staff, resolvedSubjects, workDays, periods)
+      setPeriods(periods)
+      setClassTT(output.classTT)
+      setTeacherTT(output.teacherTT)
+      setConflicts(output.conflicts)
+      setSuggestions(suggestions)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      setJob(j => j ? { ...j, status:"failed", progress:0, log:[{ type:'error', msg:`❌ Solver error: ${msg}` }] } : j)
+      return
+    }
 
-    const solveMs = Date.now() - startedAt
-
-    // ── Now replay the log animation fast (80ms/step) as visual feedback ──
+    // ── Replay log animation at 80ms/step as visual feedback ──
     let step = 0
     const r = replacements(output.score, output.conflicts.length)
 
