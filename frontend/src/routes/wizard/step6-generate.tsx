@@ -122,14 +122,17 @@ export function Step6Generate() {
         return
       }
 
-      let msg = PIPELINE[step].msg
+      // Snapshot step before async setJob — updater runs after step++ so we
+      // must capture current index or PIPELINE[step] will be undefined
+      const idx = step
+      let msg = PIPELINE[idx].msg
       for (const [k, v] of Object.entries(r)) msg = msg.replaceAll(k, v)
 
       setJob(j => j ? {
         ...j,
         status: "running",
-        progress: Math.round(5 + (step + 1) / PIPELINE.length * 93),
-        log: [...j.log, { type: PIPELINE[step].type, msg }],
+        progress: Math.round(5 + (idx + 1) / PIPELINE.length * 93),
+        log: [...j.log, { type: PIPELINE[idx].type, msg }],
       } : j)
       step++
     }, 80)   // 80ms × 16 steps = ~1.3s total animation
