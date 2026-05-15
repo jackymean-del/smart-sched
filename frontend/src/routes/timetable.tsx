@@ -1,13 +1,12 @@
 import { useState } from "react"
 import { useTimetableStore } from "@/store/timetableStore"
-import { SubstitutionModal } from "@/components/modals/SubstitutionModal"
 import { EditCellModal } from "@/components/modals/EditCellModal"
 import { ORG_CONFIGS, getCountry, getSubjectColor } from "@/lib/orgData"
 import { shiftPeriod, rebuildTeacherTT } from "@/lib/aiEngine"
 import { useExport } from "@/hooks/useExport"
 import type { Period } from "@/types"
 
-type ViewMode = "class" | "teacher" | "subject" | "room"
+type ViewMode = "class" | "teacher" | "subject" | "room" | "calendar"
 
 const DAY_SHORT: Record<string,string> = {
   MONDAY:"Mon",TUESDAY:"Tue",WEDNESDAY:"Wed",THURSDAY:"Thu",
@@ -62,10 +61,11 @@ function BreakCell({ p }: { p:Period }) {
 }
 
 // ── Subject color cell ─────────────────────────────────────
-function SubjectCell({ subject, teacher, room, isClassTeacher, isSub, subTeacher, showTeacher, showRoom, onClick, dragOver, onDragOver, onDrop, onDragLeave }:{
+function SubjectCell({ subject, teacher, room, isClassTeacher, isSub, subTeacher, showTeacher, showRoom, onClick, dragOver, onDragOver, onDrop, onDragLeave, absentHighlight }:{
   subject?:string; teacher?:string; room?:string; isClassTeacher?:boolean; isSub?:boolean; subTeacher?:string;
   showTeacher:boolean; showRoom:boolean; onClick?:()=>void;
   dragOver?:boolean; onDragOver?:(e:React.DragEvent)=>void; onDrop?:(e:React.DragEvent)=>void; onDragLeave?:()=>void;
+  absentHighlight?:boolean;
 }) {
   if (!subject) return (
     <td style={{ border:"1px solid #e2e8f0", padding:2 }}
@@ -81,8 +81,9 @@ function SubjectCell({ subject, teacher, room, isClassTeacher, isSub, subTeacher
   return (
     <td style={{ border:"1px solid #e2e8f0", padding:2 }}>
       <div className={colorClass} onClick={onClick}
-        style={{ borderRadius:5, padding:"4px 7px", minHeight:44, cursor:onClick?"pointer":"default", outline:isSub?"2px dashed #f59e0b":"none", position:"relative" as const }}>
+        style={{ borderRadius:5, padding:"4px 7px", minHeight:44, cursor:onClick?"pointer":"default", outline:absentHighlight?"3px solid #f59e0b":isSub?"2px dashed #f59e0b":"none", outlineOffset:absentHighlight?"-2px":undefined, position:"relative" as const }}>
         {isSub && <span style={{ position:"absolute" as const, top:2, right:3, width:6, height:6, borderRadius:"50%", background:"#f59e0b" }} title="Substituted" />}
+        {absentHighlight && <span style={{ position:"absolute" as const, top:2, left:3, fontSize:8, color:"#d97706" }}>⚠</span>}
         <div style={{ fontSize:10, fontWeight:700, lineHeight:1.3 }}>{subject}</div>
         {showTeacher && teacher && (
           <div style={{ fontSize:9, opacity:0.75, marginTop:2, display:"flex", alignItems:"center", gap:3 }}>
@@ -107,7 +108,6 @@ export function TimetablePage() {
     setPeriods, setTeacherTT, setSubstitutions,
   } = store
 
-  const [subModalOpen, setSubModalOpen] = useState(false)
   const [editTarget, setEditTarget] = useState<{section:string;day:string;periodId:string}|null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>("class")
   const [transposed, setTransposed] = useState(false)
@@ -115,6 +115,15 @@ export function TimetablePage() {
   const [uncoveredOpen, setUncoveredOpen] = useState(false)
   const [dragItem, setDragItem] = useState<{section:string;day:string;periodId:string}|null>(null)
   const [dragOverCell, setDragOverCell] = useState<string|null>(null) // key = "sec|day|pid"
+
+  // ── Substitution panel state ─────────────────────────────
+  const [subPanelOpen, setSubPanelOpen] = useState(false)
+  const [subAbsentTeacher, setSubAbsentTeacher] = useState("")
+  const [subAbsentDay, setSubAbsentDay] = useState(config.workDays[0] ?? "MONDAY")
+  const [subReason, setSubReason] = useState("")
+  const [subAssignments, setSubAssignments] = useState<Record<string, string>>({}) // periodId → staffName
+  const [subActiveTab, setSubActiveTab] = useState<"assign"|"active">("assign")
+
   const { exportXLSX } = useExport()
 
   const org = ORG_CONFIGS[config.orgType ?? "school"]
@@ -134,10 +143,11 @@ export function TimetablePage() {
   // Entity options per view
   const getEntityList = (): string[] => {
     switch (viewMode) {
-      case "class":   return ["ALL", ...sections.map(s => s.name)]
-      case "teacher": return ["ALL", ...staff.map(s => s.name)]
-      case "subject": return ["ALL", ...subjects.map(s => s.name)]
-      case "room":    return ["ALL", ...allRooms]
+      case "class":    return ["ALL", ...sections.map(s => s.name)]
+      case "teacher":  return ["ALL", ...staff.map(s => s.name)]
+      case "subject":  return ["ALL", ...subjects.map(s => s.name)]
+      case "room":     return ["ALL", ...allRooms]
+      case "calendar": return ["ALL", ...sections.map(s => s.name), ...staff.map(s => s.name)]
     }
   }
 
@@ -171,10 +181,67 @@ export function TimetablePage() {
     setEditTarget({ section, day, periodId })
   }
 
+  // ── Absent teacher slots on selected day ──────────────────
+  const absentSlots = (() => {
+    if (!subAbsentTeacher || !subAbsentDay) return []
+    return classPeriods.flatMap(p => {
+      const hit = sections.flatMap(sec => {
+        const cell = classTT[sec.name]?.[subAbsentDay]?.[p.id]
+        return cell?.teacher === subAbsentTeacher ? [{ sectionName: sec.name, periodId: p.id, periodName: p.name, subject: cell.subject ?? "" }] : []
+      })
+      return hit
+    })
+  })()
+
+  // ── Score substitute candidates for a slot ───────────────
+  const scoreCandidates = (slot: { sectionName:string; periodId:string; subject:string }) => {
+    return staff
+      .filter(st => st.name !== subAbsentTeacher)
+      .map(st => {
+        const workloadToday = Object.values((teacherTT[st.name]?.schedule ?? {})[subAbsentDay] ?? {}).filter((x:any) => x?.subject).length
+        const workloadWeek = Object.values(teacherTT[st.name]?.schedule ?? {}).reduce((a:number, d:any) => a + Object.values(d).filter((x:any) => x?.subject).length, 0)
+        const maxW = (st as any).maxPeriodsPerWeek ?? 30
+        const subFreq = Object.values(substitutions).filter(v => v === st.name).length
+        const subs: string[] = (st as any).subjects ?? []
+        const subjectMatch = subs.some((s:string) => s === `${slot.sectionName}::${slot.subject}` || s.endsWith(`::${slot.subject}`) || (!s.includes("::") && s === slot.subject))
+        const isBusy = Object.entries(classTT).some(([sec, sd]:any) => sec !== slot.sectionName && sd[subAbsentDay]?.[slot.periodId]?.teacher === st.name)
+        const score = (subjectMatch ? 10 : 0) + (isBusy ? -20 : 0) - workloadToday * 2 - subFreq
+        return { st, workloadToday, workloadWeek, maxW, subFreq, subjectMatch, isBusy, score }
+      })
+      .sort((a, b) => b.score - a.score)
+  }
+
+  // ── Apply substitutions ───────────────────────────────────
+  const applySubstitutions = () => {
+    const newSubs = { ...substitutions }
+    Object.entries(subAssignments).forEach(([periodId, staffName]) => {
+      const slot = absentSlots.find(s => s.periodId === periodId)
+      if (slot) newSubs[`${slot.sectionName}|${subAbsentDay}|${periodId}`] = staffName
+    })
+    setSubstitutions(newSubs)
+    setSubAssignments({})
+    setSubAbsentTeacher("")
+    setSubReason("")
+  }
+
+  // ── Auto-fill best candidates ────────────────────────────
+  const autoFillBest = () => {
+    const assignments: Record<string, string> = {}
+    absentSlots.forEach(slot => {
+      const candidates = scoreCandidates(slot)
+      const best = candidates.find(c => !c.isBusy)
+      if (best) assignments[slot.periodId] = best.st.name
+    })
+    setSubAssignments(assignments)
+  }
+
+  // Active substitutions count
+  const activeSubCount = Object.keys(substitutions).length
+
   // ═══════════════════════════════════════════════════════════
   // RENDER: Class Timetable (Normal)
   // ═══════════════════════════════════════════════════════════
-  const renderClassTT = (sn: string) => {
+  const renderClassTT = (sn: string, absentHL?: { teacher:string; day:string }) => {
     const sd = classTT[sn]
     if (!sd) return <EmptyState label={sn} />
     const section = sections.find(s => s.name === sn)
@@ -202,11 +269,13 @@ export function TimetablePage() {
                     const isSub = !!substitutions[`${sn}|${day}|${p.id}`]
                     const subTeacher = substitutions[`${sn}|${day}|${p.id}`]
                     const cellKey = `${sn}|${day}|${p.id}`
+                    const highlight = !!(absentHL && cell?.teacher === absentHL.teacher && day === absentHL.day)
                     return (
                       <SubjectCell key={p.id}
                         subject={cell?.subject} teacher={cell?.teacher} room={cell?.room}
                         isClassTeacher={cell?.isClassTeacher} isSub={isSub} subTeacher={subTeacher}
                         showTeacher={showTeacher} showRoom={showRoom}
+                        absentHighlight={highlight}
                         dragOver={dragOverCell === cellKey && !cell?.subject}
                         onDragOver={() => !cell?.subject && setDragOverCell(cellKey)}
                         onDrop={e => handleDrop(e, sn, day, p.id)}
@@ -227,7 +296,7 @@ export function TimetablePage() {
   // ═══════════════════════════════════════════════════════════
   // RENDER: Class Timetable (Transposed — periods as rows)
   // ═══════════════════════════════════════════════════════════
-  const renderClassTTTransposed = (sn: string) => {
+  const renderClassTTTransposed = (sn: string, absentHL?: { teacher:string; day:string }) => {
     const sd = classTT[sn]
     if (!sd) return <EmptyState label={sn} />
     const section = sections.find(s => s.name === sn)
@@ -257,11 +326,12 @@ export function TimetablePage() {
                     {usedDays.map(day => {
                       if (isBreak) return <td key={day} style={{ background:"#fffbeb", border:"1px solid #e2e8f0", textAlign:"center" as const, fontSize:9, color:"#d97706", fontStyle:"italic", padding:6 }}>{p.name}</td>
                       const cell = sd[day]?.[p.id]
+                      const highlight = !!(absentHL && cell?.teacher === absentHL.teacher && day === absentHL.day)
                       if (!cell?.subject) return <td key={day} style={{ border:"1px solid #e2e8f0", padding:2 }}><div style={{ height:38, background:"#f8fafc", borderRadius:4, display:"flex", alignItems:"center", justifyContent:"center", color:"#cbd5e1", fontSize:10 }}>—</div></td>
                       const colorClass = getSubjectColor(cell.subject)
                       return (
                         <td key={day} style={{ border:"1px solid #e2e8f0", padding:2 }}>
-                          <div className={colorClass} onClick={() => editMode && setEditTarget({section:sn, day, periodId:p.id})} style={{ borderRadius:5, padding:"4px 7px", minHeight:38, cursor:editMode?"pointer":"default" }}>
+                          <div className={colorClass} onClick={() => editMode && setEditTarget({section:sn, day, periodId:p.id})} style={{ borderRadius:5, padding:"4px 7px", minHeight:38, cursor:editMode?"pointer":"default", outline:highlight?"3px solid #f59e0b":"none", outlineOffset:"-2px" }}>
                             <div style={{ fontSize:10, fontWeight:700 }}>{cell.subject}</div>
                             {showTeacher && cell.teacher && <div style={{ fontSize:9, opacity:0.75 }}>{cell.teacher}</div>}
                             {showRoom && cell.room && <div style={{ fontSize:8, opacity:0.55 }}>{cell.room}</div>}
@@ -415,7 +485,7 @@ export function TimetablePage() {
   }
 
   // ═══════════════════════════════════════════════════════════
-  // RENDER: Subject Timetable — where & when is this subject taught
+  // RENDER: Subject Timetable — where & when is this subject taught (Normal)
   // ═══════════════════════════════════════════════════════════
   const renderSubjectTT = (subName: string) => {
     const usedDays = config.workDays
@@ -441,7 +511,6 @@ export function TimetablePage() {
                   <td style={{ padding:"6px 12px", fontWeight:700, fontSize:11, color:"#1e293b", border:"1px solid #e2e8f0", whiteSpace:"nowrap" as const }}>{DAY_SHORT[day]??day.slice(0,3)}</td>
                   {periods.map(p => {
                     if (p.type !== "class") return <BreakCell key={p.id} p={p} />
-                    // Find all classes that have this subject in this slot
                     const hits = sections.filter(sec => classTT[sec.name]?.[day]?.[p.id]?.subject === subName)
                     if (!hits.length) return (
                       <td key={p.id} style={{ border:"1px solid #e2e8f0", padding:2 }}>
@@ -475,7 +544,75 @@ export function TimetablePage() {
   }
 
   // ═══════════════════════════════════════════════════════════
-  // RENDER: Room Timetable — what's happening in this room
+  // RENDER: Subject Timetable (Transposed — periods as rows)
+  // ═══════════════════════════════════════════════════════════
+  const renderSubjectTTTransposed = (subName: string) => {
+    const usedDays = config.workDays
+    const sub = subjects.find(s => s.name === subName)
+    return (
+      <div>
+        <div style={{ padding:"12px 16px", background:"#f8fafc", borderBottom:"1px solid #e2e8f0", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+          <div>
+            <div style={{ fontSize:15, fontWeight:700, color:"#1e293b" }}>{subName}</div>
+            <div style={{ fontSize:11, color:"#64748b" }}>{sub?.category ?? "Subject"} · Transposed view</div>
+          </div>
+          <div style={{ fontSize:11, color:"#94a3b8" }}>Rows = periods · Columns = days</div>
+        </div>
+        <div style={{ overflowX:"auto" }}>
+          <table style={{ borderCollapse:"collapse", fontSize:11, width:"100%" }}>
+            <thead><tr>
+              <th style={{ background:"#1e293b", color:"#fff", padding:"8px 12px", textAlign:"left", minWidth:100, fontSize:11, fontWeight:700, border:"1px solid #1e293b" }}>Period</th>
+              {usedDays.map(day => (
+                <th key={day} style={{ background:"#1e293b", color:"#fff", padding:"8px 12px", textAlign:"center", minWidth:90, fontSize:11, fontWeight:700, border:"1px solid #1e293b" }}>{DAY_SHORT[day]??day.slice(0,3)}</th>
+              ))}
+            </tr></thead>
+            <tbody>
+              {periods.map((p, pi) => {
+                const isBreak = p.type !== "class"
+                const times = periodTimes.get(p.id)
+                return (
+                  <tr key={p.id} style={{ background: isBreak?"#fffbeb":pi%2===0?"#fff":"#f8fafc" }}>
+                    <td style={{ padding:"6px 10px", border:"1px solid #e2e8f0", whiteSpace:"nowrap" as const }}>
+                      <div style={{ fontWeight:700, fontSize:11, color:isBreak?"#d97706":"#1e293b" }}>{p.name}</div>
+                      {times && <div style={{ fontSize:9, color:"#94a3b8" }}>{times.start} → {times.end}</div>}
+                    </td>
+                    {usedDays.map(day => {
+                      if (isBreak) return <td key={day} style={{ background:"#fffbeb", border:"1px solid #e2e8f0", textAlign:"center" as const, fontSize:9, color:"#d97706", fontStyle:"italic", padding:6 }}>{p.name}</td>
+                      const hits = sections.filter(sec => classTT[sec.name]?.[day]?.[p.id]?.subject === subName)
+                      if (!hits.length) return (
+                        <td key={day} style={{ border:"1px solid #e2e8f0", padding:2 }}>
+                          <div style={{ height:38, background:"#f8fafc", borderRadius:4, display:"flex", alignItems:"center", justifyContent:"center", color:"#cbd5e1", fontSize:10 }}>—</div>
+                        </td>
+                      )
+                      const colorClass = getSubjectColor(subName)
+                      return (
+                        <td key={day} style={{ border:"1px solid #e2e8f0", padding:2 }}>
+                          <div className={colorClass} style={{ borderRadius:5, padding:"4px 7px", minHeight:38 }}>
+                            {hits.map(sec => {
+                              const cell = classTT[sec.name][day][p.id]
+                              return (
+                                <div key={sec.name} style={{ marginBottom:2 }}>
+                                  <div style={{ fontSize:10, fontWeight:700 }}>{sec.name}</div>
+                                  {showTeacher && cell?.teacher && <div style={{ fontSize:8, opacity:0.7 }}>{cell.teacher}</div>}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </td>
+                      )
+                    })}
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    )
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // RENDER: Room Timetable (Normal)
   // ═══════════════════════════════════════════════════════════
   const renderRoomTT = (roomName: string) => {
     const usedDays = config.workDays
@@ -527,6 +664,179 @@ export function TimetablePage() {
   }
 
   // ═══════════════════════════════════════════════════════════
+  // RENDER: Room Timetable (Transposed — periods as rows)
+  // ═══════════════════════════════════════════════════════════
+  const renderRoomTTTransposed = (roomName: string) => {
+    const usedDays = config.workDays
+    return (
+      <div>
+        <div style={{ padding:"12px 16px", background:"#f8fafc", borderBottom:"1px solid #e2e8f0" }}>
+          <div style={{ fontSize:15, fontWeight:700, color:"#1e293b" }}>🚪 {roomName}</div>
+          <div style={{ fontSize:11, color:"#64748b" }}>Room occupancy schedule · Transposed view</div>
+        </div>
+        <div style={{ overflowX:"auto" }}>
+          <table style={{ borderCollapse:"collapse", fontSize:11, width:"100%" }}>
+            <thead><tr>
+              <th style={{ background:"#1e293b", color:"#fff", padding:"8px 12px", textAlign:"left", minWidth:100, fontSize:11, fontWeight:700, border:"1px solid #1e293b" }}>Period</th>
+              {usedDays.map(day => (
+                <th key={day} style={{ background:"#1e293b", color:"#fff", padding:"8px 12px", textAlign:"center", minWidth:90, fontSize:11, fontWeight:700, border:"1px solid #1e293b" }}>{DAY_SHORT[day]??day.slice(0,3)}</th>
+              ))}
+            </tr></thead>
+            <tbody>
+              {periods.map((p, pi) => {
+                const isBreak = p.type !== "class"
+                const times = periodTimes.get(p.id)
+                return (
+                  <tr key={p.id} style={{ background: isBreak?"#fffbeb":pi%2===0?"#fff":"#f8fafc" }}>
+                    <td style={{ padding:"6px 10px", border:"1px solid #e2e8f0", whiteSpace:"nowrap" as const }}>
+                      <div style={{ fontWeight:700, fontSize:11, color:isBreak?"#d97706":"#1e293b" }}>{p.name}</div>
+                      {times && <div style={{ fontSize:9, color:"#94a3b8" }}>{times.start} → {times.end}</div>}
+                    </td>
+                    {usedDays.map(day => {
+                      if (isBreak) return <td key={day} style={{ background:"#fffbeb", border:"1px solid #e2e8f0", textAlign:"center" as const, fontSize:9, color:"#d97706", fontStyle:"italic", padding:6 }}>{p.name}</td>
+                      const hit = sections.flatMap(sec => {
+                        const cell = classTT[sec.name]?.[day]?.[p.id]
+                        return cell?.subject && cell.room === roomName ? [{ sec: sec.name, cell }] : []
+                      })[0]
+                      if (!hit) return (
+                        <td key={day} style={{ border:"1px solid #e2e8f0", padding:2 }}>
+                          <div style={{ height:38, background:"#f0fdf4", borderRadius:4, display:"flex", alignItems:"center", justifyContent:"center", color:"#86efac", fontSize:10 }}>Free</div>
+                        </td>
+                      )
+                      const colorClass = getSubjectColor(hit.cell.subject)
+                      return (
+                        <td key={day} style={{ border:"1px solid #e2e8f0", padding:2 }}>
+                          <div className={colorClass} style={{ borderRadius:5, padding:"4px 7px", minHeight:38 }}>
+                            <div style={{ fontSize:10, fontWeight:700 }}>{hit.cell.subject}</div>
+                            <div style={{ fontSize:9, color:"#475569", fontWeight:600 }}>{hit.sec}</div>
+                            {showTeacher && hit.cell.teacher && <div style={{ fontSize:8, opacity:0.7 }}>{hit.cell.teacher}</div>}
+                          </div>
+                        </td>
+                      )
+                    })}
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    )
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // RENDER: Calendar View (Google Calendar-style week grid)
+  // ═══════════════════════════════════════════════════════════
+  const renderCalendarView = (entityFilter: string) => {
+    const usedDays = config.workDays
+    const absentHL = subPanelOpen && subAbsentTeacher ? { teacher: subAbsentTeacher, day: subAbsentDay } : null
+
+    // Determine filter mode
+    const isClassFilter = entityFilter !== "ALL" && sections.some(s => s.name === entityFilter)
+    const isTeacherFilter = entityFilter !== "ALL" && staff.some(s => s.name === entityFilter)
+
+    // Collect events for a given period+day
+    const getEvents = (day: string, periodId: string) => {
+      return sections.flatMap(sec => {
+        const cell = classTT[sec.name]?.[day]?.[periodId]
+        if (!cell?.subject) return []
+        if (isClassFilter && sec.name !== entityFilter) return []
+        if (isTeacherFilter && cell.teacher !== entityFilter) return []
+        return [{ sectionName: sec.name, subject: cell.subject, teacher: cell.teacher ?? "", room: cell.room ?? "", periodId }]
+      })
+    }
+
+    const initials = (name: string) => name.split(" ").map(w => w[0]).join("").slice(0,2).toUpperCase()
+
+    const COL_W = 120
+    const TIME_W = 68
+
+    return (
+      <div>
+        <div style={{ padding:"10px 16px", background:"#f8fafc", borderBottom:"1px solid #e2e8f0", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+          <div style={{ fontSize:14, fontWeight:700, color:"#1e293b" }}>📅 Calendar View</div>
+          <div style={{ fontSize:11, color:"#94a3b8" }}>{entityFilter === "ALL" ? "All classes" : entityFilter} · {usedDays.length}-day week</div>
+        </div>
+        <div style={{ overflowX:"auto" }}>
+          <div style={{ minWidth: TIME_W + usedDays.length * COL_W }}>
+            {/* Sticky day header */}
+            <div style={{ display:"flex", position:"sticky" as const, top:0, zIndex:10, background:"#fff", borderBottom:"2px solid #e2e8f0" }}>
+              <div style={{ width:TIME_W, flexShrink:0, padding:"8px 6px", fontSize:10, color:"#94a3b8", fontWeight:600, borderRight:"1px solid #e2e8f0" }}>Time</div>
+              {usedDays.map(day => (
+                <div key={day} style={{ width:COL_W, flexShrink:0, padding:"8px 0", textAlign:"center" as const, fontSize:12, fontWeight:700, color:"#1e293b", borderRight:"1px solid #e2e8f0" }}>
+                  {DAY_SHORT[day]??day.slice(0,3)}
+                </div>
+              ))}
+            </div>
+
+            {/* Period rows */}
+            {periods.map((p, pi) => {
+              const times = periodTimes.get(p.id)
+              const isBreak = p.type !== "class"
+
+              if (isBreak) {
+                // Full-width amber divider for break periods
+                return (
+                  <div key={p.id} style={{ display:"flex", background:"#fffbeb", borderBottom:"1px solid #fde68a" }}>
+                    <div style={{ width:TIME_W, flexShrink:0, padding:"4px 6px", borderRight:"1px solid #fde68a", fontSize:9, color:"#d97706" }}>
+                      {times?.start}
+                    </div>
+                    <div style={{ flex:1, padding:"4px 10px", fontSize:10, fontWeight:600, color:"#d97706", fontStyle:"italic" }}>
+                      {p.name}{times ? ` · ${times.start} – ${times.end}` : ""}
+                    </div>
+                  </div>
+                )
+              }
+
+              return (
+                <div key={p.id} style={{ display:"flex", background:pi%2===0?"#fff":"#f8fafc", borderBottom:"1px solid #e2e8f0", minHeight:64 }}>
+                  {/* Time label */}
+                  <div style={{ width:TIME_W, flexShrink:0, padding:"6px 6px", borderRight:"1px solid #e2e8f0", display:"flex", flexDirection:"column" as const, justifyContent:"center" }}>
+                    <div style={{ fontSize:10, fontWeight:700, color:"#475569" }}>{p.name}</div>
+                    {times && <>
+                      <div style={{ fontSize:9, color:"#94a3b8" }}>{times.start}</div>
+                      <div style={{ fontSize:8, color:"#cbd5e1" }}>→ {times.end}</div>
+                    </>}
+                  </div>
+
+                  {/* Day columns */}
+                  {usedDays.map(day => {
+                    const events = getEvents(day, p.id)
+                    const isAbsentHL = !!(absentHL && day === absentHL.day && events.some(ev => ev.teacher === absentHL.teacher))
+                    return (
+                      <div key={day} style={{ width:COL_W, flexShrink:0, padding:3, borderRight:"1px solid #e2e8f0", display:"flex", flexDirection:"column" as const, gap:2, background: isAbsentHL?"#fffbeb":"transparent" }}>
+                        {events.map((ev, ei) => {
+                          const colorClass = getSubjectColor(ev.subject)
+                          const isAbsent = !!(absentHL && ev.teacher === absentHL.teacher && day === absentHL.day)
+                          return (
+                            <div key={ei} className={colorClass}
+                              onClick={() => {
+                                const sec = sections.find(s => s.name === ev.sectionName)
+                                if (sec && editMode) setEditTarget({ section: ev.sectionName, day, periodId: p.id })
+                              }}
+                              style={{ borderRadius:4, padding:"3px 5px", fontSize:9, cursor:editMode?"pointer":"default", outline:isAbsent?"2px solid #f59e0b":"none", outlineOffset:"-1px" }}>
+                              <div style={{ fontWeight:700, fontSize:9, lineHeight:1.2 }}>{ev.subject}</div>
+                              <div style={{ fontSize:8, opacity:0.8 }}>{ev.sectionName}</div>
+                              {showTeacher && ev.teacher && <div style={{ fontSize:8, opacity:0.65 }}>{initials(ev.teacher)}</div>}
+                            </div>
+                          )
+                        })}
+                        {events.length === 0 && (
+                          <div style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", color:"#e2e8f0", fontSize:10 }}>·</div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ═══════════════════════════════════════════════════════════
   // RENDER: "All" stacked views
   // ═══════════════════════════════════════════════════════════
   const renderAllEntities = () => {
@@ -535,10 +845,10 @@ export function TimetablePage() {
       <div style={{ display:"flex", flexDirection:"column" as const, gap:16 }}>
         {list.map(e => (
           <div key={e} style={{ background:"#fff", borderRadius:10, boxShadow:"0 1px 3px rgba(0,0,0,0.08)", overflow:"hidden" }}>
-            {viewMode === "class"   && (transposed ? renderClassTTTransposed(e)   : renderClassTT(e))}
+            {viewMode === "class"   && (transposed ? renderClassTTTransposed(e) : renderClassTT(e))}
             {viewMode === "teacher" && (transposed ? renderTeacherTTTransposed(e) : renderTeacherTT(e))}
-            {viewMode === "subject" && renderSubjectTT(e)}
-            {viewMode === "room"    && renderRoomTT(e)}
+            {viewMode === "subject" && (transposed ? renderSubjectTTTransposed(e) : renderSubjectTT(e))}
+            {viewMode === "room"    && (transposed ? renderRoomTTTransposed(e) : renderRoomTT(e))}
           </div>
         ))}
       </div>
@@ -556,7 +866,6 @@ export function TimetablePage() {
 
     return (
       <div style={{ marginTop:16, background:"#fff", border:"1.5px solid #e2e8f0", borderRadius:10, overflow:"hidden" }}>
-        {/* Panel header */}
         <button onClick={() => setUncoveredOpen(o => !o)}
           style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 16px", border:"none", background: uncoveredOpen?"#fffbeb":"#fff", cursor:"pointer", textAlign:"left" as const }}>
           <div style={{ display:"flex", alignItems:"center", gap:10 }}>
@@ -625,11 +934,16 @@ export function TimetablePage() {
 
   const entities = getEntityList()
   const VIEW_TABS: { key: ViewMode; icon: string; label: string }[] = [
-    { key:"class",   icon:"📚", label:org.sectionLabel },
-    { key:"teacher", icon:"👤", label:org.staffLabel },
-    { key:"subject", icon:"📖", label:"Subject" },
-    { key:"room",    icon:"🚪", label:"Room" },
+    { key:"class",    icon:"📚", label:org.sectionLabel },
+    { key:"teacher",  icon:"👤", label:org.staffLabel },
+    { key:"subject",  icon:"📖", label:"Subject" },
+    { key:"room",     icon:"🚪", label:"Room" },
+    { key:"calendar", icon:"📅", label:"Calendar" },
   ]
+
+  const absentHighlightProp = subPanelOpen && subAbsentTeacher
+    ? { teacher: subAbsentTeacher, day: subAbsentDay }
+    : undefined
 
   return (
     <div style={{ display:"flex", height:"calc(100vh - 52px)", background:"#f1f5f9" }}>
@@ -688,11 +1002,13 @@ export function TimetablePage() {
         {/* Toolbar row 1 — view mode + entity selector */}
         <div style={{ background:"#fff", borderBottom:"1px solid #e2e8f0", padding:"8px 16px", display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" as const }}>
 
-          {/* Transpose */}
-          <div style={{ display:"flex", border:"1px solid #e2e8f0", borderRadius:7, overflow:"hidden" }}>
-            <button onClick={() => setTransposed(false)} style={{ padding:"5px 12px", border:"none", background:!transposed?"#4f46e5":"#fff", color:!transposed?"#fff":"#64748b", fontSize:11, fontWeight:500, cursor:"pointer" }}>☰ Normal</button>
-            <button onClick={() => setTransposed(true)}  style={{ padding:"5px 12px", border:"none", background:transposed?"#4f46e5":"#fff",  color:transposed?"#fff":"#64748b",  fontSize:11, fontWeight:500, cursor:"pointer" }}>⊞ Transposed</button>
-          </div>
+          {/* Transpose — hidden for calendar */}
+          {viewMode !== "calendar" && (
+            <div style={{ display:"flex", border:"1px solid #e2e8f0", borderRadius:7, overflow:"hidden" }}>
+              <button onClick={() => setTransposed(false)} style={{ padding:"5px 12px", border:"none", background:!transposed?"#4f46e5":"#fff", color:!transposed?"#fff":"#64748b", fontSize:11, fontWeight:500, cursor:"pointer" }}>☰ Normal</button>
+              <button onClick={() => setTransposed(true)}  style={{ padding:"5px 12px", border:"none", background:transposed?"#4f46e5":"#fff",  color:transposed?"#fff":"#64748b",  fontSize:11, fontWeight:500, cursor:"pointer" }}>⊞ Transposed</button>
+            </div>
+          )}
 
           <div style={{ width:1, height:20, background:"#e2e8f0" }} />
 
@@ -722,9 +1038,9 @@ export function TimetablePage() {
 
           {/* Edit + Substitution */}
           {TBtn(editMode, () => setEditMode(!editMode), editMode ? "✏️ Editing" : "✏️ Edit")}
-          <button onClick={() => setSubModalOpen(true)}
-            style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 12px", borderRadius:6, border:"1px solid #fbbf24", background:"#fffbeb", color:"#92400e", fontSize:11, fontWeight:600, cursor:"pointer" }}>
-            🔄 Substitution
+          <button onClick={() => setSubPanelOpen(o => !o)}
+            style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 12px", borderRadius:6, border:`1px solid ${subPanelOpen?"#f59e0b":"#fbbf24"}`, background:subPanelOpen?"#fff7ed":"#fffbeb", color:"#92400e", fontSize:11, fontWeight:600, cursor:"pointer" }}>
+            🔄 Substitution{activeSubCount > 0 ? ` (${activeSubCount})` : ""}
           </button>
 
           <div style={{ flex:1 }} />
@@ -743,14 +1059,16 @@ export function TimetablePage() {
         {/* Timetable content */}
         <div style={{ flex:1, overflowY:"auto", padding:20 }}>
           <div style={{ background:"#fff", borderRadius:12, boxShadow:"0 1px 3px rgba(0,0,0,0.08)", overflow:"hidden" }}>
-            {selectedEntity === "ALL" ? renderAllEntities() : (() => {
-              switch(viewMode) {
-                case "class":   return transposed ? renderClassTTTransposed(selectedEntity) : renderClassTT(selectedEntity)
-                case "teacher": return transposed ? renderTeacherTTTransposed(selectedEntity) : renderTeacherTT(selectedEntity)
-                case "subject": return renderSubjectTT(selectedEntity)
-                case "room":    return renderRoomTT(selectedEntity)
-              }
-            })()}
+            {viewMode === "calendar" ? renderCalendarView(selectedEntity) :
+              selectedEntity === "ALL" ? renderAllEntities() : (() => {
+                switch(viewMode) {
+                  case "class":   return transposed ? renderClassTTTransposed(selectedEntity, absentHighlightProp) : renderClassTT(selectedEntity, absentHighlightProp)
+                  case "teacher": return transposed ? renderTeacherTTTransposed(selectedEntity) : renderTeacherTT(selectedEntity)
+                  case "subject": return transposed ? renderSubjectTTTransposed(selectedEntity) : renderSubjectTT(selectedEntity)
+                  case "room":    return transposed ? renderRoomTTTransposed(selectedEntity) : renderRoomTT(selectedEntity)
+                }
+              })()
+            }
           </div>
 
           {/* Uncovered periods pool */}
@@ -766,7 +1084,176 @@ export function TimetablePage() {
         </div>
       </div>
 
-      <SubstitutionModal open={subModalOpen} onClose={() => setSubModalOpen(false)} />
+      {/* ── Inline Substitution Panel ────────────────────── */}
+      {subPanelOpen && (
+        <div style={{ width:380, background:"#fff", borderLeft:"1px solid #e2e8f0", display:"flex", flexDirection:"column" as const, flexShrink:0, overflow:"hidden" }}>
+          {/* Panel header */}
+          <div style={{ padding:"12px 16px", background:"#fffbeb", borderBottom:"1px solid #fde68a", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+            <div style={{ fontSize:14, fontWeight:700, color:"#92400e" }}>🔄 Substitution</div>
+            <button onClick={() => setSubPanelOpen(false)} style={{ border:"none", background:"none", fontSize:16, cursor:"pointer", color:"#92400e", lineHeight:1 }}>✕</button>
+          </div>
+
+          {/* Tab bar */}
+          <div style={{ display:"flex", borderBottom:"1px solid #e2e8f0", background:"#f8fafc" }}>
+            <button onClick={() => setSubActiveTab("assign")}
+              style={{ flex:1, padding:"8px", border:"none", background:subActiveTab==="assign"?"#fff":"transparent", color:subActiveTab==="assign"?"#92400e":"#64748b", fontSize:11, fontWeight:600, cursor:"pointer", borderBottom:subActiveTab==="assign"?"2px solid #f59e0b":"2px solid transparent" }}>
+              📋 Assign Cover
+            </button>
+            <button onClick={() => setSubActiveTab("active")}
+              style={{ flex:1, padding:"8px", border:"none", background:subActiveTab==="active"?"#fff":"transparent", color:subActiveTab==="active"?"#92400e":"#64748b", fontSize:11, fontWeight:600, cursor:"pointer", borderBottom:subActiveTab==="active"?"2px solid #f59e0b":"2px solid transparent" }}>
+              📂 Active ({activeSubCount})
+            </button>
+          </div>
+
+          <div style={{ flex:1, overflowY:"auto" }}>
+            {subActiveTab === "assign" && (
+              <div style={{ padding:12 }}>
+                {/* Day chips */}
+                <div style={{ fontSize:10, fontWeight:700, color:"#94a3b8", textTransform:"uppercase" as const, letterSpacing:"0.06em", marginBottom:6 }}>Absent Day</div>
+                <div style={{ display:"flex", gap:4, flexWrap:"wrap" as const, marginBottom:12 }}>
+                  {config.workDays.map(day => (
+                    <button key={day} onClick={() => setSubAbsentDay(day)}
+                      style={{ padding:"4px 10px", borderRadius:20, border:`1px solid ${subAbsentDay===day?"#f59e0b":"#e2e8f0"}`, background:subAbsentDay===day?"#fff7ed":"#fff", color:subAbsentDay===day?"#92400e":"#64748b", fontSize:10, fontWeight:600, cursor:"pointer" }}>
+                      {DAY_SHORT[day]??day.slice(0,3)}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Absent teacher selector */}
+                <div style={{ fontSize:10, fontWeight:700, color:"#94a3b8", textTransform:"uppercase" as const, letterSpacing:"0.06em", marginBottom:6 }}>Absent Teacher</div>
+                <div style={{ display:"flex", flexWrap:"wrap" as const, gap:4, marginBottom:12 }}>
+                  {staff.map(st => (
+                    <button key={st.id} onClick={() => setSubAbsentTeacher(st.name)}
+                      style={{ padding:"5px 10px", borderRadius:6, border:`1px solid ${subAbsentTeacher===st.name?"#ef4444":"#e2e8f0"}`, background:subAbsentTeacher===st.name?"#fef2f2":"#fff", color:subAbsentTeacher===st.name?"#dc2626":"#374151", fontSize:10, fontWeight:600, cursor:"pointer" }}>
+                      {st.name}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Reason input */}
+                <div style={{ fontSize:10, fontWeight:700, color:"#94a3b8", textTransform:"uppercase" as const, letterSpacing:"0.06em", marginBottom:4 }}>Reason (optional)</div>
+                <input value={subReason} onChange={e => setSubReason(e.target.value)} placeholder="e.g. Sick leave, Personal"
+                  style={{ width:"100%", padding:"6px 10px", border:"1px solid #e2e8f0", borderRadius:6, fontSize:11, marginBottom:14, boxSizing:"border-box" as const, outline:"none" }} />
+
+                {/* Absent teacher's slots on selected day */}
+                {subAbsentTeacher && (
+                  <>
+                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
+                      <div style={{ fontSize:11, fontWeight:700, color:"#1e293b" }}>
+                        Slots for {subAbsentTeacher} on {DAY_SHORT[subAbsentDay]??subAbsentDay}
+                      </div>
+                      <button onClick={autoFillBest}
+                        style={{ padding:"4px 10px", borderRadius:6, border:"1px solid #4f46e5", background:"#eef2ff", color:"#4f46e5", fontSize:10, fontWeight:600, cursor:"pointer" }}>
+                        ⚡ Auto-fill best
+                      </button>
+                    </div>
+
+                    {absentSlots.length === 0 && (
+                      <div style={{ padding:16, textAlign:"center" as const, color:"#94a3b8", fontSize:12 }}>No periods for this teacher on {DAY_SHORT[subAbsentDay]??subAbsentDay}</div>
+                    )}
+
+                    {absentSlots.map(slot => {
+                      const candidates = scoreCandidates(slot)
+                      const selected = subAssignments[slot.periodId]
+                      return (
+                        <div key={slot.periodId} style={{ marginBottom:14, padding:10, background:"#f8fafc", borderRadius:8, border:"1px solid #e2e8f0" }}>
+                          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
+                            <span style={{ padding:"2px 8px", background:"#fff7ed", border:"1px solid #fed7aa", borderRadius:6, fontSize:9, color:"#c2410c", fontWeight:700 }}>{slot.periodName}</span>
+                            <span style={{ fontSize:11, fontWeight:700, color:"#1e293b" }}>{slot.subject}</span>
+                            <span style={{ fontSize:10, color:"#64748b" }}>· {slot.sectionName}</span>
+                          </div>
+
+                          {/* Candidate cards */}
+                          <div style={{ display:"flex", flexDirection:"column" as const, gap:4 }}>
+                            {candidates.slice(0,4).map(cand => {
+                              const isSelected = selected === cand.st.name
+                              return (
+                                <div key={cand.st.id}
+                                  style={{ padding:"7px 10px", borderRadius:7, border:`1.5px solid ${isSelected?"#4f46e5":cand.isBusy?"#fca5a5":"#e2e8f0"}`, background:isSelected?"#eef2ff":cand.isBusy?"#fff5f5":"#fff", display:"flex", alignItems:"center", gap:8 }}>
+                                  {/* Avatar */}
+                                  <div style={{ width:28, height:28, borderRadius:"50%", background:isSelected?"#4f46e5":"#94a3b8", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, flexShrink:0 }}>
+                                    {cand.st.name[0]}
+                                  </div>
+                                  {/* Info */}
+                                  <div style={{ flex:1, minWidth:0 }}>
+                                    <div style={{ fontSize:11, fontWeight:700, color:"#1e293b" }}>{cand.st.name}</div>
+                                    {cand.st.role && <div style={{ fontSize:9, color:"#64748b" }}>{cand.st.role}</div>}
+                                    <div style={{ display:"flex", gap:4, flexWrap:"wrap" as const, marginTop:2 }}>
+                                      {cand.subjectMatch && <span style={{ padding:"1px 5px", borderRadius:4, background:"#f0fdf4", color:"#059669", fontSize:8, fontWeight:600 }}>★ Subject match</span>}
+                                      {cand.isBusy && <span style={{ padding:"1px 5px", borderRadius:4, background:"#fff7ed", color:"#d97706", fontSize:8, fontWeight:600 }}>⚠️ Busy</span>}
+                                    </div>
+                                    {/* Workload bar */}
+                                    <div style={{ marginTop:3 }}>
+                                      <div style={{ fontSize:8, color:"#94a3b8", marginBottom:1 }}>{cand.workloadToday} today · {cand.workloadWeek}/{cand.maxW} week · Subbed {cand.subFreq}× term</div>
+                                      <div style={{ height:3, background:"#e2e8f0", borderRadius:2, overflow:"hidden" }}>
+                                        <div style={{ height:"100%", width:`${Math.min(100, Math.round(cand.workloadWeek/cand.maxW*100))}%`, background: cand.workloadWeek/cand.maxW > 0.9 ? "#dc2626" : "#4f46e5", borderRadius:2 }} />
+                                      </div>
+                                    </div>
+                                  </div>
+                                  {/* Select button */}
+                                  <button
+                                    onClick={() => setSubAssignments(prev => isSelected ? Object.fromEntries(Object.entries(prev).filter(([k]) => k !== slot.periodId)) : { ...prev, [slot.periodId]: cand.st.name })}
+                                    style={{ padding:"4px 8px", borderRadius:5, border:"none", background:isSelected?"#4f46e5":"#e2e8f0", color:isSelected?"#fff":"#374151", fontSize:10, fontWeight:600, cursor:"pointer", flexShrink:0 }}>
+                                    {isSelected ? "✓" : "Select"}
+                                  </button>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </>
+                )}
+
+                {!subAbsentTeacher && (
+                  <div style={{ padding:24, textAlign:"center" as const, color:"#94a3b8", fontSize:12 }}>Select an absent teacher above to see their slots and assign cover</div>
+                )}
+              </div>
+            )}
+
+            {subActiveTab === "active" && (
+              <div style={{ padding:12 }}>
+                {activeSubCount === 0 && (
+                  <div style={{ padding:24, textAlign:"center" as const, color:"#94a3b8", fontSize:12 }}>No active substitutions</div>
+                )}
+                {Object.entries(substitutions).map(([key, staffName]) => {
+                  const [sec, day, periodId] = key.split("|")
+                  const p = periods.find(pp => pp.id === periodId)
+                  return (
+                    <div key={key} style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 10px", borderRadius:7, border:"1px solid #e2e8f0", marginBottom:6, background:"#f8fafc" }}>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:11, fontWeight:700, color:"#1e293b" }}>{sec} · {DAY_SHORT[day]??day.slice(0,3)} · {p?.name ?? periodId}</div>
+                        <div style={{ fontSize:10, color:"#64748b" }}>Cover: <strong>{staffName}</strong></div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          const next = { ...substitutions }
+                          delete next[key]
+                          setSubstitutions(next)
+                        }}
+                        style={{ padding:"3px 8px", borderRadius:5, border:"1px solid #fca5a5", background:"#fff5f5", color:"#dc2626", fontSize:10, fontWeight:600, cursor:"pointer" }}>
+                        Remove
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Footer: Apply */}
+          {subActiveTab === "assign" && (
+            <div style={{ padding:12, borderTop:"1px solid #e2e8f0", background:"#f8fafc" }}>
+              <button onClick={applySubstitutions} disabled={Object.keys(subAssignments).length === 0}
+                style={{ width:"100%", padding:"9px", borderRadius:7, border:"none", background:Object.keys(subAssignments).length>0?"#f59e0b":"#e2e8f0", color:Object.keys(subAssignments).length>0?"#fff":"#94a3b8", fontSize:12, fontWeight:700, cursor:Object.keys(subAssignments).length>0?"pointer":"not-allowed", transition:"background 0.15s" }}>
+                Apply {Object.keys(subAssignments).length > 0 ? `(${Object.keys(subAssignments).length} assignment${Object.keys(subAssignments).length>1?"s":""})` : "Substitutions"}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {editTarget && <EditCellModal target={editTarget} onClose={() => setEditTarget(null)} />}
     </div>
   )
