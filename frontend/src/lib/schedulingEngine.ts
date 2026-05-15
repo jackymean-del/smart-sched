@@ -101,22 +101,35 @@ export function solveTimetable(input: SolverInput): SolverOutput {
     subjects.forEach(sub => { subjectCount[sec.name][sub.name] = 0 })
   })
 
-  // Class teacher map
+  // Class teacher map — resolve IDs to names (UI stores staff.id, engine needs staff.name)
   const classTeacherMap: Record<string, string> = {}
   staff.forEach(st => { if (st.isClassTeacher) classTeacherMap[st.isClassTeacher] = st.name })
-  sections.forEach(sec => { if (sec.classTeacher) classTeacherMap[sec.name] = sec.classTeacher })
+  sections.forEach(sec => {
+    if (!sec.classTeacher) return
+    // sec.classTeacher may be a staff ID or a staff name — resolve to name
+    const resolved = staff.find(s => s.id === sec.classTeacher || s.name === sec.classTeacher)
+    if (resolved) classTeacherMap[sec.name] = resolved.name
+  })
+
+  // Helper: ensure teacherBusy entry exists for a name (guards against dynamic additions)
+  const ensureBusy = (name: string) => {
+    if (!teacherBusy[name]) {
+      teacherBusy[name] = Object.fromEntries(workDays.map(d => [d, new Set<string>()]))
+    }
+  }
 
   // ── Pass 1: Place class teachers in Period 1 (hard constraint) ──
-  sections.forEach((sec, si) => {
+  sections.forEach((sec) => {
     const ctName = classTeacherMap[sec.name]
     if (!ctName) return
+    ensureBusy(ctName)
     const ctStaff = staff.find(s => s.name === ctName)
     const ctSubject = ctStaff?.subjects?.[0]?.replace(/.*::/, '') ?? subjects[0]?.name ?? ''
-    
+
     workDays.forEach(day => {
       const p = classPeriods[0]
       if (!p) return
-      if (!teacherBusy[ctName]?.[day]?.has(p.id)) {
+      if (!teacherBusy[ctName][day].has(p.id)) {
         classTT[sec.name][day][p.id] = {
           subject: ctSubject,
           teacher: ctName,
@@ -206,6 +219,7 @@ export function solveTimetable(input: SolverInput): SolverOutput {
           penalties.push({ constraint: 'consecutive-heavy', penalty: 7, details: `${chosenSub.name} consecutive in ${sec.name}` })
         }
 
+        ensureBusy(teacher.name)
         classTT[sec.name][day][period.id] = {
           subject: chosenSub.name,
           teacher: teacher.name,
