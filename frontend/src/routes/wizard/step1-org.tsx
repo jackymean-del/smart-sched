@@ -1,161 +1,184 @@
 import { useState } from "react"
 import { useTimetableStore } from "@/store/timetableStore"
-import type { OrgType } from "@/types"
 
-const ORG_TYPES: { type: OrgType; icon: string; label: string }[] = [
-  { type:"school",    icon:"🏫", label:"School"    },
-  { type:"college",   icon:"🎓", label:"College"   },
-  { type:"corporate", icon:"🏢", label:"Company"   },
-  { type:"hospital",  icon:"🏥", label:"Hospital"  },
-  { type:"ngo",       icon:"🤝", label:"NGO"       },
-  { type:"factory",   icon:"🏭", label:"Factory"   },
+const BOARDS = [
+  { value:"CBSE",      label:"CBSE",      sub:"Central Board of Secondary Education" },
+  { value:"ICSE",      label:"ICSE",      sub:"Council for the Indian School Certificate" },
+  { value:"STATE",     label:"State",     sub:"State Board Curriculum" },
+  { value:"IB",        label:"IB",        sub:"International Baccalaureate" },
+  { value:"CAMBRIDGE", label:"Cambridge", sub:"IGCSE / A-Level" },
+  { value:"OTHER",     label:"Other",     sub:"Custom / Other Curriculum" },
 ]
 
-// Facility types per org
-const FACILITY_TYPES = [
-  { key:"numClassrooms",   icon:"🏫", label:"Classrooms",      sub:"Regular teaching rooms" },
-  { key:"numLabs",         icon:"🔬", label:"Labs",             sub:"Science / computer labs" },
-  { key:"numHalls",        icon:"🏛️", label:"Halls / Auditoriums", sub:"Assembly, events" },
-  { key:"numMusicRooms",   icon:"🎵", label:"Music Rooms",      sub:"For music periods" },
-  { key:"numArtRooms",     icon:"🎨", label:"Art Rooms",        sub:"For art & craft" },
-  { key:"numSportVenues",  icon:"⚽", label:"Sports / Play",    sub:"Playground, gym, court" },
-  { key:"numLibraries",    icon:"📚", label:"Libraries",        sub:"Reading & study rooms" },
-  { key:"numOtherRooms",   icon:"🏢", label:"Other Rooms",      sub:"Any other spaces" },
+const TIMEZONES = [
+  "Asia/Kolkata","Asia/Dubai","Asia/Singapore","Asia/Tokyo","Asia/Karachi",
+  "Asia/Dhaka","Asia/Colombo","Europe/London","America/New_York","Australia/Sydney",
 ]
 
-const lbl = (text: string, sub?: string) => (
-  <div style={{ marginBottom:8 }}>
-    <div style={{ fontSize:12, fontWeight:600, color:"#374151" }}>{text}</div>
-    {sub && <div style={{ fontSize:10, color:"#a8a59e", marginTop:1 }}>{sub}</div>}
-  </div>
-)
+const GRADE_GROUPS = [
+  { id:"pre",       label:"Pre-School",               grades:"Nursery, LKG, UKG",  profile:"fixed",    color:"#0891b2",  desc:"Students stay fixed, teachers rotate" },
+  { id:"primary",   label:"Primary  (Class I – V)",   grades:"I, II, III, IV, V",  profile:"fixed",    color:"#0891b2",  desc:"Students stay fixed, teachers rotate" },
+  { id:"middle",    label:"Middle   (Class VI – VIII)",grades:"VI, VII, VIII",      profile:"standard", color:"#059669",  desc:"Subject-wise teaching, teacher movement" },
+  { id:"secondary", label:"Secondary (Class IX – X)",  grades:"IX, X",              profile:"standard", color:"#059669",  desc:"Subject-wise teaching, teacher movement" },
+  { id:"senior",    label:"Senior Secondary (XI – XII)",grades:"XI, XII",           profile:"dynamic",  color:"#7c3aed",  desc:"Optional subjects, instructional clusters, parallel blocks" },
+]
+
+const MODE_LABEL: Record<string,string> = {
+  fixed:"Mode 1 — Fixed Classroom", standard:"Mode 2 — Standard", dynamic:"Mode 3 — Dynamic Elective"
+}
+
+const h = (text: string): React.CSSProperties => ({})
 
 export function Step1Org() {
   const { config, setConfig, setStep } = useTimetableStore()
-  const [orgName, setOrgName] = useState((config as any).orgName ?? "")
-  const facilityConfig = (config as any).facilityConfig ?? {}
-  const selectedType = config.orgType
+  const cfg = config as any
 
-  const setFacility = (key: string, val: number) => {
-    setConfig({ facilityConfig: { ...facilityConfig, [key]: Math.max(0, val) } } as any)
+  const [name,    setName]    = useState<string>(cfg.schoolName ?? "")
+  const [board,   setBoard]   = useState<string>(cfg.board ?? "CBSE")
+  const [year,    setYear]    = useState<string>(cfg.academicYear ?? "2025-26")
+  const [tz,      setTz]      = useState<string>(cfg.timezone ?? "Asia/Kolkata")
+  const [groups,  setGroups]  = useState<string[]>(cfg.gradeGroups ?? ["primary","middle","secondary"])
+
+  const toggle = (id: string) =>
+    setGroups(g => g.includes(id) ? g.filter(x => x !== id) : [...g, id])
+
+  const hasXIXII = groups.includes("senior")
+  const canContinue = name.trim().length > 0 && groups.length > 0
+
+  const handleContinue = () => {
+    setConfig({
+      orgType: "school",
+      schoolName: name, board, academicYear: year, timezone: tz, gradeGroups: groups,
+    } as any)
+    setStep(2)
   }
 
-  const canContinue = !!selectedType && config.numSections > 0 && config.numStaff > 0
-
-  const totalFacilities = FACILITY_TYPES.reduce((a, f) => a + (facilityConfig[f.key] ?? 0), 0)
+  const inp = (extra: React.CSSProperties = {}): React.CSSProperties => ({
+    width:"100%", padding:"10px 14px", border:"1.5px solid #e8e5de", borderRadius:9,
+    fontSize:14, outline:"none", boxSizing:"border-box" as const, ...extra,
+  })
+  const lbl: React.CSSProperties = { display:"block", fontSize:10, fontWeight:700, textTransform:"uppercase" as const, letterSpacing:"0.07em", color:"#a8a59e", marginBottom:7 }
+  const fieldBox: React.CSSProperties = { display:"flex", flexDirection:"column" as const, gap:6 }
 
   return (
     <div>
-      <h1 style={{ fontFamily:"'DM Serif Display',Georgia,serif", fontSize:32, marginBottom:6 }}>
-        Welcome to Schedu ✨
-      </h1>
-      <p style={{ color:"#6a6860", fontSize:14, marginBottom:28, lineHeight:1.65 }}>
-        Tell us about your organization. Schedu will auto-generate everything — you just review and edit.
+      <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:6 }}>
+        <div style={{ width:40, height:40, borderRadius:12, background:"linear-gradient(135deg,#4f46e5,#7c3aed)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:20 }}>🏫</div>
+        <div>
+          <h1 style={{ fontFamily:"'DM Serif Display',Georgia,serif", fontSize:28, margin:0 }}>School Setup</h1>
+          <p style={{ color:"#6a6860", fontSize:12, margin:0 }}>Step 1 of 6 — Organization & Academic Profile</p>
+        </div>
+      </div>
+      <p style={{ color:"#6a6860", fontSize:13, marginBottom:24, lineHeight:1.7 }}>
+        Tell us about your school. Schedu uses this to apply CBSE norms, calculate period loads, configure scheduling modes and build the academic structure automatically.
       </p>
 
-      {/* Org type */}
-      <div style={{ fontSize:11, fontWeight:700, textTransform:"uppercase" as const, letterSpacing:"0.06em", color:"#a8a59e", marginBottom:10 }}>
-        Organization Type
-      </div>
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(6,1fr)", gap:8, marginBottom:24 }}>
-        {ORG_TYPES.map(o => {
-          const sel = config.orgType === o.type
-          return (
-            <button key={o.type} onClick={() => setConfig({ orgType: o.type })}
-              style={{ padding:"12px 8px", borderRadius:10, textAlign:"center" as const, cursor:"pointer", border: sel?"2px solid #4f46e5":"1.5px solid #e8e5de", background: sel?"#eaecf8":"#fff", transition:"all 0.12s" }}
-              onMouseEnter={e => { if(!sel){ (e.currentTarget as HTMLElement).style.background="#f0fdf4"; (e.currentTarget as HTMLElement).style.borderColor="#34d399" }}}
-              onMouseLeave={e => { if(!sel){ (e.currentTarget as HTMLElement).style.background="#fff"; (e.currentTarget as HTMLElement).style.borderColor="#e8e5de" }}}>
-              <div style={{ fontSize:24, marginBottom:4 }}>{o.icon}</div>
-              <div style={{ fontSize:11, fontWeight:600, color: sel?"#3730a3":"#1c1b18" }}>{o.label}</div>
-            </button>
-          )
-        })}
+      {/* ── School Name ── */}
+      <div style={{ ...fieldBox, marginBottom:20 }}>
+        <label style={lbl}>School / Institution Name *</label>
+        <input value={name} onChange={e => setName(e.target.value)}
+          placeholder="e.g. Delhi Public School, Vasant Kunj"
+          style={inp({ fontSize:16 })}
+          onFocus={e => (e.target as HTMLInputElement).style.borderColor="#4f46e5"}
+          onBlur={e  => (e.target as HTMLInputElement).style.borderColor="#e8e5de"} />
       </div>
 
-      {selectedType && (
-        <div style={{ border:"1.5px solid #e8e5de", borderRadius:14, overflow:"hidden", marginBottom:20 }}>
+      {/* ── Board + Year + Timezone ── */}
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20, marginBottom:24 }}>
 
-          {/* Org Name */}
-          <div style={{ padding:"20px 24px", borderBottom:"1px solid #e8e5de", background:"#fafaf9" }}>
-            <div style={{ fontSize:11, fontWeight:700, textTransform:"uppercase" as const, letterSpacing:"0.06em", color:"#a8a59e", marginBottom:8 }}>
-              Organization Name
-            </div>
-            <input value={orgName}
-              onChange={e => { setOrgName(e.target.value); setConfig({ orgName: e.target.value } as any) }}
-              placeholder={`e.g. St. Mary's ${ORG_TYPES.find(o=>o.type===selectedType)?.label}`}
-              style={{ width:"100%", padding:"10px 14px", border:"1.5px solid #e8e5de", borderRadius:8, fontSize:14, outline:"none", boxSizing:"border-box" as const }}
-              onFocus={e=>(e.target as HTMLInputElement).style.borderColor="#4f46e5"}
-              onBlur={e=>(e.target as HTMLInputElement).style.borderColor="#e8e5de"} />
+        {/* Board */}
+        <div style={fieldBox}>
+          <label style={lbl}>Board / Curriculum *</label>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:7 }}>
+            {BOARDS.map(b => {
+              const sel = board === b.value
+              return (
+                <button key={b.value} onClick={() => setBoard(b.value)}
+                  style={{ padding:"10px 6px", borderRadius:8, border: sel?"2px solid #4f46e5":"1.5px solid #e8e5de", background: sel?"#eaecf8":"#fff", cursor:"pointer", textAlign:"center" as const }}>
+                  <div style={{ fontSize:12, fontWeight:700, color: sel?"#3730a3":"#1c1b18" }}>{b.label}</div>
+                  <div style={{ fontSize:9, color:"#a8a59e", marginTop:2, lineHeight:1.3 }}>{b.sub}</div>
+                </button>
+              )
+            })}
           </div>
+        </div>
 
-          {/* Academic numbers */}
-          <div style={{ padding:"20px 24px", borderBottom:"1px solid #e8e5de" }}>
-            <div style={{ fontSize:13, fontWeight:700, color:"#1c1b18", marginBottom:14 }}>👥 Academic Structure</div>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:14 }}>
-              {[
-                { label:"Total Classes / Sections",  sub:"No. of class sections (e.g. I-A, I-B...)", key:"numSections"  as const, icon:"📚", val:config.numSections, min:1, max:500 },
-                { label:"Total Teachers / Staff",     sub:"No. of teaching staff",                    key:"numStaff"     as const, icon:"👤", val:config.numStaff,    min:1, max:1000 },
-                { label:"Total Subjects",             sub:"No. of subjects taught",                   key:"numSubjects"  as const, icon:"📖", val:config.numSubjects, min:1, max:100 },
-              ].map(f => (
-                <div key={f.key} style={{ background:"#f7f6f2", borderRadius:10, padding:"14px", textAlign:"center" as const }}>
-                  <div style={{ fontSize:22, marginBottom:5 }}>{f.icon}</div>
-                  {lbl(f.label, f.sub)}
-                  <input type="number" min={f.min} max={f.max}
-                    defaultValue={f.val} key={f.key+selectedType}
-                    onBlur={e => setConfig({ [f.key]: Math.max(f.min, +e.target.value) })}
-                    style={{ width:"100%", padding:"8px", border:"1.5px solid #e8e5de", borderRadius:8, fontSize:24, fontWeight:700, fontFamily:"monospace", textAlign:"center" as const, outline:"none", background:"#fff" }} />
+        {/* Year + Timezone */}
+        <div style={{ display:"flex", flexDirection:"column" as const, gap:14 }}>
+          <div style={fieldBox}>
+            <label style={lbl}>Academic Year</label>
+            <input value={year} onChange={e => setYear(e.target.value)} placeholder="e.g. 2025-26" style={inp()} />
+          </div>
+          <div style={fieldBox}>
+            <label style={lbl}>Timezone</label>
+            <select value={tz} onChange={e => setTz(e.target.value)}
+              style={{ padding:"10px 14px", border:"1.5px solid #e8e5de", borderRadius:9, fontSize:13, background:"#fff", outline:"none" }}>
+              {TIMEZONES.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Grade Groups ── */}
+      <div style={{ marginBottom:24 }}>
+        <label style={lbl}>Grades Taught in Your School * <span style={{ textTransform:"none" as const, fontWeight:400, color:"#6a6860" }}>— select all that apply</span></label>
+        <div style={{ display:"flex", flexDirection:"column" as const, gap:8 }}>
+          {GRADE_GROUPS.map(g => {
+            const sel = groups.includes(g.id)
+            return (
+              <button key={g.id} onClick={() => toggle(g.id)}
+                style={{ display:"flex", alignItems:"center", gap:14, padding:"14px 18px", borderRadius:10, border: sel?`2px solid ${g.color}`:"1.5px solid #e8e5de", background: sel?g.color+"0d":"#fff", cursor:"pointer", textAlign:"left" as const, transition:"all 0.12s" }}>
+                <div style={{ width:22, height:22, borderRadius:6, flexShrink:0, border: sel?"none":"2px solid #d1d5db", background: sel?g.color:"transparent", display:"flex", alignItems:"center", justifyContent:"center", color:"#fff", fontSize:13 }}>
+                  {sel && "✓"}
                 </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Facilities */}
-          <div style={{ padding:"20px 24px" }}>
-            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
-              <div style={{ fontSize:13, fontWeight:700, color:"#1c1b18" }}>🏢 Facilities & Spaces</div>
-              <div style={{ fontSize:11, color:"#a8a59e" }}>Total: {totalFacilities} spaces</div>
-            </div>
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10 }}>
-              {FACILITY_TYPES.map(f => {
-                const val = facilityConfig[f.key] ?? 0
-                return (
-                  <div key={f.key} style={{ background: val>0?"#f0fdf4":"#f7f6f2", borderRadius:10, padding:"12px", textAlign:"center" as const, border:`1.5px solid ${val>0?"#86efac":"#e8e5de"}`, transition:"all 0.15s" }}>
-                    <div style={{ fontSize:20, marginBottom:4 }}>{f.icon}</div>
-                    <div style={{ fontSize:11, fontWeight:600, color:"#374151", marginBottom:2, lineHeight:1.3 }}>{f.label}</div>
-                    <div style={{ fontSize:9, color:"#a8a59e", marginBottom:8, lineHeight:1.3 }}>{f.sub}</div>
-                    <input type="number" min={0} max={200}
-                      defaultValue={val} key={f.key+'-'+val}
-                      onBlur={e => setFacility(f.key, Math.max(0, +e.target.value))}
-                      style={{ width:"100%", padding:"6px", border:`1.5px solid ${val>0?"#86efac":"#e8e5de"}`, borderRadius:8, fontSize:20, fontWeight:700, fontFamily:"monospace", textAlign:"center" as const, outline:"none", background:"#fff", color: val>0?"#059669":"#374151" }}
-                      onFocus={e => (e.target as HTMLInputElement).style.borderColor="#4f46e5"}
-                    />
-                  </div>
-                )
-              })}
-            </div>
-            <div style={{ marginTop:14, padding:"10px 14px", background:"#eaecf8", borderRadius:8, fontSize:11, color:"#3730a3", lineHeight:1.6 }}>
-              ✨ Schedu will auto-generate names for all spaces:
-              {totalFacilities === 0
-                ? " — set counts above"
-                : ` Room 1–${facilityConfig.numClassrooms??0}, Lab 1–${facilityConfig.numLabs??0}, Hall 1–${facilityConfig.numHalls??0}... All editable in Step 5.`}
-            </div>
-          </div>
-
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:13, fontWeight:600, color: sel?g.color:"#1c1b18" }}>{g.label}</div>
+                  <div style={{ fontSize:11, color:"#6a6860", marginTop:2 }}>Grades: {g.grades} — {g.desc}</div>
+                </div>
+                <span style={{ fontSize:10, fontWeight:700, padding:"4px 10px", borderRadius:20, background:g.color+"18", color:g.color, border:`1px solid ${g.color}33`, flexShrink:0 }}>
+                  {MODE_LABEL[g.profile]}
+                </span>
+              </button>
+            )
+          })}
         </div>
-      )}
 
-      {/* Summary */}
-      {canContinue && (
-        <div style={{ padding:"12px 16px", background:"#f0fdf4", border:"1px solid #86efac", borderRadius:10, marginBottom:20, fontSize:12, color:"#14532d", lineHeight:1.8 }}>
-          ✅ Schedu will generate: <strong>{config.numSections}</strong> classes · <strong>{config.numStaff}</strong> teachers · <strong>{config.numSubjects}</strong> subjects · <strong>{totalFacilities}</strong> spaces
-          <br/>Next: Set working days, shifts and timings →
+        {hasXIXII && (
+          <div style={{ marginTop:12, padding:"12px 16px", background:"#f5f3ff", border:"1.5px solid #a78bfa", borderRadius:9, fontSize:12, color:"#4c1d95", lineHeight:1.7 }}>
+            🔀 <strong>XI–XII Dynamic Mode detected.</strong> After setting up resources, you'll configure the <strong>Academic Combination Matrix</strong> — where students choose optional subjects (Maths OR Biology, PE OR Painting) using AND/OR/NONE expressions. Schedu will automatically build instructional clusters and parallel blocks.
+          </div>
+        )}
+      </div>
+
+      {/* ── Academic Scale ── */}
+      <div style={{ border:"1.5px solid #e8e5de", borderRadius:12, padding:"20px 24px", marginBottom:24, background:"#fafaf9" }}>
+        <div style={{ fontSize:13, fontWeight:700, color:"#1c1b18", marginBottom:16 }}>📊 Academic Scale — How many?</div>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16 }}>
+          {[
+            { label:"Class Sections",  sub:"Total sections (e.g. I-A, I-B = 2)", key:"numSections",  icon:"📚", def:20, min:1, max:500 },
+            { label:"Teaching Staff",  sub:"Total teachers across all grades",     key:"numStaff",     icon:"👤", def:10, min:1, max:1000 },
+            { label:"Subjects",        sub:"Unique subjects across all grades",    key:"numSubjects",  icon:"📖", def:8,  min:1, max:100 },
+          ].map(f => (
+            <div key={f.key} style={{ textAlign:"center" as const }}>
+              <div style={{ fontSize:22, marginBottom:8 }}>{f.icon}</div>
+              <div style={{ fontSize:12, fontWeight:600, color:"#374151", marginBottom:2 }}>{f.label}</div>
+              <div style={{ fontSize:10, color:"#a8a59e", marginBottom:10, lineHeight:1.4 }}>{f.sub}</div>
+              <input type="number" min={f.min} max={f.max}
+                defaultValue={(cfg[f.key] as number) ?? f.def}
+                onBlur={e => setConfig({ [f.key]: Math.max(f.min, +e.target.value) } as any)}
+                style={{ width:"100%", padding:"8px", border:"1.5px solid #e8e5de", borderRadius:9, fontSize:26, fontWeight:700, fontFamily:"'DM Mono',monospace", textAlign:"center" as const, outline:"none", background:"#fff" }} />
+            </div>
+          ))}
         </div>
-      )}
+        <div style={{ marginTop:14, padding:"9px 14px", background:"#eaecf8", borderRadius:8, fontSize:11, color:"#3730a3" }}>
+          ✨ Schedu will auto-generate all names (Teacher 1…N, Class I-A, I-B…). Everything is editable in the next steps.
+        </div>
+      </div>
 
       <div style={{ display:"flex", justifyContent:"flex-end", paddingTop:16, borderTop:"1px solid #e8e5de" }}>
-        <button onClick={() => canContinue && setStep(2)} disabled={!canContinue}
-          style={{ padding:"11px 28px", borderRadius:8, border:"none", fontSize:14, fontWeight:600, cursor: canContinue?"pointer":"not-allowed", background: canContinue?"#059669":"#d4d1c8", color:"#fff" }}>
-          Continue →
+        <button onClick={handleContinue} disabled={!canContinue}
+          style={{ padding:"11px 28px", borderRadius:9, border:"none", fontSize:14, fontWeight:600, cursor:canContinue?"pointer":"not-allowed", background:canContinue?"#059669":"#d4d1c8", color:"#fff" }}>
+          Continue → Bell Schedule
         </button>
       </div>
     </div>

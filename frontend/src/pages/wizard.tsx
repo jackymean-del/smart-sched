@@ -1,25 +1,25 @@
 import { Component, type ReactNode } from "react"
 import { useTimetableStore } from "@/store/timetableStore"
 import { Step1Org }        from "@/routes/wizard/step1-org"
-import { Step2Setup }      from "@/routes/wizard/step2-setup"
-import { Step3Schedule }   from "@/routes/wizard/step3-schedule"
-import { Step3bOptionals } from "@/routes/wizard/step3b-optionals"  
-import { Step4Pools }      from "@/routes/wizard/step4-pools"
-import { Step5Facilities } from "@/routes/wizard/step5-facilities"
+import { StepBell }        from "@/routes/wizard/step-bell"
+import { StepResources }   from "@/routes/wizard/step-resources"
+import { StepHours }       from "@/routes/wizard/step-hours"
+import { Step5Data }       from "@/routes/wizard/step5-data"
 import { Step6Generate }   from "@/routes/wizard/step6-generate"
 
-const STEPS = [Step1Org, Step2Setup, Step3Schedule, Step3bOptionals, Step4Pools, Step5Facilities, Step6Generate]
+// ── New 6-step school-specific wizard ─────────────────────────
+const STEPS = [Step1Org, StepBell, StepResources, StepHours, Step5Data, Step6Generate]
 
 const STEP_META = [
-  { label:"Organization",    sub:"Type, counts & spaces",   icon:"🏫" },
-  { label:"Classes & Subjects", sub:"Review & assign",     icon:"📋" },
-  { label:"Schedule",        sub:"Days, shifts & timing",  icon:"📅" },
-  { label:"Optional Subjects", sub:"XI-XII combinations",  icon:"🔀" },
-  { label:"Teacher Pools",   sub:"Staff groups",            icon:"👥" },
-  { label:"Facilities",      sub:"Rooms & spaces",          icon:"🏢" },
-  { label:"Generate",        sub:"Build timetable",         icon:"✨" },
+  { label:"School Setup",     sub:"Board, grades & scale",          icon:"🏫" },
+  { label:"Bell Schedule",    sub:"Days, periods & breaks",         icon:"🔔" },
+  { label:"Resources",        sub:"Classes, teachers, subjects",    icon:"📋" },
+  { label:"Subject Hours",    sub:"Periods/week per class",         icon:"📊" },
+  { label:"Review & Assign",  sub:"Edit data, assign teachers",     icon:"✏️" },
+  { label:"Generate",         sub:"Build timetable",                icon:"✨" },
 ]
 
+// ── Error boundary ────────────────────────────────────────────
 class StepErrorBoundary extends Component<
   { children: ReactNode; step: number },
   { error: string | null }
@@ -30,10 +30,14 @@ class StepErrorBoundary extends Component<
     if (this.state.error) return (
       <div style={{ padding:24, background:"#fef2f2", border:"1px solid #fca5a5", borderRadius:12 }}>
         <div style={{ fontSize:16, fontWeight:600, color:"#991b1b", marginBottom:8 }}>⚠️ Step {this.props.step} error</div>
-        <div style={{ fontSize:11, color:"#7f1d1d", fontFamily:"monospace", marginBottom:16 }}>{this.state.error}</div>
+        <div style={{ fontSize:11, color:"#7f1d1d", fontFamily:"monospace", marginBottom:16, whiteSpace:"pre-wrap" }}>{this.state.error}</div>
         <button onClick={() => { this.setState({ error:null }); useTimetableStore.getState().resetWizard() }}
-          style={{ padding:"8px 16px", borderRadius:8, border:"none", background:"#dc2626", color:"#fff", cursor:"pointer" }}>
+          style={{ padding:"8px 16px", borderRadius:8, border:"none", background:"#dc2626", color:"#fff", cursor:"pointer", marginRight:10 }}>
           Reset Wizard
+        </button>
+        <button onClick={() => this.setState({ error: null })}
+          style={{ padding:"8px 16px", borderRadius:8, border:"1.5px solid #fca5a5", background:"#fff", color:"#991b1b", cursor:"pointer" }}>
+          Try Again
         </button>
       </div>
     )
@@ -41,45 +45,103 @@ class StepErrorBoundary extends Component<
   }
 }
 
+// ── Main wizard page ──────────────────────────────────────────
 export function WizardPage() {
   const { step, setStep } = useTimetableStore()
   const CurrentStep = STEPS[step - 1] ?? Step1Org
+  const totalSteps  = STEPS.length
 
   return (
     <div style={{ display:"flex", flex:1, minHeight:"calc(100vh - 52px)" }}>
-      {/* Sidebar */}
-      <div style={{ width:220, background:"#1c1b18", flexShrink:0 }}>
+
+      {/* ── Sidebar ─────────────────────────────────────────── */}
+      <div style={{ width:228, background:"#1c1b18", flexShrink:0, display:"flex", flexDirection:"column" }}>
         <div style={{ padding:"20px 16px 14px", borderBottom:"1px solid #2a2926" }}>
-          <div style={{ fontSize:10, fontWeight:700, textTransform:"uppercase" as const, letterSpacing:"0.1em", color:"#6a6860" }}>Setup Wizard</div>
+          <div style={{ fontSize:10, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.1em", color:"#6a6860" }}>
+            Setup Wizard
+          </div>
+          <div style={{ fontSize:11, color:"#4a4844", marginTop:4 }}>
+            Step {step} of {totalSteps}
+          </div>
         </div>
-        <nav>
+
+        <nav style={{ flex:1 }}>
           {STEP_META.map((s, i) => {
-            const n = i + 1
+            const n      = i + 1
             const active = step === n
             const done   = step > n
+
             return (
-              <button key={n} onClick={() => done && setStep(n)}
-                style={{ width:"100%", display:"flex", alignItems:"center", gap:10, padding:"10px 16px", border:"none", background: active?"#2a2926":"transparent", cursor: done?"pointer":"default", textAlign:"left" as const }}>
-                <div style={{ width:24, height:24, borderRadius:"50%", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, background: done?"#059669":active?"#4f46e5":"#2a2926", color: done||active?"#fff":"#4a4844", border: done||active?"none":"1px solid #3a3834" }}>
+              <button key={n}
+                onClick={() => (done || n === step) && setStep(n)}
+                style={{
+                  width:"100%", display:"flex", alignItems:"center", gap:10,
+                  padding:"11px 16px", border:"none",
+                  background: active ? "#2a2926" : "transparent",
+                  cursor: done ? "pointer" : "default",
+                  textAlign:"left",
+                  borderLeft: active ? "3px solid #4f46e5" : "3px solid transparent",
+                }}>
+                <div style={{
+                  width:26, height:26, borderRadius:"50%", flexShrink:0,
+                  display:"flex", alignItems:"center", justifyContent:"center",
+                  fontSize: done ? 12 : 11, fontWeight:700,
+                  background: done ? "#059669" : active ? "#4f46e5" : "#2a2926",
+                  color: done || active ? "#fff" : "#4a4844",
+                  border: done || active ? "none" : "1px solid #3a3834",
+                }}>
                   {done ? "✓" : n}
                 </div>
-                <div>
-                  <div style={{ fontSize:12, fontWeight: active?600:400, color: active?"#fff":done?"#d4d1c8":"#6a6860" }}>{s.label}</div>
+                <div style={{ minWidth:0 }}>
+                  <div style={{
+                    fontSize:12, fontWeight: active ? 600 : 400,
+                    color: active ? "#fff" : done ? "#d4d1c8" : "#6a6860",
+                    whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis",
+                  }}>
+                    {s.label}
+                  </div>
                   <div style={{ fontSize:10, color:"#4a4844", marginTop:1 }}>{s.sub}</div>
                 </div>
               </button>
             )
           })}
         </nav>
+
+        {/* Progress bar at bottom */}
+        <div style={{ padding:"14px 16px", borderTop:"1px solid #2a2926" }}>
+          <div style={{ height:4, background:"#2a2926", borderRadius:2 }}>
+            <div style={{ height:"100%", borderRadius:2, background:"linear-gradient(90deg,#4f46e5,#7c3aed)", width:`${((step - 1) / (totalSteps - 1)) * 100}%`, transition:"width 0.3s" }} />
+          </div>
+          <div style={{ fontSize:10, color:"#4a4844", marginTop:6 }}>
+            {Math.round(((step - 1) / (totalSteps - 1)) * 100)}% complete
+          </div>
+        </div>
       </div>
 
-      {/* Content */}
+      {/* ── Content area ────────────────────────────────────── */}
       <div style={{ flex:1, overflowY:"auto", background:"#fafaf9", padding:"28px 40px", maxHeight:"calc(100vh - 52px)" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
-          <div style={{ fontSize:11, color:"#059669" }}>💾 Progress auto-saved</div>
-          <div style={{ fontSize:11, color:"#a8a59e" }}>Step {step} of {STEPS.length}</div>
+          <div style={{ fontSize:11, color:"#059669", display:"flex", alignItems:"center", gap:5 }}>
+            <span>💾</span> Progress auto-saved
+          </div>
+          <div style={{ display:"flex", alignItems:"center", gap:8, fontSize:11, color:"#a8a59e" }}>
+            {STEP_META.map((s, i) => {
+              const n = i + 1
+              const done = step > n
+              const active = step === n
+              return (
+                <span key={n} style={{
+                  width:6, height:6, borderRadius:"50%",
+                  background: done ? "#059669" : active ? "#4f46e5" : "#e8e5de",
+                  display:"inline-block",
+                }} />
+              )
+            })}
+            <span style={{ marginLeft:4 }}>Step {step} of {totalSteps}</span>
+          </div>
         </div>
-        <div style={{ maxWidth:820, margin:"0 auto" }}>
+
+        <div style={{ maxWidth:860, margin:"0 auto" }}>
           <StepErrorBoundary step={step}>
             <CurrentStep />
           </StepErrorBoundary>
