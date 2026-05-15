@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { useTimetableStore } from "@/store/timetableStore"
-import { generateSections, generateStaff, generateSubjects, generateBreaks, ORG_CONFIGS, getCountry } from "@/lib/orgData"
+import { ORG_CONFIGS, getCountry } from "@/lib/orgData"
 
 type Tab = "sections" | "subjects" | "staff" | "breaks"
 
@@ -17,49 +17,19 @@ export function Step5Data() {
   const { config, sections, staff, subjects, breaks,
           setSections, setStaff, setSubjects, setBreaks, setStep, setConfig } = useTimetableStore()
   const [tab, setTab] = useState<Tab>("sections")
-  const [showClassWise, setShowClassWise] = useState<string|null>(null) // subject id for class-wise panel
   const org     = ORG_CONFIGS[config.orgType ?? "school"]
   const country = getCountry(config.countryCode ?? "IN")
   const hasShifts = config.shifts.length > 0
 
-  // Get unique base classes
+  // Unique base classes derived from section names
   const baseClasses = [...new Set(sections.map(s => {
-    const m = s.name.match(/^(.+?)[-\s][A-E]$/i)
+    const m = s.name.match(/^(.+?)[-\s][A-E\d]$/i)
     return m ? m[1].trim() : s.name
   }))]
-
-  useEffect(() => {
-    if (!sections.length) {
-      setSections(generateSections(config.orgType ?? "school", config.countryCode ?? "IN", config.numSections))
-      setStaff(generateStaff(config.orgType ?? "school", config.countryCode ?? "IN", config.numStaff))
-      setSubjects(generateSubjects(config.orgType ?? "school", config.countryCode ?? "IN", config.numSubjects))
-      setBreaks(generateBreaks(config.orgType ?? "school", config.numBreaks))
-    }
-  }, [])
 
   const nextRoomNumber = () => {
     const used = sections.map(s => { const m = s.room?.match(/\d+/); return m ? parseInt(m[0]) : 0 })
     return (used.length ? Math.max(...used) : country.roomStart - 1) + 1
-  }
-
-  // Get class-wise config for a subject
-  const getClassConfig = (subId: string, baseClass: string) => {
-    const sub = subjects.find(s => s.id === subId)
-    const cc = (sub as any)?.classConfigs?.find((c: any) => c.sectionName === baseClass)
-    return cc ?? { periodsPerWeek: sub?.periodsPerWeek ?? 2, maxPeriodsPerDay: 2, sessionDuration: (sub as any)?.sessionDuration ?? 40 }
-  }
-
-  const updateClassConfig = (subIdx: number, baseClass: string, updates: any) => {
-    const updated = [...subjects]
-    const configs = (updated[subIdx] as any).classConfigs ?? []
-    const existingIdx = configs.findIndex((c: any) => c.sectionName === baseClass)
-    if (existingIdx >= 0) {
-      configs[existingIdx] = { ...configs[existingIdx], ...updates }
-    } else {
-      configs.push({ sectionName: baseClass, periodsPerWeek: updated[subIdx].periodsPerWeek, maxPeriodsPerDay: 2, sessionDuration: (updated[subIdx] as any).sessionDuration ?? 40, ...updates })
-    }
-    ;(updated[subIdx] as any).classConfigs = configs
-    setSubjects(updated)
   }
 
   const TABS: { key: Tab; label: string }[] = [
@@ -159,142 +129,157 @@ export function Step5Data() {
         </div>
       )}
 
-      {/* ── SUBJECTS TAB ── */}
+      {/* ── SUBJECTS TAB — Class-wise matrix ── */}
       {tab === "subjects" && (
         <div>
-          {/* Global session duration setter */}
-          <div style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 14px", background:"#f7f6f2", border:"1.5px solid #e8e5de", borderRadius:10, marginBottom:12 }}>
-            <span style={{ fontSize:12, color:"#374151", fontWeight:500 }}>Set all session durations to:</span>
-            <input type="number" min={10} max={120} defaultValue={config.defaultSessionDuration}
-              onBlur={e => {
-                const dur = Math.max(10, +e.target.value)
-                setConfig({ defaultSessionDuration: dur })
-                setSubjects(subjects.map(s => ({ ...s, sessionDuration: dur } as any)))
-              }}
-              style={{ width:60, padding:"5px 8px", border:"1.5px solid #4f46e5", borderRadius:6, fontSize:13, fontFamily:"monospace", textAlign:"center" as const, outline:"none" }}
-            />
-            <span style={{ fontSize:12, color:"#6a6860" }}>min &nbsp;·&nbsp; Apply to all subjects at once</span>
+          {/* Global controls */}
+          <div style={{ display:"flex", alignItems:"center", gap:16, padding:"10px 14px", background:"#f7f6f2", border:"1.5px solid #e8e5de", borderRadius:10, marginBottom:12, flexWrap:"wrap" as const }}>
+            <span style={{ fontSize:12, color:"#374151", fontWeight:600 }}>Global defaults:</span>
+            <label style={{ display:"flex", alignItems:"center", gap:6, fontSize:12, color:"#374151" }}>
+              Duration
+              <input type="number" min={10} max={120} defaultValue={config.defaultSessionDuration}
+                onBlur={e => {
+                  const dur = Math.max(10, +e.target.value)
+                  setConfig({ defaultSessionDuration: dur })
+                  setSubjects(subjects.map(s => ({ ...s, sessionDuration: dur } as any)))
+                }}
+                style={{ width:54, padding:"4px 6px", border:"1.5px solid #4f46e5", borderRadius:6, fontSize:13, fontFamily:"monospace", textAlign:"center" as const, outline:"none" }} />
+              <span style={{ color:"#6a6860" }}>min/period</span>
+            </label>
+            <span style={{ color:"#d1d5db" }}>|</span>
+            <span style={{ fontSize:11, color:"#6a6860" }}>
+              📋 Each subject row shows global defaults. Expand <strong>▸ Class-wise</strong> to override per class.
+            </span>
           </div>
 
+          {/* Class-wise matrix — scrollable horizontally */}
           <div style={{ border:"1.5px solid #e8e5de", borderRadius:12, overflow:"hidden" }}>
-            <table style={{ width:"100%", borderCollapse:"collapse" }}>
-              <thead><tr>
-                <th style={{...thS, width:36}}>#</th>
-                <th style={thS}>Name</th>
-                <th style={{...thS, width:80}}>Total hrs/week</th>
-                <th style={{...thS, width:80}}>Per./week</th>
-                <th style={{...thS, width:80}}>Per./day</th>
-                <th style={{...thS, width:90}}>Min./session</th>
-                <th style={{...thS, width:90}}>Max/day</th>
-                <th style={{...thS, width:110, color:"#4f46e5"}}>Class-wise ⚙</th>
-                <th style={{...thS, width:32}}></th>
-              </tr></thead>
-              <tbody>
-                {subjects.map((s, i) => {
-                  const dur = (s as any).sessionDuration ?? 40
-                  const perDay = Math.ceil(s.periodsPerWeek / config.workDays.length)
-                  const totalHrs = Math.round(s.periodsPerWeek * dur / 60 * 10) / 10
-                  const isExpanded = showClassWise === s.id
-                  return (
-                    <>
+            <div style={{ overflowX:"auto" as const }}>
+              <table style={{ width:"100%", borderCollapse:"collapse", minWidth: 500 + baseClasses.length * 160 }}>
+                <thead>
+                  <tr>
+                    {/* Fixed subject info columns */}
+                    <th style={{...thS, width:36, position:"sticky" as const, left:0, zIndex:2, background:"#f7f6f2"}}>#</th>
+                    <th style={{...thS, minWidth:140, position:"sticky" as const, left:36, zIndex:2, background:"#f7f6f2"}}>Subject</th>
+                    <th style={{...thS, width:76}}>Per./wk<br/><span style={{fontWeight:400,fontSize:9,color:"#b0ada6"}}>global</span></th>
+                    <th style={{...thS, width:72}}>Min.<br/><span style={{fontWeight:400,fontSize:9,color:"#b0ada6"}}>global</span></th>
+                    <th style={{...thS, width:64}}>Max/day<br/><span style={{fontWeight:400,fontSize:9,color:"#b0ada6"}}>global</span></th>
+                    {/* One column per base class */}
+                    {baseClasses.map(cls => (
+                      <th key={cls} style={{...thS, minWidth:155, background:"#f0f0ff", color:"#3730a3", borderLeft:"2px solid #c7d2fe"}}>
+                        <div style={{ fontSize:11, fontWeight:700 }}>{cls}</div>
+                        <div style={{ fontSize:9, fontWeight:400, color:"#818cf8", marginTop:1 }}>Per/wk · Min · Max/day</div>
+                      </th>
+                    ))}
+                    <th style={{...thS, width:32}}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {subjects.map((s, i) => {
+                    const dur     = (s as any).sessionDuration ?? 40
+                    const maxDay  = (s as any).maxPeriodsPerDay ?? 2
+                    const totalH  = Math.round(s.periodsPerWeek * dur / 60 * 10) / 10
+                    return (
                       <tr key={s.id} style={{ background: i%2===0?"#fff":"#fafaf9" }}>
-                        <td style={{...tdS, color:"#a8a59e", fontSize:10, fontFamily:"monospace"}}>{i+1}</td>
-                        <td style={tdS}><input style={inp()} value={s.name} onChange={e=>{const n=[...subjects];n[i]={...n[i],name:e.target.value};setSubjects(n)}} /></td>
-                        <td style={{...tdS, textAlign:"center" as const}}>
-                          <span style={{ fontSize:12, fontFamily:"monospace", fontWeight:600, color:"#059669" }}>{totalHrs}h</span>
+                        {/* # */}
+                        <td style={{...tdS, color:"#a8a59e", fontSize:10, fontFamily:"monospace", position:"sticky" as const, left:0, background: i%2===0?"#fff":"#fafaf9", zIndex:1}}>{i+1}</td>
+                        {/* Subject name */}
+                        <td style={{...tdS, position:"sticky" as const, left:36, background: i%2===0?"#fff":"#fafaf9", zIndex:1}}>
+                          <input style={inp({ fontWeight:600 })} value={s.name}
+                            onChange={e=>{const n=[...subjects];n[i]={...n[i],name:e.target.value};setSubjects(n)}} />
+                          <div style={{ fontSize:10, color:"#059669", fontFamily:"monospace", marginTop:1 }}>{totalH}h/wk</div>
                         </td>
+                        {/* Global periods/week */}
                         <td style={tdS}>
-                          <input type="number" min={1} max={30} style={inp({ fontFamily:"monospace", width:50, textAlign:"center" as const })}
-                            value={s.periodsPerWeek} onChange={e=>{const n=[...subjects];n[i]={...n[i],periodsPerWeek:Math.max(1,+e.target.value)};setSubjects(n)}} />
+                          <input type="number" min={1} max={30}
+                            style={{ width:48, padding:"3px 5px", border:"1px solid #e8e5de", borderRadius:5, fontSize:12, fontFamily:"monospace", textAlign:"center" as const, outline:"none" }}
+                            value={s.periodsPerWeek}
+                            onChange={e=>{const n=[...subjects];n[i]={...n[i],periodsPerWeek:Math.max(1,+e.target.value)};setSubjects(n)}} />
                         </td>
-                        <td style={{...tdS, textAlign:"center" as const}}>
-                          <span style={{ fontSize:12, fontFamily:"monospace", fontWeight:600, color:"#4f46e5", background:"#eaecf8", padding:"2px 6px", borderRadius:4 }}>{perDay}</span>
-                          <span style={{ fontSize:9, color:"#a8a59e", marginLeft:3 }}>avg</span>
-                        </td>
+                        {/* Global duration */}
                         <td style={tdS}>
-                          <div style={{ display:"flex", alignItems:"center", gap:3 }}>
-                            <input type="number" min={10} max={180} style={{ width:48, padding:"3px 5px", border:"1px solid #e8e5de", borderRadius:5, fontSize:12, fontFamily:"monospace", textAlign:"center" as const, outline:"none" }}
-                              value={dur} onChange={e=>{const n=[...subjects] as any[];n[i].sessionDuration=Math.max(10,+e.target.value);setSubjects(n)}} />
+                          <div style={{ display:"flex", alignItems:"center", gap:2 }}>
+                            <input type="number" min={10} max={180}
+                              style={{ width:44, padding:"3px 5px", border:"1px solid #e8e5de", borderRadius:5, fontSize:12, fontFamily:"monospace", textAlign:"center" as const, outline:"none" }}
+                              value={dur}
+                              onChange={e=>{const n=[...subjects] as any[];n[i].sessionDuration=Math.max(10,+e.target.value);setSubjects(n)}} />
                             <span style={{ fontSize:10, color:"#a8a59e" }}>m</span>
                           </div>
                         </td>
+                        {/* Global max/day */}
                         <td style={tdS}>
-                          <input type="number" min={1} max={6} style={{ width:44, padding:"3px 5px", border:"1px solid #e8e5de", borderRadius:5, fontSize:12, fontFamily:"monospace", textAlign:"center" as const, outline:"none" }}
-                            value={(s as any).maxPeriodsPerDay ?? 2} onChange={e=>{const n=[...subjects] as any[];n[i].maxPeriodsPerDay=Math.max(1,+e.target.value);setSubjects(n)}} />
+                          <input type="number" min={1} max={6}
+                            style={{ width:40, padding:"3px 5px", border:"1px solid #e8e5de", borderRadius:5, fontSize:12, fontFamily:"monospace", textAlign:"center" as const, outline:"none" }}
+                            value={maxDay}
+                            onChange={e=>{const n=[...subjects] as any[];n[i].maxPeriodsPerDay=Math.max(1,+e.target.value);setSubjects(n)}} />
                         </td>
-                        <td style={tdS}>
-                          <button onClick={() => setShowClassWise(isExpanded ? null : s.id)}
-                            style={{ fontSize:11, padding:"3px 8px", borderRadius:5, border:`1px solid ${isExpanded?"#4f46e5":"#e8e5de"}`, background: isExpanded?"#eaecf8":"#fff", color: isExpanded?"#4f46e5":"#6a6860", cursor:"pointer", fontWeight:500 }}>
-                            {isExpanded ? "▲ Hide" : "⚙ Class-wise"}
-                          </button>
-                        </td>
+                        {/* Per-class columns */}
+                        {baseClasses.map(cls => {
+                          const configs  = (s.classConfigs ?? []) as any[]
+                          const existing = configs.find((c:any) => c.sectionName === cls || c.classId === cls)
+                          const pw  = existing?.periodsPerWeek  ?? s.periodsPerWeek
+                          const mn  = existing?.sessionDuration ?? dur
+                          const mx  = existing?.maxPeriodsPerDay ?? maxDay
+                          const isOverride = !!existing
+
+                          const upsertCC = (updates: any) => {
+                            const n = [...subjects] as any[]
+                            const cfgs = [...(n[i].classConfigs ?? [])]
+                            const idx  = cfgs.findIndex((c:any) => c.sectionName === cls || c.classId === cls)
+                            const next = { sectionName: cls, classId: cls,
+                              periodsPerWeek: pw, sessionDuration: mn, maxPeriodsPerDay: mx,
+                              ...updates }
+                            if (idx >= 0) cfgs[idx] = next; else cfgs.push(next)
+                            n[i] = { ...n[i], classConfigs: cfgs }
+                            setSubjects(n)
+                          }
+
+                          return (
+                            <td key={cls} style={{ ...tdS, borderLeft:"2px solid #e0e7ff", background: isOverride ? (i%2===0?"#f5f3ff":"#ede9fe") : (i%2===0?"#fff":"#fafaf9") }}>
+                              <div style={{ display:"flex", alignItems:"center", gap:3 }}>
+                                {/* Per/week */}
+                                <input type="number" min={1} max={30}
+                                  style={{ width:36, padding:"2px 3px", border:`1px solid ${isOverride?"#a78bfa":"#e8e5de"}`, borderRadius:4, fontSize:11, fontFamily:"monospace", textAlign:"center" as const, outline:"none", background: isOverride?"#fdf4ff":"#fff" }}
+                                  value={pw}
+                                  onChange={e => upsertCC({ periodsPerWeek: Math.max(1,+e.target.value) })} />
+                                <span style={{ color:"#c8c5bc", fontSize:10 }}>·</span>
+                                {/* Duration */}
+                                <input type="number" min={10} max={180}
+                                  style={{ width:38, padding:"2px 3px", border:`1px solid ${isOverride?"#a78bfa":"#e8e5de"}`, borderRadius:4, fontSize:11, fontFamily:"monospace", textAlign:"center" as const, outline:"none", background: isOverride?"#fdf4ff":"#fff" }}
+                                  value={mn}
+                                  onChange={e => upsertCC({ sessionDuration: Math.max(10,+e.target.value) })} />
+                                <span style={{ color:"#c8c5bc", fontSize:10 }}>·</span>
+                                {/* Max/day */}
+                                <input type="number" min={1} max={6}
+                                  style={{ width:30, padding:"2px 3px", border:`1px solid ${isOverride?"#a78bfa":"#e8e5de"}`, borderRadius:4, fontSize:11, fontFamily:"monospace", textAlign:"center" as const, outline:"none", background: isOverride?"#fdf4ff":"#fff" }}
+                                  value={mx}
+                                  onChange={e => upsertCC({ maxPeriodsPerDay: Math.max(1,+e.target.value) })} />
+                              </div>
+                              {isOverride && (
+                                <div style={{ fontSize:9, color:"#7c3aed", marginTop:2 }}>
+                                  ✦ override · {Math.round(pw * mn / 60 * 10)/10}h/wk
+                                </div>
+                              )}
+                            </td>
+                          )
+                        })}
+                        {/* Delete */}
                         <td style={tdS}><button style={delBtn} onClick={()=>setSubjects(subjects.filter((_,j)=>j!==i))}>×</button></td>
                       </tr>
-                      {/* Class-wise config panel */}
-                      {isExpanded && (
-                        <tr key={s.id+'-cw'}>
-                          <td colSpan={9} style={{ padding:0 }}>
-                            <div style={{ background:"#f5f3ff", borderBottom:"2px solid #4f46e5", padding:"12px 16px" }}>
-                              <div style={{ fontSize:12, fontWeight:600, color:"#3730a3", marginBottom:10 }}>
-                                ⚙ Class-wise settings for <strong>{s.name}</strong> — override defaults per class group
-                              </div>
-                              <table style={{ borderCollapse:"collapse", fontSize:11, width:"100%" }}>
-                                <thead>
-                                  <tr>
-                                    <th style={{ ...thS, background:"#ede9fe", minWidth:100 }}>Class</th>
-                                    <th style={{ ...thS, background:"#ede9fe", width:100 }}>Per./week</th>
-                                    <th style={{ ...thS, background:"#ede9fe", width:100 }}>Min./session</th>
-                                    <th style={{ ...thS, background:"#ede9fe", width:90 }}>Max/day</th>
-                                    <th style={{ ...thS, background:"#ede9fe", width:80 }}>Total hrs</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {baseClasses.map(cls => {
-                                    const cc = getClassConfig(s.id, cls)
-                                    return (
-                                      <tr key={cls}>
-                                        <td style={{ ...tdS, fontWeight:600, color:"#4f46e5", background:"#faf5ff" }}>{cls}</td>
-                                        <td style={{ ...tdS, background:"#faf5ff" }}>
-                                          <input type="number" min={1} defaultValue={cc.periodsPerWeek} key={cc.periodsPerWeek}
-                                            onBlur={e => updateClassConfig(i, cls, { periodsPerWeek: Math.max(1,+e.target.value) })}
-                                            style={{ width:50, padding:"3px 5px", border:"1px solid #c4b5fd", borderRadius:5, fontSize:12, fontFamily:"monospace", textAlign:"center" as const, outline:"none" }} />
-                                        </td>
-                                        <td style={{ ...tdS, background:"#faf5ff" }}>
-                                          <div style={{ display:"flex", alignItems:"center", gap:3 }}>
-                                            <input type="number" min={10} max={180} defaultValue={cc.sessionDuration} key={cc.sessionDuration}
-                                              onBlur={e => updateClassConfig(i, cls, { sessionDuration: Math.max(10,+e.target.value) })}
-                                              style={{ width:50, padding:"3px 5px", border:"1px solid #c4b5fd", borderRadius:5, fontSize:12, fontFamily:"monospace", textAlign:"center" as const, outline:"none" }} />
-                                            <span style={{ fontSize:10, color:"#a8a59e" }}>min</span>
-                                          </div>
-                                        </td>
-                                        <td style={{ ...tdS, background:"#faf5ff" }}>
-                                          <input type="number" min={1} max={6} defaultValue={cc.maxPeriodsPerDay} key={cc.maxPeriodsPerDay}
-                                            onBlur={e => updateClassConfig(i, cls, { maxPeriodsPerDay: Math.max(1,+e.target.value) })}
-                                            style={{ width:44, padding:"3px 5px", border:"1px solid #c4b5fd", borderRadius:5, fontSize:12, fontFamily:"monospace", textAlign:"center" as const, outline:"none" }} />
-                                        </td>
-                                        <td style={{ ...tdS, background:"#faf5ff" }}>
-                                          <span style={{ fontSize:12, fontFamily:"monospace", color:"#059669", fontWeight:600 }}>
-                                            {Math.round(cc.periodsPerWeek * cc.sessionDuration / 60 * 10) / 10}h
-                                          </span>
-                                        </td>
-                                      </tr>
-                                    )
-                                  })}
-                                </tbody>
-                              </table>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </>
-                  )
-                })}
-              </tbody>
-            </table>
-            <div style={{ padding:"6px 12px 4px", background:"#f7f6f2", borderTop:"1px solid #e8e5de", fontSize:11, color:"#6a6860" }}>
-              💡 Total hrs/week = Per./week × Min./session ÷ 60 · Click <strong>⚙ Class-wise</strong> to set different durations per class
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
-            <button style={addRow} onClick={() => setSubjects([...subjects, { id:crypto.randomUUID(), name:`New ${org.subjectLabel}`, periodsPerWeek:2, color:"bg-gray-100 text-gray-700", sections:[], sessionDuration:40, maxPeriodsPerDay:2, classConfigs:[] } as any])}>
+            <div style={{ padding:"7px 14px", background:"#f7f6f2", borderTop:"1px solid #e8e5de", fontSize:11, color:"#6a6860", display:"flex", alignItems:"center", gap:12 }}>
+              <span>💡 <strong>Global columns</strong> = default for all classes. <strong>Class columns</strong> = override for that class only.</span>
+              <span style={{ color:"#7c3aed", fontWeight:600 }}>✦ purple = overridden</span>
+            </div>
+            <button style={addRow} onClick={() => setSubjects([...subjects, {
+              id: crypto.randomUUID(), name: `${org.subjectLabel} ${subjects.length + 1}`,
+              periodsPerWeek: 5, sessionDuration: 40, maxPeriodsPerDay: 2,
+              color: "#6366f1", sections: [], classConfigs: []
+            } as any])}>
               ＋ Add {org.subjectLabel}
             </button>
           </div>

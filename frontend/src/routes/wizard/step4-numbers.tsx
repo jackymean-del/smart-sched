@@ -1,5 +1,6 @@
 import { useTimetableStore } from "@/store/timetableStore"
-import { getCountry, ORG_CONFIGS } from "@/lib/orgData"
+import { getCountry, ORG_CONFIGS, generateSections, generateStaff, generateSubjects, generateBreaks } from "@/lib/orgData"
+import type { Subject } from "@/types"
 
 // Org-specific labels for periods/slots
 const SLOT_LABELS: Record<string, { periodLabel: string; periodSub: string; breakLabel: string; breakSub: string }> = {
@@ -14,6 +15,17 @@ const SLOT_LABELS: Record<string, { periodLabel: string; periodSub: string; brea
 export function Step4Numbers() {
   const store = useTimetableStore()
   const { config, setConfig, setStep } = store
+
+  // Always regenerate fresh data from current config numbers
+  const handleGenerate = () => {
+    const orgType = config.orgType ?? "school"
+    const cc      = config.countryCode ?? "IN"
+    store.setSections(generateSections(orgType, cc, config.numSections))
+    store.setStaff(generateStaff(orgType, cc, config.numStaff))
+    store.setSubjects(generateSubjects(orgType, cc, config.numSubjects) as Subject[])
+    store.setBreaks(generateBreaks(orgType, config.numBreaks))
+    setStep(5)
+  }
   const country = getCountry(config.countryCode ?? "IN")
   const org     = ORG_CONFIGS[config.orgType ?? "school"]
   const slots   = SLOT_LABELS[config.orgType ?? "school"] ?? SLOT_LABELS.school
@@ -126,7 +138,7 @@ export function Step4Numbers() {
 
       <div style={{ display:"flex", justifyContent:"space-between", paddingTop:16, borderTop:"1px solid #e8e5de" }}>
         <button onClick={() => setStep(3)} style={{ padding:"9px 18px", borderRadius:8, border:"1.5px solid #e8e5de", background:"#fff", fontSize:13, fontWeight:500, cursor:"pointer" }}>← Back</button>
-        <button onClick={() => setStep(5)} style={{ padding:"9px 18px", borderRadius:8, border:"none", fontSize:13, fontWeight:600, cursor:"pointer", background:"#059669", color:"#fff" }}>Generate data & continue →</button>
+        <button onClick={handleGenerate} style={{ padding:"9px 18px", borderRadius:8, border:"none", fontSize:13, fontWeight:600, cursor:"pointer", background:"#059669", color:"#fff" }}>✨ Generate data & continue →</button>
       </div>
     </div>
   )
