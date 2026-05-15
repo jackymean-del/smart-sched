@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { useTimetableStore } from "@/store/timetableStore"
+import type { BoardType } from "@/types"
 
 const BOARDS = [
   { value:"CBSE",      label:"CBSE",      sub:"Central Board of Secondary Education" },
@@ -31,13 +32,12 @@ const h = (text: string): React.CSSProperties => ({})
 
 export function Step1Org() {
   const { config, setConfig, setStep } = useTimetableStore()
-  const cfg = config as any
 
-  const [name,        setName]        = useState<string>(cfg.schoolName ?? "")
-  const [board,       setBoard]       = useState<string>(cfg.board ?? "CBSE")
-  const [year,        setYear]        = useState<string>(cfg.academicYear ?? "2025-26")
-  const [tz,          setTz]          = useState<string>(cfg.timezone ?? "Asia/Kolkata")
-  const [groups,      setGroups]      = useState<string[]>(cfg.gradeGroups ?? ["primary","middle","secondary"])
+  const [name,        setName]        = useState<string>(config.schoolName ?? "")
+  const [board,       setBoard]       = useState<BoardType>(config.board ?? "CBSE")
+  const [year,        setYear]        = useState<string>(config.academicYear ?? "2025-26")
+  const [tz,          setTz]          = useState<string>(config.timezone ?? "Asia/Kolkata")
+  const [groups,      setGroups]      = useState<string[]>(config.gradeGroups ?? ["primary","middle","secondary"])
   // Controlled count inputs — always reflect exactly what will be generated
   const [numSections, setNumSections] = useState<number>(cfg.numSections ?? 20)
   const [numStaff,    setNumStaff]    = useState<number>(cfg.numStaff ?? 10)
@@ -99,7 +99,7 @@ export function Step1Org() {
             {BOARDS.map(b => {
               const sel = board === b.value
               return (
-                <button key={b.value} onClick={() => setBoard(b.value)}
+                <button key={b.value} onClick={() => setBoard(b.value as BoardType)}
                   style={{ padding:"10px 6px", borderRadius:8, border: sel?"2px solid #4f46e5":"1.5px solid #e8e5de", background: sel?"#eaecf8":"#fff", cursor:"pointer", textAlign:"center" as const }}>
                   <div style={{ fontSize:12, fontWeight:700, color: sel?"#3730a3":"#1c1b18" }}>{b.label}</div>
                   <div style={{ fontSize:9, color:"#a8a59e", marginTop:2, lineHeight:1.3 }}>{b.sub}</div>
