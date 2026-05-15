@@ -197,7 +197,7 @@ function guessFreq(subject: string): number {
 }
 
 // ── Grade group → actual grade names ─────────────────────────
-const GRADE_GROUP_GRADES: Record<string, string[]> = {
+export const GRADE_GROUP_GRADES: Record<string, string[]> = {
   pre:       ['Nursery', 'LKG', 'UKG'],
   primary:   ['I', 'II', 'III', 'IV', 'V'],
   middle:    ['VI', 'VII', 'VIII'],

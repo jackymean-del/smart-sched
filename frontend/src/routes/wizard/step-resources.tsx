@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react"
 import { useTimetableStore } from "@/store/timetableStore"
-import { generateSections, generateStaff, generateSubjects, generateBreaks } from "@/lib/orgData"
+import { generateSections, generateStaff, generateSubjects, generateBreaks, GRADE_GROUP_GRADES } from "@/lib/orgData"
 import type { Subject } from "@/types"
 import { ChevronDown, ChevronRight, RefreshCw, Plus, Trash2 } from "lucide-react"
 
@@ -102,13 +102,26 @@ export function StepResources() {
     })))
   }
 
-  // Auto-generate on first load if store is empty OR counts don't match what user entered
+  // Auto-generate on first load if store is empty, counts don't match, OR
+  // existing sections belong to wrong grade groups (e.g. Nursery when Primary selected)
   useEffect(() => {
     const countsMismatch =
       sections.length !== config.numSections ||
       staff.length    !== config.numStaff    ||
       subjects.length !== config.numSubjects
-    if (sections.length === 0 || countsMismatch) {
+
+    // Build the set of valid grades for the selected groups
+    const gradeGroups = config.gradeGroups?.length ? config.gradeGroups : null
+    const validGrades = gradeGroups
+      ? new Set(gradeGroups.flatMap(g => GRADE_GROUP_GRADES[g] ?? []))
+      : null
+
+    // If any stored section has a grade outside the selected groups → stale data
+    const gradesMismatch = validGrades !== null && sections.some(
+      s => (s as any).grade && !validGrades.has((s as any).grade)
+    )
+
+    if (sections.length === 0 || countsMismatch || gradesMismatch) {
       regen()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
