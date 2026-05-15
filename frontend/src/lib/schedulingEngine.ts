@@ -124,7 +124,13 @@ export function solveTimetable(input: SolverInput): SolverOutput {
     if (!ctName) return
     ensureBusy(ctName)
     const ctStaff = staff.find(s => s.name === ctName)
-    const ctSubject = ctStaff?.subjects?.[0]?.replace(/.*::/, '') ?? subjects[0]?.name ?? ''
+    // Pick a subject this teacher can actually teach for this section
+    const ctRawSubs: string[] = ctStaff?.subjects ?? []
+    const ctSubjectRaw = ctRawSubs.find(s =>
+      s === `${sec.name}::${s.replace(/.*::/, '')}` ||   // section-specific
+      (!s.includes('::'))                                  // or global
+    ) ?? ctRawSubs[0] ?? subjects[0]?.name ?? ''
+    const ctSubject = ctSubjectRaw.replace(/.*::/, '')
 
     workDays.forEach(day => {
       const p = classPeriods[0]
@@ -144,10 +150,12 @@ export function solveTimetable(input: SolverInput): SolverOutput {
 
   // ── Pass 2: Fill remaining periods with constraint checking ──
   sections.forEach((sec, si) => {
-    // Get subjects for this section
-    const sectionSubjects = subjects.filter(sub =>
-      (sub.sections ?? []).includes(sec.name)
-    )
+    // Get subjects for this section.
+    // Empty sub.sections means "applies to all classes" — treat as universal.
+    const sectionSubjects = subjects.filter(sub => {
+      const secs = sub.sections ?? []
+      return secs.length === 0 || secs.includes(sec.name)
+    })
     if (!sectionSubjects.length) return
 
     // Sort subjects by weekly periods (highest first — greedy)
@@ -179,16 +187,48 @@ export function solveTimetable(input: SolverInput): SolverOutput {
         const subIdx = (si * 11 + di * 7 + pi * 3) % availableSubs.length
         const chosenSub = availableSubs[subIdx]
 
-        // Find available teacher (hard constraint: no clash)
-        const eligibleTeachers = staff.filter(st => {
-          const subKey = `${sec.grade ?? sec.name}::${chosenSub.name}`
-          const simpleKey = chosenSub.name
-          const teachesThis = (st.subjects ?? []).some(s =>
-            s === subKey || s === simpleKey || s.endsWith(`::${simpleKey}`)
+        // ── Teacher eligibility ───────────────────────────────
+        // Priority 1: teacher explicitly assigned to this section+subject via matrix
+        // Priority 2: teacher with grade-level assignment
+        // Priority 3: teacher with global subject name
+        // In all cases: hard constraint — teacher must not be already busy this slot
+
+        const sectionKey = `${sec.name}::${chosenSub.name}`
+        const gradeKey   = sec.grade ? `${sec.grade}::${chosenSub.name}` : ''
+        const simpleKey  = chosenSub.name
+
+        const isAvailable = (st: any) =>
+          !teacherBusy[st.name]?.[day]?.has(period.id)
+
+        const matchesSub = (st: any): boolean => {
+          const subs: string[] = st.subjects ?? []
+          if (!subs.length) return false
+          // If this teacher has any section-specific assignments, use section/grade matching
+          if (subs.some(s => s.includes('::'))) {
+            return subs.some(s =>
+              s === sectionKey ||
+              (gradeKey !== '' && s === gradeKey)
+            )
+          }
+          // Global subject name
+          return subs.includes(simpleKey)
+        }
+
+        // Build candidate list: section-specific first, then global fallback
+        let eligibleTeachers = staff.filter(st => matchesSub(st) && isAvailable(st))
+
+        // Fallback: if no section-specific teacher available, use any teacher
+        // who knows this subject globally and isn't busy
+        if (!eligibleTeachers.length) {
+          eligibleTeachers = staff.filter(st =>
+            (st.subjects ?? []).includes(simpleKey) && isAvailable(st)
           )
-          if (!teachesThis) return false
-          return !teacherBusy[st.name]?.[day]?.has(period.id)
-        })
+        }
+        // Last resort: any non-busy teacher at all (prevents empty slots when
+        // teacher-subject links are incomplete)
+        if (!eligibleTeachers.length) {
+          eligibleTeachers = staff.filter(st => isAvailable(st))
+        }
 
         // Soft constraint: prefer teacher with fewer periods today
         // Pre-compute teacher load counts for this day to avoid O(n²) sort
