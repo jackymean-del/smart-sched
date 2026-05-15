@@ -2,6 +2,25 @@ import { useState } from 'react'
 import { CalendarDays, Mail, Lock, User, School, Loader2 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 
+// Google "G" logo SVG
+function GoogleIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
+      <path d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z" fill="#34A853"/>
+      <path d="M3.964 10.706A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.706V4.962H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.038l3.007-2.332z" fill="#FBBC05"/>
+      <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.962L3.964 7.294C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
+    </svg>
+  )
+}
+
+// Fake Google accounts for demo simulation
+const FAKE_GOOGLE_USERS = [
+  { name: 'Priya Sharma', email: 'priya.sharma@gmail.com', school: 'Delhi Public School' },
+  { name: 'Rajesh Kumar',  email: 'rajesh.kumar@gmail.com',  school: 'Kendriya Vidyalaya' },
+  { name: 'Anita Verma',   email: 'anita.verma@gmail.com',   school: 'DAV Public School' },
+]
+
 export function RegisterPage() {
   const { register } = useAuthStore()
   const [name, setName]           = useState('')
@@ -9,6 +28,7 @@ export function RegisterPage() {
   const [school, setSchool]       = useState('')
   const [password, setPassword]   = useState('')
   const [loading, setLoading]     = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
   const [error, setError]         = useState('')
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -22,6 +42,21 @@ export function RegisterPage() {
     } catch {
       setError('Registration failed. Please try again.')
     } finally { setLoading(false) }
+  }
+
+  const handleGoogle = async () => {
+    setGoogleLoading(true)
+    setError('')
+    // Simulate Google OAuth popup delay
+    await new Promise(r => setTimeout(r, 1200))
+    try {
+      const u = FAKE_GOOGLE_USERS[Math.floor(Math.random() * FAKE_GOOGLE_USERS.length)]
+      await register(u.name, u.email, 'google-oauth-token', u.school)
+      window.location.href = '/wizard'
+    } catch {
+      setError('Google sign-in failed. Please try again.')
+      setGoogleLoading(false)
+    }
   }
 
   return (
@@ -43,15 +78,42 @@ export function RegisterPage() {
         </div>
 
         <h1 style={{ fontSize:22, fontWeight:700, color:'#111827', marginBottom:4 }}>Create your account</h1>
-        <p style={{ color:'#6b7280', fontSize:13, marginBottom:28 }}>
+        <p style={{ color:'#6b7280', fontSize:13, marginBottom:24 }}>
           Already have one?{' '}
           <a href="/login" style={{ color:'#4f46e5', fontWeight:600, textDecoration:'none' }}>Sign in</a>
         </p>
 
+        {/* ── Google button ── */}
+        <button onClick={handleGoogle} disabled={googleLoading || loading}
+          style={{
+            width:'100%', padding:'11px 16px', borderRadius:8,
+            border:'1.5px solid #e5e7eb', background: googleLoading ? '#f9fafb' : '#fff',
+            display:'flex', alignItems:'center', justifyContent:'center', gap:10,
+            fontSize:14, fontWeight:600, color:'#374151', cursor: googleLoading ? 'default' : 'pointer',
+            boxShadow:'0 1px 3px rgba(0,0,0,0.07)', transition:'box-shadow 0.15s, border-color 0.15s',
+            marginBottom:20,
+          }}
+          onMouseEnter={e => { if (!googleLoading) { (e.currentTarget as HTMLButtonElement).style.borderColor='#d1d5db'; (e.currentTarget as HTMLButtonElement).style.boxShadow='0 2px 6px rgba(0,0,0,0.10)' } }}
+          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor='#e5e7eb'; (e.currentTarget as HTMLButtonElement).style.boxShadow='0 1px 3px rgba(0,0,0,0.07)' }}
+        >
+          {googleLoading
+            ? <><Loader2 size={16} style={{ animation:'spin 1s linear infinite', color:'#6b7280' }} /> Connecting to Google...</>
+            : <><GoogleIcon /> Continue with Google</>
+          }
+        </button>
+
+        {/* ── OR divider ── */}
+        <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:20 }}>
+          <div style={{ flex:1, height:1, background:'#e5e7eb' }} />
+          <span style={{ fontSize:11, fontWeight:600, color:'#9ca3af', letterSpacing:'0.06em', textTransform:'uppercase' }}>or</span>
+          <div style={{ flex:1, height:1, background:'#e5e7eb' }} />
+        </div>
+
+        {/* ── Email/password form ── */}
         <form onSubmit={handleSubmit} style={{ display:'flex', flexDirection:'column', gap:14 }}>
           <Field label="Full Name" icon={<User size={14} color="#9ca3af" />}>
             <input value={name} onChange={e => setName(e.target.value)}
-              placeholder="Priya Sharma" style={inp} autoFocus
+              placeholder="Priya Sharma" style={inp}
               onFocus={e => fi(e.target as HTMLInputElement)} onBlur={e => fo(e.target as HTMLInputElement)} />
           </Field>
 
@@ -79,12 +141,13 @@ export function RegisterPage() {
             </div>
           )}
 
-          <button type="submit" disabled={loading}
+          <button type="submit" disabled={loading || googleLoading}
             style={{
               padding:'12px', borderRadius:8, border:'none', marginTop:4,
-              background: loading ? '#d1d5db' : '#059669', color:'#fff',
-              fontSize:14, fontWeight:600, cursor: loading ? 'default' : 'pointer',
+              background: (loading || googleLoading) ? '#d1d5db' : '#059669', color:'#fff',
+              fontSize:14, fontWeight:600, cursor: (loading || googleLoading) ? 'default' : 'pointer',
               display:'flex', alignItems:'center', justifyContent:'center', gap:8,
+              transition:'background 0.15s',
             }}>
             {loading
               ? <><Loader2 size={15} style={{ animation:'spin 1s linear infinite' }} /> Creating account...</>
