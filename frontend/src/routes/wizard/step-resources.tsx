@@ -72,6 +72,8 @@ export function StepResources() {
   )
   // Class-wise overrides: subjectId → sectionId → periodsPerWeek
   const [classOverrides, setClassOverrides] = useState<Record<string, Record<string, number>>>({})
+  // Teacher assignment matrix: sectionId → subjectId → staffId
+  const [teacherMatrix, setTeacherMatrix] = useState<Record<string, Record<string, string>>>({})
 
   // Generate all data fresh using current config counts
   const regen = () => {
@@ -117,8 +119,9 @@ export function StepResources() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Persist class-wise overrides into subjects then advance
+  // Persist class-wise overrides + teacher assignments then advance
   const handleContinue = () => {
+    // 1. Persist period-count overrides into subjects
     setSubjects(subjects.map(s => {
       const ov = classOverrides[s.id]
       if (!ov || Object.keys(ov).length === 0) return s
@@ -131,6 +134,28 @@ export function StepResources() {
       }))
       return { ...s, classConfigs }
     }))
+
+    // 2. Persist teacher-class-subject assignments from matrix into staff.subjects
+    const hasMatrixData = Object.keys(teacherMatrix).length > 0 &&
+      Object.values(teacherMatrix).some(m => Object.values(m).some(v => v))
+
+    if (hasMatrixData) {
+      setStaff(staff.map(s => {
+        const assignments: string[] = []
+        Object.entries(teacherMatrix).forEach(([sectionId, subMap]) => {
+          const sec = sections.find((x: any) => x.id === sectionId)
+          if (!sec) return
+          Object.entries(subMap).forEach(([subjectId, staffId]) => {
+            if (staffId === s.id) {
+              const sub = subjects.find((x: any) => x.id === subjectId)
+              if (sub) assignments.push(`${sec.name}::${sub.name}`)
+            }
+          })
+        })
+        return assignments.length > 0 ? { ...s, subjects: assignments } : s
+      }))
+    }
+
     setStep(4)
   }
 
@@ -194,7 +219,11 @@ export function StepResources() {
 
         {/* ══ TEACHERS ═════════════════════════════════════════ */}
         {tab === "teachers" && (
-          <TeachersTable staff={staff} setStaff={setStaff} subjects={subjects} />
+          <TeachersTable
+            staff={staff} setStaff={setStaff}
+            subjects={subjects} sections={sections}
+            teacherMatrix={teacherMatrix} setTeacherMatrix={setTeacherMatrix}
+          />
         )}
 
         {/* ══ ROOMS ════════════════════════════════════════════ */}
@@ -636,76 +665,377 @@ function SubjectsTable({
 }
 
 // ════════════════════════════════════════════════════════════════
-// TEACHERS TABLE
+// TEACHERS TABLE — List view + Class-wise Assignment Matrix
 // ════════════════════════════════════════════════════════════════
-function TeachersTable({ staff, setStaff, subjects }: { staff:any[]; setStaff:(s:any[])=>void; subjects:any[] }) {
+function TeachersTable({ staff, setStaff, subjects, sections, teacherMatrix, setTeacherMatrix }: {
+  staff: any[]; setStaff: (s: any[]) => void
+  subjects: any[]; sections: any[]
+  teacherMatrix: Record<string, Record<string, string>>
+  setTeacherMatrix: (m: Record<string, Record<string, string>>) => void
+}) {
+  const [view, setView] = useState<'list' | 'matrix'>('list')
+  const [transposed, setTransposed] = useState(false)
+  const [activeCell, setActiveCell] = useState<{r:number; c:number}|null>(null)
+
+  // ── List helpers ──────────────────────────────────────────────
   const upd = (id:string, k:string, v:any) => setStaff(staff.map(t => t.id===id ? {...t,[k]:v} : t))
   const add = () => setStaff([...staff, { id:makeId(), name:`Teacher ${staff.length+1}`, role:"Teacher", subjects:[], classes:[], isClassTeacher:"", maxPeriodsPerWeek:30 }])
   const del = (id:string) => setStaff(staff.filter(t=>t.id!==id))
-
   const toggleSub = (tid:string, sname:string) => {
     const t = staff.find(x=>x.id===tid); if (!t) return
     const cur:string[] = t.subjects??[]
     upd(tid,"subjects", cur.includes(sname) ? cur.filter((x:string)=>x!==sname) : [...cur,sname])
   }
 
+  // ── Matrix helpers ────────────────────────────────────────────
+  const getAssigned = (secId: string, subId: string) => teacherMatrix[secId]?.[subId] ?? ''
+  const setAssigned = (secId: string, subId: string, staffId: string) =>
+    setTeacherMatrix({ ...teacherMatrix, [secId]: { ...(teacherMatrix[secId] ?? {}), [subId]: staffId } })
+
+  // Per-teacher colour palette (cycles by staff index)
+  const PALETTES = [
+    { bg:'#dbeafe', text:'#1d4ed8', border:'#93c5fd' },
+    { bg:'#d1fae5', text:'#065f46', border:'#6ee7b7' },
+    { bg:'#fef3c7', text:'#92400e', border:'#fcd34d' },
+    { bg:'#fce7f3', text:'#9d174d', border:'#f9a8d4' },
+    { bg:'#ede9fe', text:'#5b21b6', border:'#c4b5fd' },
+    { bg:'#ffedd5', text:'#9a3412', border:'#fdba74' },
+    { bg:'#cffafe', text:'#164e63', border:'#67e8f9' },
+    { bg:'#dcfce7', text:'#166534', border:'#86efac' },
+  ]
+  const tPal = (staffId: string) => {
+    if (!staffId) return { bg:'#f3f4f6', text:'#9ca3af', border:'#e5e7eb' }
+    const idx = staff.findIndex(s => s.id === staffId)
+    return PALETTES[Math.max(0,idx) % PALETTES.length]
+  }
+
+  // Auto-assign: fills every cell with the least-loaded eligible teacher
+  const autoAssign = () => {
+    const matrix: Record<string, Record<string, string>> = {}
+    const load: Record<string, number> = {}
+    staff.forEach(s => { load[s.id] = 0 })
+    sections.forEach(sec => {
+      matrix[sec.id] = {}
+      subjects.forEach(sub => {
+        let eligible = staff.filter(t =>
+          (t.subjects ?? []).some((s: string) => s === sub.name || s.endsWith(`::${sub.name}`))
+        )
+        if (!eligible.length) eligible = [...staff]
+        if (!eligible.length) return
+        const picked = eligible.reduce((a, b) => (load[a.id]??0) <= (load[b.id]??0) ? a : b)
+        matrix[sec.id][sub.id] = picked.id
+        load[picked.id]++
+      })
+    })
+    setTeacherMatrix(matrix)
+  }
+
+  const totalSlots    = sections.length * subjects.length
+  const totalAssigned = Object.values(teacherMatrix).reduce((a, m) => a + Object.values(m).filter(v=>v).length, 0)
+  const unassigned    = totalSlots - totalAssigned
+
+  // Keyboard navigation for matrix cells
+  const handleKey = (e: React.KeyboardEvent, r: number, c: number) => {
+    const maxR = (transposed ? sections.length : subjects.length) - 1
+    const maxC = (transposed ? subjects.length : sections.length) - 1
+    if      (e.key==='Tab')        { e.preventDefault(); setActiveCell({r, c: c<maxC?c+1:c}) }
+    else if (e.key==='Enter')      { e.preventDefault(); setActiveCell({r: r<maxR?r+1:r, c}) }
+    else if (e.key==='Escape')     { setActiveCell(null) }
+    else if (e.key==='ArrowRight') { e.preventDefault(); setActiveCell({r, c:Math.min(c+1,maxC)}) }
+    else if (e.key==='ArrowLeft')  { e.preventDefault(); setActiveCell({r, c:Math.max(c-1,0)}) }
+    else if (e.key==='ArrowDown')  { e.preventDefault(); setActiveCell({r:Math.min(r+1,maxR),c}) }
+    else if (e.key==='ArrowUp')    { e.preventDefault(); setActiveCell({r:Math.max(r-1,0),c}) }
+  }
+
+  // Fixed sticky col layout for matrix (normal: rows=subjects)
+  const M_FCOLS = [
+    { label:'#',       w:36  },
+    { label:'SUBJECT', w:152 },
+    { label:'SHORT',   w:54  },
+  ]
+  const mLeft = M_FCOLS.reduce((acc,col,i) => { acc.push(i===0?0:acc[i-1]+M_FCOLS[i-1].w); return acc }, [] as number[])
+  const CELL_W = 94
+
+  const mTh = (i:number): React.CSSProperties => ({
+    ...th, position:'sticky' as const, left:mLeft[i], zIndex:3, background:'#f9fafb',
+    width:M_FCOLS[i].w, minWidth:M_FCOLS[i].w,
+    boxShadow: i===M_FCOLS.length-1 ? '3px 0 6px -2px rgba(0,0,0,0.08)' : 'none',
+  })
+  const mTd = (i:number, bg:string): React.CSSProperties => ({
+    ...td, position:'sticky' as const, left:mLeft[i], zIndex:1, background:bg,
+    width:M_FCOLS[i].w, minWidth:M_FCOLS[i].w,
+    boxShadow: i===M_FCOLS.length-1 ? '3px 0 6px -2px rgba(0,0,0,0.08)' : 'none',
+  })
+
+  // Shared cell renderer for both orientations
+  const MatrixCell = ({ secId, subId, r, c, rowBg }: { secId:string; subId:string; r:number; c:number; rowBg:string }) => {
+    const assignedId    = getAssigned(secId, subId)
+    const assignedStaff = staff.find(s => s.id === assignedId)
+    const isActive      = activeCell?.r === r && activeCell?.c === c
+    const pal           = tPal(assignedId)
+    return (
+      <td
+        onClick={() => setActiveCell({r, c})}
+        title={assignedStaff ? `${assignedStaff.name} — click to change` : 'Click to assign a teacher'}
+        style={{
+          ...td, textAlign:'center', cursor:'pointer', padding:'4px 5px',
+          background: isActive ? '#eef2ff' : assignedId ? pal.bg : rowBg,
+          borderLeft:'1px solid #f0f0f0',
+          outline: isActive ? '2px solid #4f46e5' : 'none', outlineOffset:-2,
+          minWidth: CELL_W,
+        }}>
+        {isActive ? (
+          <select autoFocus value={assignedId}
+            onChange={e => { setAssigned(secId, subId, e.target.value); setActiveCell(null) }}
+            onKeyDown={e => handleKey(e, r, c)}
+            onBlur={() => setActiveCell(null)}
+            style={{ width:'100%', fontSize:11, border:'1px solid #6366f1', borderRadius:5, padding:'3px 4px', background:'#fff', color:'#111827', outline:'none', cursor:'pointer' }}>
+            <option value="">— None —</option>
+            {staff.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+        ) : assignedStaff ? (
+          <span style={{ fontSize:11, fontWeight:600, color:pal.text, padding:'2px 7px', borderRadius:5, background:pal.bg, border:`1px solid ${pal.border}`, whiteSpace:'nowrap', display:'inline-block', maxWidth:'100%', overflow:'hidden', textOverflow:'ellipsis' }}>
+            {assignedStaff.shortName || assignedStaff.name.replace(/\s+\d+$/,'') + ' ' + (staff.findIndex(s=>s.id===assignedStaff.id)+1)}
+          </span>
+        ) : (
+          <span style={{ fontSize:11, color:'#d1d5db' }}>—</span>
+        )}
+      </td>
+    )
+  }
+
   return (
-    <table style={{ width:"100%", borderCollapse:"collapse" }}>
-      <thead><tr>
-        <th style={{...th,width:36,textAlign:"center"}}>#</th>
-        <th style={th}>Full Name</th>
-        <th style={{...th,width:72}}>Short</th>
-        <th style={{...th,width:130}}>Role</th>
-        <th style={th}>Subjects (click to assign)</th>
-        <th style={{...th,width:88,textAlign:"center"}}>Max/week</th>
-        <th style={{...th,width:36}}></th>
-      </tr></thead>
-      <tbody>
-        {staff.map((t,i) => (
-          <tr key={t.id}
-            style={{ background:i%2===0?"#fff":"#fafafa" }}
-            onMouseEnter={e => (e.currentTarget as HTMLElement).style.background="#f0f9ff"}
-            onMouseLeave={e => (e.currentTarget as HTMLElement).style.background=i%2===0?"#fff":"#fafafa"}>
-            <td style={{...td,textAlign:"center",color:"#d1d5db",fontSize:10,fontFamily:"monospace"}}>{i+1}</td>
-            <td style={td}><input style={inp({fontWeight:600})} value={t.name} onChange={e=>upd(t.id,"name",e.target.value)} onFocus={onFocus} onBlur={onBlur} /></td>
-            <td style={td}><input style={inp({textTransform:"uppercase",fontFamily:"monospace",fontSize:11})} value={t.shortName??t.name?.slice(0,4).toUpperCase()??""} onChange={e=>upd(t.id,"shortName",e.target.value.toUpperCase())} maxLength={5} onFocus={onFocus} onBlur={onBlur} /></td>
-            <td style={td}>
-              <select style={inp({fontSize:11})} value={t.role??"Teacher"} onChange={e=>upd(t.id,"role",e.target.value)} onFocus={onFocus} onBlur={onBlur}>
-                {ROLES.map(r=><option key={r}>{r}</option>)}
-              </select>
-            </td>
-            <td style={td}>
-              <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
-                {subjects.map((s:any) => {
-                  const on = (t.subjects??[]).includes(s.name)
+    <div style={{ display:'flex', flexDirection:'column', height:'100%' }}>
+
+      {/* ── Sub-tab bar ── */}
+      <div style={{ display:'flex', alignItems:'center', borderBottom:'1px solid #e5e7eb', background:'#fafafa', padding:'0 12px', flexShrink:0 }}>
+        {(['list','matrix'] as const).map(v => (
+          <button key={v} onClick={() => setView(v)}
+            style={{
+              padding:'8px 14px', border:'none',
+              borderBottom: view===v ? '2px solid #4f46e5' : '2px solid transparent',
+              marginBottom:-1, background:'transparent', fontSize:12,
+              fontWeight: view===v ? 600 : 400, color: view===v ? '#4f46e5' : '#6b7280',
+              cursor:'pointer',
+            }}>
+            {v === 'list' ? '👤  Teacher List' : '📋  Class-wise Assignment'}
+          </button>
+        ))}
+
+        {/* Matrix toolbar */}
+        {view === 'matrix' && (
+          <div style={{ marginLeft:'auto', display:'flex', gap:8, alignItems:'center' }}>
+            <span style={{ fontSize:11, color: unassigned>0 ? '#f59e0b' : '#059669', fontWeight:600 }}>
+              {unassigned > 0 ? `⚠️ ${unassigned} unassigned` : `✅ All ${totalSlots} slots assigned`}
+            </span>
+            <button onClick={autoAssign}
+              style={{ padding:'4px 11px', borderRadius:5, border:'1px solid #c7d2fe', background:'#e0e7ff', color:'#3730a3', fontSize:11, fontWeight:600, cursor:'pointer' }}>
+              ⚡ Auto-assign
+            </button>
+            <button onClick={() => { setTeacherMatrix({}); setActiveCell(null) }}
+              style={{ padding:'4px 9px', borderRadius:5, border:'1px solid #fecaca', background:'#fff1f2', color:'#be123c', fontSize:11, cursor:'pointer' }}>
+              ✕ Clear
+            </button>
+            <button onClick={() => { setTransposed(t=>!t); setActiveCell(null) }}
+              style={{ padding:'4px 10px', borderRadius:5, border:'1px solid #d1d5db', background: transposed?'#f0fdf4':'#fff', color: transposed?'#059669':'#374151', fontSize:11, fontWeight:600, cursor:'pointer' }}>
+              ⇄ {transposed ? 'Classes as rows' : 'Subjects as rows'}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* ══ LIST VIEW ══════════════════════════════════════════ */}
+      {view === 'list' && (
+        <div style={{ overflowY:'auto', flex:1 }}>
+          <div style={{ padding:'7px 16px', background:'#eff6ff', borderBottom:'1px solid #dbeafe', fontSize:11, color:'#3730a3' }}>
+            💡 Toggle the subjects each teacher <strong>can</strong> teach — then go to <strong>Class-wise Assignment</strong> to assign which class they actually teach it for.
+          </div>
+          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+            <thead><tr>
+              <th style={{...th,width:36,textAlign:"center"}}>#</th>
+              <th style={th}>Full Name</th>
+              <th style={{...th,width:72}}>Short</th>
+              <th style={{...th,width:130}}>Role</th>
+              <th style={th}>Can teach (click to toggle)</th>
+              <th style={{...th,width:88,textAlign:"center"}}>Max/week</th>
+              <th style={{...th,width:36}}></th>
+            </tr></thead>
+            <tbody>
+              {staff.map((t,i) => {
+                const pal = tPal(t.id)
+                return (
+                  <tr key={t.id}
+                    style={{ background:i%2===0?"#fff":"#fafafa" }}
+                    onMouseEnter={e => (e.currentTarget as HTMLElement).style.background="#f0f9ff"}
+                    onMouseLeave={e => (e.currentTarget as HTMLElement).style.background=i%2===0?"#fff":"#fafafa"}>
+                    <td style={{...td,textAlign:"center",color:"#d1d5db",fontSize:10,fontFamily:"monospace"}}>{i+1}</td>
+                    <td style={td}><input style={inp({fontWeight:600})} value={t.name} onChange={e=>upd(t.id,"name",e.target.value)} onFocus={onFocus} onBlur={onBlur} /></td>
+                    <td style={td}><input style={inp({textTransform:"uppercase",fontFamily:"monospace",fontSize:11})} value={t.shortName??t.name?.slice(0,4).toUpperCase()??""} onChange={e=>upd(t.id,"shortName",e.target.value.toUpperCase())} maxLength={5} onFocus={onFocus} onBlur={onBlur} /></td>
+                    <td style={td}>
+                      <select style={inp({fontSize:11})} value={t.role??"Teacher"} onChange={e=>upd(t.id,"role",e.target.value)} onFocus={onFocus} onBlur={onBlur}>
+                        {ROLES.map(r=><option key={r}>{r}</option>)}
+                      </select>
+                    </td>
+                    <td style={td}>
+                      <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
+                        {subjects.map((s:any) => {
+                          const on = (t.subjects??[]).includes(s.name)
+                          return (
+                            <span key={s.id} onClick={() => toggleSub(t.id,s.name)}
+                              style={{
+                                padding:"2px 9px", borderRadius:20, fontSize:10, fontWeight:500, cursor:"pointer", userSelect:"none" as const,
+                                background: on ? pal.bg : "#f3f4f6",
+                                color:      on ? pal.text : "#6b7280",
+                                border:     on ? `1px solid ${pal.border}` : "1px solid transparent",
+                              }}>
+                              {s.name}
+                            </span>
+                          )
+                        })}
+                      </div>
+                    </td>
+                    <td style={{...td,textAlign:"center"}}>
+                      <input type="number" min={1} max={45} style={inp({textAlign:"center",fontFamily:"monospace",fontWeight:700})} value={t.maxPeriodsPerWeek??30} onChange={e=>upd(t.id,"maxPeriodsPerWeek",+e.target.value)} onFocus={onFocus} onBlur={onBlur} />
+                    </td>
+                    <td style={td}><button onClick={()=>del(t.id)} style={{ background:"none",border:"none",cursor:"pointer",color:"#d1d5db",padding:0,display:"flex",alignItems:"center" }}><Trash2 size={13}/></button></td>
+                  </tr>
+                )
+              })}
+            </tbody>
+            <tfoot>
+              <tr><td colSpan={7} style={{ padding:0 }}>
+                <button onClick={add} style={{ width:"100%",padding:"9px 16px",border:"none",borderTop:"1.5px dashed #e5e7eb",background:"transparent",cursor:"pointer",fontSize:12,color:"#9ca3af",textAlign:"left" as const,display:"flex",alignItems:"center",gap:6 }}>
+                  <Plus size={14}/> Add teacher
+                </button>
+              </td></tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+
+      {/* ══ MATRIX VIEW ════════════════════════════════════════ */}
+      {view === 'matrix' && (
+        <div style={{ overflowX:'auto', overflowY:'auto', flex:1 }}>
+          <div style={{ padding:'7px 16px', background:'#f0fdf4', borderBottom:'1px solid #bbf7d0', fontSize:11, color:'#166534', flexShrink:0 }}>
+            💡 Each cell = which teacher delivers that subject to that class · <strong>Click</strong> to assign · <strong>⚡ Auto-assign</strong> distributes based on "Can teach" list · <kbd style={{ padding:'1px 5px', borderRadius:3, border:'1px solid #bbf7d0', background:'#dcfce7', fontSize:10 }}>Tab</kbd> / <kbd style={{ padding:'1px 5px', borderRadius:3, border:'1px solid #bbf7d0', background:'#dcfce7', fontSize:10 }}>↑↓←→</kbd> to navigate
+          </div>
+
+          {/* ── Legend strip ── */}
+          <div style={{ padding:'6px 16px', borderBottom:'1px solid #e5e7eb', display:'flex', gap:8, flexWrap:'wrap' as const, alignItems:'center', background:'#fafafa', flexShrink:0 }}>
+            <span style={{ fontSize:10, color:'#9ca3af', fontWeight:600, marginRight:4 }}>TEACHERS:</span>
+            {staff.map((t,i) => {
+              const pal = PALETTES[i % PALETTES.length]
+              const assigned = Object.values(teacherMatrix).reduce((a,m) => a + (Object.values(m).filter(v=>v===t.id).length), 0)
+              return (
+                <span key={t.id} style={{ display:'flex', alignItems:'center', gap:4, padding:'2px 8px', borderRadius:5, background:pal.bg, border:`1px solid ${pal.border}`, fontSize:10, fontWeight:600, color:pal.text }}>
+                  {t.name}
+                  {assigned > 0 && <span style={{ background:pal.border, color:'#fff', borderRadius:8, padding:'0 5px', fontSize:9 }}>{assigned}</span>}
+                </span>
+              )
+            })}
+          </div>
+
+          {transposed ? (
+            /* ── TRANSPOSED: rows = sections, cols = subjects ── */
+            <table style={{ borderCollapse:'collapse', minWidth: 186 + subjects.length * CELL_W, tableLayout:'fixed' }}>
+              <colgroup>
+                <col style={{ width:36 }} />
+                <col style={{ width:150 }} />
+                {subjects.map(s => <col key={s.id} style={{ width:CELL_W }} />)}
+              </colgroup>
+              <thead>
+                <tr>
+                  <th style={{ ...th, position:'sticky' as const, left:0,  zIndex:3, background:'#f9fafb', width:36,  textAlign:'center' }}>#</th>
+                  <th style={{ ...th, position:'sticky' as const, left:36, zIndex:3, background:'#f9fafb', width:150, boxShadow:'3px 0 6px -2px rgba(0,0,0,0.08)' }}>CLASS</th>
+                  {subjects.map(sub => (
+                    <th key={sub.id} style={{ ...th, textAlign:'center', background:'#fdf4ff', color:'#7c3aed', borderLeft:'1px solid #ede9fe', fontSize:10, padding:'5px 4px' }}>
+                      <div style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' as const }}>{sub.shortName || sub.name}</div>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {sections.map((sec, r) => {
+                  const rowBg = r%2===0 ? '#fff' : '#fafafa'
                   return (
-                    <span key={s.id} onClick={() => toggleSub(t.id,s.name)}
-                      style={{
-                        padding:"2px 8px", borderRadius:20, fontSize:10, fontWeight:500, cursor:"pointer", userSelect:"none",
-                        background: on?"#dbeafe":"#f3f4f6", color: on?"#1d4ed8":"#6b7280",
-                        border: on?"1px solid #93c5fd":"1px solid transparent",
-                      }}>
-                      {s.name}
-                    </span>
+                    <tr key={sec.id}
+                      onMouseEnter={e => (e.currentTarget as HTMLElement).style.background='#f8faff'}
+                      onMouseLeave={e => (e.currentTarget as HTMLElement).style.background=rowBg}>
+                      <td style={{ ...td, position:'sticky' as const, left:0,  zIndex:1, background:rowBg, textAlign:'center', color:'#d1d5db', fontSize:10, fontFamily:'monospace' }}>{r+1}</td>
+                      <td style={{ ...td, position:'sticky' as const, left:36, zIndex:1, background:rowBg, fontWeight:600, fontSize:12, boxShadow:'3px 0 6px -2px rgba(0,0,0,0.08)' }}>{sec.name}</td>
+                      {subjects.map((sub, c) => <MatrixCell key={sub.id} secId={sec.id} subId={sub.id} r={r} c={c} rowBg={rowBg} />)}
+                    </tr>
                   )
                 })}
-              </div>
-            </td>
-            <td style={{...td,textAlign:"center"}}>
-              <input type="number" min={1} max={45} style={inp({textAlign:"center",fontFamily:"monospace",fontWeight:700})} value={t.maxPeriodsPerWeek??30} onChange={e=>upd(t.id,"maxPeriodsPerWeek",+e.target.value)} onFocus={onFocus} onBlur={onBlur} />
-            </td>
-            <td style={td}><button onClick={()=>del(t.id)} style={{ background:"none",border:"none",cursor:"pointer",color:"#d1d5db",padding:0,display:"flex",alignItems:"center" }}><Trash2 size={13}/></button></td>
-          </tr>
-        ))}
-      </tbody>
-      <tfoot>
-        <tr><td colSpan={7} style={{ padding:0 }}>
-          <button onClick={add} style={{ width:"100%",padding:"9px 16px",border:"none",borderTop:"1.5px dashed #e5e7eb",background:"transparent",cursor:"pointer",fontSize:12,color:"#9ca3af",textAlign:"left",display:"flex",alignItems:"center",gap:6 }}>
-            <Plus size={14}/> Add teacher
-          </button>
-        </td></tr>
-      </tfoot>
-    </table>
+              </tbody>
+              <tfoot>
+                <tr style={{ background:'#f9fafb' }}>
+                  <td colSpan={2} style={{ ...td, position:'sticky' as const, left:0, zIndex:1, background:'#f9fafb', fontSize:10, fontWeight:700, color:'#6b7280', textAlign:'right' as const, paddingRight:10, borderTop:'1.5px solid #e5e7eb', boxShadow:'3px 0 6px -2px rgba(0,0,0,0.08)' }}>
+                    Assigned →
+                  </td>
+                  {subjects.map(sub => {
+                    const count = sections.filter(sec => getAssigned(sec.id, sub.id)).length
+                    return (
+                      <td key={sub.id} style={{ ...td, textAlign:'center', background:'#f9fafb', borderLeft:'1px solid #e5e7eb', borderTop:'1.5px solid #e5e7eb', fontFamily:'monospace', fontWeight:700, fontSize:11, color: count<sections.length?'#f59e0b':'#059669', padding:'5px 4px' }}>
+                        {count}/{sections.length}
+                      </td>
+                    )
+                  })}
+                </tr>
+              </tfoot>
+            </table>
+          ) : (
+            /* ── NORMAL: rows = subjects, cols = sections ── */
+            <table style={{ borderCollapse:'collapse', minWidth: (mLeft[M_FCOLS.length-1]+M_FCOLS[M_FCOLS.length-1].w) + sections.length * CELL_W, tableLayout:'fixed' }}>
+              <colgroup>
+                {M_FCOLS.map((_,i) => <col key={i} style={{ width:M_FCOLS[i].w }} />)}
+                {sections.map(s => <col key={s.id} style={{ width:CELL_W }} />)}
+              </colgroup>
+              <thead>
+                <tr>
+                  {M_FCOLS.map((col,i) => <th key={i} style={mTh(i)}>{col.label}</th>)}
+                  {sections.map(sec => (
+                    <th key={sec.id} style={{ ...th, textAlign:'center', background:'#f0f9ff', color:'#0369a1', borderLeft:'1px solid #e0f2fe', fontSize:10, padding:'6px 4px' }}>
+                      {sec.name}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {subjects.map((sub, r) => {
+                  const rowBg = r%2===0 ? '#fff' : '#fafafa'
+                  return (
+                    <tr key={sub.id}
+                      onMouseEnter={e => (e.currentTarget as HTMLElement).style.background='#f8faff'}
+                      onMouseLeave={e => (e.currentTarget as HTMLElement).style.background=rowBg}>
+                      <td style={{...mTd(0,rowBg), textAlign:'center', color:'#d1d5db', fontSize:10, fontFamily:'monospace'}}>{r+1}</td>
+                      <td style={{...mTd(1,rowBg), fontWeight:600, fontSize:12}}>{sub.name}</td>
+                      <td style={{...mTd(2,rowBg), textAlign:'center', fontFamily:'monospace', fontSize:11, color:'#9ca3af'}}>{sub.shortName||'—'}</td>
+                      {sections.map((sec, c) => <MatrixCell key={sec.id} secId={sec.id} subId={sub.id} r={r} c={c} rowBg={rowBg} />)}
+                    </tr>
+                  )
+                })}
+              </tbody>
+              <tfoot>
+                <tr style={{ background:'#f9fafb' }}>
+                  <td colSpan={M_FCOLS.length} style={{ ...td, position:'sticky' as const, left:0, zIndex:1, background:'#f9fafb', fontSize:10, fontWeight:700, color:'#6b7280', textAlign:'right' as const, paddingRight:10, borderTop:'1.5px solid #e5e7eb', boxShadow:'3px 0 6px -2px rgba(0,0,0,0.08)' }}>
+                    Assigned →
+                  </td>
+                  {sections.map(sec => {
+                    const count = subjects.filter(sub => getAssigned(sec.id, sub.id)).length
+                    return (
+                      <td key={sec.id} style={{ ...td, textAlign:'center', background:'#f9fafb', borderLeft:'1px solid #e5e7eb', borderTop:'1.5px solid #e5e7eb', fontFamily:'monospace', fontWeight:700, fontSize:12, color: count<subjects.length?'#f59e0b':'#059669', padding:'6px 4px' }}>
+                        {count}/{subjects.length}
+                      </td>
+                    )
+                  })}
+                </tr>
+              </tfoot>
+            </table>
+          )}
+        </div>
+      )}
+    </div>
   )
 }
 
