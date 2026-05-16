@@ -112,7 +112,7 @@ export function StepOptionalBlocks() {
     const has = b.sectionNames.includes(name)
     upsertOptionalBlock({
       ...b,
-      sectionNames: has ? b.sectionNames.filter(s => s !== name) : [...b.sectionNames, name],
+      sectionNames: has ? b.sectionNames.filter((s: string) => s !== name) : [...b.sectionNames, name],
     })
   }
 
