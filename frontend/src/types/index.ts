@@ -567,6 +567,46 @@ export const SubjectCombinationSchema = z.object({
   strength: z.number().int().min(0),
 })
 
+// ─────────────────────────────────────────────────────────────
+// schedU Scope System — per-entity slot allowability matrix
+// ─────────────────────────────────────────────────────────────
+
+/** A single cell in a ScopeMatrix: structural allow/disallow.
+ *  - allowed  = entity may be scheduled in this slot (default)
+ *  - disabled = entity may NOT be scheduled (soft visual hint, AI avoids)
+ *  - locked   = HARD constraint, AI must never violate */
+export type ScopeState = 'allowed' | 'disabled' | 'locked'
+
+/** Slot-allowability matrix attached to any entity (Teacher, Subject,
+ *  Room, Class, Section, ElectivePool, Activity).
+ *
+ *  Shape: day -> periodId -> state. Missing entries default to 'allowed'.
+ *  When ALL entries are missing/'allowed', the entity is unscoped.
+ *
+ *  AI Engine treats 'locked' as a HARD constraint; 'disabled' as a
+ *  strong soft penalty. */
+export interface ScopeMatrix {
+  /** day key (DOW_KEY) -> periodId -> state */
+  cells: Record<string, Record<string, ScopeState>>
+  /** Optional human-readable rationale for the constraint */
+  note?: string
+}
+
+export const ScopeMatrixSchema = z.object({
+  cells: z.record(z.string(), z.record(z.string(), z.enum(['allowed', 'disabled', 'locked']))),
+  note: z.string().optional(),
+})
+
+/** Helper: lookup state for (day, periodId); defaults to 'allowed' */
+export function getScopeState(matrix: ScopeMatrix | undefined, day: string, periodId: string): ScopeState {
+  return matrix?.cells?.[day]?.[periodId] ?? 'allowed'
+}
+
+/** Helper: is the entity allowed in this slot? (locked = no, disabled = no) */
+export function isScopeAllowed(matrix: ScopeMatrix | undefined, day: string, periodId: string): boolean {
+  return getScopeState(matrix, day, periodId) === 'allowed'
+}
+
 /** schedU Phase 6 — Simplified section-strength matrix.
  *
  *  Per-section, how many students take each subject. From this single
