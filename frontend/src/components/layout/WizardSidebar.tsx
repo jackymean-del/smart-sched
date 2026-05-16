@@ -4,9 +4,8 @@ export const WIZARD_STEPS = [
   { n: 1, label: 'School' },
   { n: 2, label: 'Schedule' },
   { n: 3, label: 'Resources' },
-  { n: 4, label: 'Optional Blocks' },
-  { n: 5, label: 'Combinations' },
-  { n: 6, label: 'Generate' },
+  { n: 4, label: 'Strengths' },
+  { n: 5, label: 'Generate' },
 ]
 
 interface Props {

@@ -67,6 +67,146 @@ export interface SolverInput {
   optionalBlocks?: import('@/types').OptionalBlock[]
   /** Per-class combination strengths — used for capacity overflow detection */
   subjectCombinations?: import('@/types').SubjectCombination[]
+  /** schedU Phase 6: Section-subject strength matrix.
+   *  When provided AND optionalBlocks is empty, the engine AUTO-INFERS
+   *  optional blocks from the matrix (the "simple input" mode). */
+  sectionStrengths?: import('@/types').SectionStrength[]
+}
+
+/** schedU Phase 6 — Auto-infer Optional Blocks from section strengths.
+ *
+ *  Heuristics:
+ *    1. For each section, find the maximum subject strength = section size.
+ *    2. Subjects with 0 < strength < max are "optional" for that section.
+ *    3. Within a section, optionals whose strengths sum to ≈ section size
+ *       are parallel choices → group into one block.
+ *    4. Across sections, the same parallel-optional group is pooled
+ *       (cross-section pooling) into a single OptionalBlock.
+ *    5. Block gets assigned to the first available class period that's not
+ *       already taken by another auto-block in any of its sections.
+ */
+function inferOptionalBlocksFromStrengths(
+  sectionStrengths: import('@/types').SectionStrength[],
+  staff: Staff[],
+  sections: Section[],
+  classPeriods: Period[],
+  workDays: string[],
+): import('@/types').OptionalBlock[] {
+  if (!sectionStrengths.length || !classPeriods.length || !workDays.length) return []
+
+  // 1) Identify optional subjects per section
+  type OptInfo = { section: string; subject: string; strength: number }
+  const optsBySection = new Map<string, OptInfo[]>()
+  sectionStrengths.forEach(row => {
+    const vals = Object.entries(row.subjectStrengths ?? {})
+      .filter(([, v]) => typeof v === 'number' && v > 0)
+    if (!vals.length) return
+    const max = Math.max(...vals.map(([, v]) => v))
+    const sectionSize = row.totalStudents ?? max
+    const opts = vals
+      .filter(([, v]) => v < sectionSize)
+      .map(([sub, v]) => ({ section: row.sectionName, subject: sub, strength: v }))
+    if (opts.length > 0) optsBySection.set(row.sectionName, opts)
+  })
+  if (optsBySection.size === 0) return []
+
+  // 2) For each section, group its optionals into "parallel sets" (subjects
+  //    whose strengths sum to roughly the section total — they're offered
+  //    at the same time slot).
+  type ParallelSet = { sectionName: string; subjects: string[]; perSubjectStrength: Record<string, number> }
+  const parallelSets: ParallelSet[] = []
+  optsBySection.forEach((opts, secName) => {
+    // Naïve grouping: assume all optionals in a section form ONE parallel block.
+    // (More sophisticated bin-packing can come later; this matches the common case
+    //  where a section has 2-4 parallel options like PE/Art/Painting/Music.)
+    parallelSets.push({
+      sectionName: secName,
+      subjects: opts.map(o => o.subject).sort(),
+      perSubjectStrength: Object.fromEntries(opts.map(o => [o.subject, o.strength])),
+    })
+  })
+
+  // 3) Pool parallel sets across sections by their subject-set signature.
+  const signatureToBlock = new Map<string, {
+    sectionNames: string[]
+    subjects: string[]
+    capacityBySubject: Record<string, number>
+  }>()
+  parallelSets.forEach(ps => {
+    const sig = ps.subjects.join('|')
+    const entry = signatureToBlock.get(sig) ?? {
+      sectionNames: [],
+      subjects: ps.subjects,
+      capacityBySubject: Object.fromEntries(ps.subjects.map(s => [s, 0])),
+    }
+    entry.sectionNames.push(ps.sectionName)
+    ps.subjects.forEach(s => {
+      entry.capacityBySubject[s] = (entry.capacityBySubject[s] ?? 0) + (ps.perSubjectStrength[s] ?? 0)
+    })
+    signatureToBlock.set(sig, entry)
+  })
+
+  // 4) Assign each pooled block to a (day, period) — first available across
+  //    every section in the block.
+  const usedSlot = new Set<string>() // "section|day|period"
+  const inferred: import('@/types').OptionalBlock[] = []
+  let blockIdx = 1
+  signatureToBlock.forEach(entry => {
+    let placedDay = workDays[0], placedPid = classPeriods[0]?.id ?? ''
+    outer: for (const day of workDays) {
+      for (const p of classPeriods) {
+        // First class period is reserved for class teachers — skip
+        if (p.id === classPeriods[0]?.id) continue
+        const allFree = entry.sectionNames.every(s => !usedSlot.has(`${s}|${day}|${p.id}`))
+        if (allFree) {
+          placedDay = day
+          placedPid = p.id
+          entry.sectionNames.forEach(s => usedSlot.add(`${s}|${day}|${p.id}`))
+          break outer
+        }
+      }
+    }
+
+    // Match a teacher per option (subject-aware, no double-booking)
+    const teacherBusyAtBlock = new Set<string>()
+    const options = entry.subjects.map(sub => {
+      const t = staff.find(st =>
+        ((st as any).subjects ?? []).some((s: string) => s === sub || s.endsWith(`::${sub}`))
+        && !teacherBusyAtBlock.has(st.name)
+      ) ?? staff.find(st => !teacherBusyAtBlock.has(st.name))
+      if (t) teacherBusyAtBlock.add(t.name)
+      // Pick a sensible room based on subject keyword
+      const roomGuess = guessRoom(sub, sections)
+      return {
+        subject: sub,
+        teacher: t?.name ?? '',
+        room: roomGuess,
+        capacity: entry.capacityBySubject[sub] ?? 0,
+        allocatedStrength: entry.capacityBySubject[sub] ?? 0,
+      }
+    })
+
+    inferred.push({
+      id: `auto-block-${blockIdx++}`,
+      name: `Optional Block ${blockIdx - 1}`,
+      sectionNames: entry.sectionNames,
+      day: placedDay,
+      periodId: placedPid,
+      options,
+    })
+  })
+
+  return inferred
+}
+
+function guessRoom(subject: string, sections: Section[]): string {
+  const u = subject.toUpperCase()
+  if (/(PE|PHYSICAL|SPORT|GAMES|YOGA)/.test(u)) return 'Ground'
+  if (/(ART|CRAFT|DRAWING|PAINTING)/.test(u))  return 'Art Room'
+  if (/(MUSIC|DANCE|DRAMA)/.test(u))           return 'Music Room'
+  if (/(LAB|COMPUTER|IT|ICT)/.test(u))         return 'Computer Lab'
+  if (/(CHEMISTRY|PHYSICS|BIOLOGY|SCIENCE)/.test(u)) return 'Science Lab'
+  return (sections[0] as any)?.room ?? 'Room 101'
 }
 
 export interface SolverOutput {
@@ -122,10 +262,19 @@ export function solveTimetable(input: SolverInput): SolverOutput {
     }
   }
 
+  // ── Phase 6: Auto-infer Optional Blocks from section strengths ──
+  // If no manual blocks were authored AND a strength matrix is present,
+  // derive blocks automatically. This is the new simplified flow.
+  const effectiveBlocks: import('@/types').OptionalBlock[] = (input.optionalBlocks && input.optionalBlocks.length > 0)
+    ? input.optionalBlocks
+    : inferOptionalBlocksFromStrengths(
+        input.sectionStrengths ?? [], staff, sections, classPeriods, workDays,
+      )
+
   // ── Pass 0: Place Optional Blocks (schedU Phase 3) ────
   // Pinned slots — must run FIRST so other passes skip them.
   // Each block applies across all listed sections (cross-section pooling).
-  ;(input.optionalBlocks ?? []).forEach(block => {
+  effectiveBlocks.forEach(block => {
     // Validate: no teacher should appear twice within the same block
     const teacherInBlock = new Map<string, string>()
     block.options.forEach((opt, idx) => {

@@ -567,6 +567,35 @@ export const SubjectCombinationSchema = z.object({
   strength: z.number().int().min(0),
 })
 
+/** schedU Phase 6 — Simplified section-strength matrix.
+ *
+ *  Per-section, how many students take each subject. From this single
+ *  matrix the AI engine infers EVERYTHING:
+ *    - Which subjects are core (strength = section total)
+ *    - Which are optional (strength < section total)
+ *    - Which optionals run in parallel within a section (sum to total)
+ *    - Which subjects pool across sections (same optional in multiple sections)
+ *
+ *  Example:
+ *    XI-A (Science): English=40, Maths=40, PE=20, Art=20  -> 40 total
+ *    XI-B (Commerce): English=40, Maths=40, PE=15, Art=25 -> 40 total
+ *
+ *  Engine derives: PE+Art is a parallel optional block, pooled across
+ *  XI-A & XI-B, total capacity PE=35 / Art=45. No manual block authoring. */
+export interface SectionStrength {
+  sectionName: string
+  stream?: string                          // "Science" / "Commerce" / "Humanities" / "General"
+  totalStudents?: number                   // optional explicit roster size
+  subjectStrengths: Record<string, number> // { "English": 40, "PE": 20, ... }
+}
+
+export const SectionStrengthSchema = z.object({
+  sectionName: z.string().min(1),
+  stream: z.string().optional(),
+  totalStudents: z.number().int().min(0).optional(),
+  subjectStrengths: z.record(z.string(), z.number().int().min(0)).default({}),
+})
+
 /** A single cell in any timetable grid view.
  *  Either a SINGLE subject (core/lab) OR an OPTIONAL BLOCK (multiple parallel options). */
 export interface TimetableCell {

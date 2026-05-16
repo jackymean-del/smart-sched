@@ -46,6 +46,8 @@ import type {
   // schedU Phase 2 — Optional Blocks + Combinations (Final Doc)
   OptionalBlock,
   SubjectCombination,
+  // schedU Phase 6 — Simplified section-strength matrix
+  SectionStrength,
 
   // Legacy (used by existing wizard + engine)
   Section,
@@ -137,6 +139,9 @@ interface ScheduState {
   // ── schedU Phase 2 — Optional Blocks + Combinations ──
   optionalBlocks: OptionalBlock[]
   subjectCombinations: SubjectCombination[]
+
+  // ── schedU Phase 6 — Section-Strength Matrix (the new simple input) ──
+  sectionStrengths: SectionStrength[]
 
   // ─────────────────────────────────────────────────────────────
   //  ACTIONS — Schedu model
@@ -235,6 +240,10 @@ interface ScheduState {
   upsertSubjectCombination: (c: SubjectCombination) => void
   removeSubjectCombination: (id: string) => void
 
+  // ── schedU Phase 6 — Section Strengths ──
+  setSectionStrengths: (s: SectionStrength[]) => void
+  upsertSectionStrength: (s: SectionStrength) => void
+
   resetWizard: () => void
   resetAll: () => void
 }
@@ -268,6 +277,7 @@ const initialState: Omit<ScheduState,
   | 'togglePeriodShiftable' | 'updateCell'
   | 'setOptionalBlocks' | 'upsertOptionalBlock' | 'removeOptionalBlock'
   | 'setSubjectCombinations' | 'upsertSubjectCombination' | 'removeSubjectCombination'
+  | 'setSectionStrengths' | 'upsertSectionStrength'
   | 'resetWizard' | 'resetAll'
 > = {
   step: 1,
@@ -324,6 +334,7 @@ const initialState: Omit<ScheduState,
   subjectPools: [],
   optionalBlocks: [],
   subjectCombinations: [],
+  sectionStrengths: [],
   schedulingMode: 'period-based',
   workingDaysPerYear: 220,
 }
@@ -501,6 +512,15 @@ export const useTimetableStore = create<ScheduState>()(
         removeSubjectCombination: (id) => set((s) => ({
           subjectCombinations: s.subjectCombinations.filter(x => x.id !== id),
         })),
+
+        // ── schedU Phase 6 — Section Strengths actions ──
+        setSectionStrengths: (sectionStrengths) => set({ sectionStrengths }),
+        upsertSectionStrength: (s) => set((st) => {
+          const i = st.sectionStrengths.findIndex(x => x.sectionName === s.sectionName)
+          return i >= 0
+            ? { sectionStrengths: st.sectionStrengths.map((x, idx) => idx === i ? s : x) }
+            : { sectionStrengths: [...st.sectionStrengths, s] }
+        }),
 
         togglePeriodShiftable: (periodId) => set((s) => ({
           periods: s.periods.map(p =>

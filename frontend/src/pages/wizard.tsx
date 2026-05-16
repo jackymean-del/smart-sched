@@ -1,24 +1,22 @@
 import { Component, type ReactNode } from "react"
 import { useTimetableStore } from "@/store/timetableStore"
 import { useAuthStore } from "@/store/authStore"
-import { Step1Org }              from "@/routes/wizard/step1-org"
-import { StepBell }              from "@/routes/wizard/step-bell"
-import { StepResources }         from "@/routes/wizard/step-resources"
-import { StepOptionalBlocks }    from "@/routes/wizard/step-optional-blocks"
-import { StepCombinations }      from "@/routes/wizard/step-combinations"
-import { Step6Generate }         from "@/routes/wizard/step6-generate"
+import { Step1Org }                from "@/routes/wizard/step1-org"
+import { StepBell }                from "@/routes/wizard/step-bell"
+import { StepResources }           from "@/routes/wizard/step-resources"
+import { StepSectionStrengths }    from "@/routes/wizard/step-section-strengths"
+import { Step6Generate }           from "@/routes/wizard/step6-generate"
 import { CheckCircle2 } from "lucide-react"
 
-// ── 6-step wizard — schedU MVP ───────────────────────────────
-const STEPS = [Step1Org, StepBell, StepResources, StepOptionalBlocks, StepCombinations, Step6Generate]
+// ── 5-step wizard — schedU MVP (simplified, AI-driven) ──────
+const STEPS = [Step1Org, StepBell, StepResources, StepSectionStrengths, Step6Generate]
 
 const STEP_META = [
   { label:"School",      sub:"Board, grades & scale",          icon:"🏫", color:"#7C6FE0" },
   { label:"Schedule",    sub:"Days, periods & breaks",         icon:"🔔", color:"#9B8EF5" },
   { label:"Resources",   sub:"Classes, teachers & subjects",   icon:"📋", color:"#7C6FE0" },
-  { label:"Optional Blocks", sub:"Parallel subjects per period", icon:"◇", color:"#9B8EF5" },
-  { label:"Combinations",sub:"Strength per combination",       icon:"⚡", color:"#7C6FE0" },
-  { label:"Generate",    sub:"Build & review timetable",       icon:"✨", color:"#D4920E" },
+  { label:"Strengths",   sub:"Students per subject (Excel-feel)", icon:"📊", color:"#9B8EF5" },
+  { label:"Generate",    sub:"AI builds your timetable",       icon:"✨", color:"#D4920E" },
 ]
 
 // ── Error boundary ────────────────────────────────────────────
