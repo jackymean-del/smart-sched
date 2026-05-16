@@ -183,6 +183,11 @@ export interface Subject {
   name: string
   shortName?: string
   category?: SubjectCategoryType
+  /** schedU subject type — drives scheduling path:
+   *  'core' = mandatory single-subject period
+   *  'optional' = part of an OptionalBlock (parallel offerings)
+   *  'lab' = specialized room required (Chemistry Lab, Computer Lab, etc.) */
+  subjectType?: SubjectType
   isOptional?: boolean
   requiresLab?: boolean
   requiresConsecutiveSlots?: boolean
@@ -192,6 +197,10 @@ export interface Subject {
   color: string
   sections?: string[]      // legacy: section names this subject applies to
   classConfigs: SubjectClassConfig[]
+  /** Optional capacity per session — relevant for activity/elective subjects */
+  capacity?: number
+  /** Room type required (e.g. 'lab', 'ground', 'art-room') — drives room allocation */
+  roomTypeRequired?: RoomType
 }
 
 export interface SubjectClassConfig {
@@ -484,7 +493,82 @@ export interface SessionInstance {
   substituteTeacherId?: string
 }
 
-/** A single cell in any timetable grid view */
+// ─────────────────────────────────────────────────────────────
+// OPTIONAL-BLOCK / COMBINATION SUPPORT (Final spec MVP)
+// schedU's key differentiator: one period can host multiple
+// parallel subjects (PE / Art / Painting) — each with its own
+// teacher, room, and capacity. Students self-select; the system
+// only tracks combination-wise strength, not individual students.
+// ─────────────────────────────────────────────────────────────
+
+/** Subject scheduling type — drives which engine path is used */
+export type SubjectType = 'core' | 'optional' | 'lab'
+
+/** A single option inside an optional block.
+ *  Example: PE → Ground (Capacity 50, Teacher M.Rao). */
+export interface OptionalOption {
+  subjectId?: string
+  subject: string
+  teacher: string
+  teacherId?: string
+  room: string
+  roomId?: string
+  capacity?: number          // max seats for this option
+  allocatedStrength?: number // students choosing this option
+}
+
+/** An Optional Block — multiple parallel subjects scheduled
+ *  into the same period across one or more sections.
+ *  E.g. OPTIONAL_BLOCK_1 = [PE, Art, Painting] on Tue Period 3. */
+export interface OptionalBlock {
+  id: string
+  name: string                 // e.g. "OPTIONAL_BLOCK_1" or "XI Optional A"
+  sectionNames: string[]       // sections sharing this block (cross-section pooling)
+  day: string                  // DOW key, e.g. "MONDAY"
+  periodId: string             // bell schedule slot id
+  options: OptionalOption[]    // parallel subjects in this block
+  totalCapacity?: number       // sum of option capacities
+}
+
+export const OptionalBlockSchema = z.object({
+  id: z.string(),
+  name: z.string().min(1),
+  sectionNames: z.array(z.string()),
+  day: z.string(),
+  periodId: z.string(),
+  options: z.array(z.object({
+    subjectId: z.string().optional(),
+    subject: z.string(),
+    teacher: z.string(),
+    teacherId: z.string().optional(),
+    room: z.string(),
+    roomId: z.string().optional(),
+    capacity: z.number().int().optional(),
+    allocatedStrength: z.number().int().optional(),
+  })),
+  totalCapacity: z.number().int().optional(),
+})
+
+/** A subject combination — e.g. "PCM + CS" with strength.
+ *  schedU uses combinations (not student rosters) to size sessions. */
+export interface SubjectCombination {
+  id: string
+  className: string            // "XI Science", "XI Commerce" etc.
+  name: string                 // "PCM + CS", "Commerce + Applied Math"
+  subjects: string[]           // resolved subject names
+  strength: number             // student headcount in this combination
+}
+
+export const SubjectCombinationSchema = z.object({
+  id: z.string(),
+  className: z.string(),
+  name: z.string().min(1),
+  subjects: z.array(z.string()),
+  strength: z.number().int().min(0),
+})
+
+/** A single cell in any timetable grid view.
+ *  Either a SINGLE subject (core/lab) OR an OPTIONAL BLOCK (multiple parallel options). */
 export interface TimetableCell {
   subject: string
   subjectId?: string
@@ -496,6 +580,11 @@ export interface TimetableCell {
   isClassTeacher?: boolean
   isSubstituted?: boolean
   substituteTeacher?: string
+  /** When this cell is an optional block, options[] is populated
+   *  with the parallel subjects. The top-level subject/teacher/room
+   *  still reflect the first option for backwards compatibility. */
+  optionalBlockId?: string
+  options?: OptionalOption[]
 }
 
 /** Class-view timetable: section → day → periodId → cell */

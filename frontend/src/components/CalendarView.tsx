@@ -145,6 +145,7 @@ function useSlotEvents(
         room: cell.room ?? "",
         isSub,
         isClassTeacher: !!cell.isClassTeacher,
+        options: (cell as any).options,        // Optional-block parallel offerings (if any)
       }]
     })
   }, [classTT, sections, substitutions, viewMode, selectedEntity])
@@ -156,15 +157,77 @@ function useSlotEvents(
 function EventChip({
   subject, section, teacher, room, isSub, isClassTeacher,
   showTeacher, showRoom, compact, absent, hideSection,
-  onClick,
+  options, onClick,
 }: {
   subject: string; section: string; teacher: string; room: string;
   isSub: boolean; isClassTeacher: boolean;
   showTeacher: boolean; showRoom: boolean;
   compact?: boolean; absent?: boolean; hideSection?: boolean;
+  /** When this cell is an OPTIONAL BLOCK, options[] holds the
+   *  parallel offerings. Cell renders as a multi-row stack. */
+  options?: Array<{ subject: string; teacher: string; room: string; capacity?: number; allocatedStrength?: number }>;
   onClick?: () => void;
 }) {
   const cc = getSubjectColor(subject)
+  const isMultiOption = options && options.length > 1
+
+  // ── MULTI-OPTION cell (Optional Block) ──
+  if (isMultiOption) {
+    return (
+      <div
+        onClick={onClick}
+        title="Optional Block — multiple parallel subjects"
+        style={{
+          borderRadius: 6, padding: compact ? "3px 5px" : "5px 7px",
+          cursor: onClick ? "pointer" : "default",
+          background: "linear-gradient(135deg, #F5F2FF 0%, #FAFAFE 100%)",
+          border: "1.5px solid #D8D2FF", borderLeft: "4px solid #7C6FE0",
+          marginBottom: 2, position: "relative" as const,
+          minWidth: 0, overflow: "hidden",
+        }}
+      >
+        {!compact && section && !hideSection && (
+          <div style={{ fontSize: 9, fontWeight: 800, opacity: 0.85, letterSpacing: '0.05em', lineHeight: 1.2, marginBottom: 2, color: "#13111E", textTransform: "uppercase" as const }}>
+            {section} · OPTIONAL BLOCK
+          </div>
+        )}
+        {compact && (
+          <div style={{ fontSize: 8, fontWeight: 700, color: "#7C6FE0", marginBottom: 2, letterSpacing: '0.08em' }}>
+            ◇ OPTIONAL ({options.length})
+          </div>
+        )}
+        {options.map((opt, i) => {
+          // Get color stripe per option subject
+          const optCC = getSubjectColor(opt.subject)
+          // Extract border color from Tailwind class string (e.g. "border-green-500")
+          const borderMatch = optCC.match(/border-([a-z]+)-(\d{3})/)
+          const stripeColor = borderMatch ? `var(--tw-${borderMatch[0]})` : '#7C6FE0'
+          return (
+            <div key={i} className={optCC}
+              style={{
+                display: "flex", alignItems: "center", gap: 4,
+                fontSize: compact ? 8 : 9.5, fontWeight: 600,
+                padding: compact ? "1px 4px" : "2px 5px",
+                borderRadius: 3, marginBottom: i < options.length - 1 ? 2 : 0,
+                lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis" as const, whiteSpace: "nowrap" as const,
+              }}
+              title={`${opt.subject} → ${opt.room}${opt.teacher ? ' · ' + opt.teacher : ''}${opt.capacity ? ' · cap ' + opt.capacity : ''}`}
+            >
+              <span style={{ fontWeight: 800 }}>{opt.subject}</span>
+              {opt.room && <span style={{ opacity: 0.65 }}>→ {opt.room}</span>}
+              {opt.allocatedStrength != null && opt.capacity && (
+                <span style={{ marginLeft: 'auto', fontSize: 8, opacity: 0.6, fontFamily: "'DM Mono', monospace" }}>
+                  {opt.allocatedStrength}/{opt.capacity}
+                </span>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+
+  // ── Single-subject cell (default) ──
   return (
     <div
       className={cc}
@@ -180,24 +243,20 @@ function EventChip({
       {isSub && (
         <span style={{ position:"absolute" as const, top:2, right:3, width:5, height:5, borderRadius:"50%", background:"#f59e0b" }} />
       )}
-      {/* Class name — only shown when not in class-grouped row layout */}
       {!compact && section && !hideSection && (
         <div style={{ fontSize: 9, fontWeight: 800, opacity: 0.9, letterSpacing: '0.05em', lineHeight: 1.2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const, marginBottom: 2, textTransform: 'uppercase' }}>
           {section}
         </div>
       )}
-      {/* Subject — main heading */}
       <div style={{ fontSize: compact ? 9 : 11, fontWeight: 700, lineHeight: 1.2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const }}>
         {subject}
       </div>
-      {/* Teacher */}
       {showTeacher && teacher && !compact && (
         <div style={{ fontSize: 8.5, opacity: 0.7, lineHeight: 1.25, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const, marginTop: 2 }}>
           {isClassTeacher && <span style={{ color:"#7C6FE0" }}>★ </span>}
           {isSub ? `🔄 ${teacher}` : teacher}
         </div>
       )}
-      {/* Room */}
       {showRoom && room && !compact && (
         <div style={{ fontSize: 7.5, opacity: 0.55, fontFamily: "'DM Mono', monospace", marginTop: 1 }}>{room}</div>
       )}

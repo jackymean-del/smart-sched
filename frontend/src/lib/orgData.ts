@@ -369,34 +369,69 @@ export function generateBreaks(orgType: OrgType, n: number) {
   return list.slice(0, Math.max(2, Math.min(n, list.length)))
 }
 
-// ─── Subject Rainbow Tints ────────────────────────────────
-// Each subject gets a unique pastel tint (Tailwind-50 shade) for
-// fast scanning + a 4px LEFT BORDER in saturated 500 shade.
-// Dark text (900 shade) keeps it readable on light tint backgrounds.
+// ─── Subject Category Colors — schedU Spec ────────────────
+// Per Final Functional Doc §7 (Recommended UI Enhancements):
+//   Sports    → Green
+//   Arts      → Purple
+//   Labs      → Blue
+//   Languages → Orange
+// Other categories use brand-aligned distinct hues so each subject
+// reads instantly. All cells: pastel-50 bg + dark-900 text + 4px
+// saturated-500 left border.
 const COLOR_MAP: [string[], string][] = [
-  [['MATH','MATHS','MATHEMATICS','CALCULUS','MATHEMATIK'], 'bg-blue-50 text-blue-900 border-l-4 border-blue-500'],
-  [['ENGLISH','ENG','LANGUAGE ARTS','DEUTSCH','COMMUNICATION'], 'bg-pink-50 text-pink-900 border-l-4 border-pink-500'],
-  [['BIOLOGY','BIO','BIOLOGIE'], 'bg-green-50 text-green-900 border-l-4 border-green-500'],
-  [['CHEMISTRY','CHEM','CHEMIE'], 'bg-orange-50 text-orange-900 border-l-4 border-orange-500'],
-  [['PHYSICS','PHY','PHYSIK'], 'bg-indigo-50 text-indigo-900 border-l-4 border-indigo-500'],
-  [['SCIENCE','SCI'], 'bg-emerald-50 text-emerald-900 border-l-4 border-emerald-500'],
-  [['SOCIAL','SST','HISTORY','GEOGRAPHY','ECONOMICS','GEOGRAPHIE'], 'bg-amber-50 text-amber-900 border-l-4 border-amber-500'],
-  [['HINDI','URDU','ARABIC','ODIA','REGIONAL','MOTHER TONGUE','SANSKRIT'], 'bg-rose-50 text-rose-900 border-l-4 border-rose-500'],
-  [['EVS','ENVIRONMENTAL'], 'bg-teal-50 text-teal-900 border-l-4 border-teal-500'],
-  [['PE','PHYSICAL EDUCATION','SPORT','PDHPE','GAMES','YOGA'], 'bg-lime-50 text-lime-900 border-l-4 border-lime-500'],
-  [['ART','CRAFT','KUNST','CREATIVE','FINE ART','DRAWING'], 'bg-fuchsia-50 text-fuchsia-900 border-l-4 border-fuchsia-500'],
-  [['MUSIC','MUSIK','DANCE','THEATRE','DRAMA'], 'bg-violet-50 text-violet-900 border-l-4 border-violet-500'],
-  [['CCA'], 'bg-purple-50 text-purple-900 border-l-4 border-purple-500'],
-  [['COMPUTER','COMP','IT','ICT','PROGRAMMING','CODING'], 'bg-sky-50 text-sky-900 border-l-4 border-sky-500'],
-  [['G.K.','GK','GENERAL KNOWLEDGE','CIVICS'], 'bg-yellow-50 text-yellow-900 border-l-4 border-yellow-500'],
-  [['ECONOMICS'], 'bg-yellow-50 text-yellow-900 border-l-4 border-yellow-600'],
-  // Corporate / Healthcare
-  [['MEETING','STANDUP','SPRINT','PLANNING','SYNC','REVIEW'], 'bg-cyan-50 text-cyan-900 border-l-4 border-cyan-500'],
-  [['DUTY','WARD ROUND','NURSING','ON-CALL'], 'bg-emerald-50 text-emerald-900 border-l-4 border-emerald-500'],
-  // Special bookends
-  [['ASSEMBLY','REGISTRATION','MORGENKREIS'], 'bg-indigo-100 text-indigo-900 border-l-4 border-indigo-600 font-bold'],
-  [['DISPERSAL','DISMISSAL','SIGN-OFF','HANDOVER','SHIFT END'], 'bg-rose-100 text-rose-900 border-l-4 border-rose-600 font-bold'],
-  // Breaks — muted slate
+  // ── Spec primary categories ──
+  // SPORTS → Green
+  [['PE','PHYSICAL EDUCATION','SPORT','SPORTS','PDHPE','GAMES','YOGA','ATHLETICS','SWIMMING'],
+   'bg-green-50 text-green-900 border-l-4 border-green-500'],
+  // ARTS → Purple
+  [['ART','CRAFT','KUNST','CREATIVE','FINE ART','DRAWING','PAINTING','SCULPTURE'],
+   'bg-purple-50 text-purple-900 border-l-4 border-purple-500'],
+  // LABS → Blue (any subject with "LAB" in the name)
+  [['LAB','LABORATORY','PRACTICAL','CHEMISTRY LAB','PHYSICS LAB','BIOLOGY LAB','COMPUTER LAB','SCIENCE LAB'],
+   'bg-blue-50 text-blue-900 border-l-4 border-blue-500'],
+  // LANGUAGES → Orange
+  [['ENGLISH','ENG','LANGUAGE ARTS','DEUTSCH','COMMUNICATION','HINDI','URDU','ARABIC','ODIA','REGIONAL','MOTHER TONGUE','SANSKRIT','FRENCH','SPANISH','GERMAN'],
+   'bg-orange-50 text-orange-900 border-l-4 border-orange-500'],
+
+  // ── Other academic ──
+  [['MATH','MATHS','MATHEMATICS','CALCULUS','MATHEMATIK','APPLIED MATH','PURE MATH'],
+   'bg-sky-50 text-sky-900 border-l-4 border-sky-500'],
+  [['BIOLOGY','BIO','BIOLOGIE','BOTANY','ZOOLOGY'],
+   'bg-emerald-50 text-emerald-900 border-l-4 border-emerald-500'],
+  [['CHEMISTRY','CHEM','CHEMIE'],
+   'bg-rose-50 text-rose-900 border-l-4 border-rose-500'],
+  [['PHYSICS','PHY','PHYSIK'],
+   'bg-indigo-50 text-indigo-900 border-l-4 border-indigo-500'],
+  [['SCIENCE','SCI','EVS','ENVIRONMENTAL'],
+   'bg-teal-50 text-teal-900 border-l-4 border-teal-500'],
+  [['SOCIAL','SST','HISTORY','GEOGRAPHY','GEOGRAPHIE','CIVICS','POLITICAL'],
+   'bg-amber-50 text-amber-900 border-l-4 border-amber-500'],
+  [['ECONOMICS','BUSINESS STUDIES','ACCOUNTANCY','COMMERCE'],
+   'bg-yellow-50 text-yellow-900 border-l-4 border-yellow-600'],
+  [['COMPUTER','COMP','IT','ICT','PROGRAMMING','CODING','CS','COMPUTER SCIENCE'],
+   'bg-cyan-50 text-cyan-900 border-l-4 border-cyan-500'],
+  [['MUSIC','MUSIK','DANCE','THEATRE','DRAMA'],
+   'bg-violet-50 text-violet-900 border-l-4 border-violet-500'],
+  [['CCA','CO-CURRICULAR'],
+   'bg-fuchsia-50 text-fuchsia-900 border-l-4 border-fuchsia-500'],
+  [['G.K.','GK','GENERAL KNOWLEDGE'],
+   'bg-pink-50 text-pink-900 border-l-4 border-pink-500'],
+  [['PSYCHOLOGY','SOCIOLOGY','PHILOSOPHY'],
+   'bg-violet-50 text-violet-900 border-l-4 border-violet-500'],
+
+  // ── Corporate / Healthcare ──
+  [['MEETING','STANDUP','SPRINT','PLANNING','SYNC','REVIEW'],
+   'bg-cyan-50 text-cyan-900 border-l-4 border-cyan-500'],
+  [['DUTY','WARD ROUND','NURSING','ON-CALL'],
+   'bg-emerald-50 text-emerald-900 border-l-4 border-emerald-500'],
+
+  // ── Special bookends ──
+  [['ASSEMBLY','REGISTRATION','MORGENKREIS'],
+   'bg-indigo-100 text-indigo-900 border-l-4 border-indigo-600 font-bold'],
+  [['DISPERSAL','DISMISSAL','SIGN-OFF','HANDOVER','SHIFT END'],
+   'bg-rose-100 text-rose-900 border-l-4 border-rose-600 font-bold'],
+
+  // ── Breaks — muted italic ──
   [['LUNCH','MEAL'], 'bg-amber-100 text-amber-800 border-l-4 border-amber-400 italic'],
   [['BREAK','RECESS','PAUSE','MORNING TEA','COFFEE'], 'bg-yellow-50 text-yellow-700 border-l-4 border-yellow-400 italic'],
   [['DIARY'], 'bg-slate-50 text-slate-600 border-l-4 border-slate-300 italic'],
