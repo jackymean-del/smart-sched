@@ -63,6 +63,10 @@ export interface SolverInput {
   workDays: string[]
   requirements: SchedulingRequirement[]
   softConstraints?: SoftConstraint[]
+  /** schedU Phase 3: Optional blocks to pin into specific (day, period, sections) slots */
+  optionalBlocks?: import('@/types').OptionalBlock[]
+  /** Per-class combination strengths — used for capacity overflow detection */
+  subjectCombinations?: import('@/types').SubjectCombination[]
 }
 
 export interface SolverOutput {
@@ -118,6 +122,71 @@ export function solveTimetable(input: SolverInput): SolverOutput {
     }
   }
 
+  // ── Pass 0: Place Optional Blocks (schedU Phase 3) ────
+  // Pinned slots — must run FIRST so other passes skip them.
+  // Each block applies across all listed sections (cross-section pooling).
+  ;(input.optionalBlocks ?? []).forEach(block => {
+    // Validate: no teacher should appear twice within the same block
+    const teacherInBlock = new Map<string, string>()
+    block.options.forEach((opt, idx) => {
+      if (!opt.teacher) return
+      const prev = teacherInBlock.get(opt.teacher)
+      if (prev != null) {
+        penalties.push({
+          constraint: 'block-teacher-conflict',
+          penalty: 50,
+          details: `${block.name}: ${opt.teacher} is assigned to multiple options (${prev} & ${opt.subject})`,
+        })
+      } else {
+        teacherInBlock.set(opt.teacher, opt.subject)
+      }
+    })
+
+    // Capacity overflow check vs combination strengths
+    const totalCap = block.options.reduce((sum, o) => sum + (o.capacity ?? 0), 0)
+    if (totalCap > 0 && (input.subjectCombinations ?? []).length > 0) {
+      // Sum combination strengths whose className matches any section in this block
+      // (matches if section.name starts with combo.className or equals it)
+      const blockStrength = (input.subjectCombinations ?? [])
+        .filter(c => block.sectionNames.some(sn => sn === c.className || sn.startsWith(c.className)))
+        .reduce((sum, c) => sum + (c.strength ?? 0), 0)
+      if (blockStrength > totalCap) {
+        penalties.push({
+          constraint: 'block-capacity-overflow',
+          penalty: 30,
+          details: `${block.name}: ${blockStrength} students need a seat but total capacity is only ${totalCap}`,
+        })
+      }
+    }
+
+    // Place the multi-option cell in every section sharing this block
+    block.sectionNames.forEach(secName => {
+      if (!classTT[secName]) classTT[secName] = {}
+      if (!classTT[secName][block.day]) classTT[secName][block.day] = {}
+      classTT[secName][block.day][block.periodId] = {
+        subject: block.options.map(o => o.subject).filter(Boolean).join(' / '),
+        teacher: block.options[0]?.teacher ?? '',
+        room: block.options[0]?.room ?? '',
+        optionalBlockId: block.id,
+        options: block.options,
+      } as any
+
+      // Reserve every option's teacher across this slot
+      block.options.forEach(opt => {
+        if (opt.teacher) {
+          ensureBusy(opt.teacher)
+          teacherBusy[opt.teacher][block.day].add(block.periodId)
+        }
+      })
+
+      // Initialize subjectCount entries for option subjects (so regular passes don't double-count)
+      if (!subjectCount[secName]) subjectCount[secName] = {}
+      block.options.forEach(opt => {
+        if (opt.subject) subjectCount[secName][opt.subject] = (subjectCount[secName][opt.subject] ?? 0) + 1
+      })
+    })
+  })
+
   // ── Pass 1: Place class teachers in Period 1 (hard constraint) ──
   sections.forEach((sec) => {
     const ctName = classTeacherMap[sec.name]
@@ -135,6 +204,8 @@ export function solveTimetable(input: SolverInput): SolverOutput {
     workDays.forEach(day => {
       const p = classPeriods[0]
       if (!p) return
+      // Skip if Pass 0 already placed an optional block here
+      if (classTT[sec.name]?.[day]?.[p.id]) return
       if (!teacherBusy[ctName][day].has(p.id)) {
         classTT[sec.name][day][p.id] = {
           subject: ctSubject,
@@ -375,6 +446,35 @@ export function generateSuggestions(
     })
   })
 
+  // ── Cross-section pooling suggestions (schedU Phase 3) ──
+  // Detect (subject, day, period) tuples that occur in MULTIPLE sections.
+  // These are candidates for merging into a pooled optional block.
+  const slotMap = new Map<string, string[]>() // "subject|day|periodId" -> [sections]
+  Object.entries(classTT).forEach(([sec, secData]) => {
+    Object.entries(secData ?? {}).forEach(([day, dayData]) => {
+      Object.entries(dayData ?? {}).forEach(([pid, cell]: [string, any]) => {
+        if (!cell?.subject || cell.optionalBlockId) return // skip if already pooled
+        const key = `${cell.subject}|${day}|${pid}`
+        const arr = slotMap.get(key) ?? []
+        arr.push(sec)
+        slotMap.set(key, arr)
+      })
+    })
+  })
+  const pooledSubjects = new Set<string>() // dedupe by subject to avoid spam
+  slotMap.forEach((secs, key) => {
+    if (secs.length < 2) return
+    const [subject] = key.split('|')
+    if (pooledSubjects.has(subject)) return
+    pooledSubjects.add(subject)
+    const periodLabel = periods.find(p => p.id === key.split('|')[2])?.name ?? key.split('|')[2]
+    suggestions.push({
+      type: 'info',
+      message: `${subject} runs in parallel for ${secs.length} sections (${secs.join(', ')}) on ${key.split('|')[1]} ${periodLabel}`,
+      action: 'Consider pooling into an Optional Block',
+    })
+  })
+
   return suggestions
 }
 
@@ -397,10 +497,20 @@ export function detectConflicts(
   classPeriods.forEach(p => {
     workDays.forEach(day => {
       const teacherMap: Record<string, string> = {}
+      // Track which sections share an optional block at this slot — they're
+      // expected to have the same teachers and should NOT be flagged.
+      const blockSlotIds: Record<string, string> = {} // sec -> blockId
       Object.entries(classTT).forEach(([sec, sd]) => {
-        const cell = sd[day]?.[p.id]
+        const cell: any = sd[day]?.[p.id]
+        if (cell?.optionalBlockId) blockSlotIds[sec] = cell.optionalBlockId
         if (cell?.teacher) {
           if (teacherMap[cell.teacher]) {
+            // Skip the conflict if both sections share the same optional block
+            const otherSec = teacherMap[cell.teacher]
+            if (blockSlotIds[sec] && blockSlotIds[otherSec] && blockSlotIds[sec] === blockSlotIds[otherSec]) {
+              // intentional cross-section pooling — not a conflict
+              return
+            }
             conflicts.push({
               type: 'double-booking',
               message: `${cell.teacher} double-booked: ${teacherMap[cell.teacher]} & ${sec} on ${day} ${p.name}`,

@@ -103,7 +103,14 @@ export function Step6Generate() {
         : subjects
 
       const staff = store.staff
-      output  = solveTimetable({ sections, staff, subjects: resolvedSubjects, periods, workDays, requirements: [] })
+      const optionalBlocks      = (store as any).optionalBlocks ?? []
+      const subjectCombinations = (store as any).subjectCombinations ?? []
+      output  = solveTimetable({
+        sections, staff, subjects: resolvedSubjects, periods, workDays,
+        requirements: [],
+        optionalBlocks,
+        subjectCombinations,
+      })
       solveMs = Date.now() - startedAt
 
       const suggestions = generateSuggestions(output.classTT, output.teacherTT, staff, resolvedSubjects, workDays, periods)
