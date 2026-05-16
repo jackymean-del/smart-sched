@@ -180,22 +180,26 @@ function EventChip({
       {isSub && (
         <span style={{ position:"absolute" as const, top:2, right:3, width:5, height:5, borderRadius:"50%", background:"#f59e0b" }} />
       )}
-      <div style={{ fontSize: compact ? 9 : 10, fontWeight: 700, lineHeight: 1.2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const }}>
-        {subject}
-      </div>
-      {!compact && (
-        <div style={{ fontSize: 8, opacity: 0.8, lineHeight: 1.2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const }}>
+      {/* Class name FIRST — primary identifier */}
+      {!compact && section && (
+        <div style={{ fontSize: 9, fontWeight: 800, opacity: 0.9, letterSpacing: '0.05em', lineHeight: 1.2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const, marginBottom: 2, textTransform: 'uppercase' }}>
           {section}
         </div>
       )}
+      {/* Subject — main heading */}
+      <div style={{ fontSize: compact ? 9 : 11, fontWeight: 700, lineHeight: 1.2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const }}>
+        {subject}
+      </div>
+      {/* Teacher */}
       {showTeacher && teacher && !compact && (
-        <div style={{ fontSize: 8, opacity: 0.65, lineHeight: 1.2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const }}>
+        <div style={{ fontSize: 8.5, opacity: 0.7, lineHeight: 1.25, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const, marginTop: 2 }}>
           {isClassTeacher && <span style={{ color:"#7C6FE0" }}>★ </span>}
           {isSub ? `🔄 ${teacher}` : teacher}
         </div>
       )}
+      {/* Room */}
       {showRoom && room && !compact && (
-        <div style={{ fontSize: 7, opacity: 0.5 }}>{room}</div>
+        <div style={{ fontSize: 7.5, opacity: 0.55, fontFamily: "'DM Mono', monospace", marginTop: 1 }}>{room}</div>
       )}
     </div>
   )
@@ -307,7 +311,7 @@ export function CalendarView({
                   style={{
                     borderRight: "1px solid #f1f5f9",
                     padding: "4px 5px",
-                    background: !isCurrentMonth ? "#f8fafc" : todayFlag ? "#eff6ff" : absentSlot ? "#fffbeb" : "#fff",
+                    background: !isCurrentMonth ? "#f8fafc" : todayFlag ? "#F5F2FF" : absentSlot ? "#fffbeb" : "#fff",
                     cursor: "pointer",
                     opacity: isCurrentMonth ? 1 : 0.4,
                     outline: isSelected ? "2px solid #7C6FE0" : "none",
@@ -321,17 +325,17 @@ export function CalendarView({
                       display: "inline-flex", alignItems: "center", justifyContent: "center",
                       fontSize: 11, fontWeight: 700,
                       background: todayFlag ? "#7C6FE0" : "transparent",
-                      color: todayFlag ? "#fff" : !isCurrentMonth ? "#94a3b8" : "#1e293b",
+                      color: todayFlag ? "#fff" : !isCurrentMonth ? "#B8B4D4" : "#1E1B2E",
                     }}>{day.getDate()}</span>
                     {absentSlot && <span style={{ fontSize: 8, color: "#D4920E", fontWeight: 600 }}>⚠ absent</span>}
-                    {!isWorkDay && isCurrentMonth && <span style={{ fontSize: 8, color: "#94a3b8" }}>off</span>}
+                    {!isWorkDay && isCurrentMonth && <span style={{ fontSize: 8, color: "#B8B4D4" }}>off</span>}
                   </div>
                   <div style={{ display: "flex", flexDirection: "column" as const, gap: 1 }}>
                     {events.slice(0, 3).map((ev, ei) => (
                       <EventChip key={ei} {...ev} showTeacher={false} showRoom={false} compact absent={!!(absentSlot && absentHighlights?.some(h => h.day === dayKey && h.teacher === ev.teacher))} />
                     ))}
                     {events.length > 3 && (
-                      <div style={{ fontSize: 8, color: "#94a3b8", paddingLeft: 4 }}>+{events.length - 3} more</div>
+                      <div style={{ fontSize: 8, color: "#B8B4D4", paddingLeft: 4 }}>+{events.length - 3} more</div>
                     )}
                   </div>
                 </div>
@@ -355,7 +359,7 @@ export function CalendarView({
           <thead>
             <tr>
               {/* Time label col */}
-              <th style={{ width: 68, background: "#1e293b", borderRight: "1px solid #374151", padding: "8px 6px", fontSize: 10, color: "#94a3b8", fontWeight: 600, border: "1px solid #374151" }}>Time</th>
+              <th style={{ width: 68, background: "#1E1B2E", borderRight: "1px solid #374151", padding: "8px 6px", fontSize: 10, color: "#B8B4D4", fontWeight: 600, border: "1px solid #374151" }}>Time</th>
               {visibleDays.map(d => {
                 const dayKey = DOW_KEY[d.getDay()]
                 const todayFlag = isToday(d)
@@ -363,7 +367,7 @@ export function CalendarView({
                 return (
                   <th key={dayKey}
                     style={{
-                      background: todayFlag ? "#312e81" : "#1e293b",
+                      background: todayFlag ? "#4F3FC0" : "#1E1B2E",
                       color: "#fff", border: "1px solid #374151",
                       padding: "8px 10px", fontSize: 11, fontWeight: 700,
                       textAlign: "center" as const, minWidth: 130,
@@ -374,7 +378,7 @@ export function CalendarView({
                     <div>{DAY_ABBR[(d.getDay() + 6) % 7]}</div>
                     <div style={{ fontSize: 14, fontWeight: 800 }}>{d.getDate()}</div>
                     <div style={{ fontSize: 9, opacity: 0.6 }}>{MONTH_NAMES[d.getMonth()].slice(0, 3)}</div>
-                    {absentFlag && <div style={{ fontSize: 8, color: "#fcd34d", marginTop: 2 }}>⚠ absent</div>}
+                    {absentFlag && <div style={{ fontSize: 8, color: "#F5A623", marginTop: 2 }}>⚠ absent</div>}
                   </th>
                 )
               })}
@@ -384,7 +388,7 @@ export function CalendarView({
             {periods.map((p, pi) => {
               const times = periodTimes.get(p.id)
               const isBreak = p.type !== "class"
-              const breakBg = p.type === "lunch" ? "#fef3c7" : p.type === "fixed-start" ? "#dbeafe" : p.type === "fixed-end" ? "#EDE9FF" : "#fefce8"
+              const breakBg = p.type === "lunch" ? "#fef3c7" : p.type === "fixed-start" ? "#EDE9FF" : p.type === "fixed-end" ? "#EDE9FF" : "#fefce8"
               const breakColor = p.type === "lunch" ? "#92400e" : p.type === "fixed-start" ? "#1e40af" : p.type === "fixed-end" ? "#065f46" : "#854d0e"
               return (
                 <tr key={p.id} style={{ background: isBreak ? breakBg : pi % 2 === 0 ? "#fff" : "#f8fafc", height: `${(p.duration) * PX_PER_MIN}px` }}>
@@ -392,8 +396,8 @@ export function CalendarView({
                     <div style={{ fontSize: 10, fontWeight: 700, color: isBreak ? breakColor : "#475569" }}>{p.name}</div>
                     {times && (
                       <>
-                        <div style={{ fontSize: 8, color: "#94a3b8" }}>{fmtTime(times.start, timeFormat)}</div>
-                        <div style={{ fontSize: 8, color: "#94a3b8" }}>{fmtTime(times.end, timeFormat)}</div>
+                        <div style={{ fontSize: 8, color: "#B8B4D4" }}>{fmtTime(times.start, timeFormat)}</div>
+                        <div style={{ fontSize: 8, color: "#B8B4D4" }}>{fmtTime(times.end, timeFormat)}</div>
                       </>
                     )}
                   </td>
@@ -442,13 +446,13 @@ export function CalendarView({
         <table style={{ borderCollapse: "collapse", width: "100%" }}>
           <thead>
             <tr>
-              <th style={{ width: 90, background: "#1e293b", color: "#94a3b8", border: "1px solid #374151", padding: "8px 6px", fontSize: 10, fontWeight: 600 }}>Day</th>
+              <th style={{ width: 90, background: "#1E1B2E", color: "#B8B4D4", border: "1px solid #374151", padding: "8px 6px", fontSize: 10, fontWeight: 600 }}>Day</th>
               {periods.map(p => {
                 const times = periodTimes.get(p.id)
                 const isBreak = p.type !== "class"
-                const bg = isBreak ? "#374151" : "#1e293b"
+                const bg = isBreak ? "#3B3660" : "#1E1B2E"
                 return (
-                  <th key={p.id} style={{ background: bg, color: isBreak ? "#fcd34d" : "#fff", border: "1px solid #374151", padding: "6px 8px", fontSize: 10, fontWeight: 700, minWidth: isBreak ? 56 : 110, textAlign: "center" as const }}>
+                  <th key={p.id} style={{ background: bg, color: isBreak ? "#F5A623" : "#fff", border: "1px solid #374151", padding: "6px 8px", fontSize: 10, fontWeight: 700, minWidth: isBreak ? 56 : 110, textAlign: "center" as const }}>
                     <div>{p.name}</div>
                     {times && <div style={{ fontSize: 8, opacity: 0.6, fontWeight: 400 }}>{fmtTime(times.start, timeFormat)}</div>}
                   </th>
@@ -462,11 +466,11 @@ export function CalendarView({
               const todayFlag = isToday(d)
               const absentFlag = absentHighlights?.some(h => h.day === dayKey)
               return (
-                <tr key={dayKey} style={{ background: todayFlag ? "#eff6ff" : di % 2 === 0 ? "#fff" : "#f8fafc" }}>
+                <tr key={dayKey} style={{ background: todayFlag ? "#F5F2FF" : di % 2 === 0 ? "#fff" : "#f8fafc" }}>
                   <td style={{
                     border: "1px solid #e2e8f0", padding: "6px 10px",
-                    fontWeight: 700, fontSize: 11, color: "#1e293b",
-                    background: todayFlag ? "#dbeafe" : absentFlag ? "#fffbeb" : "#f8fafc",
+                    fontWeight: 700, fontSize: 11, color: "#1E1B2E",
+                    background: todayFlag ? "#EDE9FF" : absentFlag ? "#fffbeb" : "#f8fafc",
                     whiteSpace: "nowrap" as const,
                     outline: absentFlag ? "2px solid #f59e0b" : "none",
                     outlineOffset: -2,
@@ -478,7 +482,7 @@ export function CalendarView({
                   {periods.map(p => {
                     const isBreak = p.type !== "class"
                     if (isBreak) {
-                      const breakBg = p.type === "lunch" ? "#fef3c7" : p.type === "fixed-start" ? "#eff6ff" : "#fefce8"
+                      const breakBg = p.type === "lunch" ? "#fef3c7" : p.type === "fixed-start" ? "#F5F2FF" : "#fefce8"
                       const breakColor = p.type === "lunch" ? "#D4920E" : "#ca8a04"
                       return (
                         <td key={p.id} style={{ border: "1px solid #e2e8f0", textAlign: "center" as const, fontSize: 9, color: breakColor, fontStyle: "italic", padding: 4, background: breakBg }}>
@@ -520,7 +524,7 @@ export function CalendarView({
     return (
       <div style={{ flex: 1, overflowY: "auto", maxWidth: 600, margin: "0 auto" }}>
         {!isWorkDay && (
-          <div style={{ padding: 40, textAlign: "center" as const, color: "#94a3b8", fontSize: 14 }}>
+          <div style={{ padding: 40, textAlign: "center" as const, color: "#B8B4D4", fontSize: 14 }}>
             <div style={{ fontSize: 32 }}>🏖️</div>
             <div style={{ marginTop: 8 }}>No school on {fmtDate(date, "long").split(",")[0]}</div>
           </div>
@@ -529,15 +533,15 @@ export function CalendarView({
           <table style={{ borderCollapse: "collapse", width: "100%" }}>
             <thead>
               <tr>
-                <th style={{ width: 90, background: "#1e293b", color: "#94a3b8", border: "1px solid #374151", padding: "8px 6px", fontSize: 10, fontWeight: 600 }}>Time</th>
+                <th style={{ width: 90, background: "#1E1B2E", color: "#B8B4D4", border: "1px solid #374151", padding: "8px 6px", fontSize: 10, fontWeight: 600 }}>Time</th>
                 <th style={{
-                  background: todayFlag ? "#312e81" : "#1e293b", color: "#fff",
+                  background: todayFlag ? "#4F3FC0" : "#1E1B2E", color: "#fff",
                   border: "1px solid #374151", padding: "10px 14px",
                   fontSize: 13, fontWeight: 800,
                 }}>
                   <div>{fmtDate(date, "long")}</div>
                   {absentHighlights?.some(h => h.day === dayKey) && (
-                    <div style={{ fontSize: 10, color: "#fcd34d", fontWeight: 500, marginTop: 2 }}>
+                    <div style={{ fontSize: 10, color: "#F5A623", fontWeight: 500, marginTop: 2 }}>
                       ⚠ {absentHighlights.filter(h => h.day === dayKey).map(h => h.teacher).join(', ')} absent today
                     </div>
                   )}
@@ -548,7 +552,7 @@ export function CalendarView({
               {periods.map((p, pi) => {
                 const times = periodTimes.get(p.id)
                 const isBreak = p.type !== "class"
-                const breakBg = p.type === "lunch" ? "#fef3c7" : p.type === "fixed-start" ? "#dbeafe" : p.type === "fixed-end" ? "#EDE9FF" : "#fefce8"
+                const breakBg = p.type === "lunch" ? "#fef3c7" : p.type === "fixed-start" ? "#EDE9FF" : p.type === "fixed-end" ? "#EDE9FF" : "#fefce8"
                 const breakColor = p.type === "lunch" ? "#92400e" : p.type === "fixed-start" ? "#1e40af" : "#854d0e"
                 const events = isBreak ? [] : getEvents(dayKey, p.id)
                 const absentFlag = absentHighlights?.some(h => h.day === dayKey)
@@ -559,8 +563,8 @@ export function CalendarView({
                       <div style={{ fontSize: 10, fontWeight: 700, color: isBreak ? breakColor : "#475569" }}>{p.name}</div>
                       {times && (
                         <>
-                          <div style={{ fontSize: 8, color: "#94a3b8" }}>{fmtTime(times.start, timeFormat)}</div>
-                          <div style={{ fontSize: 8, color: "#94a3b8" }}>→ {fmtTime(times.end, timeFormat)}</div>
+                          <div style={{ fontSize: 8, color: "#B8B4D4" }}>{fmtTime(times.start, timeFormat)}</div>
+                          <div style={{ fontSize: 8, color: "#B8B4D4" }}>→ {fmtTime(times.end, timeFormat)}</div>
                         </>
                       )}
                     </td>
@@ -607,9 +611,9 @@ export function CalendarView({
               {periods.map(p => {
                 const times = periodTimes.get(p.id)
                 const isBreak = p.type !== "class"
-                const bg = isBreak ? "#374151" : "#1e293b"
+                const bg = isBreak ? "#3B3660" : "#1E1B2E"
                 return (
-                  <th key={p.id} style={{ background: bg, color: isBreak ? "#fcd34d" : "#fff", border: "1px solid #374151", padding: "8px 10px", fontSize: 10, fontWeight: 700, minWidth: isBreak ? 64 : 130, textAlign: "center" as const, verticalAlign: "bottom" as const }}>
+                  <th key={p.id} style={{ background: bg, color: isBreak ? "#F5A623" : "#fff", border: "1px solid #374151", padding: "8px 10px", fontSize: 10, fontWeight: 700, minWidth: isBreak ? 64 : 130, textAlign: "center" as const, verticalAlign: "bottom" as const }}>
                     <div>{p.name}</div>
                     {times && <div style={{ fontSize: 8, opacity: 0.6, fontWeight: 400 }}>{fmtTime(times.start, timeFormat)} → {fmtTime(times.end, timeFormat)}</div>}
                   </th>
@@ -621,7 +625,7 @@ export function CalendarView({
             <tr>
               {periods.map(p => {
                 const isBreak = p.type !== "class"
-                const breakBg = p.type === "lunch" ? "#fef3c7" : p.type === "fixed-start" ? "#eff6ff" : "#fefce8"
+                const breakBg = p.type === "lunch" ? "#fef3c7" : p.type === "fixed-start" ? "#F5F2FF" : "#fefce8"
                 const breakColor = p.type === "lunch" ? "#D4920E" : "#ca8a04"
                 const events = isBreak ? [] : getEvents(dayKey, p.id)
                 const absentFlag = absentHighlights?.some(h => h.day === dayKey)
@@ -676,21 +680,21 @@ export function CalendarView({
         {/* Navigation */}
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
           <button onClick={() => navigate(-1)}
-            style={{ width: 28, height: 28, border: "1px solid #e2e8f0", borderRadius: 6, background: "#fff", cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", color: "#374151" }}>
+            style={{ width: 28, height: 28, border: "1px solid #e2e8f0", borderRadius: 6, background: "#fff", cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", color: "#3B3660" }}>
             ‹
           </button>
           <button onClick={goToday}
-            style={{ padding: "4px 12px", border: "1px solid #e2e8f0", borderRadius: 6, background: "#fff", cursor: "pointer", fontSize: 11, color: "#374151", fontWeight: 500 }}>
+            style={{ padding: "4px 12px", border: "1px solid #e2e8f0", borderRadius: 6, background: "#fff", cursor: "pointer", fontSize: 11, color: "#3B3660", fontWeight: 500 }}>
             Today
           </button>
           <button onClick={() => navigate(1)}
-            style={{ width: 28, height: 28, border: "1px solid #e2e8f0", borderRadius: 6, background: "#fff", cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", color: "#374151" }}>
+            style={{ width: 28, height: 28, border: "1px solid #e2e8f0", borderRadius: 6, background: "#fff", cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", color: "#3B3660" }}>
             ›
           </button>
         </div>
 
         {/* Current range label */}
-        <div style={{ fontSize: 14, fontWeight: 700, color: "#1e293b", minWidth: 200 }}>{headerLabel}</div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "#1E1B2E", minWidth: 200 }}>{headerLabel}</div>
 
         <div style={{ flex: 1 }} />
 

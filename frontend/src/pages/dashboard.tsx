@@ -3,6 +3,7 @@ import {
   CalendarDays, Plus, Clock, Users, BookOpen,
   ChevronRight, Sparkles, ArrowRight, RefreshCw,
   AlertTriangle, CheckCircle2, TrendingUp,
+  FileText, MapPin,
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { useTimetableStore } from '@/store/timetableStore'
@@ -150,11 +151,16 @@ export function DashboardPage() {
   const calendarAbsentHighlights = absentTeachers.map(t => ({ teacher: t, day: absentDay }))
 
   // ── STATS ──────────────────────────────────────────────────
+  const publishedCount = hasTimetable && timetableStatus === 'published' ? 1 : 0
+  const draftCount     = hasTimetable && timetableStatus !== 'published' ? 1 : 0
+  const roomsCount     = ((config as any).rooms?.length ?? 0) || sectionCount
   const stats = [
-    { icon: <CalendarDays size={18} color="#7C6FE0" />, label: 'Timetables', value: hasTimetable ? 1 : 0, bg: '#EDE9FF', color: '#7C6FE0' },
-    { icon: <Users        size={18} color="#7C6FE0" />, label: 'Teachers',   value: staffCount,            bg: '#f0fdf4', color: '#7C6FE0' },
-    { icon: <BookOpen     size={18} color="#9B8EF5" />, label: 'Classes',    value: sectionCount,          bg: '#EDE9FF', color: '#9B8EF5' },
-    { icon: <Clock        size={18} color="#D4920E" />, label: 'Subjects',   value: subjectCount,          bg: '#fffbeb', color: '#D4920E' },
+    { icon: <CheckCircle2 size={16} color="#16a34a" />, label: 'Published', value: publishedCount, bg: '#DCFCE7', color: '#16a34a' },
+    { icon: <FileText     size={16} color="#D4920E" />, label: 'Draft',     value: draftCount,     bg: '#FEF3C7', color: '#D4920E' },
+    { icon: <Users        size={16} color="#7C6FE0" />, label: 'Teachers',  value: staffCount,     bg: '#EDE9FF', color: '#7C6FE0' },
+    { icon: <BookOpen     size={16} color="#9B8EF5" />, label: 'Classes',   value: sectionCount,   bg: '#F3E8FF', color: '#9B8EF5' },
+    { icon: <Clock        size={16} color="#0EA5E9" />, label: 'Subjects',  value: subjectCount,   bg: '#E0F2FE', color: '#0EA5E9' },
+    { icon: <MapPin       size={16} color="#D946EF" />, label: 'Rooms',     value: roomsCount,     bg: '#FAE8FF', color: '#D946EF' },
   ]
 
   return (
@@ -190,30 +196,32 @@ export function DashboardPage() {
             LEFT COLUMN — actions & stats
         ════════════════════════════════════════ */}
         <div style={{
-          borderRight: '1px solid #e5e7eb',
-          padding: '24px 24px',
-          background: '#f9fafb',
+          borderRight: '1px solid #E8E4FF',
+          padding: '20px 18px',
+          background: '#FAFAFE',
           minHeight: 'calc(100vh - 70px)',
+          overflow: 'hidden',
+          minWidth: 0,
         }}>
 
-          {/* Stats row */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 24 }}>
+          {/* Stats — 2×3 compact grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 20 }}>
             {stats.map(s => (
               <div key={s.label} style={{
-                background: '#fff', borderRadius: 10, padding: '14px 16px',
-                border: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', gap: 12,
+                background: '#fff', borderRadius: 9, padding: '10px 11px',
+                border: '1px solid #E8E4FF', display: 'flex', alignItems: 'center', gap: 9, minWidth: 0,
               }}>
                 <div style={{
-                  width: 36, height: 36, borderRadius: 9, background: s.bg,
+                  width: 30, height: 30, borderRadius: 7, background: s.bg,
                   display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                 }}>
                   {s.icon}
                 </div>
-                <div>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: '#111827', lineHeight: 1, fontFamily: "'DM Mono',monospace" }}>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: '#13111E', lineHeight: 1, fontFamily: "'DM Mono',monospace" }}>
                     {s.value}
                   </div>
-                  <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{s.label}</div>
+                  <div style={{ fontSize: 10, color: '#8B87AD', marginTop: 2, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.label}</div>
                 </div>
               </div>
             ))}
