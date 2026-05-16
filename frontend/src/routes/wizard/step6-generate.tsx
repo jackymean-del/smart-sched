@@ -146,7 +146,7 @@ export function Step6Generate() {
   const dashOffset = circ * (1 - progress / 100)
 
   const ringColor =
-    job?.status === "completed" ? "#059669" :
+    job?.status === "completed" ? "#7C6FE0" :
     job?.status === "failed"    ? "#dc2626" : "#7C6FE0"
 
   const elapsed = job?.startedAt ? ((Date.now() - job.startedAt) / 1000).toFixed(1) : "0.0"
@@ -233,7 +233,7 @@ export function Step6Generate() {
       {/* ── Current step label ── */}
       {job && (
         <div key={job.currentStep}
-          style={{ animation:"fade-up 0.3s ease", fontSize:14, color: job.status==="failed"?"#dc2626": job.status==="completed"?"#059669":"#374151", fontWeight:500, maxWidth:420, lineHeight:1.5 }}>
+          style={{ animation:"fade-up 0.3s ease", fontSize:14, color: job.status==="failed"?"#dc2626": job.status==="completed"?"#7C6FE0":"#374151", fontWeight:500, maxWidth:420, lineHeight:1.5 }}>
           {job.status === "running" && (
             <span style={{ display:"inline-block", width:8, height:8, borderRadius:"50%", background:"#7C6FE0", marginRight:8, animation:"pulse-dot 1s ease-in-out infinite", verticalAlign:"middle" }}/>
           )}
@@ -248,7 +248,7 @@ export function Step6Generate() {
             display:"flex", flexDirection:"column" as const, alignItems:"center", gap:3,
             padding:"12px 16px", borderRadius:12,
             background: job?.status==="completed" ? "#f0fdf4" : "#f7f6f2",
-            border: `1.5px solid ${job?.status==="completed" ? "#bbf7d0" : "#e8e5de"}`,
+            border: `1.5px solid ${job?.status==="completed" ? "#D8D2FF" : "#e8e5de"}`,
             minWidth:72,
             transition:"all 0.3s ease",
             animationDelay: `${0.3 + i * 0.05}s`,
@@ -320,7 +320,7 @@ export function Step6Generate() {
         {job?.status === "completed" && (
           <>
             <button onClick={() => window.location.href='/timetable'}
-              style={{ padding:"13px 32px", borderRadius:10, border:"none", background:"#059669", color:"#fff", fontSize:15, fontWeight:700, cursor:"pointer", boxShadow:"0 4px 20px rgba(5,150,105,0.3)" }}>
+              style={{ padding:"13px 32px", borderRadius:10, border:"none", background:"#7C6FE0", color:"#fff", fontSize:15, fontWeight:700, cursor:"pointer", boxShadow:"0 4px 20px rgba(124,111,224,0.3)" }}>
               View {T.schedule} (Draft) →
             </button>
             <button onClick={() => setJob(null)}

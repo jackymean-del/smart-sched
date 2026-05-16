@@ -114,7 +114,7 @@ export function Step3bOptionals() {
     return validateStrengths(c, combos).valid
   })
 
-  const LINE_COLORS = ["#7C6FE0", "#059669", "#d97706", "#dc2626", "#9B8EF5"]
+  const LINE_COLORS = ["#7C6FE0", "#7C6FE0", "#D4920E", "#dc2626", "#9B8EF5"]
 
   return (
     <div>
@@ -141,7 +141,7 @@ export function Step3bOptionals() {
                 <button key={s.name} onClick={() => setSelectedSection(s.name)}
                   style={{ padding:"8px 12px", borderRadius:8, border:`1.5px solid ${isSelected?"#7C6FE0":"#e8e5de"}`, background: isSelected?"#eaecf8":"#fff", cursor:"pointer", textAlign:"left" as const, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
                   <span style={{ fontSize:12, fontWeight: isSelected?600:400, color: isSelected?"#3730a3":"#1c1b18" }}>{s.name}</span>
-                  <span style={S.badge(scfg.hasOptionals ? "#059669" : "#a8a59e")}>
+                  <span style={S.badge(scfg.hasOptionals ? "#7C6FE0" : "#a8a59e")}>
                     {scfg.hasOptionals ? "Optional" : "Normal"}
                   </span>
                 </button>
@@ -152,7 +152,7 @@ export function Step3bOptionals() {
           {/* Summary */}
           <div style={{ marginTop:16, padding:"10px 12px", background:"#f7f6f2", borderRadius:8, fontSize:11, color:"#374151" }}>
             <div style={{ marginBottom:4 }}>📊 Summary</div>
-            <div style={{ color:"#059669" }}>✓ {optionalSections.length} with optionals</div>
+            <div style={{ color:"#7C6FE0" }}>✓ {optionalSections.length} with optionals</div>
             <div style={{ color:"#64748b" }}>○ {normalSections.length} normal</div>
             {allPoolsValid && optionalSections.length > 0 && (
               <div style={{ color:"#7C6FE0", marginTop:4 }}>🏊 Pools ready</div>
@@ -306,7 +306,7 @@ export function Step3bOptionals() {
                           <td style={{ padding:"8px 12px", fontSize:12, fontWeight:700 }}>Total</td>
                           <td style={{ padding:"8px 12px", textAlign:"center" as const }}>
                             <span style={{ fontSize:13, fontWeight:700, fontFamily:"monospace",
-                              color: validation?.valid ? "#059669" : "#dc2626" }}>
+                              color: validation?.valid ? "#7C6FE0" : "#dc2626" }}>
                               {validation?.total ?? 0} / {cfg.totalStudents}
                             </span>
                           </td>
@@ -318,8 +318,8 @@ export function Step3bOptionals() {
                   {/* Validation message */}
                   <div style={{ marginTop:8, padding:"8px 12px", borderRadius:7, fontSize:11, fontWeight:500,
                     background: validation?.valid ? "#f0fdf4" : "#fef2f2",
-                    color: validation?.valid ? "#059669" : "#dc2626",
-                    border: `1px solid ${validation?.valid ? "#86efac" : "#fca5a5"}` }}>
+                    color: validation?.valid ? "#7C6FE0" : "#dc2626",
+                    border: `1px solid ${validation?.valid ? "#D8D2FF" : "#fca5a5"}` }}>
                     {validation?.message}
                   </div>
                 </div>
@@ -349,7 +349,7 @@ export function Step3bOptionals() {
 
       <div style={{ display:"flex", justifyContent:"space-between", paddingTop:20, borderTop:"1px solid #e8e5de", marginTop:20 }}>
         <button onClick={() => setStep(3)} style={{ padding:"10px 20px", borderRadius:8, border:"1.5px solid #e8e5de", background:"#fff", fontSize:13, fontWeight:500, cursor:"pointer" }}>← Back</button>
-        <button onClick={() => setStep(4)} style={{ padding:"10px 24px", borderRadius:8, border:"none", background:"#059669", color:"#fff", fontSize:13, fontWeight:600, cursor:"pointer" }}>
+        <button onClick={() => setStep(4)} style={{ padding:"10px 24px", borderRadius:8, border:"none", background:"#7C6FE0", color:"#fff", fontSize:13, fontWeight:600, cursor:"pointer" }}>
           Save & Continue →
         </button>
       </div>

@@ -29,7 +29,7 @@ const lbl = (text: string) => (
   </div>
 )
 
-const SHIFT_COLORS = ['#7C6FE0','#059669','#d97706','#dc2626','#9B8EF5','#7C6FE0']
+const SHIFT_COLORS = ['#7C6FE0','#7C6FE0','#D4920E','#dc2626','#9B8EF5','#7C6FE0']
 
 export function Step2Schedule() {
   const { config, setConfig, setStep } = useTimetableStore()
@@ -120,8 +120,8 @@ export function Step2Schedule() {
             <div style={{ fontSize:11, color:'#6a6860' }}>All classes have the same start & end time</div>
           </button>
           <button onClick={() => { setMultiShift(true); if ((config.shifts ?? []).length === 0) addShift() }}
-            style={{ padding:'14px', borderRadius:10, border: multiShift?'2px solid #059669':'1.5px solid #e8e5de', background: multiShift?'#f0fdf4':'#fff', cursor:'pointer', textAlign:'left' as const }}>
-            <div style={{ fontSize:13, fontWeight:600, color: multiShift?'#059669':'#1c1b18', marginBottom:4 }}>🕐🕑 Multiple Shifts</div>
+            style={{ padding:'14px', borderRadius:10, border: multiShift?'2px solid #7C6FE0':'1.5px solid #e8e5de', background: multiShift?'#f0fdf4':'#fff', cursor:'pointer', textAlign:'left' as const }}>
+            <div style={{ fontSize:13, fontWeight:600, color: multiShift?'#7C6FE0':'#1c1b18', marginBottom:4 }}>🕐🕑 Multiple Shifts</div>
             <div style={{ fontSize:11, color:'#6a6860' }}>Different classes have different start/end times</div>
           </button>
         </div>
@@ -206,7 +206,7 @@ export function Step2Schedule() {
 
       <div style={{ display:'flex', justifyContent:'space-between', paddingTop:16, borderTop:'1px solid #e8e5de' }}>
         <button onClick={() => setStep(1)} style={{ padding:'9px 18px', borderRadius:8, border:'1.5px solid #e8e5de', background:'#fff', fontSize:13, fontWeight:500, cursor:'pointer' }}>← Back</button>
-        <button onClick={() => setStep(3)} style={{ padding:'9px 18px', borderRadius:8, border:'none', fontSize:13, fontWeight:600, cursor:'pointer', background:'#059669', color:'#fff' }}>
+        <button onClick={() => setStep(3)} style={{ padding:'9px 18px', borderRadius:8, border:'none', fontSize:13, fontWeight:600, cursor:'pointer', background:'#7C6FE0', color:'#fff' }}>
           Save & Continue →
         </button>
       </div>

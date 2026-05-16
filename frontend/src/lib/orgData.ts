@@ -369,36 +369,53 @@ export function generateBreaks(orgType: OrgType, n: number) {
   return list.slice(0, Math.max(2, Math.min(n, list.length)))
 }
 
-// ─── Subject Colors ───────────────────────────────────────
+// ─── Subject Stripe System ────────────────────────────────
+// Uniform white cell + 4px left border stripe per category.
+// No rainbow fills — clean, scannable, lavender-modern.
+// Categories: science=green · language=lavender · humanities=gold ·
+// arts=plum · sports=teal · computer=sky · break/lunch=grey.
+const SCI  = 'bg-white text-slate-800 border-l-4 border-[#22A066]'
+const LANG = 'bg-white text-slate-800 border-l-4 border-[#7C6FE0]'
+const HUM  = 'bg-white text-slate-800 border-l-4 border-[#D4920E]'
+const ART  = 'bg-white text-slate-800 border-l-4 border-[#D946EF]'
+const SPT  = 'bg-white text-slate-800 border-l-4 border-[#0B7285]'
+const COMP = 'bg-white text-slate-800 border-l-4 border-[#0EA5E9]'
+const BRK  = 'bg-slate-50 text-slate-500 border-l-4 border-slate-300 italic'
+const ASM  = 'bg-[#EDE9FF] text-[#13111E] border-l-4 border-[#7C6FE0] font-semibold'
+const DSP  = 'bg-[#FEF3C7] text-[#13111E] border-l-4 border-[#D4920E] font-semibold'
+
 const COLOR_MAP: [string[], string][] = [
-  [['MATH','MATHS','MATHEMATICS','CALCULUS','MATHEMATIK'], 'bg-blue-100 text-blue-800'],
-  [['ENGLISH','ENG','LANGUAGE ARTS','DEUTSCH','COMMUNICATION'], 'bg-pink-100 text-pink-800'],
-  [['BIOLOGY','BIO','BIOLOGIE'], 'bg-green-100 text-green-800'],
-  [['CHEMISTRY','CHEM','CHEMIE'], 'bg-orange-100 text-orange-800'],
-  [['PHYSICS','PHY','PHYSIK'], 'bg-indigo-100 text-indigo-800'],
-  [['SCIENCE','SCI'], 'bg-emerald-100 text-emerald-800'],
-  [['SOCIAL','SST','HISTORY','GEOGRAPHY','ECONOMICS','GEOGRAPHIE'], 'bg-yellow-100 text-yellow-800'],
-  [['HINDI','URDU','ARABIC','ODIA','REGIONAL','MOTHER TONGUE'], 'bg-red-100 text-red-800'],
-  [['EVS','ENVIRONMENTAL'], 'bg-teal-100 text-teal-800'],
-  [['PE','PHYSICAL EDUCATION','SPORT','PDHPE'], 'bg-lime-100 text-lime-800'],
-  [['ART','CRAFT','KUNST','CREATIVE','FINE ART'], 'bg-purple-100 text-purple-800'],
-  [['MUSIC','MUSIK'], 'bg-violet-100 text-violet-800'],
-  [['COMPUTER','COMP','IT','ICT','PROGRAMMING','CODING'], 'bg-sky-100 text-sky-800'],
-  [['MEETING','STANDUP','SPRINT','PLANNING','SYNC'], 'bg-cyan-100 text-cyan-800'],
-  [['DUTY','WARD ROUND','NURSING','ON-CALL'], 'bg-green-100 text-green-800'],
-  [['ASSEMBLY','REGISTRATION','MORGENKREIS'], 'bg-blue-200 text-blue-900 font-bold'],
-  [['DISPERSAL','DISMISSAL','SIGN-OFF','HANDOVER','SHIFT END'], 'bg-green-200 text-green-900 font-bold'],
-  [['LUNCH','MEAL'], 'bg-amber-100 text-amber-800'],
-  [['BREAK','RECESS','PAUSE','MORNING TEA','COFFEE'], 'bg-yellow-100 text-yellow-700'],
-  [['DIARY'], 'bg-slate-100 text-slate-600'],
-  [['SNACK'], 'bg-yellow-50 text-yellow-700'],
+  // Science / Math
+  [['MATH','MATHS','MATHEMATICS','CALCULUS','MATHEMATIK','PHYSICS','PHY','PHYSIK','CHEMISTRY','CHEM','CHEMIE','BIOLOGY','BIO','BIOLOGIE','SCIENCE','SCI'], SCI],
+  // Languages
+  [['ENGLISH','ENG','LANGUAGE ARTS','DEUTSCH','COMMUNICATION','HINDI','URDU','ARABIC','ODIA','REGIONAL','MOTHER TONGUE','SANSKRIT'], LANG],
+  // Humanities
+  [['SOCIAL','SST','HISTORY','GEOGRAPHY','ECONOMICS','GEOGRAPHIE','EVS','ENVIRONMENTAL','G.K.','GK','GENERAL KNOWLEDGE','CIVICS'], HUM],
+  // Arts / CCA
+  [['ART','CRAFT','KUNST','CREATIVE','FINE ART','MUSIC','MUSIK','DANCE','CCA','DRAMA','THEATRE'], ART],
+  // Sports
+  [['PE','PHYSICAL EDUCATION','SPORT','PDHPE','GAMES','YOGA'], SPT],
+  // Computer / IT
+  [['COMPUTER','COMP','IT','ICT','PROGRAMMING','CODING'], COMP],
+  // Corporate
+  [['MEETING','STANDUP','SPRINT','PLANNING','SYNC','REVIEW'], LANG],
+  [['DUTY','WARD ROUND','NURSING','ON-CALL'], SCI],
+  // Special — full tint
+  [['ASSEMBLY','REGISTRATION','MORGENKREIS'], ASM],
+  [['DISPERSAL','DISMISSAL','SIGN-OFF','HANDOVER','SHIFT END'], DSP],
+  // Breaks / non-academic — grey
+  [['LUNCH','MEAL'], BRK],
+  [['BREAK','RECESS','PAUSE','MORNING TEA','COFFEE'], BRK],
+  [['DIARY'], BRK],
+  [['SNACK'], BRK],
 ]
 
 export function getSubjectColor(subject: string): string {
-  if (!subject?.trim()) return 'bg-gray-100 text-gray-500'
+  if (!subject?.trim()) return 'bg-slate-50 text-slate-400 border-l-4 border-slate-200'
   const u = subject.toUpperCase()
   for (const [keys, cls] of COLOR_MAP) {
     if (keys.some(k => u.includes(k))) return cls
   }
-  return 'bg-gray-100 text-gray-700'
+  // Default = lavender stripe for any unmatched subject
+  return 'bg-white text-slate-800 border-l-4 border-[#7C6FE0]'
 }

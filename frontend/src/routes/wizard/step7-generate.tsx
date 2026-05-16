@@ -153,7 +153,7 @@ export function Step7Generate() {
 
       {/* Status icon */}
       {status === "running" && (
-        <div style={{ width:56, height:56, borderRadius:"50%", border:"4px solid #e8e5de", borderTopColor:"#059669", animation:"spin 1s linear infinite" }} />
+        <div style={{ width:56, height:56, borderRadius:"50%", border:"4px solid #e8e5de", borderTopColor:"#7C6FE0", animation:"spin 1s linear infinite" }} />
       )}
       {status === "done" && result && (
         <div style={{ width:64, height:64, borderRadius:"50%", background: result.conflicts>0?"#fef3c7":"#f0fdf4", display:"flex", alignItems:"center", justifyContent:"center", fontSize:28 }}>
@@ -161,7 +161,7 @@ export function Step7Generate() {
         </div>
       )}
       {status === "idle" && (
-        <div style={{ width:64, height:64, borderRadius:18, background:"linear-gradient(135deg,#9B8EF5,#059669)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:30 }}>
+        <div style={{ width:64, height:64, borderRadius:18, background:"linear-gradient(135deg,#9B8EF5,#7C6FE0)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:30 }}>
           ✨
         </div>
       )}
@@ -176,7 +176,7 @@ export function Step7Generate() {
       {/* Mode badge */}
       {status === "idle" && (
         <div style={{ display:"flex", gap:8 }}>
-          <span style={{ padding:"4px 12px", borderRadius:20, fontSize:11, fontWeight:600, background: store.schedulingMode==='duration-based'?"#f0fdf4":"#eaecf8", color: store.schedulingMode==='duration-based'?"#059669":"#7C6FE0", border:`1px solid ${store.schedulingMode==='duration-based'?"#86efac":"#D8D2FF"}` }}>
+          <span style={{ padding:"4px 12px", borderRadius:20, fontSize:11, fontWeight:600, background: store.schedulingMode==='duration-based'?"#f0fdf4":"#eaecf8", color: store.schedulingMode==='duration-based'?"#7C6FE0":"#7C6FE0", border:`1px solid ${store.schedulingMode==='duration-based'?"#D8D2FF":"#D8D2FF"}` }}>
             {store.schedulingMode === 'duration-based' ? '⏱ Duration-Based Mode' : '📅 Period-Based Mode'}
           </span>
           <span style={{ padding:"4px 12px", borderRadius:20, fontSize:11, background:"#f7f6f2", color:"#6a6860" }}>
@@ -188,7 +188,7 @@ export function Step7Generate() {
       {/* Progress bar */}
       {status !== "idle" && (
         <div style={{ width:"100%", maxWidth:480, height:6, background:"#e8e5de", borderRadius:4, overflow:"hidden" }}>
-          <div style={{ height:"100%", width:`${progress}%`, background:"linear-gradient(90deg,#9B8EF5,#059669)", borderRadius:4, transition:"width 0.25s" }} />
+          <div style={{ height:"100%", width:`${progress}%`, background:"linear-gradient(90deg,#9B8EF5,#7C6FE0)", borderRadius:4, transition:"width 0.25s" }} />
         </div>
       )}
 
@@ -196,7 +196,7 @@ export function Step7Generate() {
       {logLines.length > 0 && (
         <div ref={logRef} style={{ width:"100%", maxWidth:520, background:"#fff", border:"1.5px solid #e8e5de", borderRadius:12, padding:"12px 14px", maxHeight:200, overflowY:"auto", textAlign:"left" as const, fontFamily:"monospace", fontSize:11 }}>
           {logLines.map((l,i) => (
-            <div key={i} style={{ color: l.type==='ok'?'#059669':l.type==='warn'?'#d97706':l.type==='error'?'#dc2626':'#7C6FE0', lineHeight:1.8 }}>
+            <div key={i} style={{ color: l.type==='ok'?'#7C6FE0':l.type==='warn'?'#D4920E':l.type==='error'?'#dc2626':'#7C6FE0', lineHeight:1.8 }}>
               {l.msg}
             </div>
           ))}
@@ -207,8 +207,8 @@ export function Step7Generate() {
       {status === "done" && result && (
         <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10, maxWidth:400, width:"100%" }}>
           {[
-            { v: result.conflicts, l: "Conflicts", color: result.conflicts>0?"#dc2626":"#059669" },
-            { v: result.score,     l: "Penalty Score", color: result.score<20?"#059669":"#d97706" },
+            { v: result.conflicts, l: "Conflicts", color: result.conflicts>0?"#dc2626":"#7C6FE0" },
+            { v: result.score,     l: "Penalty Score", color: result.score<20?"#7C6FE0":"#D4920E" },
             { v: result.suggestions, l: "Suggestions", color: "#7C6FE0" },
           ].map(({ v, l, color }) => (
             <div key={l} style={{ background:"#fff", border:"1.5px solid #e8e5de", borderRadius:10, padding:"12px", textAlign:"center" as const }}>
@@ -224,7 +224,7 @@ export function Step7Generate() {
         {status === "idle" && (
           <>
             <button onClick={startGenerate}
-              style={{ display:"flex", alignItems:"center", gap:8, padding:"13px 28px", borderRadius:10, border:"none", background:"#059669", color:"#fff", fontSize:15, fontWeight:600, cursor:"pointer", boxShadow:"0 4px 14px rgba(5,150,105,0.3)" }}>
+              style={{ display:"flex", alignItems:"center", gap:8, padding:"13px 28px", borderRadius:10, border:"none", background:"#7C6FE0", color:"#fff", fontSize:15, fontWeight:600, cursor:"pointer", boxShadow:"0 4px 14px rgba(124,111,224,0.3)" }}>
               ✨ Generate Timetable
             </button>
             <button onClick={() => setStep(6)} style={{ padding:"13px 20px", borderRadius:10, border:"1.5px solid #e8e5de", background:"#fff", fontSize:13, cursor:"pointer" }}>← Back</button>
@@ -233,7 +233,7 @@ export function Step7Generate() {
         {status === "done" && (
           <>
             <button onClick={() => window.location.href='/timetable'}
-              style={{ padding:"13px 28px", borderRadius:10, border:"none", background:"#059669", color:"#fff", fontSize:15, fontWeight:600, cursor:"pointer" }}>
+              style={{ padding:"13px 28px", borderRadius:10, border:"none", background:"#7C6FE0", color:"#fff", fontSize:15, fontWeight:600, cursor:"pointer" }}>
               View Timetable →
             </button>
             <button onClick={() => { setStatus("idle"); setLogLines([]); setProgress(0); setResult(null) }}

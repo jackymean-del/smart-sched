@@ -166,7 +166,7 @@ export function SubstitutionModal({ open, onClose }: Props) {
                         <div style={{ width:30, height:30, borderRadius:"50%", background:isSelected?"#f59e0b":"#e2e8f0", color:isSelected?"#fff":"#6b7280", display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:700, flexShrink:0 }}>{st.name[0]}</div>
                         <div style={{ minWidth:0 }}>
                           <div style={{ fontSize:11, fontWeight:600, color:"#1e293b", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const }}>{st.name}</div>
-                          <div style={{ fontSize:9, color: periodCount>0?"#d97706":"#94a3b8" }}>{periodCount > 0 ? `${periodCount} period${periodCount>1?"s":""} today` : "No periods today"}</div>
+                          <div style={{ fontSize:9, color: periodCount>0?"#D4920E":"#94a3b8" }}>{periodCount > 0 ? `${periodCount} period${periodCount>1?"s":""} today` : "No periods today"}</div>
                         </div>
                       </button>
                     )
@@ -196,7 +196,7 @@ export function SubstitutionModal({ open, onClose }: Props) {
                   </div>
 
                   {absentSlots.length === 0 ? (
-                    <div style={{ padding:"12px", background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:8, fontSize:12, color:"#166534", textAlign:"center" as const }}>
+                    <div style={{ padding:"12px", background:"#f0fdf4", border:"1px solid #D8D2FF", borderRadius:8, fontSize:12, color:"#166534", textAlign:"center" as const }}>
                       ✅ {absentName} has no classes on {DAY_LABEL[selectedDay]}. No cover needed.
                     </div>
                   ) : (
@@ -214,11 +214,11 @@ export function SubstitutionModal({ open, onClose }: Props) {
                                 <span style={{ fontSize:10, color:"#94a3b8", marginLeft:6 }}>— {slot.subject}</span>
                               </div>
                               {alreadySub && !assigned && (
-                                <span style={{ fontSize:9, background:"#fff7ed", border:"1px solid #fcd34d", color:"#d97706", padding:"1px 6px", borderRadius:4 }}>Covered: {alreadySub}</span>
+                                <span style={{ fontSize:9, background:"#fff7ed", border:"1px solid #fcd34d", color:"#D4920E", padding:"1px 6px", borderRadius:4 }}>Covered: {alreadySub}</span>
                               )}
                             </div>
                             <select value={assigned} onChange={e => setAssignments(a => ({ ...a, [slot.periodId]: e.target.value }))}
-                              style={{ width:"100%", padding:"6px 10px", border:`1.5px solid ${assigned?"#86efac":"#e2e8f0"}`, borderRadius:6, fontSize:11, background:"#fff", outline:"none", cursor:"pointer" }}>
+                              style={{ width:"100%", padding:"6px 10px", border:`1.5px solid ${assigned?"#D8D2FF":"#e2e8f0"}`, borderRadius:6, fontSize:11, background:"#fff", outline:"none", cursor:"pointer" }}>
                               <option value="">— Select substitute —</option>
                               {avail.map(t => (
                                 <option key={t.name} value={t.name}>
@@ -280,7 +280,7 @@ export function SubstitutionModal({ open, onClose }: Props) {
           <div style={{ padding:"12px 20px", borderTop:"1px solid #e2e8f0", display:"flex", gap:8, justifyContent:"flex-end", flexShrink:0 }}>
             <button onClick={onClose} style={{ padding:"8px 18px", borderRadius:7, border:"1px solid #e2e8f0", background:"#fff", fontSize:12, color:"#64748b", cursor:"pointer" }}>Cancel</button>
             <button onClick={apply} disabled={!absentName || Object.keys(assignments).length === 0}
-              style={{ padding:"8px 22px", borderRadius:7, border:"none", background: (!absentName || Object.keys(assignments).length===0)?"#e2e8f0":"#059669", color:(!absentName || Object.keys(assignments).length===0)?"#94a3b8":"#fff", fontSize:12, fontWeight:700, cursor: (!absentName || Object.keys(assignments).length===0)?"not-allowed":"pointer" }}>
+              style={{ padding:"8px 22px", borderRadius:7, border:"none", background: (!absentName || Object.keys(assignments).length===0)?"#e2e8f0":"#7C6FE0", color:(!absentName || Object.keys(assignments).length===0)?"#94a3b8":"#fff", fontSize:12, fontWeight:700, cursor: (!absentName || Object.keys(assignments).length===0)?"not-allowed":"pointer" }}>
               ✅ Apply {Object.keys(assignments).length > 0 ? `(${Object.keys(assignments).length})` : ""} Cover{Object.keys(assignments).length !== 1 ? "s" : ""}
             </button>
           </div>

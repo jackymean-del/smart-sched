@@ -4,8 +4,8 @@ import type { Facility } from "@/types"
 
 const FACILITY_TYPES = [
   { type: 'classroom', label: 'Classroom', icon: '🏫', color: '#7C6FE0' },
-  { type: 'lab',       label: 'Lab',       icon: '🔬', color: '#059669' },
-  { type: 'hall',      label: 'Hall',      icon: '🏛️', color: '#d97706' },
+  { type: 'lab',       label: 'Lab',       icon: '🔬', color: '#7C6FE0' },
+  { type: 'hall',      label: 'Hall',      icon: '🏛️', color: '#D4920E' },
   { type: 'gym',       label: 'Gym',       icon: '⚽', color: '#dc2626' },
   { type: 'other',     label: 'Other',     icon: '🏢', color: '#9B8EF5' },
 ] as const
@@ -166,7 +166,7 @@ export function Step5Facilities() {
       <div style={{ display:"flex", justifyContent:"space-between", paddingTop:16, borderTop:"1px solid #e8e5de" }}>
         <button onClick={() => setStep(4)} style={{ padding:"9px 18px", borderRadius:8, border:"1.5px solid #e8e5de", background:"#fff", fontSize:13, fontWeight:500, cursor:"pointer" }}>← Back</button>
         <button onClick={() => setStep(6)}
-          style={{ padding:"9px 18px", borderRadius:8, border:"none", background:"#059669", color:"#fff", fontSize:13, fontWeight:600, cursor:"pointer" }}>
+          style={{ padding:"9px 18px", borderRadius:8, border:"none", background:"#7C6FE0", color:"#fff", fontSize:13, fontWeight:600, cursor:"pointer" }}>
           Save & Continue →
         </button>
       </div>

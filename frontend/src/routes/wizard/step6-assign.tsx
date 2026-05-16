@@ -150,7 +150,7 @@ export function Step6Assign() {
                       {cls}<div style={{ fontSize:9, color:"#c8c5bc", fontWeight:400, marginTop:1 }}>{getSectionsForClass(sections, cls).length} sec.</div>
                     </th>
                   ))}
-                  <th style={{ ...thS, textAlign:"center" as const, minWidth:60, background:"#f0fdf4", color:"#059669" }}>All</th>
+                  <th style={{ ...thS, textAlign:"center" as const, minWidth:60, background:"#f0fdf4", color:"#7C6FE0" }}>All</th>
                 </tr>
               </thead>
               <tbody>
@@ -167,14 +167,14 @@ export function Step6Assign() {
                           <input type="checkbox" checked={all}
                             ref={el => { if (el) el.indeterminate = some }}
                             onChange={e => toggleSubForAllSections(si, cls, e.target.checked)}
-                            style={{ width:14, height:14, accentColor:"#059669", cursor:"pointer" }} />
-                          {some && <div style={{ fontSize:8, color:"#d97706" }}>partial</div>}
+                            style={{ width:14, height:14, accentColor:"#7C6FE0", cursor:"pointer" }} />
+                          {some && <div style={{ fontSize:8, color:"#D4920E" }}>partial</div>}
                         </td>
                       )
                     })}
                     <td style={{ ...tdS, textAlign:"center" as const, background: si%2===0?"#f0fdf4":"#ecfdf5" }}>
                       <button onClick={() => setSubjects(subjects.map((s,i) => i===si ? { ...s, sections: sections.map(x=>x.name) } : s))}
-                        style={{ fontSize:10, padding:"2px 8px", borderRadius:4, border:"1px solid #86efac", background:"#fff", color:"#059669", cursor:"pointer", fontWeight:600 }}>+ All</button>
+                        style={{ fontSize:10, padding:"2px 8px", borderRadius:4, border:"1px solid #D8D2FF", background:"#fff", color:"#7C6FE0", cursor:"pointer", fontWeight:600 }}>+ All</button>
                     </td>
                   </tr>
                 ))}
@@ -196,22 +196,22 @@ export function Step6Assign() {
       {/* ── STAFF TAB ── */}
       {tab === "staff" && (
         <div>
-          <div style={{ background:"#f0fdf4", border:"1.5px solid #86efac", borderRadius:10, padding:"12px 16px", marginBottom:12, fontSize:12, color:"#14532d" }}>
+          <div style={{ background:"#f0fdf4", border:"1.5px solid #D8D2FF", borderRadius:10, padding:"12px 16px", marginBottom:12, fontSize:12, color:"#14532d" }}>
             <strong>How to assign:</strong> Select classes for each {org.staffLabel.toLowerCase()} → subjects for those classes appear as separate columns → check which subjects they teach per class → click <strong>🤖 Auto-allocate</strong> to auto-fill everything, then fine-tune.
           </div>
 
           {/* Auto-allocate */}
-          <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:14, padding:"12px 16px", background: allocated?"#f0fdf4":"#eaecf8", borderRadius:10, border:`1.5px solid ${allocated?"#86efac":"#D8D2FF"}` }}>
+          <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:14, padding:"12px 16px", background: allocated?"#f0fdf4":"#eaecf8", borderRadius:10, border:`1.5px solid ${allocated?"#D8D2FF":"#D8D2FF"}` }}>
             <div style={{ flex:1 }}>
               <div style={{ fontSize:13, fontWeight:600, color: allocated?"#14532d":"#3730a3" }}>
                 {allocated ? "✅ Sections auto-allocated!" : "🤖 AI Auto-allocate Everything"}
               </div>
-              <div style={{ fontSize:11, color: allocated?"#059669":"#7C6FE0", marginTop:2 }}>
+              <div style={{ fontSize:11, color: allocated?"#7C6FE0":"#7C6FE0", marginTop:2 }}>
                 {allocated ? "Classes, sections and subjects auto-assigned. Review and edit below." : "AI will assign all classes, sections and subjects to teachers optimally. You can edit after."}
               </div>
             </div>
             <button onClick={handleAutoAllocate}
-              style={{ padding:"9px 18px", borderRadius:8, border:"none", background: allocated?"#059669":"#7C6FE0", color:"#fff", fontSize:13, fontWeight:600, cursor:"pointer", whiteSpace:"nowrap" as const }}>
+              style={{ padding:"9px 18px", borderRadius:8, border:"none", background: allocated?"#7C6FE0":"#7C6FE0", color:"#fff", fontSize:13, fontWeight:600, cursor:"pointer", whiteSpace:"nowrap" as const }}>
               {allocated ? "Re-allocate" : "🤖 Auto-allocate"}
             </button>
           </div>
@@ -228,7 +228,7 @@ export function Step6Assign() {
               }, 0)
               const maxP = st.maxPeriodsPerWeek ?? country.maxPeriodsWeek
               const pct  = Math.min(150, Math.round(load / maxP * 100))
-              const barColor = pct>100?"#ef4444":pct>85?"#f59e0b":"#059669"
+              const barColor = pct>100?"#ef4444":pct>85?"#f59e0b":"#7C6FE0"
 
               return (
                 <div key={st.id} style={{ border:"1.5px solid #e8e5de", borderRadius:12, overflow:"hidden" }}>
@@ -240,7 +240,7 @@ export function Step6Assign() {
                     <div style={{ flex:1 }}>
                       <input value={st.name} onChange={e=>{const n=[...staff];n[i]={...n[i],name:e.target.value};setStaff(n)}}
                         style={{ fontSize:13, fontWeight:600, background:"transparent", border:"none", outline:"none", width:"100%", color:"#1c1b18" }} />
-                      {st.isClassTeacher && <div style={{ fontSize:10, color:"#059669" }}>★ Class Teacher: {st.isClassTeacher}</div>}
+                      {st.isClassTeacher && <div style={{ fontSize:10, color:"#7C6FE0" }}>★ Class Teacher: {st.isClassTeacher}</div>}
                     </div>
                     <div style={{ textAlign:"right" as const, flexShrink:0 }}>
                       <div style={{ fontSize:11, fontFamily:"monospace", color:"#1c1b18" }}>{load}/{maxP} {org.loadUnit}</div>
@@ -309,7 +309,7 @@ export function Step6Assign() {
                               const checked = isSubjectCheckedForClass(i, sub.name, cls)
                               return (
                                 <label key={sub.name} style={{ display:"flex", alignItems:"center", gap:5, cursor:"pointer", padding:"3px 5px", borderRadius:4, marginBottom:2, background: checked?"#f0fdf4":"transparent" }}>
-                                  <input type="checkbox" checked={checked} style={{ accentColor:"#059669", width:12, height:12 }}
+                                  <input type="checkbox" checked={checked} style={{ accentColor:"#7C6FE0", width:12, height:12 }}
                                     onChange={e => toggleSubjectForClass(i, sub.name, cls, e.target.checked)} />
                                   <span style={{ fontSize:11, fontWeight: checked?600:400, color: checked?"#14532d":"#1c1b18", flex:1 }}>{sub.name}</span>
                                   <span style={{ fontSize:9, color:"#a8a59e", fontFamily:"monospace" }}>{sub.periodsPerWeek}×</span>
@@ -319,7 +319,7 @@ export function Step6Assign() {
                             {/* Check all / clear for this class */}
                             <div style={{ display:"flex", gap:4, marginTop:8 }}>
                               <button onClick={() => clsSubjects.forEach(sub => toggleSubjectForClass(i, sub.name, cls, true))}
-                                style={{ flex:1, fontSize:9, padding:"2px 4px", borderRadius:3, border:"1px solid #86efac", background:"#f0fdf4", color:"#059669", cursor:"pointer" }}>All ✓</button>
+                                style={{ flex:1, fontSize:9, padding:"2px 4px", borderRadius:3, border:"1px solid #D8D2FF", background:"#f0fdf4", color:"#7C6FE0", cursor:"pointer" }}>All ✓</button>
                               <button onClick={() => clsSubjects.forEach(sub => toggleSubjectForClass(i, sub.name, cls, false))}
                                 style={{ flex:1, fontSize:9, padding:"2px 4px", borderRadius:3, border:"1px solid #e8e5de", background:"#fff", color:"#6a6860", cursor:"pointer" }}>Clear</button>
                             </div>
@@ -337,7 +337,7 @@ export function Step6Assign() {
 
       <div style={{ display:"flex", justifyContent:"space-between", paddingTop:16, borderTop:"1px solid #e8e5de", marginTop:16 }}>
         <button onClick={() => setStep(5)} style={{ padding:"9px 18px", borderRadius:8, border:"1.5px solid #e8e5de", background:"#fff", fontSize:13, fontWeight:500, cursor:"pointer" }}>← Back</button>
-        <button onClick={() => setStep(7)} style={{ padding:"9px 18px", borderRadius:8, border:"none", background:"#059669", color:"#fff", fontSize:13, fontWeight:600, cursor:"pointer" }}>
+        <button onClick={() => setStep(7)} style={{ padding:"9px 18px", borderRadius:8, border:"none", background:"#7C6FE0", color:"#fff", fontSize:13, fontWeight:600, cursor:"pointer" }}>
           ✨ Generate Timetable →
         </button>
       </div>

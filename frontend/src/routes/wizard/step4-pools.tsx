@@ -11,7 +11,7 @@ function gradeToNum(g: string): number {
   return isNaN(n) ? 0 : n
 }
 
-const POOL_COLORS = ['#7C6FE0','#059669','#d97706','#dc2626','#9B8EF5','#7C6FE0','#db2777']
+const POOL_COLORS = ['#7C6FE0','#7C6FE0','#D4920E','#dc2626','#9B8EF5','#7C6FE0','#db2777']
 
 export function Step4Pools() {
   const store = useTimetableStore()
@@ -79,7 +79,7 @@ export function Step4Pools() {
       </p>
 
       {/* How it works */}
-      <div style={{ background:"#f0fdf4", border:"1.5px solid #86efac", borderRadius:10, padding:"12px 16px", marginBottom:20, fontSize:12, color:"#14532d" }}>
+      <div style={{ background:"#f0fdf4", border:"1.5px solid #D8D2FF", borderRadius:10, padding:"12px 16px", marginBottom:20, fontSize:12, color:"#14532d" }}>
         <div style={{ fontWeight:700, marginBottom:6 }}>How pools work:</div>
         <div style={{ lineHeight:1.8 }}>
           1. Create a pool for each subject + grade group (e.g. "Primary Maths" for grades 1–5)<br/>
@@ -205,7 +205,7 @@ export function Step4Pools() {
 
       {/* Summary */}
       {teacherPools.length > 0 && (
-        <div style={{ background:"#f0fdf4", border:"1px solid #86efac", borderRadius:8, padding:"10px 14px", marginBottom:16, fontSize:12, color:"#14532d" }}>
+        <div style={{ background:"#f0fdf4", border:"1px solid #D8D2FF", borderRadius:8, padding:"10px 14px", marginBottom:16, fontSize:12, color:"#14532d" }}>
           ✅ <strong>{teacherPools.length} pools</strong> · <strong>{totalTeachers} {org.staffsLabel.toLowerCase()}</strong> will be auto-generated
           {teacherPools.map(p => ` · ${p.name} (${p.teacherCount})`).join('')}
         </div>
@@ -214,7 +214,7 @@ export function Step4Pools() {
       <div style={{ display:"flex", justifyContent:"space-between", paddingTop:16, borderTop:"1px solid #e8e5de" }}>
         <button onClick={() => setStep(3)} style={{ padding:"9px 18px", borderRadius:8, border:"1.5px solid #e8e5de", background:"#fff", fontSize:13, fontWeight:500, cursor:"pointer" }}>← Back</button>
         <button onClick={handleContinue} disabled={teacherPools.length === 0}
-          style={{ padding:"9px 18px", borderRadius:8, border:"none", fontSize:13, fontWeight:600, cursor: teacherPools.length>0?"pointer":"not-allowed", background: teacherPools.length>0?"#059669":"#d4d1c8", color:"#fff" }}>
+          style={{ padding:"9px 18px", borderRadius:8, border:"none", fontSize:13, fontWeight:600, cursor: teacherPools.length>0?"pointer":"not-allowed", background: teacherPools.length>0?"#7C6FE0":"#d4d1c8", color:"#fff" }}>
           Save & Continue →
         </button>
       </div>

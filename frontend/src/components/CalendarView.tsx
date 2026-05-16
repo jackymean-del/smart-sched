@@ -190,7 +190,7 @@ function EventChip({
       )}
       {showTeacher && teacher && !compact && (
         <div style={{ fontSize: 8, opacity: 0.65, lineHeight: 1.2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const }}>
-          {isClassTeacher && <span style={{ color:"#059669" }}>★ </span>}
+          {isClassTeacher && <span style={{ color:"#7C6FE0" }}>★ </span>}
           {isSub ? `🔄 ${teacher}` : teacher}
         </div>
       )}
@@ -323,7 +323,7 @@ export function CalendarView({
                       background: todayFlag ? "#7C6FE0" : "transparent",
                       color: todayFlag ? "#fff" : !isCurrentMonth ? "#94a3b8" : "#1e293b",
                     }}>{day.getDate()}</span>
-                    {absentSlot && <span style={{ fontSize: 8, color: "#d97706", fontWeight: 600 }}>⚠ absent</span>}
+                    {absentSlot && <span style={{ fontSize: 8, color: "#D4920E", fontWeight: 600 }}>⚠ absent</span>}
                     {!isWorkDay && isCurrentMonth && <span style={{ fontSize: 8, color: "#94a3b8" }}>off</span>}
                   </div>
                   <div style={{ display: "flex", flexDirection: "column" as const, gap: 1 }}>
@@ -384,7 +384,7 @@ export function CalendarView({
             {periods.map((p, pi) => {
               const times = periodTimes.get(p.id)
               const isBreak = p.type !== "class"
-              const breakBg = p.type === "lunch" ? "#fef3c7" : p.type === "fixed-start" ? "#dbeafe" : p.type === "fixed-end" ? "#d1fae5" : "#fefce8"
+              const breakBg = p.type === "lunch" ? "#fef3c7" : p.type === "fixed-start" ? "#dbeafe" : p.type === "fixed-end" ? "#EDE9FF" : "#fefce8"
               const breakColor = p.type === "lunch" ? "#92400e" : p.type === "fixed-start" ? "#1e40af" : p.type === "fixed-end" ? "#065f46" : "#854d0e"
               return (
                 <tr key={p.id} style={{ background: isBreak ? breakBg : pi % 2 === 0 ? "#fff" : "#f8fafc", height: `${(p.duration) * PX_PER_MIN}px` }}>
@@ -473,13 +473,13 @@ export function CalendarView({
                   }}>
                     <div>{DAY_ABBR[(d.getDay() + 6) % 7]}</div>
                     <div style={{ fontSize: 10, color: "#64748b", fontWeight: 500 }}>{d.getDate()} {MONTH_NAMES[d.getMonth()].slice(0,3)}</div>
-                    {absentFlag && <div style={{ fontSize: 8, color: "#d97706" }}>⚠ absent</div>}
+                    {absentFlag && <div style={{ fontSize: 8, color: "#D4920E" }}>⚠ absent</div>}
                   </td>
                   {periods.map(p => {
                     const isBreak = p.type !== "class"
                     if (isBreak) {
                       const breakBg = p.type === "lunch" ? "#fef3c7" : p.type === "fixed-start" ? "#eff6ff" : "#fefce8"
-                      const breakColor = p.type === "lunch" ? "#d97706" : "#ca8a04"
+                      const breakColor = p.type === "lunch" ? "#D4920E" : "#ca8a04"
                       return (
                         <td key={p.id} style={{ border: "1px solid #e2e8f0", textAlign: "center" as const, fontSize: 9, color: breakColor, fontStyle: "italic", padding: 4, background: breakBg }}>
                           {p.name}
@@ -548,7 +548,7 @@ export function CalendarView({
               {periods.map((p, pi) => {
                 const times = periodTimes.get(p.id)
                 const isBreak = p.type !== "class"
-                const breakBg = p.type === "lunch" ? "#fef3c7" : p.type === "fixed-start" ? "#dbeafe" : p.type === "fixed-end" ? "#d1fae5" : "#fefce8"
+                const breakBg = p.type === "lunch" ? "#fef3c7" : p.type === "fixed-start" ? "#dbeafe" : p.type === "fixed-end" ? "#EDE9FF" : "#fefce8"
                 const breakColor = p.type === "lunch" ? "#92400e" : p.type === "fixed-start" ? "#1e40af" : "#854d0e"
                 const events = isBreak ? [] : getEvents(dayKey, p.id)
                 const absentFlag = absentHighlights?.some(h => h.day === dayKey)
@@ -622,7 +622,7 @@ export function CalendarView({
               {periods.map(p => {
                 const isBreak = p.type !== "class"
                 const breakBg = p.type === "lunch" ? "#fef3c7" : p.type === "fixed-start" ? "#eff6ff" : "#fefce8"
-                const breakColor = p.type === "lunch" ? "#d97706" : "#ca8a04"
+                const breakColor = p.type === "lunch" ? "#D4920E" : "#ca8a04"
                 const events = isBreak ? [] : getEvents(dayKey, p.id)
                 const absentFlag = absentHighlights?.some(h => h.day === dayKey)
 

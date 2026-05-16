@@ -152,9 +152,9 @@ export function DashboardPage() {
   // ── STATS ──────────────────────────────────────────────────
   const stats = [
     { icon: <CalendarDays size={18} color="#7C6FE0" />, label: 'Timetables', value: hasTimetable ? 1 : 0, bg: '#EDE9FF', color: '#7C6FE0' },
-    { icon: <Users        size={18} color="#059669" />, label: 'Teachers',   value: staffCount,            bg: '#f0fdf4', color: '#059669' },
+    { icon: <Users        size={18} color="#7C6FE0" />, label: 'Teachers',   value: staffCount,            bg: '#f0fdf4', color: '#7C6FE0' },
     { icon: <BookOpen     size={18} color="#9B8EF5" />, label: 'Classes',    value: sectionCount,          bg: '#EDE9FF', color: '#9B8EF5' },
-    { icon: <Clock        size={18} color="#d97706" />, label: 'Subjects',   value: subjectCount,          bg: '#fffbeb', color: '#d97706' },
+    { icon: <Clock        size={18} color="#D4920E" />, label: 'Subjects',   value: subjectCount,          bg: '#fffbeb', color: '#D4920E' },
   ]
 
   return (
@@ -180,7 +180,7 @@ export function DashboardPage() {
       {/* ── Two-column body ──────────────────────────────────── */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.6fr)',
+        gridTemplateColumns: '280px minmax(0, 1fr)',
         gap: 0,
         alignItems: 'start',
         minHeight: 'calc(100vh - 70px)',
@@ -271,7 +271,7 @@ export function DashboardPage() {
                     background: '#fffbeb', color: '#92400e', textAlign: 'left', width: '100%',
                   }}>
                   <div style={{ width: 32, height: 32, borderRadius: 8, background: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <RefreshCw size={15} color="#d97706" />
+                    <RefreshCw size={15} color="#D4920E" />
                   </div>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 13, fontWeight: 600 }}>Manage Substitutions</div>
@@ -298,7 +298,7 @@ export function DashboardPage() {
                   background: '#fff', color: '#111827', textAlign: 'left', width: '100%',
                 }}>
                 <div style={{ width: 32, height: 32, borderRadius: 8, background: '#f0fdf4', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <TrendingUp size={15} color="#059669" />
+                  <TrendingUp size={15} color="#7C6FE0" />
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 13, fontWeight: 600 }}>Reports & Analytics</div>
@@ -319,11 +319,11 @@ export function DashboardPage() {
                 padding: '10px 14px', background: '#fffbeb',
                 display: 'flex', alignItems: 'center', gap: 8,
               }}>
-                <AlertTriangle size={14} color="#d97706" />
+                <AlertTriangle size={14} color="#D4920E" />
                 <span style={{ fontSize: 12, fontWeight: 700, color: '#92400e', flex: 1 }}>
                   Active Substitutions
                 </span>
-                <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10, background: '#fef3c7', color: '#d97706' }}>
+                <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10, background: '#fef3c7', color: '#D4920E' }}>
                   {activeSubKeys.length}
                 </span>
                 <button onClick={exportCSV}
@@ -355,7 +355,7 @@ export function DashboardPage() {
                           <td style={{ padding: '5px 10px', fontSize: 11 }}>{period?.name ?? pid}</td>
                           <td style={{ padding: '5px 10px', fontSize: 11, fontWeight: 600 }}>{sn}</td>
                           <td style={{ padding: '5px 10px', fontSize: 11, color: '#dc2626' }}>{cell?.teacher ?? '—'}</td>
-                          <td style={{ padding: '5px 10px', fontSize: 11, color: '#059669', fontWeight: 700 }}>{substitutions[key]}</td>
+                          <td style={{ padding: '5px 10px', fontSize: 11, color: '#7C6FE0', fontWeight: 700 }}>{substitutions[key]}</td>
                         </tr>
                       )
                     })}
@@ -393,7 +393,7 @@ export function DashboardPage() {
                 <span style={{ fontSize: 13, color: '#374151', fontWeight: 500 }}>{timetableName}</span>
                 <span style={{
                   padding: '2px 9px', borderRadius: 20, fontSize: 11, fontWeight: 600,
-                  background: timetableStatus === 'published' ? '#d1fae5' : '#fef3c7',
+                  background: timetableStatus === 'published' ? '#EDE9FF' : '#fef3c7',
                   color: timetableStatus === 'published' ? '#065f46' : '#92400e',
                 }}>
                   {timetableStatus === 'published' ? '✓ Published' : '📋 Draft'}
@@ -504,7 +504,7 @@ export function DashboardPage() {
           }}>
             {/* Header */}
             <div style={{ padding: '16px 20px', borderBottom: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', gap: 12 }}>
-              <RefreshCw size={18} color="#d97706" />
+              <RefreshCw size={18} color="#D4920E" />
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 15, fontWeight: 700, color: '#111827' }}>Manage Substitutions</div>
                 <div style={{ fontSize: 11, color: '#6b7280', marginTop: 1 }}>Mark absent · Assign cover · View report</div>
@@ -585,7 +585,7 @@ export function DashboardPage() {
                             <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{st.name}</div>
                             <div style={{ fontSize: 11, color: '#6b7280' }}>{st.role}</div>
                           </div>
-                          {isAbsent && <span style={{ fontSize: 11, color: '#d97706', fontWeight: 600 }}>Absent</span>}
+                          {isAbsent && <span style={{ fontSize: 11, color: '#D4920E', fontWeight: 600 }}>Absent</span>}
                         </div>
                       )
                     })}
@@ -649,7 +649,7 @@ export function DashboardPage() {
                                   <span style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>{slot.periodName}</span>
                                   <span style={{ fontSize: 11, color: '#6b7280', marginLeft: 8 }}>{slot.sectionName} · {slot.subject}</span>
                                 </div>
-                                {assignedName && <span style={{ fontSize: 11, color: '#059669', fontWeight: 700 }}>✓ {assignedName}</span>}
+                                {assignedName && <span style={{ fontSize: 11, color: '#7C6FE0', fontWeight: 700 }}>✓ {assignedName}</span>}
                               </div>
                               <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4 }}>
                                 {candidates.slice(0, 8).map(({ s, subjectMatch, isBusy, workloadToday, workloadWeek, maxW, subFreq }) => {
@@ -659,7 +659,7 @@ export function DashboardPage() {
                                       onClick={() => setSubAssignments(a => ({ ...a, [key]: selected ? '' : s.name }))}
                                       style={{
                                         minWidth: 130, padding: '8px 10px', borderRadius: 8, cursor: 'pointer', flexShrink: 0,
-                                        border: `1.5px solid ${selected ? '#059669' : isBusy ? '#fecaca' : '#e5e7eb'}`,
+                                        border: `1.5px solid ${selected ? '#7C6FE0' : isBusy ? '#fecaca' : '#e5e7eb'}`,
                                         background: selected ? '#f0fdf4' : isBusy ? '#fff5f5' : '#fff',
                                       }}>
                                       <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
@@ -667,14 +667,14 @@ export function DashboardPage() {
                                         <span style={{ fontSize: 12, fontWeight: 700, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
                                       </div>
                                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginBottom: 5 }}>
-                                        {subjectMatch && <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 8, background: '#d1fae5', color: '#065f46', fontWeight: 600 }}>★ Subject</span>}
+                                        {subjectMatch && <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 8, background: '#EDE9FF', color: '#065f46', fontWeight: 600 }}>★ Subject</span>}
                                         {isBusy && <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 8, background: '#fee2e2', color: '#dc2626', fontWeight: 600 }}>⚠ Busy</span>}
                                       </div>
                                       <div style={{ fontSize: 9, color: '#6b7280' }}>Today: {workloadToday} · Week: {workloadWeek}/{maxW}</div>
                                       <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 2, marginBottom: 5 }}>Subbed {subFreq}× so far</div>
                                       <button style={{
                                         width: '100%', padding: '3px', borderRadius: 5, border: 'none', fontSize: 10, fontWeight: 700, cursor: 'pointer',
-                                        background: selected ? '#059669' : '#7C6FE0', color: '#fff',
+                                        background: selected ? '#7C6FE0' : '#7C6FE0', color: '#fff',
                                       }}>
                                         {selected ? '✓ Selected' : 'Select'}
                                       </button>
@@ -734,7 +734,7 @@ export function DashboardPage() {
                               <td style={{ padding: '6px 8px', fontSize: 11 }}>{period?.name ?? pid}</td>
                               <td style={{ padding: '6px 8px', fontSize: 11 }}>{cell?.subject ?? '—'}</td>
                               <td style={{ padding: '6px 8px', fontSize: 11, color: '#dc2626' }}>{cell?.teacher ?? '—'}</td>
-                              <td style={{ padding: '6px 8px', fontSize: 11, color: '#059669', fontWeight: 700 }}>{sub}</td>
+                              <td style={{ padding: '6px 8px', fontSize: 11, color: '#7C6FE0', fontWeight: 700 }}>{sub}</td>
                             </tr>
                           )
                         })}
@@ -756,7 +756,7 @@ export function DashboardPage() {
                 disabled={Object.keys(subAssignments).filter(k => subAssignments[k]).length === 0}
                 style={{
                   flex: 2, padding: '10px', borderRadius: 8, border: 'none',
-                  background: Object.keys(subAssignments).filter(k => subAssignments[k]).length > 0 ? '#059669' : '#e5e7eb',
+                  background: Object.keys(subAssignments).filter(k => subAssignments[k]).length > 0 ? '#7C6FE0' : '#e5e7eb',
                   color: Object.keys(subAssignments).filter(k => subAssignments[k]).length > 0 ? '#fff' : '#9ca3af',
                   fontWeight: 700, fontSize: 13,
                   cursor: Object.keys(subAssignments).filter(k => subAssignments[k]).length > 0 ? 'pointer' : 'not-allowed',

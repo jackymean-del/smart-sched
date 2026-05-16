@@ -301,7 +301,7 @@ export function StepBell() {
                   : isLunch ? "#fefce8" : isAssembly ? "#f0fdf4" : isDispersal ? "#fdf4ff" : "#fafaf9"
                 const borderColor = isPeriod
                   ? "#EDE9FF"
-                  : isLunch ? "#fde68a" : isAssembly ? "#86efac" : isDispersal ? "#d8b4fe" : "#e8e5de"
+                  : isLunch ? "#fde68a" : isAssembly ? "#D8D2FF" : isDispersal ? "#d8b4fe" : "#e8e5de"
                 const labelColor = isPeriod ? "#3730a3" : isLunch ? "#92400e" : isAssembly ? "#14532d" : isDispersal ? "#6b21a8" : "#374151"
 
                 return (
@@ -350,7 +350,7 @@ export function StepBell() {
           ← Back
         </button>
         <button onClick={handleContinue} disabled={workDays.length === 0}
-          style={{ padding:"11px 28px", borderRadius:9, border:"none", fontSize:14, fontWeight:600, cursor:workDays.length>0?"pointer":"not-allowed", background:workDays.length>0?"#059669":"#d4d1c8", color:"#fff" }}>
+          style={{ padding:"11px 28px", borderRadius:9, border:"none", fontSize:14, fontWeight:600, cursor:workDays.length>0?"pointer":"not-allowed", background:workDays.length>0?"#7C6FE0":"#d4d1c8", color:"#fff" }}>
           Continue → Resources
         </button>
       </div>

@@ -238,7 +238,7 @@ export function Step2Setup() {
                       <div style={{ fontSize:9, color:"#c8c5bc", fontWeight:400 }}>{groups.get(g)?.length} sec.</div>
                     </th>
                   ))}
-                  <th style={{ ...thS, textAlign:"center" as const, minWidth:60, background:"#f0fdf4", color:"#059669" }}>All</th>
+                  <th style={{ ...thS, textAlign:"center" as const, minWidth:60, background:"#f0fdf4", color:"#7C6FE0" }}>All</th>
                 </tr>
               </thead>
               <tbody>
@@ -256,14 +256,14 @@ export function Step2Setup() {
                           <input type="checkbox" checked={allChk}
                             ref={el => { if (el) el.indeterminate = partial }}
                             onChange={e => toggleSubjectForGroup(g, sub.name, e.target.checked)}
-                            style={{ width:15, height:15, accentColor:"#059669", cursor:"pointer" }}
+                            style={{ width:15, height:15, accentColor:"#7C6FE0", cursor:"pointer" }}
                             title={`${sub.name} → all ${g} sections`} />
                         </td>
                       )
                     })}
                     <td style={{ ...tdS, textAlign:"center" as const, background: si%2===0?"#f0fdf4":"#ecfdf5" }}>
                       <button onClick={() => setSubjects(subjects.map((s,j) => j===si ? { ...s, sections: sections.map(x=>x.name) } : s))}
-                        style={{ fontSize:10, padding:"2px 8px", borderRadius:4, border:"1px solid #86efac", background:"#fff", color:"#059669", cursor:"pointer", fontWeight:600 }}>+All</button>
+                        style={{ fontSize:10, padding:"2px 8px", borderRadius:4, border:"1px solid #D8D2FF", background:"#fff", color:"#7C6FE0", cursor:"pointer", fontWeight:600 }}>+All</button>
                     </td>
                   </tr>
                 ))}
@@ -278,7 +278,7 @@ export function Step2Setup() {
 
       <div style={{ display:"flex", justifyContent:"space-between", paddingTop:20, borderTop:"1px solid #e8e5de", marginTop:20 }}>
         <button onClick={() => setStep(1)} style={{ padding:"10px 20px", borderRadius:8, border:"1.5px solid #e8e5de", background:"#fff", fontSize:13, fontWeight:500, cursor:"pointer" }}>← Back</button>
-        <button onClick={() => setStep(3)} style={{ padding:"10px 24px", borderRadius:8, border:"none", background:"#059669", color:"#fff", fontSize:13, fontWeight:600, cursor:"pointer" }}>
+        <button onClick={() => setStep(3)} style={{ padding:"10px 24px", borderRadius:8, border:"none", background:"#7C6FE0", color:"#fff", fontSize:13, fontWeight:600, cursor:"pointer" }}>
           Save & Continue →
         </button>
       </div>

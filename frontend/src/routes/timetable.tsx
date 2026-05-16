@@ -36,7 +36,7 @@ function calcTimes(periods: any[], config: any): Map<string,{start:string;end:st
 // ── Period header ──────────────────────────────────────────
 function PeriodCol({ p, times, onShiftLeft, onShiftRight }: { p:Period; times?:{start:string;end:string}; onShiftLeft?:()=>void; onShiftRight?:()=>void }) {
   const isBreak = p.type !== "class"
-  const bg = p.type==="fixed-start"?"#dbeafe":p.type==="lunch"?"#fef3c7":p.type==="break"?"#fef9c3":p.type==="fixed-end"?"#d1fae5":"#f1f5f9"
+  const bg = p.type==="fixed-start"?"#dbeafe":p.type==="lunch"?"#fef3c7":p.type==="break"?"#fef9c3":p.type==="fixed-end"?"#EDE9FF":"#f1f5f9"
   const color = p.type==="fixed-start"?"#1e40af":p.type==="lunch"?"#92400e":p.type==="break"?"#854d0e":p.type==="fixed-end"?"#065f46":"#64748b"
   return (
     <th style={{ background:bg, color, fontSize:10, fontWeight:700, padding:"6px 4px", border:"1px solid #e2e8f0", textAlign:"center", minWidth:isBreak?64:80, whiteSpace:"nowrap", position:"relative" as const }}>
@@ -55,7 +55,7 @@ function PeriodCol({ p, times, onShiftLeft, onShiftRight }: { p:Period; times?:{
 // ── Break cell ─────────────────────────────────────────────
 function BreakCell({ p }: { p:Period }) {
   const bg = p.type==="fixed-start"?"#eff6ff":p.type==="lunch"?"#fffbeb":p.type==="break"?"#fefce8":p.type==="fixed-end"?"#f0fdf4":"#f8fafc"
-  const color = p.type==="fixed-start"?"#3b82f6":p.type==="lunch"?"#d97706":p.type==="break"?"#ca8a04":"#10b981"
+  const color = p.type==="fixed-start"?"#3b82f6":p.type==="lunch"?"#D4920E":p.type==="break"?"#ca8a04":"#7C6FE0"
   return (
     <td style={{ background:bg, color, fontSize:9, fontWeight:600, textAlign:"center", padding:"4px 2px", border:"1px solid #e2e8f0", fontStyle:"italic", whiteSpace:"nowrap" }}>{p.name}</td>
   )
@@ -84,12 +84,12 @@ function SubjectCell({ subject, teacher, room, isClassTeacher, isSub, subTeacher
       <div className={colorClass} onClick={onClick}
         style={{ borderRadius:5, padding:"4px 7px", minHeight:44, cursor:onClick?"pointer":"default", outline:absentHighlight?"3px solid #f59e0b":isSub?"2px dashed #f59e0b":"none", outlineOffset:absentHighlight?"-2px":undefined, position:"relative" as const }}>
         {isSub && <span style={{ position:"absolute" as const, top:2, right:3, width:6, height:6, borderRadius:"50%", background:"#f59e0b" }} title="Substituted" />}
-        {absentHighlight && <span style={{ position:"absolute" as const, top:2, left:3, fontSize:8, color:"#d97706" }}>⚠</span>}
+        {absentHighlight && <span style={{ position:"absolute" as const, top:2, left:3, fontSize:8, color:"#D4920E" }}>⚠</span>}
         <div style={{ fontSize:10, fontWeight:700, lineHeight:1.3 }}>{subject}</div>
         {showTeacher && teacher && (
           <div style={{ fontSize:9, opacity:0.75, marginTop:2, display:"flex", alignItems:"center", gap:3 }}>
-            {isClassTeacher && <span style={{ color:"#059669" }}>★</span>}
-            {isSub ? <span style={{ color:"#d97706" }}>🔄 {subTeacher}</span> : teacher}
+            {isClassTeacher && <span style={{ color:"#7C6FE0" }}>★</span>}
+            {isSub ? <span style={{ color:"#D4920E" }}>🔄 {subTeacher}</span> : teacher}
           </div>
         )}
         {showRoom && room && <div style={{ fontSize:8, opacity:0.55, marginTop:1 }}>{room}</div>}
@@ -323,11 +323,11 @@ export function TimetablePage() {
                 return (
                   <tr key={p.id} style={{ background: isBreak?"#fffbeb":pi%2===0?"#fff":"#f8fafc" }}>
                     <td style={{ padding:"6px 10px", border:"1px solid #e2e8f0", whiteSpace:"nowrap" as const }}>
-                      <div style={{ fontWeight:700, fontSize:11, color:isBreak?"#d97706":"#1e293b" }}>{p.name}</div>
+                      <div style={{ fontWeight:700, fontSize:11, color:isBreak?"#D4920E":"#1e293b" }}>{p.name}</div>
                       {times && <div style={{ fontSize:9, color:"#94a3b8" }}>{times.start} → {times.end}</div>}
                     </td>
                     {usedDays.map(day => {
-                      if (isBreak) return <td key={day} style={{ background:"#fffbeb", border:"1px solid #e2e8f0", textAlign:"center" as const, fontSize:9, color:"#d97706", fontStyle:"italic", padding:6 }}>{p.name}</td>
+                      if (isBreak) return <td key={day} style={{ background:"#fffbeb", border:"1px solid #e2e8f0", textAlign:"center" as const, fontSize:9, color:"#D4920E", fontStyle:"italic", padding:6 }}>{p.name}</td>
                       const cell = sd[day]?.[p.id]
                       const highlight = !!(absentHL && cell?.teacher === absentHL.teacher && day === absentHL.day)
                       if (!cell?.subject) return <td key={day} style={{ border:"1px solid #e2e8f0", padding:2 }}><div style={{ height:38, background:"#f8fafc", borderRadius:4, display:"flex", alignItems:"center", justifyContent:"center", color:"#cbd5e1", fontSize:10 }}>—</div></td>
@@ -364,7 +364,7 @@ export function TimetablePage() {
     const total = Object.values(sch).reduce((a,d) => a + Object.values(d).filter(x=>x?.subject).length, 0)
     const max = st?.maxPeriodsPerWeek ?? country.maxPeriodsWeek
     const pct = Math.min(150, Math.round(total/max*100))
-    const loadColor = pct>100?"#dc2626":pct>85?"#d97706":"#059669"
+    const loadColor = pct>100?"#dc2626":pct>85?"#D4920E":"#7C6FE0"
     const assignedStr = (st?.subjects ?? []).filter(s => s.includes("::")).map(s => { const [cls,sub]=s.split("::"); return `${cls}: ${sub}` }).join(" · ") || (st?.subjects??[]).join(", ") || "—"
 
     return (
@@ -411,7 +411,7 @@ export function TimetablePage() {
                           {cell.conflict && <span style={{ position:"absolute" as const, top:2, right:3, fontSize:8, color:"#dc2626" }}>⚠</span>}
                           <div style={{ fontSize:10, fontWeight:700, lineHeight:1.3 }}>{cell.subject.replace(/\s*\(.*\)/, "")}</div>
                           <div style={{ fontSize:9, color:"#475569", marginTop:2, fontWeight:600 }}>{cell.sectionName}</div>
-                          {cell.isClassTeacher && <div style={{ fontSize:8, color:"#059669" }}>★ Class Teacher</div>}
+                          {cell.isClassTeacher && <div style={{ fontSize:8, color:"#7C6FE0" }}>★ Class Teacher</div>}
                           {showRoom && cell.room && <div style={{ fontSize:8, opacity:0.55 }}>{cell.room}</div>}
                         </div>
                       </td>
@@ -438,7 +438,7 @@ export function TimetablePage() {
     const total = Object.values(sch).reduce((a,d) => a + Object.values(d).filter(x=>x?.subject).length, 0)
     const max = st?.maxPeriodsPerWeek ?? country.maxPeriodsWeek
     const pct = Math.min(150, Math.round(total/max*100))
-    const loadColor = pct>100?"#dc2626":pct>85?"#d97706":"#059669"
+    const loadColor = pct>100?"#dc2626":pct>85?"#D4920E":"#7C6FE0"
     return (
       <div>
         <div style={{ padding:"10px 16px", background:"#f8fafc", borderBottom:"1px solid #e2e8f0", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
@@ -460,11 +460,11 @@ export function TimetablePage() {
                 return (
                   <tr key={p.id} style={{ background: isBreak?"#fffbeb":pi%2===0?"#fff":"#f8fafc" }}>
                     <td style={{ padding:"6px 10px", border:"1px solid #e2e8f0", whiteSpace:"nowrap" as const }}>
-                      <div style={{ fontWeight:700, fontSize:11, color:isBreak?"#d97706":"#1e293b" }}>{p.name}</div>
+                      <div style={{ fontWeight:700, fontSize:11, color:isBreak?"#D4920E":"#1e293b" }}>{p.name}</div>
                       {times && <div style={{ fontSize:9, color:"#94a3b8" }}>{times.start} → {times.end}</div>}
                     </td>
                     {usedDays.map(day => {
-                      if (isBreak) return <td key={day} style={{ background:"#fffbeb", border:"1px solid #e2e8f0", textAlign:"center" as const, fontSize:9, color:"#d97706", fontStyle:"italic", padding:6 }}>{p.name}</td>
+                      if (isBreak) return <td key={day} style={{ background:"#fffbeb", border:"1px solid #e2e8f0", textAlign:"center" as const, fontSize:9, color:"#D4920E", fontStyle:"italic", padding:6 }}>{p.name}</td>
                       const cell = sch[day]?.[p.id]
                       if (!cell?.subject) return <td key={day} style={{ border:"1px solid #e2e8f0", padding:2 }}><div style={{ height:42, background:"#f8fafc", borderRadius:4, display:"flex", alignItems:"center", justifyContent:"center", color:"#cbd5e1", fontSize:9, fontStyle:"italic" }}>Free</div></td>
                       const colorClass = getSubjectColor(cell.subject.split(" (")[0])
@@ -576,11 +576,11 @@ export function TimetablePage() {
                 return (
                   <tr key={p.id} style={{ background: isBreak?"#fffbeb":pi%2===0?"#fff":"#f8fafc" }}>
                     <td style={{ padding:"6px 10px", border:"1px solid #e2e8f0", whiteSpace:"nowrap" as const }}>
-                      <div style={{ fontWeight:700, fontSize:11, color:isBreak?"#d97706":"#1e293b" }}>{p.name}</div>
+                      <div style={{ fontWeight:700, fontSize:11, color:isBreak?"#D4920E":"#1e293b" }}>{p.name}</div>
                       {times && <div style={{ fontSize:9, color:"#94a3b8" }}>{times.start} → {times.end}</div>}
                     </td>
                     {usedDays.map(day => {
-                      if (isBreak) return <td key={day} style={{ background:"#fffbeb", border:"1px solid #e2e8f0", textAlign:"center" as const, fontSize:9, color:"#d97706", fontStyle:"italic", padding:6 }}>{p.name}</td>
+                      if (isBreak) return <td key={day} style={{ background:"#fffbeb", border:"1px solid #e2e8f0", textAlign:"center" as const, fontSize:9, color:"#D4920E", fontStyle:"italic", padding:6 }}>{p.name}</td>
                       const hits = sections.filter(sec => classTT[sec.name]?.[day]?.[p.id]?.subject === subName)
                       if (!hits.length) return (
                         <td key={day} style={{ border:"1px solid #e2e8f0", padding:2 }}>
@@ -643,7 +643,7 @@ export function TimetablePage() {
                     })[0]
                     if (!hit) return (
                       <td key={p.id} style={{ border:"1px solid #e2e8f0", padding:2 }}>
-                        <div style={{ height:44, background:"#f0fdf4", borderRadius:4, display:"flex", alignItems:"center", justifyContent:"center", color:"#86efac", fontSize:10 }}>Free</div>
+                        <div style={{ height:44, background:"#f0fdf4", borderRadius:4, display:"flex", alignItems:"center", justifyContent:"center", color:"#D8D2FF", fontSize:10 }}>Free</div>
                       </td>
                     )
                     const colorClass = getSubjectColor(hit.cell.subject)
@@ -692,18 +692,18 @@ export function TimetablePage() {
                 return (
                   <tr key={p.id} style={{ background: isBreak?"#fffbeb":pi%2===0?"#fff":"#f8fafc" }}>
                     <td style={{ padding:"6px 10px", border:"1px solid #e2e8f0", whiteSpace:"nowrap" as const }}>
-                      <div style={{ fontWeight:700, fontSize:11, color:isBreak?"#d97706":"#1e293b" }}>{p.name}</div>
+                      <div style={{ fontWeight:700, fontSize:11, color:isBreak?"#D4920E":"#1e293b" }}>{p.name}</div>
                       {times && <div style={{ fontSize:9, color:"#94a3b8" }}>{times.start} → {times.end}</div>}
                     </td>
                     {usedDays.map(day => {
-                      if (isBreak) return <td key={day} style={{ background:"#fffbeb", border:"1px solid #e2e8f0", textAlign:"center" as const, fontSize:9, color:"#d97706", fontStyle:"italic", padding:6 }}>{p.name}</td>
+                      if (isBreak) return <td key={day} style={{ background:"#fffbeb", border:"1px solid #e2e8f0", textAlign:"center" as const, fontSize:9, color:"#D4920E", fontStyle:"italic", padding:6 }}>{p.name}</td>
                       const hit = sections.flatMap(sec => {
                         const cell = classTT[sec.name]?.[day]?.[p.id]
                         return cell?.subject && cell.room === roomName ? [{ sec: sec.name, cell }] : []
                       })[0]
                       if (!hit) return (
                         <td key={day} style={{ border:"1px solid #e2e8f0", padding:2 }}>
-                          <div style={{ height:38, background:"#f0fdf4", borderRadius:4, display:"flex", alignItems:"center", justifyContent:"center", color:"#86efac", fontSize:10 }}>Free</div>
+                          <div style={{ height:38, background:"#f0fdf4", borderRadius:4, display:"flex", alignItems:"center", justifyContent:"center", color:"#D8D2FF", fontSize:10 }}>Free</div>
                         </td>
                       )
                       const colorClass = getSubjectColor(hit.cell.subject)
@@ -801,12 +801,12 @@ export function TimetablePage() {
             <span style={{ fontSize:16 }}>📭</span>
             <div>
               <span style={{ fontSize:13, fontWeight:700, color:"#92400e" }}>Uncovered Periods Pool</span>
-              <span style={{ fontSize:11, color:"#d97706", marginLeft:8, fontWeight:600 }}>{total} empty slot{total!==1?"s":""} across {Object.keys(grouped).length} classes</span>
+              <span style={{ fontSize:11, color:"#D4920E", marginLeft:8, fontWeight:600 }}>{total} empty slot{total!==1?"s":""} across {Object.keys(grouped).length} classes</span>
             </div>
           </div>
           <div style={{ display:"flex", alignItems:"center", gap:8 }}>
             <span style={{ fontSize:10, color:"#92400e" }}>Drag to a cell or click Fill to assign</span>
-            <span style={{ fontSize:12, color:"#d97706" }}>{uncoveredOpen ? "▲" : "▼"}</span>
+            <span style={{ fontSize:12, color:"#D4920E" }}>{uncoveredOpen ? "▲" : "▼"}</span>
           </div>
         </button>
 
@@ -827,11 +827,11 @@ export function TimetablePage() {
                       <span style={{ fontSize:14 }}>📌</span>
                       <div>
                         <div style={{ fontWeight:600, color:"#92400e" }}>{DAY_SHORT[slot.day]??slot.day.slice(0,3)} · {slot.periodName}</div>
-                        {slot.time && <div style={{ color:"#d97706", fontSize:9 }}>{slot.time.start} – {slot.time.end}</div>}
+                        {slot.time && <div style={{ color:"#D4920E", fontSize:9 }}>{slot.time.start} – {slot.time.end}</div>}
                       </div>
                       <button
                         onClick={() => setEditTarget({ section: slot.section, day: slot.day, periodId: slot.periodId })}
-                        style={{ marginLeft:4, padding:"2px 7px", borderRadius:4, border:"none", background:"#d97706", color:"#fff", fontSize:9, fontWeight:600, cursor:"pointer" }}>
+                        style={{ marginLeft:4, padding:"2px 7px", borderRadius:4, border:"none", background:"#D4920E", color:"#fff", fontSize:9, fontWeight:600, cursor:"pointer" }}>
                         Fill
                       </button>
                     </div>
@@ -890,9 +890,9 @@ export function TimetablePage() {
           { label:"Assembly/Start",  bg:"#dbeafe", color:"#1e40af" },
           { label:"Break",            bg:"#fef9c3", color:"#854d0e" },
           { label:"Lunch",            bg:"#fef3c7", color:"#92400e" },
-          { label:"Dispersal/End",   bg:"#d1fae5", color:"#065f46" },
+          { label:"Dispersal/End",   bg:"#EDE9FF", color:"#065f46" },
           { label:"Substituted",     bg:"#fff7ed", color:"#c2410c", border:"2px dashed #f59e0b" },
-          { label:"★ Class Teacher", bg:"#f0fdf4", color:"#059669" },
+          { label:"★ Class Teacher", bg:"#f0fdf4", color:"#7C6FE0" },
         ].map(s => <div key={s.label} style={{ display:"flex", alignItems:"center", gap:6, padding:"4px 8px", borderRadius:5, marginBottom:3, background:s.bg, color:s.color, fontSize:10, border:(s as any).border }}>{s.label}</div>)}
 
         <div style={{ fontSize:10, fontWeight:700, textTransform:"uppercase" as const, letterSpacing:"0.08em", color:"#94a3b8", margin:"14px 0 8px" }}>Staff Workload</div>
@@ -900,7 +900,7 @@ export function TimetablePage() {
           const total = Object.values(teacherTT[st.name]?.schedule ?? {}).reduce((a,d) => a + Object.values(d).filter(x=>x?.subject).length, 0)
           const max = st.maxPeriodsPerWeek ?? country.maxPeriodsWeek
           const pct = Math.min(100, Math.round(total/max*100))
-          const color = pct>90?"#dc2626":pct>75?"#d97706":"#059669"
+          const color = pct>90?"#dc2626":pct>75?"#D4920E":"#7C6FE0"
           return (
             <div key={st.id} style={{ marginBottom:6 }}>
               <div style={{ display:"flex", justifyContent:"space-between", fontSize:10, marginBottom:2 }}>
@@ -919,7 +919,7 @@ export function TimetablePage() {
             <div style={{ fontSize:10, fontWeight:700, textTransform:"uppercase" as const, letterSpacing:"0.08em", color:"#94a3b8", margin:"14px 0 8px" }}>Uncovered</div>
             <div style={{ padding:"6px 8px", background:"#fff7ed", border:"1px solid #fed7aa", borderRadius:7, fontSize:11, color:"#c2410c", fontWeight:600, textAlign:"center" as const }}>
               {uncoveredPeriods.length} empty slots
-              <div style={{ fontSize:9, fontWeight:400, color:"#d97706", marginTop:2 }}>scroll down → Fill</div>
+              <div style={{ fontSize:9, fontWeight:400, color:"#D4920E", marginTop:2 }}>scroll down → Fill</div>
             </div>
           </>
         )}
@@ -930,7 +930,7 @@ export function TimetablePage() {
 
         {/* Timetable name + date banner */}
         {(config.timetableName || config.timetableStartDate) && (
-          <div style={{ background: timetableStatus==="published"?"#f0fdf4":"#fffbeb", borderBottom:`1px solid ${timetableStatus==="published"?"#bbf7d0":"#fde68a"}`, padding:"6px 16px", display:"flex", alignItems:"center", gap:12, flexShrink:0 }}>
+          <div style={{ background: timetableStatus==="published"?"#f0fdf4":"#fffbeb", borderBottom:`1px solid ${timetableStatus==="published"?"#D8D2FF":"#fde68a"}`, padding:"6px 16px", display:"flex", alignItems:"center", gap:12, flexShrink:0 }}>
             <span style={{ fontSize:13, fontWeight:700, color: timetableStatus==="published"?"#065f46":"#92400e" }}>
               {config.timetableName || "Timetable"}
             </span>
@@ -941,7 +941,7 @@ export function TimetablePage() {
                 {new Date(config.timetableEndDate).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"})}
               </span>
             )}
-            <span style={{ fontSize:10, fontWeight:600, padding:"2px 8px", borderRadius:10, background: timetableStatus==="published"?"#dcfce7":"#fef9c3", color: timetableStatus==="published"?"#166534":"#854d0e", border:`1px solid ${timetableStatus==="published"?"#86efac":"#fde047"}` }}>
+            <span style={{ fontSize:10, fontWeight:600, padding:"2px 8px", borderRadius:10, background: timetableStatus==="published"?"#EDE9FF":"#fef9c3", color: timetableStatus==="published"?"#166534":"#854d0e", border:`1px solid ${timetableStatus==="published"?"#D8D2FF":"#fde047"}` }}>
               {timetableStatus === "published" ? "🔒 Published" : "📋 Draft"}
             </span>
           </div>
@@ -995,7 +995,7 @@ export function TimetablePage() {
 
           {/* Draft / Publish status */}
           {timetableStatus === "published" ? (
-            <span style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 12px", borderRadius:6, border:"1px solid #86efac", background:"#f0fdf4", color:"#059669", fontSize:11, fontWeight:700 }}>
+            <span style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 12px", borderRadius:6, border:"1px solid #D8D2FF", background:"#f0fdf4", color:"#7C6FE0", fontSize:11, fontWeight:700 }}>
               🔒 Published
             </span>
           ) : (
@@ -1011,7 +1011,7 @@ export function TimetablePage() {
           <button onClick={() => window.location.href="/wizard"} style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 12px", borderRadius:6, border:"1px solid #e2e8f0", background:"#fff", color:"#64748b", fontSize:11, cursor:"pointer" }}>← Wizard</button>
 
           {/* Conflicts badge */}
-          <span style={{ padding:"4px 10px", borderRadius:20, fontSize:10, fontWeight:600, background:conflicts.length===0?"#f0fdf4":"#fff7ed", color:conflicts.length===0?"#059669":"#c2410c", border:`1px solid ${conflicts.length===0?"#86efac":"#fed7aa"}` }}>
+          <span style={{ padding:"4px 10px", borderRadius:20, fontSize:10, fontWeight:600, background:conflicts.length===0?"#f0fdf4":"#fff7ed", color:conflicts.length===0?"#7C6FE0":"#c2410c", border:`1px solid ${conflicts.length===0?"#D8D2FF":"#fed7aa"}` }}>
             {conflicts.length===0 ? "✅ 0 conflicts" : `⚠️ ${conflicts.length} conflict${conflicts.length>1?"s":""}`}
           </span>
         </div>
@@ -1141,8 +1141,8 @@ export function TimetablePage() {
                                     <div style={{ fontSize:11, fontWeight:700, color:"#1e293b" }}>{cand.st.name}</div>
                                     {cand.st.role && <div style={{ fontSize:9, color:"#64748b" }}>{cand.st.role}</div>}
                                     <div style={{ display:"flex", gap:4, flexWrap:"wrap" as const, marginTop:2 }}>
-                                      {cand.subjectMatch && <span style={{ padding:"1px 5px", borderRadius:4, background:"#f0fdf4", color:"#059669", fontSize:8, fontWeight:600 }}>★ Subject match</span>}
-                                      {cand.isBusy && <span style={{ padding:"1px 5px", borderRadius:4, background:"#fff7ed", color:"#d97706", fontSize:8, fontWeight:600 }}>⚠️ Busy</span>}
+                                      {cand.subjectMatch && <span style={{ padding:"1px 5px", borderRadius:4, background:"#f0fdf4", color:"#7C6FE0", fontSize:8, fontWeight:600 }}>★ Subject match</span>}
+                                      {cand.isBusy && <span style={{ padding:"1px 5px", borderRadius:4, background:"#fff7ed", color:"#D4920E", fontSize:8, fontWeight:600 }}>⚠️ Busy</span>}
                                     </div>
                                     {/* Workload bar */}
                                     <div style={{ marginTop:3 }}>
@@ -1253,7 +1253,7 @@ export function TimetablePage() {
                 Cancel
               </button>
               <button onClick={() => { setTimetableStatus("published"); setPublishConfirm(false) }}
-                style={{ padding:"9px 24px", borderRadius:8, border:"none", background:"#059669", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer", boxShadow:"0 4px 14px rgba(5,150,105,0.3)" }}>
+                style={{ padding:"9px 24px", borderRadius:8, border:"none", background:"#7C6FE0", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer", boxShadow:"0 4px 14px rgba(124,111,224,0.3)" }}>
                 ✅ Publish
               </button>
             </div>

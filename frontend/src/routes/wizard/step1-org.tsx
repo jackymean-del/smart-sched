@@ -19,8 +19,8 @@ const TIMEZONES = [
 const GRADE_GROUPS = [
   { id:"pre",       label:"Pre-School",               grades:"Nursery, LKG, UKG",  profile:"fixed",    color:"#7C6FE0",  desc:"Students stay fixed, teachers rotate" },
   { id:"primary",   label:"Primary  (Class I – V)",   grades:"I, II, III, IV, V",  profile:"fixed",    color:"#7C6FE0",  desc:"Students stay fixed, teachers rotate" },
-  { id:"middle",    label:"Middle   (Class VI – VIII)",grades:"VI, VII, VIII",      profile:"standard", color:"#059669",  desc:"Subject-wise teaching, teacher movement" },
-  { id:"secondary", label:"Secondary (Class IX – X)",  grades:"IX, X",              profile:"standard", color:"#059669",  desc:"Subject-wise teaching, teacher movement" },
+  { id:"middle",    label:"Middle   (Class VI – VIII)",grades:"VI, VII, VIII",      profile:"standard", color:"#7C6FE0",  desc:"Subject-wise teaching, teacher movement" },
+  { id:"secondary", label:"Secondary (Class IX – X)",  grades:"IX, X",              profile:"standard", color:"#7C6FE0",  desc:"Subject-wise teaching, teacher movement" },
   { id:"senior",    label:"Senior Secondary (XI – XII)",grades:"XI, XII",           profile:"dynamic",  color:"#9B8EF5",  desc:"Optional subjects, instructional clusters, parallel blocks" },
 ]
 
@@ -185,7 +185,7 @@ export function Step1Org() {
 
       <div style={{ display:"flex", justifyContent:"flex-end", paddingTop:16, borderTop:"1px solid #e8e5de" }}>
         <button onClick={handleContinue} disabled={!canContinue}
-          style={{ padding:"11px 28px", borderRadius:9, border:"none", fontSize:14, fontWeight:600, cursor:canContinue?"pointer":"not-allowed", background:canContinue?"#059669":"#d4d1c8", color:"#fff" }}>
+          style={{ padding:"11px 28px", borderRadius:9, border:"none", fontSize:14, fontWeight:600, cursor:canContinue?"pointer":"not-allowed", background:canContinue?"#7C6FE0":"#d4d1c8", color:"#fff" }}>
           Continue → Bell Schedule
         </button>
       </div>

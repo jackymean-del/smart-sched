@@ -142,7 +142,7 @@ export function StepHours() {
           Go back and complete the Resources step, or generate placeholder data now.
         </p>
         <button onClick={handleGenerate}
-          style={{ padding:"11px 28px", borderRadius:9, border:"none", fontSize:14, fontWeight:600, cursor:"pointer", background:"#059669", color:"#fff" }}>
+          style={{ padding:"11px 28px", borderRadius:9, border:"none", fontSize:14, fontWeight:600, cursor:"pointer", background:"#7C6FE0", color:"#fff" }}>
           ✨ Generate Placeholder Data
         </button>
       </div>
@@ -191,7 +191,7 @@ export function StepHours() {
                 {baseClasses.map(c => (
                   <th key={c.id} style={{...thS, width:90, minWidth:90}}>
                     <div style={{ fontWeight:700, color:"#1c1b18", fontSize:11 }}>{c.name}</div>
-                    <div style={{ fontSize:8, fontWeight:400, color: totalForClass(c.id) > totalSlotsPerClass ? "#ef4444" : "#059669" }}>
+                    <div style={{ fontSize:8, fontWeight:400, color: totalForClass(c.id) > totalSlotsPerClass ? "#ef4444" : "#7C6FE0" }}>
                       {totalForClass(c.id)}/{totalSlotsPerClass} used
                     </div>
                   </th>
@@ -306,7 +306,7 @@ export function StepHours() {
                   const total = totalForClass(c.id)
                   const over  = total > totalSlotsPerClass
                   return (
-                    <td key={c.id} style={{...tdS, fontWeight:700, fontFamily:"monospace", fontSize:12, color: over?"#ef4444":"#059669" }}>
+                    <td key={c.id} style={{...tdS, fontWeight:700, fontFamily:"monospace", fontSize:12, color: over?"#ef4444":"#7C6FE0" }}>
                       {total}
                       {over && <div style={{ fontSize:8, color:"#ef4444" }}>-{total - totalSlotsPerClass} over</div>}
                     </td>

@@ -54,8 +54,8 @@ export function WizardSidebar({ currentStep, onStepClick }: Props) {
                 width: 24, height: 24, borderRadius: '50%', flexShrink: 0,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 10, fontWeight: 700,
-                background: done ? '#059669' : active ? '#7C6FE0' : 'transparent',
-                border: done ? '1.5px solid #059669' : active ? '1.5px solid #7C6FE0' : '1.5px solid #d4d1c8',
+                background: done ? '#7C6FE0' : active ? '#7C6FE0' : 'transparent',
+                border: done ? '1.5px solid #7C6FE0' : active ? '1.5px solid #7C6FE0' : '1.5px solid #d4d1c8',
                 color: done || active ? '#fff' : '#a8a59e',
               }}>
                 {done ? '✓' : step.n}
@@ -64,7 +64,7 @@ export function WizardSidebar({ currentStep, onStepClick }: Props) {
               {/* Label */}
               <span style={{
                 fontSize: 12, fontWeight: active ? 600 : 500,
-                color: active ? '#3730a3' : done ? '#059669' : future ? '#c8c5bc' : '#6a6860',
+                color: active ? '#3730a3' : done ? '#7C6FE0' : future ? '#c8c5bc' : '#6a6860',
                 lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
               }}>
                 {step.label}
@@ -75,7 +75,7 @@ export function WizardSidebar({ currentStep, onStepClick }: Props) {
             {i < WIZARD_STEPS.length - 1 && (
               <div style={{
                 width: 1.5, height: 10, marginLeft: 21, marginTop: 1, marginBottom: 1,
-                background: done ? '#059669' : '#e8e5de',
+                background: done ? '#7C6FE0' : '#e8e5de',
               }} />
             )}
           </div>

@@ -52,7 +52,7 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
   const { user, logout } = useAuthStore()
   const path = window.location.pathname + window.location.search
   const handleLogout = () => { logout(); window.location.href = '/login' }
-  const W = collapsed ? 56 : 240
+  const W = collapsed ? 52 : 200
 
   const NavGroup = ({ label, items }: { label: string; items: NavItem[] }) => (
     <div style={{ marginBottom: 4 }}>

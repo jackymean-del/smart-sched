@@ -67,11 +67,11 @@ export function LoginPage() {
       }}>
         {/* Background decoration */}
         <div style={{ position:'absolute', top:-80, right:-80, width:300, height:300, borderRadius:'50%', background:'rgba(79,70,229,0.15)' }} />
-        <div style={{ position:'absolute', bottom:-60, left:-60, width:220, height:220, borderRadius:'50%', background:'rgba(5,150,105,0.12)' }} />
+        <div style={{ position:'absolute', bottom:-60, left:-60, width:220, height:220, borderRadius:'50%', background:'rgba(124,111,224,0.12)' }} />
 
         <div style={{ position:'relative', zIndex:1 }}>
           <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:52 }}>
-            <div style={{ width:36, height:36, borderRadius:10, background:'linear-gradient(135deg,#9B8EF5,#059669)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+            <div style={{ width:36, height:36, borderRadius:10, background:'linear-gradient(135deg,#9B8EF5,#7C6FE0)', display:'flex', alignItems:'center', justifyContent:'center' }}>
               <CalendarDays size={18} color="#fff" />
             </div>
             <span style={{ fontFamily:"'DM Serif Display',Georgia,serif", fontSize:20, color:'#fff' }}>

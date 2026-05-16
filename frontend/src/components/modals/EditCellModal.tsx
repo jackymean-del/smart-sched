@@ -303,7 +303,7 @@ export function EditCellModal({ target, onClose }: Props) {
               onChange={e => handleTeacherChange(e.target.value)}
               style={{
                 width: "100%", padding: "8px 12px",
-                border: `1.5px solid ${conflictWith ? "#fca5a5" : selectedTeacher ? "#86efac" : "#e2e8f0"}`,
+                border: `1.5px solid ${conflictWith ? "#fca5a5" : selectedTeacher ? "#D8D2FF" : "#e2e8f0"}`,
                 borderRadius: 8, fontSize: 12, outline: "none",
                 background: "#fff", cursor: "pointer",
               }}
@@ -450,7 +450,7 @@ export function EditCellModal({ target, onClose }: Props) {
               disabled={!canSave}
               style={{
                 padding: "8px 22px", borderRadius: 7, border: "none",
-                background: canSave ? (conflictWith ? "#d97706" : "#7C6FE0") : "#e2e8f0",
+                background: canSave ? (conflictWith ? "#D4920E" : "#7C6FE0") : "#e2e8f0",
                 color: canSave ? "#fff" : "#94a3b8",
                 fontSize: 12, fontWeight: 700,
                 cursor: canSave ? "pointer" : "not-allowed",

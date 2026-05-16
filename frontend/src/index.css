@@ -40,7 +40,7 @@ button:hover { opacity: 0.88; }
 button:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* Green primary button */
-.bg-emerald-600         { background-color: #059669 !important; }
+.bg-emerald-600         { background-color: #7C6FE0 !important; }
 .hover\:bg-emerald-700:hover { background-color: #047857 !important; }
 .bg-indigo-600          { background-color: #7C6FE0 !important; }
 .hover\:bg-indigo-700:hover  { background-color: #4338ca !important; }

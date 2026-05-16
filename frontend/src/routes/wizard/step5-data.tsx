@@ -9,9 +9,9 @@ const thS: React.CSSProperties = { padding:"8px 8px", background:"#f7f6f2", font
 const inp = (extra?: React.CSSProperties): React.CSSProperties => ({ width:"100%", padding:"4px 6px", border:"1px solid transparent", borderRadius:5, fontSize:12, background:"transparent", outline:"none", ...extra })
 const delBtn: React.CSSProperties = { width:24, height:24, borderRadius:4, border:"none", background:"transparent", cursor:"pointer", color:"#c8c5bc", fontSize:17 }
 const addRow: React.CSSProperties = { width:"100%", padding:"8px 12px", border:"none", borderTop:"1.5px dashed #e8e5de", background:"transparent", cursor:"pointer", fontSize:12, color:"#a8a59e", textAlign:"left" as const }
-const navBtn = (p: boolean): React.CSSProperties => ({ padding:"9px 18px", borderRadius:8, border: p?"none":"1.5px solid #e8e5de", background: p?"#059669":"#fff", color: p?"#fff":"#1c1b18", fontSize:13, fontWeight:600, cursor:"pointer" })
+const navBtn = (p: boolean): React.CSSProperties => ({ padding:"9px 18px", borderRadius:8, border: p?"none":"1.5px solid #e8e5de", background: p?"#7C6FE0":"#fff", color: p?"#fff":"#1c1b18", fontSize:13, fontWeight:600, cursor:"pointer" })
 
-const SHIFT_COLORS = ['#7C6FE0','#059669','#d97706','#dc2626','#9B8EF5','#7C6FE0']
+const SHIFT_COLORS = ['#7C6FE0','#7C6FE0','#D4920E','#dc2626','#9B8EF5','#7C6FE0']
 
 export function Step5Data() {
   const { config, sections, staff, subjects, breaks,
@@ -187,7 +187,7 @@ export function Step5Data() {
                         <td style={{...tdS, position:"sticky" as const, left:36, background: i%2===0?"#fff":"#fafaf9", zIndex:1}}>
                           <input style={inp({ fontWeight:600 })} value={s.name}
                             onChange={e=>{const n=[...subjects];n[i]={...n[i],name:e.target.value};setSubjects(n)}} />
-                          <div style={{ fontSize:10, color:"#059669", fontFamily:"monospace", marginTop:1 }}>{totalH}h/wk</div>
+                          <div style={{ fontSize:10, color:"#7C6FE0", fontFamily:"monospace", marginTop:1 }}>{totalH}h/wk</div>
                         </td>
                         {/* Global periods/week */}
                         <td style={tdS}>
@@ -303,7 +303,7 @@ export function Step5Data() {
                   <td style={{...tdS, color:"#a8a59e", fontSize:10, fontFamily:"monospace"}}>{i+1}</td>
                   <td style={tdS}>
                     <input style={inp()} value={s.name} onChange={e=>{const n=[...staff];n[i]={...n[i],name:e.target.value};setStaff(n)}} />
-                    {s.isClassTeacher && <span style={{ fontSize:10, color:"#059669", marginLeft:4 }}>★ CT: {s.isClassTeacher}</span>}
+                    {s.isClassTeacher && <span style={{ fontSize:10, color:"#7C6FE0", marginLeft:4 }}>★ CT: {s.isClassTeacher}</span>}
                   </td>
                   <td style={tdS}><input type="number" style={inp({ fontFamily:"monospace", width:60 })} value={s.maxPeriodsPerWeek} onChange={e=>{const n=[...staff];n[i]={...n[i],maxPeriodsPerWeek:+e.target.value};setStaff(n)}} /></td>
                   <td style={tdS}><input style={inp()} value={s.role} onChange={e=>{const n=[...staff];n[i]={...n[i],role:e.target.value};setStaff(n)}} /></td>
@@ -351,7 +351,7 @@ export function Step5Data() {
                     </select>
                   </td>
                   <td style={{...tdS, textAlign:"center" as const}}>
-                    <input type="checkbox" checked={b.shiftable} onChange={e=>{const n=[...breaks];n[i]={...n[i],shiftable:e.target.checked};setBreaks(n)}} style={{ width:14, height:14, accentColor:"#059669", cursor:"pointer" }} />
+                    <input type="checkbox" checked={b.shiftable} onChange={e=>{const n=[...breaks];n[i]={...n[i],shiftable:e.target.checked};setBreaks(n)}} style={{ width:14, height:14, accentColor:"#7C6FE0", cursor:"pointer" }} />
                   </td>
                   <td style={tdS}><button style={delBtn} onClick={()=>setBreaks(breaks.filter((_,j)=>j!==i))}>×</button></td>
                 </tr>

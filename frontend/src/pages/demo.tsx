@@ -49,9 +49,9 @@ export function DemoPage() {
     }}>
       <div style={{
         width: 72, height: 72, borderRadius: 18,
-        background: 'linear-gradient(135deg, #9B8EF5, #059669)',
+        background: 'linear-gradient(135deg, #9B8EF5, #7C6FE0)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        color: '#fff', boxShadow: '0 8px 20px rgba(5,150,105,0.3)',
+        color: '#fff', boxShadow: '0 8px 20px rgba(124,111,224,0.3)',
       }}>
         <Sparkles size={32} />
       </div>
@@ -65,9 +65,9 @@ export function DemoPage() {
       <button onClick={loadDemo} style={{
         display: 'flex', alignItems: 'center', gap: 10,
         padding: '14px 32px', borderRadius: 10, fontSize: 16, fontWeight: 600,
-        background: '#059669', color: '#fff', border: 'none',
+        background: '#7C6FE0', color: '#fff', border: 'none',
         cursor: 'pointer', transition: 'all 0.18s',
-        boxShadow: '0 4px 14px rgba(5,150,105,0.35)',
+        boxShadow: '0 4px 14px rgba(124,111,224,0.35)',
       }}
       onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'; }}
       onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; }}

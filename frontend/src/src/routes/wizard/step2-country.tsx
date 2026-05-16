@@ -158,7 +158,7 @@ export function Step2Country() {
               {editingStd && (
                 <>
                   <button onClick={saveStandard}
-                    style={{ padding:'5px 12px', borderRadius:6, border:'none', background:'#059669', color:'#fff', fontSize:11, fontWeight:600, cursor:'pointer' }}>
+                    style={{ padding:'5px 12px', borderRadius:6, border:'none', background:'#7C6FE0', color:'#fff', fontSize:11, fontWeight:600, cursor:'pointer' }}>
                     💾 Save as My Standard
                   </button>
                   <button onClick={() => setEditingStd(false)}
@@ -194,7 +194,7 @@ export function Step2Country() {
 
       {/* Saved confirmation */}
       {savedMsg && (
-        <div style={{ background:'#f0fdf4', border:'1px solid #86efac', borderRadius:8, padding:'8px 14px', fontSize:12, color:'#14532d', marginBottom:12, display:'flex', alignItems:'center', gap:6 }}>
+        <div style={{ background:'#f0fdf4', border:'1px solid #D8D2FF', borderRadius:8, padding:'8px 14px', fontSize:12, color:'#14532d', marginBottom:12, display:'flex', alignItems:'center', gap:6 }}>
           ✅ Standard saved! Will be used for all future {selected?.name} · {org.name} timetables.
         </div>
       )}
@@ -205,7 +205,7 @@ export function Step2Country() {
           ← Back
         </button>
         <button onClick={() => config.countryCode && setStep(3)} disabled={!config.countryCode}
-          style={{ padding:'9px 18px', borderRadius:8, border:'none', fontSize:13, fontWeight:600, cursor: config.countryCode?'pointer':'not-allowed', background: config.countryCode?'#059669':'#d4d1c8', color:'#fff' }}>
+          style={{ padding:'9px 18px', borderRadius:8, border:'none', fontSize:13, fontWeight:600, cursor: config.countryCode?'pointer':'not-allowed', background: config.countryCode?'#7C6FE0':'#d4d1c8', color:'#fff' }}>
           Continue →
         </button>
       </div>

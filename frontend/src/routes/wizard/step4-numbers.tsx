@@ -64,18 +64,18 @@ export function Step4Numbers() {
             <div style={{ fontSize:11, color:"#6a6860", lineHeight:1.5 }}>Enter periods/week per subject directly. Schedu allocates teachers and prevents clashes.</div>
           </button>
           <button onClick={() => store.setSchedulingMode('duration-based')}
-            style={{ padding:"14px", borderRadius:10, textAlign:"left" as const, cursor:"pointer", border: store.schedulingMode==='duration-based'?"2px solid #059669":"1.5px solid #e8e5de", background: store.schedulingMode==='duration-based'?"#f0fdf4":"#fff" }}>
+            style={{ padding:"14px", borderRadius:10, textAlign:"left" as const, cursor:"pointer", border: store.schedulingMode==='duration-based'?"2px solid #7C6FE0":"1.5px solid #e8e5de", background: store.schedulingMode==='duration-based'?"#f0fdf4":"#fff" }}>
             <div style={{ fontSize:13, fontWeight:700, color: store.schedulingMode==='duration-based'?"#14532d":"#1c1b18", marginBottom:4 }}>⏱ Mode 2: Duration-Based</div>
             <div style={{ fontSize:11, color:"#6a6860", lineHeight:1.5 }}>Enter total hours needed per subject (e.g. 180 hrs/year). Schedu calculates weekly periods automatically.</div>
           </button>
         </div>
         {store.schedulingMode === 'duration-based' && (
-          <div style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 14px", background:"#f0fdf4", border:"1px solid #86efac", borderRadius:8, fontSize:12, color:"#14532d" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 14px", background:"#f0fdf4", border:"1px solid #D8D2FF", borderRadius:8, fontSize:12, color:"#14532d" }}>
             <span>📆 Working days / year:</span>
             <input type="number" min={100} max={365} defaultValue={store.workingDaysPerYear}
               onBlur={e => store.setWorkingDaysPerYear(Math.max(100, +e.target.value))}
-              style={{ width:70, padding:"4px 8px", border:"1.5px solid #86efac", borderRadius:6, fontSize:13, fontFamily:"monospace", textAlign:"center" as const, outline:"none" }} />
-            <span style={{ color:"#059669" }}>
+              style={{ width:70, padding:"4px 8px", border:"1.5px solid #D8D2FF", borderRadius:6, fontSize:13, fontFamily:"monospace", textAlign:"center" as const, outline:"none" }} />
+            <span style={{ color:"#7C6FE0" }}>
               → {Math.round(store.workingDaysPerYear / config.workDays.length)} working weeks/year
             </span>
             <span style={{ color:"#6b7280", fontSize:11 }}>Used to convert total hours → weekly periods</span>
@@ -131,14 +131,14 @@ export function Step4Numbers() {
         </div>
       )}
       {status === "ok" && (
-        <div style={{ background:"#f0fdf4", border:"1px solid #86efac", borderRadius:8, padding:"10px 14px", fontSize:12, color:"#14532d", marginBottom:12, display:"flex", alignItems:"center", gap:6 }}>
+        <div style={{ background:"#f0fdf4", border:"1px solid #D8D2FF", borderRadius:8, padding:"10px 14px", fontSize:12, color:"#14532d", marginBottom:12, display:"flex", alignItems:"center", gap:6 }}>
           ✅ <strong>Well balanced ({pct}%)</strong> — {org.staffsLabel} count is sufficient.
         </div>
       )}
 
       <div style={{ display:"flex", justifyContent:"space-between", paddingTop:16, borderTop:"1px solid #e8e5de" }}>
         <button onClick={() => setStep(3)} style={{ padding:"9px 18px", borderRadius:8, border:"1.5px solid #e8e5de", background:"#fff", fontSize:13, fontWeight:500, cursor:"pointer" }}>← Back</button>
-        <button onClick={handleGenerate} style={{ padding:"9px 18px", borderRadius:8, border:"none", fontSize:13, fontWeight:600, cursor:"pointer", background:"#059669", color:"#fff" }}>✨ Generate data & continue →</button>
+        <button onClick={handleGenerate} style={{ padding:"9px 18px", borderRadius:8, border:"none", fontSize:13, fontWeight:600, cursor:"pointer", background:"#7C6FE0", color:"#fff" }}>✨ Generate data & continue →</button>
       </div>
     </div>
   )

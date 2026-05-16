@@ -1,4 +1,4 @@
-import { CalendarDays, LogOut, LayoutDashboard, Sparkles } from 'lucide-react'
+import { LogOut, LayoutDashboard, Sparkles } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 
 interface TopbarProps {
@@ -15,37 +15,44 @@ export function Topbar({ step, totalSteps, stepLabel }: TopbarProps) {
 
   return (
     <header style={{
-      height: 52, background: '#fff',
-      borderBottom: '1px solid #e5e7eb',
+      height: 56, background: '#fff',
+      borderBottom: '1px solid #E8E4FF',
       display: 'flex', alignItems: 'center',
       padding: '0 20px', position: 'sticky',
       top: 0, zIndex: 500, gap: 12,
     }}>
-      {/* Logo */}
-      <a href={isAuthenticated ? '/dashboard' : '/'} style={{ display:'flex', alignItems:'center', gap:8, textDecoration:'none', flexShrink:0 }}>
-        <div style={{ width:30, height:30, borderRadius:8, background:'linear-gradient(135deg,#9B8EF5,#059669)', display:'flex', alignItems:'center', justifyContent:'center' }}>
-          <CalendarDays size={15} color="#fff" />
+      {/* Bhusku-b mark + SchedU wordmark */}
+      <a href={isAuthenticated ? '/dashboard' : '/'} style={{ display:'flex', alignItems:'center', gap:10, textDecoration:'none', flexShrink:0 }}>
+        <div style={{ width:32, height:32, borderRadius:8, background:'#7C6FE0', display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <svg width="19" height="19" viewBox="0 0 52 52" fill="none">
+            <rect x="12" y="9" width="8" height="33" rx="4" fill="white"/>
+            <path d="M 20 22 C 23 14 40 15 40 30 C 40 45 23 46 20 42" stroke="white" strokeWidth="8" fill="none" strokeLinecap="round"/>
+            <circle cx="39" cy="10" r="4.5" fill="#D4920E"/>
+          </svg>
         </div>
-        <span style={{ fontFamily:"'DM Serif Display',Georgia,serif", fontSize:16 }}>
-          Sche<span style={{ color:'#059669' }}>du</span>
-        </span>
+        <div>
+          <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#8B87AD', lineHeight: 1, marginBottom: 2 }}>by bhusku</div>
+          <div style={{ fontFamily: "'Inter',sans-serif", fontSize: 16, fontWeight: 900, color: '#13111E', letterSpacing: '-0.5px', lineHeight: 1 }}>
+            Sched<span style={{ color: '#7C6FE0', fontFamily: "'DM Serif Display',Georgia,serif", fontStyle: 'italic', fontSize: 17 }}>U</span>
+          </div>
+        </div>
       </a>
 
       {/* Wizard step pill — center */}
       <div style={{ flex:1, display:'flex', justifyContent:'center' }}>
         {isWizard && step && totalSteps && (
-          <div style={{ display:'flex', alignItems:'center', gap:8, padding:'4px 14px', background:'#f3f4f6', borderRadius:20, border:'1px solid #e5e7eb' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:8, padding:'4px 14px', background:'#F5F2FF', borderRadius:20, border:'1px solid #E8E4FF' }}>
             <div style={{ display:'flex', gap:4 }}>
               {Array.from({ length: totalSteps }).map((_, i) => (
                 <div key={i} style={{
                   width: i + 1 === step ? 16 : 6, height:6, borderRadius:3,
-                  background: i + 1 < step ? '#059669' : i + 1 === step ? '#7C6FE0' : '#d1d5db',
+                  background: i + 1 < step ? '#7C6FE0' : i + 1 === step ? '#9B8EF5' : '#D8D2FF',
                   transition:'all 0.2s',
                 }} />
               ))}
             </div>
-            <span style={{ fontSize:11, color:'#6b7280' }}>
-              Step {step}/{totalSteps}: <strong style={{ color:'#111827' }}>{stepLabel}</strong>
+            <span style={{ fontSize:11, color:'#4B5275' }}>
+              Step {step}/{totalSteps}: <strong style={{ color:'#13111E' }}>{stepLabel}</strong>
             </span>
           </div>
         )}
@@ -57,21 +64,21 @@ export function Topbar({ step, totalSteps, stepLabel }: TopbarProps) {
           <>
             {!isWizard && (
               <a href="/dashboard" style={{ textDecoration:'none' }}>
-                <button style={{ display:'flex', alignItems:'center', gap:5, padding:'5px 11px', borderRadius:6, border:'1px solid #e5e7eb', background:'#fff', fontSize:12, color:'#374151', cursor:'pointer', fontWeight:500 }}>
+                <button style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 13px', borderRadius:7, border:'1px solid #E8E4FF', background:'#fff', fontSize:12, color:'#4B5275', cursor:'pointer', fontWeight:600 }}>
                   <LayoutDashboard size={13} /> Dashboard
                 </button>
               </a>
             )}
-            <div style={{ display:'flex', alignItems:'center', gap:8, padding:'4px 10px', background:'#f9fafb', borderRadius:8, border:'1px solid #e5e7eb' }}>
-              <div style={{ width:24, height:24, borderRadius:'50%', background:'#7C6FE0', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontSize:10, fontWeight:700, flexShrink:0 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:9, padding:'5px 11px', background:'#F5F2FF', borderRadius:8, border:'1px solid #E8E4FF' }}>
+              <div style={{ width:26, height:26, borderRadius:'50%', background:'#7C6FE0', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontSize:11, fontWeight:700, flexShrink:0 }}>
                 {user.name[0].toUpperCase()}
               </div>
               <div style={{ lineHeight:1.2 }}>
-                <div style={{ fontSize:12, fontWeight:600, color:'#111827' }}>{user.name}</div>
-                {user.schoolName && <div style={{ fontSize:10, color:'#9ca3af' }}>{user.schoolName}</div>}
+                <div style={{ fontSize:12, fontWeight:600, color:'#13111E' }}>{user.name}</div>
+                {user.schoolName && <div style={{ fontSize:10, color:'#8B87AD' }}>{user.schoolName}</div>}
               </div>
               <button onClick={handleLogout} title="Logout"
-                style={{ background:'none', border:'none', cursor:'pointer', color:'#9ca3af', padding:'2px', display:'flex', alignItems:'center' }}>
+                style={{ background:'none', border:'none', cursor:'pointer', color:'#8B87AD', padding:'2px', display:'flex', alignItems:'center' }}>
                 <LogOut size={13} />
               </button>
             </div>
@@ -79,12 +86,12 @@ export function Topbar({ step, totalSteps, stepLabel }: TopbarProps) {
         ) : (
           <>
             <a href="/login" style={{ textDecoration:'none' }}>
-              <button style={{ padding:'6px 12px', borderRadius:6, border:'1px solid #e5e7eb', background:'#fff', fontSize:12, fontWeight:500, color:'#374151', cursor:'pointer' }}>
+              <button style={{ padding:'7px 14px', borderRadius:7, border:'1px solid #E8E4FF', background:'#fff', fontSize:12, fontWeight:600, color:'#4B5275', cursor:'pointer' }}>
                 Sign in
               </button>
             </a>
             <a href="/wizard" style={{ textDecoration:'none' }}>
-              <button style={{ display:'flex', alignItems:'center', gap:5, padding:'6px 12px', borderRadius:6, background:'#059669', color:'#fff', border:'none', fontSize:12, fontWeight:600, cursor:'pointer' }}>
+              <button style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 14px', borderRadius:7, background:'#7C6FE0', color:'#fff', border:'none', fontSize:12, fontWeight:600, cursor:'pointer' }}>
                 <Sparkles size={12} /> Get started
               </button>
             </a>

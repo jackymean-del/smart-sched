@@ -87,8 +87,8 @@ export function Step2Country() {
               onBlur={e => standard && setStandard(recalculate(standard, k, +e.target.value))}
               style={{ padding:"4px 8px", border:"1.5px solid #7C6FE0", borderRadius:6, fontSize:12, fontFamily:"'DM Mono',monospace", textAlign:"right", outline:"none", width:"100%", background:"#fff" }} />
           : <div style={{ display:"flex", alignItems:"center", justifyContent:"flex-end", gap:4 }}>
-              {ro && editingStd && <span style={{ fontSize:9, background:"#f0fdf4", color:"#059669", padding:"1px 5px", borderRadius:4, fontWeight:600 }}>AUTO</span>}
-              <span style={{ fontSize:13, fontFamily:"'DM Mono',monospace", fontWeight:700, color: ro&&editingStd?"#059669":"#1c1b18" }}>{val}</span>
+              {ro && editingStd && <span style={{ fontSize:9, background:"#f0fdf4", color:"#7C6FE0", padding:"1px 5px", borderRadius:4, fontWeight:600 }}>AUTO</span>}
+              <span style={{ fontSize:13, fontFamily:"'DM Mono',monospace", fontWeight:700, color: ro&&editingStd?"#7C6FE0":"#1c1b18" }}>{val}</span>
             </div>
         }
         <span style={{ fontSize:11, color:"#a8a59e" }}>{unit}</span>
@@ -178,7 +178,7 @@ export function Step2Country() {
               {!editingStd
                 ? <button onClick={() => setEditingStd(true)} style={{ padding:"5px 12px", borderRadius:6, border:"1.5px solid #d4d1c8", background:"#fff", fontSize:11, fontWeight:600, cursor:"pointer", color:"#7C6FE0" }}>✏️ Customize</button>
                 : <>
-                    <button onClick={saveStandard} style={{ padding:"5px 12px", borderRadius:6, border:"none", background:"#059669", color:"#fff", fontSize:11, fontWeight:600, cursor:"pointer" }}>💾 Save</button>
+                    <button onClick={saveStandard} style={{ padding:"5px 12px", borderRadius:6, border:"none", background:"#7C6FE0", color:"#fff", fontSize:11, fontWeight:600, cursor:"pointer" }}>💾 Save</button>
                     <button onClick={() => setEditingStd(false)} style={{ padding:"5px 12px", borderRadius:6, border:"1.5px solid #e8e5de", background:"#fff", fontSize:11, cursor:"pointer" }}>Cancel</button>
                     <button onClick={resetStandard} style={{ padding:"5px 12px", borderRadius:6, border:"1.5px solid #fca5a5", background:"#fff", fontSize:11, cursor:"pointer", color:"#dc2626" }}>Reset</button>
                   </>
@@ -189,7 +189,7 @@ export function Step2Country() {
           {/* Edit tip */}
           {editingStd && (
             <div style={{ background:"#fffbeb", borderBottom:"1px solid #fcd34d", padding:"6px 14px", fontSize:11, color:"#92400e" }}>
-              💡 Edit any field — related fields update <strong>automatically</strong>. <strong style={{ color:"#059669" }}>AUTO</strong> fields are calculated.
+              💡 Edit any field — related fields update <strong>automatically</strong>. <strong style={{ color:"#7C6FE0" }}>AUTO</strong> fields are calculated.
             </div>
           )}
 
@@ -235,7 +235,7 @@ export function Step2Country() {
       )}
 
       {savedMsg && (
-        <div style={{ background:"#f0fdf4", border:"1px solid #86efac", borderRadius:8, padding:"8px 14px", fontSize:12, color:"#14532d", marginBottom:12 }}>
+        <div style={{ background:"#f0fdf4", border:"1px solid #D8D2FF", borderRadius:8, padding:"8px 14px", fontSize:12, color:"#14532d", marginBottom:12 }}>
           ✅ Saved! Will auto-load for all future {displayName} · {org.name} timetables.
         </div>
       )}
@@ -243,7 +243,7 @@ export function Step2Country() {
       <div style={{ display:"flex", justifyContent:"space-between", paddingTop:16, borderTop:"1px solid #e8e5de" }}>
         <button onClick={() => setStep(1)} style={{ padding:"9px 18px", borderRadius:8, border:"1.5px solid #e8e5de", background:"#fff", fontSize:13, fontWeight:500, cursor:"pointer" }}>← Back</button>
         <button onClick={() => config.countryCode && setStep(3)} disabled={!config.countryCode}
-          style={{ padding:"9px 18px", borderRadius:8, border:"none", fontSize:13, fontWeight:600, cursor: config.countryCode?"pointer":"not-allowed", background: config.countryCode?"#059669":"#d4d1c8", color:"#fff" }}>
+          style={{ padding:"9px 18px", borderRadius:8, border:"none", fontSize:13, fontWeight:600, cursor: config.countryCode?"pointer":"not-allowed", background: config.countryCode?"#7C6FE0":"#d4d1c8", color:"#fff" }}>
           Continue →
         </button>
       </div>

@@ -36,7 +36,7 @@ const suggestPW = (name: string) => CBSE_PW[name] ?? 4
 function makeId() { return Math.random().toString(36).slice(2,8) }
 
 // ─── Toggle component ─────────────────────────────────────────
-function Toggle({ on, onChange, color="#059669" }: { on:boolean; onChange:(v:boolean)=>void; color?:string }) {
+function Toggle({ on, onChange, color="#7C6FE0" }: { on:boolean; onChange:(v:boolean)=>void; color?:string }) {
   return (
     <button onClick={() => onChange(!on)}
       style={{ width:32, height:18, borderRadius:9, border:"none", cursor:"pointer", position:"relative",
@@ -395,14 +395,14 @@ function SubjectsTable({
       {/* ── Info bar ── */}
       <div style={{ padding:'8px 16px', background:'#eff6ff', borderBottom:'1px solid #dbeafe', fontSize:11, color:'#3730a3', display:'flex', gap:20, alignItems:'center', flexShrink:0 }}>
         <span>🗓 {workDaysCount} days/week · {periodsPerDay} periods/day · <strong>{slotsPerWeek} total slots/class/week</strong></span>
-        <span style={{ color: totalGlobal > slotsPerWeek ? '#dc2626' : '#059669' }}>
+        <span style={{ color: totalGlobal > slotsPerWeek ? '#dc2626' : '#7C6FE0' }}>
           Σ global: <strong>{totalGlobal}/{slotsPerWeek}</strong> {totalGlobal > slotsPerWeek ? '⚠ over' : '✓'}
         </span>
         <span style={{ color:'#6b7280', fontSize:10 }}>💡 Click cell to override · ⌨ Arrow / Tab / Enter · Double-click to reset</span>
         <div style={{ marginLeft:'auto', display:'flex', gap:8, alignItems:'center' }}>
           <button onClick={() => { setTransposed(t => !t); setActiveCell(null) }}
             title="Transpose: swap rows and columns"
-            style={{ padding:'4px 10px', borderRadius:5, border:'1px solid #d1d5db', background: transposed?'#f0fdf4':'#fff', color: transposed?'#059669':'#374151', fontSize:11, fontWeight:600, cursor:'pointer' }}>
+            style={{ padding:'4px 10px', borderRadius:5, border:'1px solid #d1d5db', background: transposed?'#f0fdf4':'#fff', color: transposed?'#7C6FE0':'#374151', fontSize:11, fontWeight:600, cursor:'pointer' }}>
             ⇄ {transposed ? 'Classes as rows' : 'Subjects as rows'}
           </button>
           <button onClick={() => setSubjects(subjects.map(s => ({...s, periodsPerWeek: suggestPW(s.name)})))}
@@ -640,7 +640,7 @@ function SubjectsTable({
                 const total = subjects.reduce((sum,sub) => sum + getVal(sub.id, sec.id, sub.periodsPerWeek ?? suggestPW(sub.name)), 0)
                 const over  = total > slotsPerWeek
                 return (
-                  <td key={sec.id} style={{ ...td, textAlign:'center', background:'#f9fafb', borderLeft:'1px solid #e5e7eb', borderTop:'1.5px solid #e5e7eb', fontFamily:'monospace', fontWeight:700, fontSize:12, color: over?'#dc2626':'#059669', padding:'6px 4px' }}>
+                  <td key={sec.id} style={{ ...td, textAlign:'center', background:'#f9fafb', borderLeft:'1px solid #e5e7eb', borderTop:'1.5px solid #e5e7eb', fontFamily:'monospace', fontWeight:700, fontSize:12, color: over?'#dc2626':'#7C6FE0', padding:'6px 4px' }}>
                     {total}
                     {over && <div style={{ fontSize:8, color:'#dc2626', fontWeight:600 }}>OVER</div>}
                   </td>
@@ -695,13 +695,13 @@ function TeachersTable({ staff, setStaff, subjects, sections, teacherMatrix, set
   // Per-teacher colour palette (cycles by staff index)
   const PALETTES = [
     { bg:'#dbeafe', text:'#1d4ed8', border:'#93c5fd' },
-    { bg:'#d1fae5', text:'#065f46', border:'#6ee7b7' },
+    { bg:'#EDE9FF', text:'#065f46', border:'#6ee7b7' },
     { bg:'#fef3c7', text:'#92400e', border:'#fcd34d' },
     { bg:'#fce7f3', text:'#9d174d', border:'#f9a8d4' },
     { bg:'#ede9fe', text:'#5b21b6', border:'#c4b5fd' },
     { bg:'#ffedd5', text:'#9a3412', border:'#fdba74' },
     { bg:'#cffafe', text:'#164e63', border:'#67e8f9' },
-    { bg:'#dcfce7', text:'#166534', border:'#86efac' },
+    { bg:'#EDE9FF', text:'#166534', border:'#D8D2FF' },
   ]
   const tPal = (staffId: string) => {
     if (!staffId) return { bg:'#f3f4f6', text:'#9ca3af', border:'#e5e7eb' }
@@ -825,7 +825,7 @@ function TeachersTable({ staff, setStaff, subjects, sections, teacherMatrix, set
         {/* Matrix toolbar */}
         {view === 'matrix' && (
           <div style={{ marginLeft:'auto', display:'flex', gap:8, alignItems:'center' }}>
-            <span style={{ fontSize:11, color: unassigned>0 ? '#f59e0b' : '#059669', fontWeight:600 }}>
+            <span style={{ fontSize:11, color: unassigned>0 ? '#f59e0b' : '#7C6FE0', fontWeight:600 }}>
               {unassigned > 0 ? `⚠️ ${unassigned} unassigned` : `✅ All ${totalSlots} slots assigned`}
             </span>
             <button onClick={autoAssign}
@@ -837,7 +837,7 @@ function TeachersTable({ staff, setStaff, subjects, sections, teacherMatrix, set
               ✕ Clear
             </button>
             <button onClick={() => { setTransposed(t=>!t); setActiveCell(null) }}
-              style={{ padding:'4px 10px', borderRadius:5, border:'1px solid #d1d5db', background: transposed?'#f0fdf4':'#fff', color: transposed?'#059669':'#374151', fontSize:11, fontWeight:600, cursor:'pointer' }}>
+              style={{ padding:'4px 10px', borderRadius:5, border:'1px solid #d1d5db', background: transposed?'#f0fdf4':'#fff', color: transposed?'#7C6FE0':'#374151', fontSize:11, fontWeight:600, cursor:'pointer' }}>
               ⇄ {transposed ? 'Classes as rows' : 'Subjects as rows'}
             </button>
           </div>
@@ -925,8 +925,8 @@ function TeachersTable({ staff, setStaff, subjects, sections, teacherMatrix, set
       {/* ══ MATRIX VIEW ════════════════════════════════════════ */}
       {view === 'matrix' && (
         <div style={{ overflowX:'auto', overflowY:'auto', flex:1 }}>
-          <div style={{ padding:'7px 16px', background:'#f0fdf4', borderBottom:'1px solid #bbf7d0', fontSize:11, color:'#166534', flexShrink:0 }}>
-            💡 Each cell = which teacher delivers that subject to that class · <strong>Click</strong> to assign · <strong>⚡ Auto-assign</strong> distributes based on "Can teach" list · <kbd style={{ padding:'1px 5px', borderRadius:3, border:'1px solid #bbf7d0', background:'#dcfce7', fontSize:10 }}>Tab</kbd> / <kbd style={{ padding:'1px 5px', borderRadius:3, border:'1px solid #bbf7d0', background:'#dcfce7', fontSize:10 }}>↑↓←→</kbd> to navigate
+          <div style={{ padding:'7px 16px', background:'#f0fdf4', borderBottom:'1px solid #D8D2FF', fontSize:11, color:'#166534', flexShrink:0 }}>
+            💡 Each cell = which teacher delivers that subject to that class · <strong>Click</strong> to assign · <strong>⚡ Auto-assign</strong> distributes based on "Can teach" list · <kbd style={{ padding:'1px 5px', borderRadius:3, border:'1px solid #D8D2FF', background:'#EDE9FF', fontSize:10 }}>Tab</kbd> / <kbd style={{ padding:'1px 5px', borderRadius:3, border:'1px solid #D8D2FF', background:'#EDE9FF', fontSize:10 }}>↑↓←→</kbd> to navigate
           </div>
 
           {/* ── Legend strip ── */}
@@ -985,7 +985,7 @@ function TeachersTable({ staff, setStaff, subjects, sections, teacherMatrix, set
                   {subjects.map(sub => {
                     const count = sections.filter(sec => getAssigned(sec.id, sub.id)).length
                     return (
-                      <td key={sub.id} style={{ ...td, textAlign:'center', background:'#f9fafb', borderLeft:'1px solid #e5e7eb', borderTop:'1.5px solid #e5e7eb', fontFamily:'monospace', fontWeight:700, fontSize:11, color: count<sections.length?'#f59e0b':'#059669', padding:'5px 4px' }}>
+                      <td key={sub.id} style={{ ...td, textAlign:'center', background:'#f9fafb', borderLeft:'1px solid #e5e7eb', borderTop:'1.5px solid #e5e7eb', fontFamily:'monospace', fontWeight:700, fontSize:11, color: count<sections.length?'#f59e0b':'#7C6FE0', padding:'5px 4px' }}>
                         {count}/{sections.length}
                       </td>
                     )
@@ -1033,7 +1033,7 @@ function TeachersTable({ staff, setStaff, subjects, sections, teacherMatrix, set
                   {sections.map(sec => {
                     const count = subjects.filter(sub => getAssigned(sec.id, sub.id)).length
                     return (
-                      <td key={sec.id} style={{ ...td, textAlign:'center', background:'#f9fafb', borderLeft:'1px solid #e5e7eb', borderTop:'1.5px solid #e5e7eb', fontFamily:'monospace', fontWeight:700, fontSize:12, color: count<subjects.length?'#f59e0b':'#059669', padding:'6px 4px' }}>
+                      <td key={sec.id} style={{ ...td, textAlign:'center', background:'#f9fafb', borderLeft:'1px solid #e5e7eb', borderTop:'1.5px solid #e5e7eb', fontFamily:'monospace', fontWeight:700, fontSize:12, color: count<subjects.length?'#f59e0b':'#7C6FE0', padding:'6px 4px' }}>
                         {count}/{subjects.length}
                       </td>
                     )

@@ -69,11 +69,11 @@ export function RegisterPage() {
 
         {/* Logo */}
         <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:28 }}>
-          <div style={{ width:32, height:32, borderRadius:9, background:'linear-gradient(135deg,#9B8EF5,#059669)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <div style={{ width:32, height:32, borderRadius:9, background:'linear-gradient(135deg,#9B8EF5,#7C6FE0)', display:'flex', alignItems:'center', justifyContent:'center' }}>
             <CalendarDays size={16} color="#fff" />
           </div>
           <span style={{ fontFamily:"'DM Serif Display',Georgia,serif", fontSize:18, color:'#111827' }}>
-            Sche<span style={{ color:'#059669' }}>du</span>
+            Sche<span style={{ color:'#7C6FE0' }}>du</span>
           </span>
         </div>
 
@@ -144,7 +144,7 @@ export function RegisterPage() {
           <button type="submit" disabled={loading || googleLoading}
             style={{
               padding:'12px', borderRadius:8, border:'none', marginTop:4,
-              background: (loading || googleLoading) ? '#d1d5db' : '#059669', color:'#fff',
+              background: (loading || googleLoading) ? '#d1d5db' : '#7C6FE0', color:'#fff',
               fontSize:14, fontWeight:600, cursor: (loading || googleLoading) ? 'default' : 'pointer',
               display:'flex', alignItems:'center', justifyContent:'center', gap:8,
               transition:'background 0.15s',
@@ -180,5 +180,5 @@ const inp: React.CSSProperties = {
   width:'100%', padding:'10px 12px 10px 34px', border:'1.5px solid #e5e7eb',
   borderRadius:7, fontSize:13, outline:'none', background:'#fff', boxSizing:'border-box', color:'#111827',
 }
-const fi = (el: HTMLInputElement) => { el.style.borderColor='#059669'; el.style.boxShadow='0 0 0 3px rgba(5,150,105,0.08)' }
+const fi = (el: HTMLInputElement) => { el.style.borderColor='#7C6FE0'; el.style.boxShadow='0 0 0 3px rgba(124,111,224,0.08)' }
 const fo = (el: HTMLInputElement) => { el.style.borderColor='#e5e7eb'; el.style.boxShadow='none' }

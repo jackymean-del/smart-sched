@@ -96,7 +96,7 @@ export function Step3Subjects() {
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, maxWidth:560 }}>
           {([
             ['period-based','📅','Mode 1 — Period Based',`Specify ${T.sessions.toLowerCase()}s/week directly.`,'#7C6FE0','#eaecf8','#3730a3'],
-            ['duration-based','⏱','Mode 2 — Duration Based',`Specify total hours/year. Auto-calculates ${T.sessions.toLowerCase()}s/week.`,'#059669','#f0fdf4','#14532d'],
+            ['duration-based','⏱','Mode 2 — Duration Based',`Specify total hours/year. Auto-calculates ${T.sessions.toLowerCase()}s/week.`,'#7C6FE0','#f0fdf4','#14532d'],
           ] as const).map(([mode,icon,title,desc,bdr,bg,tc]) => {
             const active = store.schedulingMode === mode
             return (
@@ -110,11 +110,11 @@ export function Step3Subjects() {
           })}
         </div>
         {store.schedulingMode === 'duration-based' && (
-          <div style={{ marginTop:10, display:"flex", alignItems:"center", gap:10, padding:"8px 12px", background:"#f0fdf4", border:"1px solid #86efac", borderRadius:8, fontSize:12, color:"#14532d" }}>
+          <div style={{ marginTop:10, display:"flex", alignItems:"center", gap:10, padding:"8px 12px", background:"#f0fdf4", border:"1px solid #D8D2FF", borderRadius:8, fontSize:12, color:"#14532d" }}>
             <span>📆 Working days/year:</span>
             <input type="number" min={100} max={365} defaultValue={store.workingDaysPerYear ?? 220}
               onBlur={e => store.setWorkingDaysPerYear(Math.max(100,+e.target.value))}
-              style={{ width:70, padding:"4px 8px", border:"1.5px solid #86efac", borderRadius:6, fontSize:13, fontFamily:"monospace", textAlign:"center" as const, outline:"none" }} />
+              style={{ width:70, padding:"4px 8px", border:"1.5px solid #D8D2FF", borderRadius:6, fontSize:13, fontFamily:"monospace", textAlign:"center" as const, outline:"none" }} />
             <span>÷ {config.workDays.length} days/week = <strong>{workingWeeks} weeks/year</strong></span>
           </div>
         )}
@@ -188,7 +188,7 @@ export function Step3Subjects() {
                         </div>
                       </td>
                       <td style={{...tdS, textAlign:"center" as const}}>
-                        <span style={{ fontSize:12, fontWeight:600, color:"#059669", background:"#f0fdf4", padding:"2px 7px", borderRadius:4 }}>{s.periodsPerWeek}</span>
+                        <span style={{ fontSize:12, fontWeight:600, color:"#7C6FE0", background:"#f0fdf4", padding:"2px 7px", borderRadius:4 }}>{s.periodsPerWeek}</span>
                       </td>
                       <td style={tdS}>
                         <div style={{ display:"flex", alignItems:"center", gap:3 }}>
@@ -201,7 +201,7 @@ export function Step3Subjects() {
                     </>}
                     <td style={tdS}>
                       <button onClick={() => setExpandedId(isExp ? null : s.id)}
-                        style={{ fontSize:11, padding:"3px 8px", borderRadius:5, border:`1px solid ${isExp?"#7C6FE0":"#e8e5de"}`, background: isExp?"#eaecf8":hasCC?"#f0fdf4":"#fff", color: isExp?"#7C6FE0":hasCC?"#059669":"#6a6860", cursor:"pointer", fontWeight:500 }}>
+                        style={{ fontSize:11, padding:"3px 8px", borderRadius:5, border:`1px solid ${isExp?"#7C6FE0":"#e8e5de"}`, background: isExp?"#eaecf8":hasCC?"#f0fdf4":"#fff", color: isExp?"#7C6FE0":hasCC?"#7C6FE0":"#6a6860", cursor:"pointer", fontWeight:500 }}>
                         {isExp ? "▲ Hide" : hasCC ? "✓ Set" : "⚙ Set"}
                       </button>
                     </td>
@@ -264,7 +264,7 @@ export function Step3Subjects() {
                                         style={{...ccS, width:60}} />
                                       <span style={{ fontSize:10, color:"#a8a59e" }}>hrs</span>
                                     </div>
-                                    <span style={{ fontSize:12, fontWeight:600, color:"#059669", background:"#f0fdf4", padding:"2px 8px", borderRadius:4, textAlign:"center" as const }}>{cc.periodsPerWeek}</span>
+                                    <span style={{ fontSize:12, fontWeight:600, color:"#7C6FE0", background:"#f0fdf4", padding:"2px 8px", borderRadius:4, textAlign:"center" as const }}>{cc.periodsPerWeek}</span>
                                     <div style={{ display:"flex", alignItems:"center", gap:3 }}>
                                       <input type="number" min={10} max={180} defaultValue={cc.sessionDuration} key={cls+'-sd2-'+s.id}
                                         onBlur={e => updateCC(i,cls,'sessionDuration',Math.max(10,+e.target.value))}
@@ -312,7 +312,7 @@ export function Step3Subjects() {
 
       <div style={{ display:"flex", justifyContent:"space-between", paddingTop:20, borderTop:"1px solid #e8e5de" }}>
         <button onClick={() => setStep(2)} style={{ padding:"10px 20px", borderRadius:8, border:"1.5px solid #e8e5de", background:"#fff", fontSize:13, fontWeight:500, cursor:"pointer" }}>← Back</button>
-        <button onClick={() => setStep(4)} style={{ padding:"10px 24px", borderRadius:8, border:"none", background:"#059669", color:"#fff", fontSize:13, fontWeight:600, cursor:"pointer" }}>Save & Continue →</button>
+        <button onClick={() => setStep(4)} style={{ padding:"10px 24px", borderRadius:8, border:"none", background:"#7C6FE0", color:"#fff", fontSize:13, fontWeight:600, cursor:"pointer" }}>Save & Continue →</button>
       </div>
     </div>
   )
