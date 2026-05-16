@@ -28,9 +28,11 @@
  */
 
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
+import * as XLSX from 'xlsx'
 import {
   Plus, Upload, Download, ClipboardPaste, Search, RefreshCw,
   Trash2, Copy, X, ArrowUpDown, Sparkles, ChevronDown,
+  Undo2, Redo2, Filter, FileSpreadsheet, ArrowDownToLine,
 } from 'lucide-react'
 
 // ─────────────────────────────────────────────────────────────
@@ -86,11 +88,16 @@ export interface DataGridProps<T> {
     add: boolean
     importCSV: boolean
     exportCSV: boolean
+    importXLSX: boolean
+    exportXLSX: boolean
     paste: boolean
     search: boolean
     transpose: boolean
     bulkActions: boolean
     aiSuggestions: boolean
+    undoRedo: boolean
+    filters: boolean
+    fillDown: boolean
   }>
 
   /** Empty state when rows.length === 0 */
@@ -135,8 +142,10 @@ export function DataGrid<T>({
   toolbar = {}, emptyState, maxHeight,
 }: DataGridProps<T>) {
   const tb = {
-    add: true, importCSV: true, exportCSV: true, paste: true,
-    search: true, transpose: false, bulkActions: true, aiSuggestions: false,
+    add: true, importCSV: true, exportCSV: true,
+    importXLSX: true, exportXLSX: true,
+    paste: true, search: true, transpose: false, bulkActions: true,
+    aiSuggestions: false, undoRedo: true, filters: true, fillDown: true,
     ...toolbar,
   }
 
@@ -149,9 +158,49 @@ export function DataGrid<T>({
   const [pasteText, setPasteText] = useState('')
   const [bulkOpen, setBulkOpen] = useState(false)
   const [bulkValue, setBulkValue] = useState('')
+  // v2: column filters — per-column filter spec
+  type FilterSpec = { text?: string; min?: number; max?: number; selected?: string[] }
+  const [filters, setFilters] = useState<Record<string, FilterSpec>>({})
+  const [filterPopover, setFilterPopover] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  const xlsxRef = useRef<HTMLInputElement>(null)
   const editInputRef = useRef<HTMLInputElement | HTMLSelectElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+
+  // ── v2: undo/redo history (snapshot of rows on each user action) ──
+  const historyRef = useRef<T[][]>([])
+  const historyIndexRef = useRef<number>(-1)
+  const skipNextHistoryRef = useRef<boolean>(false)
+  // Snapshot on every rows-prop change unless we just popped from history
+  useEffect(() => {
+    if (skipNextHistoryRef.current) {
+      skipNextHistoryRef.current = false
+      return
+    }
+    const h = historyRef.current
+    const idx = historyIndexRef.current
+    // Trim any "redo tail" when a new branch begins
+    if (idx < h.length - 1) h.splice(idx + 1)
+    h.push(rows.map(r => ({ ...(r as any) })))
+    if (h.length > 100) h.shift()  // cap depth
+    historyIndexRef.current = h.length - 1
+  }, [rows])
+  const undo = useCallback(() => {
+    const h = historyRef.current
+    if (historyIndexRef.current <= 0) return
+    historyIndexRef.current -= 1
+    skipNextHistoryRef.current = true
+    onChange(h[historyIndexRef.current].map(r => ({ ...(r as any) })))
+  }, [onChange])
+  const redo = useCallback(() => {
+    const h = historyRef.current
+    if (historyIndexRef.current >= h.length - 1) return
+    historyIndexRef.current += 1
+    skipNextHistoryRef.current = true
+    onChange(h[historyIndexRef.current].map(r => ({ ...(r as any) })))
+  }, [onChange])
+  const canUndo = historyIndexRef.current > 0
+  const canRedo = historyIndexRef.current < historyRef.current.length - 1
 
   // ── Cell value helpers ─────────────────────────────────────
   const getCell = useCallback((row: T, col: DataGridColumn<T>): any => {
@@ -166,17 +215,50 @@ export function DataGrid<T>({
     return { ...row, [col.key]: value }
   }, [])
 
-  // ── Filtered rows ──────────────────────────────────────────
+  // ── Filtered rows (search + per-column filters) ───────────
   const filteredRows = useMemo(() => {
-    if (!search.trim()) return rows
-    const q = search.toLowerCase()
-    return rows.filter(r =>
-      columns.some(c => {
-        const v = getCell(r, c)
-        return v != null && String(v).toLowerCase().includes(q)
-      })
+    let out = rows
+    // Apply per-column filters
+    const activeFilters = Object.entries(filters).filter(([, f]) =>
+      f && (f.text || f.min != null || f.max != null || (f.selected && f.selected.length > 0))
     )
-  }, [rows, search, columns, getCell])
+    if (activeFilters.length > 0) {
+      out = out.filter(r => activeFilters.every(([colKey, f]) => {
+        const col = columns.find(c => c.key === colKey)
+        if (!col) return true
+        const raw = getCell(r, col)
+        if (f.text) {
+          if (raw == null) return false
+          return String(raw).toLowerCase().includes(f.text.toLowerCase())
+        }
+        if (f.min != null || f.max != null) {
+          const n = parseFloat(String(raw ?? ''))
+          if (isNaN(n)) return false
+          if (f.min != null && n < f.min) return false
+          if (f.max != null && n > f.max) return false
+          return true
+        }
+        if (f.selected && f.selected.length > 0) {
+          return f.selected.includes(String(raw ?? ''))
+        }
+        return true
+      }))
+    }
+    // Apply global search
+    if (search.trim()) {
+      const q = search.toLowerCase()
+      out = out.filter(r =>
+        columns.some(c => {
+          const v = getCell(r, c)
+          return v != null && String(v).toLowerCase().includes(q)
+        })
+      )
+    }
+    return out
+  }, [rows, search, filters, columns, getCell])
+  const activeFilterCount = Object.values(filters).filter(f =>
+    f && (f.text || f.min != null || f.max != null || (f.selected && f.selected.length > 0))
+  ).length
 
   // Map filtered idx → original idx so edits modify the right row
   const originalIndex = useCallback((filteredIdx: number) => {
@@ -273,6 +355,21 @@ export function DataGrid<T>({
         e.preventDefault()
         navigator.clipboard?.readText().then(txt => applyPaste(txt, selection)).catch(() => {})
       }
+      else if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === 'z') {
+        // Undo
+        e.preventDefault()
+        undo()
+      }
+      else if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.shiftKey && e.key === 'z' || e.shiftKey && e.key === 'Z'))) {
+        // Redo
+        e.preventDefault()
+        redo()
+      }
+      else if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
+        // Fill-down: copy top row of selection to all rows in selection
+        e.preventDefault()
+        applyFillDown()
+      }
       else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
         // Start editing on character key
         const col = columns[selection.c]
@@ -360,6 +457,82 @@ export function DataGrid<T>({
     setBulkOpen(false)
     setBulkValue('')
   }, [selection, selectionEnd, rows, columns, originalIndex, setCell, onChange])
+
+  // ── v2: Fill Down (Ctrl+D) ───────────────────────────────
+  const applyFillDown = useCallback(() => {
+    if (!selection) return
+    const end = selectionEnd ?? selection
+    const r0 = Math.min(selection.r, end.r), r1 = Math.max(selection.r, end.r)
+    const c0 = Math.min(selection.c, end.c), c1 = Math.max(selection.c, end.c)
+    if (r1 <= r0) return
+    let next = rows.slice()
+    for (let c = c0; c <= c1; c++) {
+      const col = columns[c]
+      if (col.readonly || col.type === 'computed') continue
+      const sourceRow = filteredRows[r0]
+      if (!sourceRow) continue
+      const sourceValue = getCell(sourceRow, col)
+      for (let r = r0 + 1; r <= r1; r++) {
+        const origR = originalIndex(r)
+        if (origR < 0) continue
+        next[origR] = setCell(next[origR], col, sourceValue)
+      }
+    }
+    onChange(next)
+  }, [selection, selectionEnd, rows, filteredRows, columns, originalIndex, setCell, getCell, onChange])
+
+  // ── v2: XLSX import / export (via SheetJS) ───────────────
+  const exportXLSX = () => {
+    const headers = columns.map(c => c.label)
+    const data = [
+      headers,
+      ...rows.map(row => columns.map(c => {
+        const v = getCell(row, c)
+        return v == null ? '' : v
+      })),
+    ]
+    const ws = XLSX.utils.aoa_to_sheet(data)
+    // auto-size columns based on header label length
+    ws['!cols'] = columns.map(c => ({ wch: Math.max(c.label.length + 2, 12) }))
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, (title ?? 'Data').slice(0, 30))
+    XLSX.writeFile(wb, `${(title ?? 'data').toLowerCase().replace(/\s+/g, '-')}.xlsx`)
+  }
+
+  const importXLSX = (file: File) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const data = new Uint8Array(reader.result as ArrayBuffer)
+      const wb = XLSX.read(data, { type: 'array' })
+      const ws = wb.Sheets[wb.SheetNames[0]]
+      if (!ws) return
+      const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as any[][]
+      if (aoa.length < 2) return
+      const headerCells = aoa[0].map((h: any) => String(h ?? '').trim())
+      const colMap = headerCells.map(h =>
+        columns.findIndex(c => c.label.toLowerCase() === h.toLowerCase())
+      )
+      let next = rows.slice()
+      aoa.slice(1).forEach(cells => {
+        if (cells.every(c => c == null || String(c).trim() === '')) return
+        let row = newRow ? newRow() : ({} as T)
+        cells.forEach((cell, i) => {
+          const ci = colMap[i]
+          if (ci == null || ci < 0) return
+          const col = columns[ci]
+          if (col.readonly || col.type === 'computed') return
+          let v: any = cell
+          if (col.type === 'number') {
+            const p = parseFloat(v); v = isNaN(p) ? 0 : p
+          }
+          row = setCell(row, col, v)
+        })
+        next.push(row)
+      })
+      onChange(next)
+    }
+    reader.readAsArrayBuffer(file)
+  }
 
   // ── CSV import / export ──────────────────────────────────
   const exportCSV = () => {
@@ -453,13 +626,18 @@ export function DataGrid<T>({
           onAdd={newRow ? addRow : undefined}
           onImport={() => fileRef.current?.click()}
           onExport={exportCSV}
+          onImportXLSX={() => xlsxRef.current?.click()}
+          onExportXLSX={exportXLSX}
           onPaste={() => setPasteOpen(true)}
           onTranspose={() => setTransposed(v => !v)}
           onBulk={() => setBulkOpen(true)}
           onAI={onAISuggestions}
+          canUndo={canUndo} canRedo={canRedo} onUndo={undo} onRedo={redo}
         />
         <input type="file" ref={fileRef} accept=".csv,.tsv,text/csv,text/tab-separated-values" style={{ display: 'none' }}
           onChange={e => { const f = e.target.files?.[0]; if (f) importCSV(f); e.target.value = '' }} />
+        <input type="file" ref={xlsxRef} accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" style={{ display: 'none' }}
+          onChange={e => { const f = e.target.files?.[0]; if (f) importXLSX(f); e.target.value = '' }} />
         <div style={{ padding: '50px 24px', textAlign: 'center', color: TOK.textDim }}>
           {emptyState ?? (
             <div>
@@ -472,6 +650,20 @@ export function DataGrid<T>({
       </div>
     )
   }
+
+  // ── v2: cumulative left offsets for multi-column freeze ──
+  const stickyOffsets = useMemo(() => {
+    const out: number[] = []
+    let off = 0
+    columns.forEach((c, i) => {
+      out[i] = off
+      if (c.sticky) {
+        const w = typeof c.width === 'number' ? c.width : (c.minWidth ?? 120)
+        off += w
+      }
+    })
+    return out
+  }, [columns])
 
   // ── Main render ─────────────────────────────────────────
   const visibleColumns = transposed
@@ -490,37 +682,84 @@ export function DataGrid<T>({
         onAdd={newRow ? addRow : undefined}
         onImport={() => fileRef.current?.click()}
         onExport={exportCSV}
+        onImportXLSX={() => xlsxRef.current?.click()}
+        onExportXLSX={exportXLSX}
         onPaste={() => setPasteOpen(true)}
         onTranspose={tb.transpose ? () => setTransposed(v => !v) : undefined}
         onBulk={() => setBulkOpen(true)}
+        onFillDown={selection ? applyFillDown : undefined}
         onAI={onAISuggestions}
         selectionInfo={selection ? `${(Math.abs((selectionEnd?.r ?? selection.r) - selection.r) + 1)}r × ${(Math.abs((selectionEnd?.c ?? selection.c) - selection.c) + 1)}c selected` : undefined}
         onDeleteRows={selection ? deleteSelectedRows : undefined}
         onDuplicateRows={selection ? duplicateSelectedRows : undefined}
+        canUndo={canUndo} canRedo={canRedo} onUndo={undo} onRedo={redo}
+        activeFilterCount={activeFilterCount}
+        onClearFilters={activeFilterCount > 0 ? () => setFilters({}) : undefined}
       />
       <input type="file" ref={fileRef} accept=".csv,.tsv,text/csv,text/tab-separated-values" style={{ display: 'none' }}
         onChange={e => { const f = e.target.files?.[0]; if (f) importCSV(f); e.target.value = '' }} />
+      <input type="file" ref={xlsxRef} accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" style={{ display: 'none' }}
+        onChange={e => { const f = e.target.files?.[0]; if (f) importXLSX(f); e.target.value = '' }} />
 
       <div style={{ overflow: 'auto', maxHeight }}>
         <table style={{ borderCollapse: 'separate', borderSpacing: 0, width: '100%', tableLayout: 'fixed' }}>
           <thead>
             <tr style={{ height: TOK.headerHeight }}>
-              {!transposed && columns.map(col => (
-                <th key={col.key} style={{
-                  background: TOK.headerBg, color: TOK.textMid,
-                  fontSize: TOK.headerFont, fontWeight: TOK.headerWeight,
-                  padding: TOK.cellPad,
-                  textAlign: (col.align ?? 'left') as any,
-                  borderBottom: `1px solid ${TOK.divider}`,
-                  position: col.sticky ? 'sticky' : 'static',
-                  left: col.sticky ? 0 : undefined,
-                  zIndex: col.sticky ? 2 : 1,
-                  width: col.width, minWidth: col.minWidth,
-                  letterSpacing: '0.01em',
-                }}>
-                  {col.label}
-                </th>
-              ))}
+              {!transposed && columns.map((col, ci) => {
+                const colFilter = filters[col.key]
+                const isFiltered = colFilter && (colFilter.text || colFilter.min != null || colFilter.max != null || (colFilter.selected && colFilter.selected.length > 0))
+                return (
+                  <th key={col.key} style={{
+                    background: TOK.headerBg, color: TOK.textMid,
+                    fontSize: TOK.headerFont, fontWeight: TOK.headerWeight,
+                    padding: TOK.cellPad,
+                    textAlign: (col.align ?? 'left') as any,
+                    borderBottom: `1px solid ${TOK.divider}`,
+                    position: col.sticky ? 'sticky' : 'static',
+                    left: col.sticky ? stickyOffsets[ci] : undefined,
+                    zIndex: col.sticky ? 2 : 1,
+                    width: col.width, minWidth: col.minWidth,
+                    letterSpacing: '0.01em',
+                    boxShadow: col.sticky && stickyOffsets[ci] > 0 && ci > 0 && columns[ci - 1].sticky === false ? `inset 1px 0 0 ${TOK.divider}` : undefined,
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, justifyContent: (col.align === 'right' ? 'flex-end' : col.align === 'center' ? 'center' : 'flex-start') as any }}>
+                      <span>{col.label}</span>
+                      {tb.filters && !col.readonly && col.type !== 'computed' && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setFilterPopover(filterPopover === col.key ? null : col.key) }}
+                          style={{
+                            background: isFiltered ? TOK.accentBg : 'transparent',
+                            border: 'none', padding: 2, borderRadius: 4,
+                            cursor: 'pointer', color: isFiltered ? TOK.accent : TOK.textDim,
+                            display: 'inline-flex', alignItems: 'center',
+                          }}
+                          title={isFiltered ? 'Filter active' : 'Filter column'}>
+                          <Filter size={11} fill={isFiltered ? TOK.accent : 'none'} />
+                        </button>
+                      )}
+                    </div>
+                    {/* Filter popover */}
+                    {filterPopover === col.key && (
+                      <FilterPopover
+                        column={col}
+                        spec={colFilter}
+                        rows={rows}
+                        getCell={getCell}
+                        onChange={(spec) => setFilters(prev => {
+                          const next = { ...prev }
+                          if (!spec || (!spec.text && spec.min == null && spec.max == null && (!spec.selected || spec.selected.length === 0))) {
+                            delete next[col.key]
+                          } else {
+                            next[col.key] = spec
+                          }
+                          return next
+                        })}
+                        onClose={() => setFilterPopover(null)}
+                      />
+                    )}
+                  </th>
+                )
+              })}
               {transposed && (
                 <>
                   <th style={{ background: TOK.headerBg, color: TOK.textMid, fontSize: TOK.headerFont, fontWeight: TOK.headerWeight, padding: TOK.cellPad, textAlign: 'left' as const, borderBottom: `1px solid ${TOK.divider}`, position: 'sticky', left: 0, zIndex: 2, minWidth: 140 }}>Field</th>
@@ -561,14 +800,14 @@ export function DataGrid<T>({
                         if (!col.readonly && col.type !== 'computed') setEditing({ r: ri, c: ci })
                       }}
                       style={{
-                        background: isSelected ? TOK.selectedBg : isInRange ? TOK.accentSoft : 'transparent',
+                        background: isSelected ? TOK.selectedBg : isInRange ? TOK.accentSoft : col.sticky ? '#FFFFFF' : 'transparent',
                         color: TOK.textOn,
                         fontSize: TOK.cellFont,
                         padding: 0,
                         textAlign: (col.align ?? (col.type === 'number' ? 'right' : 'left')) as any,
                         borderBottom: `1px solid ${TOK.divider}`,
                         position: col.sticky ? 'sticky' : 'static',
-                        left: col.sticky ? 0 : undefined,
+                        left: col.sticky ? stickyOffsets[ci] : undefined,
                         zIndex: col.sticky ? 1 : undefined,
                         cursor: col.readonly || col.type === 'computed' ? 'default' : 'cell',
                         outline: isSelected ? `2px solid ${TOK.selectedBorder}` : 'none',
@@ -675,16 +914,31 @@ interface ToolbarProps {
   onAdd?: () => void
   onImport?: () => void
   onExport?: () => void
+  onImportXLSX?: () => void
+  onExportXLSX?: () => void
   onPaste?: () => void
   onTranspose?: () => void
   onBulk?: () => void
+  onFillDown?: () => void
   onAI?: () => void
   onDeleteRows?: () => void
   onDuplicateRows?: () => void
   selectionInfo?: string
+  // v2 — undo/redo + filters
+  canUndo?: boolean
+  canRedo?: boolean
+  onUndo?: () => void
+  onRedo?: () => void
+  activeFilterCount?: number
+  onClearFilters?: () => void
 }
 
-function Toolbar({ title, description, icon, tb, search, setSearch, onAdd, onImport, onExport, onPaste, onTranspose, onBulk, onAI, onDeleteRows, onDuplicateRows, selectionInfo }: ToolbarProps) {
+function Toolbar({
+  title, description, icon, tb, search, setSearch,
+  onAdd, onImport, onExport, onImportXLSX, onExportXLSX, onPaste, onTranspose,
+  onBulk, onFillDown, onAI, onDeleteRows, onDuplicateRows, selectionInfo,
+  canUndo, canRedo, onUndo, onRedo, activeFilterCount, onClearFilters,
+}: ToolbarProps) {
   return (
     <div style={{ padding: '12px 16px', borderBottom: `1px solid ${TOK.divider}`, background: '#FFFFFF' }}>
       {(title || description) && (
@@ -703,13 +957,31 @@ function Toolbar({ title, description, icon, tb, search, setSearch, onAdd, onImp
       )}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
         {onAdd && tb.add && <button onClick={onAdd} style={btnPri}><Plus size={13} /> Add Row</button>}
-        {onImport && tb.importCSV && <button onClick={onImport} style={btnGhost}><Upload size={12} /> Import</button>}
-        {onExport && tb.exportCSV && <button onClick={onExport} style={btnGhost}><Download size={12} /> Export</button>}
+        {tb.undoRedo && onUndo && (
+          <button onClick={onUndo} disabled={!canUndo}
+            style={{ ...btnGhost, opacity: canUndo ? 1 : 0.4, cursor: canUndo ? 'pointer' : 'not-allowed' }}
+            title="Undo (Ctrl+Z)"><Undo2 size={12} /></button>
+        )}
+        {tb.undoRedo && onRedo && (
+          <button onClick={onRedo} disabled={!canRedo}
+            style={{ ...btnGhost, opacity: canRedo ? 1 : 0.4, cursor: canRedo ? 'pointer' : 'not-allowed' }}
+            title="Redo (Ctrl+Y)"><Redo2 size={12} /></button>
+        )}
+        {onImport && tb.importCSV && <button onClick={onImport} style={btnGhost}><Upload size={12} /> CSV</button>}
+        {onImportXLSX && tb.importXLSX && <button onClick={onImportXLSX} style={btnGhost} title="Import XLSX"><FileSpreadsheet size={12} /> XLSX</button>}
+        {onExport && tb.exportCSV && <button onClick={onExport} style={btnGhost} title="Export CSV"><Download size={12} /> CSV</button>}
+        {onExportXLSX && tb.exportXLSX && <button onClick={onExportXLSX} style={btnGhost} title="Export XLSX"><FileSpreadsheet size={12} /> XLSX</button>}
         {onPaste && tb.paste && <button onClick={onPaste} style={btnGhost}><ClipboardPaste size={12} /> Paste</button>}
         {onTranspose && tb.transpose && <button onClick={onTranspose} style={btnGhost}><ArrowUpDown size={12} /> Transpose</button>}
         {onBulk && tb.bulkActions && selectionInfo && <button onClick={onBulk} style={btnGhost}><RefreshCw size={12} /> Bulk fill</button>}
+        {onFillDown && tb.fillDown && selectionInfo && <button onClick={onFillDown} style={btnGhost} title="Fill Down (Ctrl+D)"><ArrowDownToLine size={12} /> Fill ↓</button>}
         {onDuplicateRows && selectionInfo && <button onClick={onDuplicateRows} style={btnGhost}><Copy size={12} /> Duplicate</button>}
         {onDeleteRows && selectionInfo && <button onClick={onDeleteRows} style={{ ...btnGhost, color: '#DC2626', borderColor: '#FEE2E2' }}><Trash2 size={12} /> Delete</button>}
+        {(activeFilterCount ?? 0) > 0 && onClearFilters && (
+          <button onClick={onClearFilters} style={{ ...btnGhost, color: TOK.accent, borderColor: TOK.accentBg, background: TOK.accentSoft }}>
+            <Filter size={12} /> {activeFilterCount} filter{activeFilterCount! > 1 ? 's' : ''} · clear
+          </button>
+        )}
         {onAI && tb.aiSuggestions && <button onClick={onAI} style={{ ...btnGhost, color: TOK.accent, borderColor: TOK.containerBorder }}><Sparkles size={12} /> AI Suggestions</button>}
         <div style={{ flex: 1 }} />
         {tb.search && (
@@ -814,6 +1086,106 @@ function renderBadge<T>(value: any, row: T, col: DataGridColumn<T>) {
       }}>{String(value)}</span>
     </div>
   )
+}
+
+// ─── v2: FilterPopover ────────────────────────────────────
+function FilterPopover<T>({
+  column, spec, rows, getCell, onChange, onClose,
+}: {
+  column: DataGridColumn<T>
+  spec?: { text?: string; min?: number; max?: number; selected?: string[] }
+  rows: T[]
+  getCell: (row: T, col: DataGridColumn<T>) => any
+  onChange: (spec: { text?: string; min?: number; max?: number; selected?: string[] } | undefined) => void
+  onClose: () => void
+}) {
+  const [local, setLocal] = useState(spec ?? {})
+
+  // Distinct values for select / badge / text columns
+  const distinct = useMemo(() => {
+    if (column.type !== 'select' && column.type !== 'badge' && column.type !== 'text') return [] as string[]
+    const set = new Set<string>()
+    rows.forEach(r => {
+      const v = getCell(r, column)
+      if (v != null && v !== '') set.add(String(v))
+    })
+    return Array.from(set).sort()
+  }, [rows, column, getCell])
+
+  const apply = () => { onChange(local); onClose() }
+  const clear = () => { setLocal({}); onChange(undefined); onClose() }
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 50 }} />
+      <div onClick={e => e.stopPropagation()} style={{
+        position: 'absolute', top: '100%', left: 0, marginTop: 4,
+        zIndex: 60, background: '#fff',
+        border: '1px solid #ECEAFB', borderRadius: 10,
+        boxShadow: '0 8px 24px rgba(19,17,30,0.16)',
+        padding: 10, width: 230,
+        textAlign: 'left' as const,
+      }}>
+        <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: TOK.textDim, marginBottom: 6 }}>
+          Filter · {column.label}
+        </div>
+
+        {column.type === 'number' && (
+          <div style={{ display: 'flex', gap: 6 }}>
+            <input type="number" placeholder="Min" value={local.min ?? ''}
+              onChange={e => setLocal({ ...local, min: e.target.value === '' ? undefined : parseFloat(e.target.value) })}
+              style={inputStyle} />
+            <input type="number" placeholder="Max" value={local.max ?? ''}
+              onChange={e => setLocal({ ...local, max: e.target.value === '' ? undefined : parseFloat(e.target.value) })}
+              style={inputStyle} />
+          </div>
+        )}
+
+        {(column.type === 'select' || column.type === 'badge') && (
+          <div style={{ maxHeight: 200, overflowY: 'auto', display: 'flex', flexDirection: 'column' as const, gap: 4 }}>
+            {distinct.map(v => {
+              const checked = local.selected?.includes(v) ?? false
+              return (
+                <label key={v} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: TOK.textOn, cursor: 'pointer', padding: '3px 5px', borderRadius: 4 }}>
+                  <input type="checkbox" checked={checked}
+                    onChange={() => {
+                      const set = new Set(local.selected ?? [])
+                      if (checked) set.delete(v); else set.add(v)
+                      setLocal({ ...local, selected: Array.from(set) })
+                    }} />
+                  {v || <span style={{ color: TOK.textDim, fontStyle: 'italic' }}>(empty)</span>}
+                </label>
+              )
+            })}
+          </div>
+        )}
+
+        {(!column.type || column.type === 'text') && (
+          <input type="text" placeholder="Contains..." value={local.text ?? ''}
+            onChange={e => setLocal({ ...local, text: e.target.value })}
+            style={inputStyle} autoFocus />
+        )}
+
+        <div style={{ display: 'flex', gap: 6, marginTop: 8, justifyContent: 'flex-end' }}>
+          <button onClick={clear} style={popBtnGhost}>Clear</button>
+          <button onClick={apply} style={popBtnPri}>Apply</button>
+        </div>
+      </div>
+    </>
+  )
+}
+const inputStyle: React.CSSProperties = {
+  width: '100%', padding: '6px 8px', fontSize: 11.5,
+  border: `1px solid ${TOK.containerBorder}`, borderRadius: 5,
+  background: TOK.accentSoft, color: TOK.textOn, outline: 'none',
+}
+const popBtnPri: React.CSSProperties = {
+  padding: '5px 12px', fontSize: 10.5, fontWeight: 700,
+  background: TOK.accent, color: '#fff', border: 'none', borderRadius: 5, cursor: 'pointer',
+}
+const popBtnGhost: React.CSSProperties = {
+  padding: '5px 10px', fontSize: 10.5, fontWeight: 600,
+  background: '#fff', color: TOK.textMid, border: `1px solid ${TOK.containerBorder}`, borderRadius: 5, cursor: 'pointer',
 }
 
 function parseCSVLine(line: string): string[] {
