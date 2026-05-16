@@ -9,6 +9,7 @@ import { useAuthStore } from '@/store/authStore'
 import { useTimetableStore } from '@/store/timetableStore'
 import { CalendarView } from '@/components/CalendarView'
 import { PageHeader } from '@/components/layout/PageHeader'
+import { SchedUWordmark, BhuskuFooter } from '@/components/branding/Logos'
 import type { Staff } from '@/types'
 
 // ── Helpers ────────────────────────────────────────────────
@@ -164,7 +165,21 @@ export function DashboardPage() {
   ]
 
   return (
-    <div style={{ minHeight: '100vh', background: '#F9F8FF' }}>
+    <div style={{ minHeight: '100vh', background: '#F9F8FF', display: 'flex', flexDirection: 'column' }}>
+
+      {/* ── SchedU branding strip ─────────────────────────────── */}
+      <div style={{
+        background: '#FFFFFF', borderBottom: '1px solid #E8E4FF',
+        padding: '12px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16,
+      }}>
+        <SchedUWordmark iconSize={36} fontSize={18} showTagline />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#8B87AD' }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22C55E' }} />
+            All systems normal
+          </div>
+        </div>
+      </div>
 
       {/* ── Page header ──────────────────────────────────────── */}
       <PageHeader
@@ -775,6 +790,9 @@ export function DashboardPage() {
           </div>
         </>
       )}
+
+      {/* ── Bhusku footer ──────────────────────────────────── */}
+      <BhuskuFooter />
     </div>
   )
 }

@@ -155,13 +155,13 @@ function useSlotEvents(
 // ─────────────────────────────────────────────
 function EventChip({
   subject, section, teacher, room, isSub, isClassTeacher,
-  showTeacher, showRoom, compact, absent,
+  showTeacher, showRoom, compact, absent, hideSection,
   onClick,
 }: {
   subject: string; section: string; teacher: string; room: string;
   isSub: boolean; isClassTeacher: boolean;
   showTeacher: boolean; showRoom: boolean;
-  compact?: boolean; absent?: boolean;
+  compact?: boolean; absent?: boolean; hideSection?: boolean;
   onClick?: () => void;
 }) {
   const cc = getSubjectColor(subject)
@@ -180,8 +180,8 @@ function EventChip({
       {isSub && (
         <span style={{ position:"absolute" as const, top:2, right:3, width:5, height:5, borderRadius:"50%", background:"#f59e0b" }} />
       )}
-      {/* Class name FIRST — primary identifier */}
-      {!compact && section && (
+      {/* Class name — only shown when not in class-grouped row layout */}
+      {!compact && section && !hideSection && (
         <div style={{ fontSize: 9, fontWeight: 800, opacity: 0.9, letterSpacing: '0.05em', lineHeight: 1.2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const, marginBottom: 2, textTransform: 'uppercase' }}>
           {section}
         </div>
@@ -325,17 +325,17 @@ export function CalendarView({
                       display: "inline-flex", alignItems: "center", justifyContent: "center",
                       fontSize: 11, fontWeight: 700,
                       background: todayFlag ? "#7C6FE0" : "transparent",
-                      color: todayFlag ? "#fff" : !isCurrentMonth ? "#B8B4D4" : "#1E1B2E",
+                      color: todayFlag ? "#fff" : !isCurrentMonth ? "#FFFFFF" : "#7C6FE0",
                     }}>{day.getDate()}</span>
                     {absentSlot && <span style={{ fontSize: 8, color: "#D4920E", fontWeight: 600 }}>⚠ absent</span>}
-                    {!isWorkDay && isCurrentMonth && <span style={{ fontSize: 8, color: "#B8B4D4" }}>off</span>}
+                    {!isWorkDay && isCurrentMonth && <span style={{ fontSize: 8, color: "#FFFFFF" }}>off</span>}
                   </div>
                   <div style={{ display: "flex", flexDirection: "column" as const, gap: 1 }}>
                     {events.slice(0, 3).map((ev, ei) => (
                       <EventChip key={ei} {...ev} showTeacher={false} showRoom={false} compact absent={!!(absentSlot && absentHighlights?.some(h => h.day === dayKey && h.teacher === ev.teacher))} />
                     ))}
                     {events.length > 3 && (
-                      <div style={{ fontSize: 8, color: "#B8B4D4", paddingLeft: 4 }}>+{events.length - 3} more</div>
+                      <div style={{ fontSize: 8, color: "#FFFFFF", paddingLeft: 4 }}>+{events.length - 3} more</div>
                     )}
                   </div>
                 </div>
@@ -352,14 +352,18 @@ export function CalendarView({
   // ─────────────────────────────────────────────────────────
   const renderWeekNormal = (weekDays: Date[]) => {
     const visibleDays = weekDays.filter(d => workDays.includes(DOW_KEY[d.getDay()]))
+    // Filter classes by viewMode; show all by default
+    const visibleClasses = viewMode === "class" && selectedEntity !== "ALL"
+      ? sections.filter(s => s.name === selectedEntity)
+      : sections
 
     return (
       <div style={{ flex: 1, overflowY: "auto", overflowX: "auto" }}>
         <table style={{ borderCollapse: "collapse", width: "100%", tableLayout: "fixed" as const }}>
           <thead>
             <tr>
-              {/* Time label col */}
-              <th style={{ width: 68, background: "#1E1B2E", borderRight: "1px solid #374151", padding: "8px 6px", fontSize: 10, color: "#B8B4D4", fontWeight: 600, border: "1px solid #374151" }}>Time</th>
+              <th style={{ width: 78, background: "#7C6FE0", color: "#fff", padding: "8px 6px", fontSize: 10, fontWeight: 800, border: "1px solid #9B8EF5", letterSpacing: "0.06em" }}>Class</th>
+              <th style={{ width: 68, background: "#7C6FE0", color: "#fff", padding: "8px 6px", fontSize: 10, fontWeight: 700, border: "1px solid #9B8EF5" }}>Time</th>
               {visibleDays.map(d => {
                 const dayKey = DOW_KEY[d.getDay()]
                 const todayFlag = isToday(d)
@@ -367,67 +371,97 @@ export function CalendarView({
                 return (
                   <th key={dayKey}
                     style={{
-                      background: todayFlag ? "#4F3FC0" : "#1E1B2E",
-                      color: "#fff", border: "1px solid #374151",
+                      background: todayFlag ? "#D4920E" : "#7C6FE0",
+                      color: "#fff", border: "1px solid #9B8EF5",
                       padding: "8px 10px", fontSize: 11, fontWeight: 700,
-                      textAlign: "center" as const, minWidth: 130,
-                      outline: absentFlag ? "2px solid #f59e0b" : "none",
+                      textAlign: "center" as const, minWidth: 110,
+                      outline: absentFlag ? "2px solid #F5A623" : "none",
                       outlineOffset: -2,
                     }}
                   >
                     <div>{DAY_ABBR[(d.getDay() + 6) % 7]}</div>
                     <div style={{ fontSize: 14, fontWeight: 800 }}>{d.getDate()}</div>
-                    <div style={{ fontSize: 9, opacity: 0.6 }}>{MONTH_NAMES[d.getMonth()].slice(0, 3)}</div>
-                    {absentFlag && <div style={{ fontSize: 8, color: "#F5A623", marginTop: 2 }}>⚠ absent</div>}
+                    <div style={{ fontSize: 9, opacity: 0.75 }}>{MONTH_NAMES[d.getMonth()].slice(0, 3)}</div>
+                    {absentFlag && <div style={{ fontSize: 8, color: "#fff", marginTop: 2 }}>⚠ absent</div>}
                   </th>
                 )
               })}
             </tr>
           </thead>
           <tbody>
-            {periods.map((p, pi) => {
-              const times = periodTimes.get(p.id)
-              const isBreak = p.type !== "class"
-              const breakBg = p.type === "lunch" ? "#fef3c7" : p.type === "fixed-start" ? "#EDE9FF" : p.type === "fixed-end" ? "#EDE9FF" : "#fefce8"
-              const breakColor = p.type === "lunch" ? "#92400e" : p.type === "fixed-start" ? "#1e40af" : p.type === "fixed-end" ? "#065f46" : "#854d0e"
-              return (
-                <tr key={p.id} style={{ background: isBreak ? breakBg : pi % 2 === 0 ? "#fff" : "#f8fafc", height: `${(p.duration) * PX_PER_MIN}px` }}>
-                  <td style={{ border: "1px solid #e2e8f0", padding: "4px 6px", verticalAlign: "top" as const, background: "#f8fafc" }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: isBreak ? breakColor : "#475569" }}>{p.name}</div>
-                    {times && (
-                      <>
-                        <div style={{ fontSize: 8, color: "#B8B4D4" }}>{fmtTime(times.start, timeFormat)}</div>
-                        <div style={{ fontSize: 8, color: "#B8B4D4" }}>{fmtTime(times.end, timeFormat)}</div>
-                      </>
+            {visibleClasses.flatMap((sec, sIdx) => {
+              const classBg = sIdx % 2 === 0 ? "#FAFAFE" : "#FFFFFF"
+              return periods.map((p, pi) => {
+                const times = periodTimes.get(p.id)
+                const isBreak = p.type !== "class"
+                const breakBg = p.type === "lunch" ? "#FEF3C7" : p.type === "fixed-start" ? "#EDE9FF" : p.type === "fixed-end" ? "#EDE9FF" : "#FEFCE8"
+                const breakColor = p.type === "lunch" ? "#92400E" : p.type === "fixed-start" ? "#4F3FC0" : p.type === "fixed-end" ? "#065F46" : "#854D0E"
+                const isFirstRow = pi === 0
+                return (
+                  <tr key={`${sec.name}-${p.id}`} style={{ background: isBreak ? breakBg : classBg, height: `${p.duration * PX_PER_MIN}px` }}>
+                    {/* Class column — rowSpan across all periods for this class */}
+                    {isFirstRow && (
+                      <td rowSpan={periods.length}
+                        style={{
+                          background: "linear-gradient(180deg, #EDE9FF 0%, #F5F2FF 100%)",
+                          border: "1px solid #D8D2FF",
+                          borderBottom: sIdx < visibleClasses.length - 1 ? "3px solid #7C6FE0" : "1px solid #D8D2FF",
+                          padding: "10px 6px", verticalAlign: "middle" as const, textAlign: "center" as const,
+                        }}>
+                        <div style={{ fontSize: 13, fontWeight: 900, color: "#13111E", letterSpacing: "0.04em" }}>{sec.name}</div>
+                        <div style={{ fontSize: 9, fontWeight: 600, color: "#7C6FE0", textTransform: "uppercase" as const, letterSpacing: "0.1em", marginTop: 3 }}>Class</div>
+                      </td>
                     )}
-                  </td>
-                  {visibleDays.map(d => {
-                    const dayKey = DOW_KEY[d.getDay()]
-                    if (isBreak) {
+                    {/* Time column */}
+                    <td style={{ border: "1px solid #E8E4FF", padding: "4px 6px", verticalAlign: "top" as const, background: isBreak ? breakBg : "#FAFAFE" }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: isBreak ? breakColor : "#4B5275" }}>{p.name}</div>
+                      {times && (
+                        <>
+                          <div style={{ fontSize: 8, color: "#8B87AD", fontFamily: "'DM Mono', monospace" }}>{fmtTime(times.start, timeFormat)}</div>
+                          <div style={{ fontSize: 8, color: "#B8B4D4", fontFamily: "'DM Mono', monospace" }}>{fmtTime(times.end, timeFormat)}</div>
+                        </>
+                      )}
+                    </td>
+                    {/* Day cells — ONE event per cell for this class */}
+                    {visibleDays.map(d => {
+                      const dayKey = DOW_KEY[d.getDay()]
+                      if (isBreak) {
+                        return (
+                          <td key={dayKey} style={{ border: "1px solid #E8E4FF", textAlign: "center" as const, fontSize: 9, color: breakColor, fontStyle: "italic", padding: 4, background: breakBg }}>
+                            {p.name}
+                          </td>
+                        )
+                      }
+                      const cell = classTT[sec.name]?.[dayKey]?.[p.id]
+                      const absentFlag = absentHighlights?.some(h => h.day === dayKey)
+                      const teacherAbsent = !!(absentFlag && cell?.teacher && absentHighlights?.some(h => h.day === dayKey && h.teacher === cell.teacher))
+                      const subKey = `${sec.name}|${dayKey}|${p.id}`
+                      const isSub = !!substitutions[subKey]
+                      const subTeacher = substitutions[subKey]
                       return (
-                        <td key={dayKey} colSpan={1}
-                          style={{ border: "1px solid #e2e8f0", textAlign: "center" as const, fontSize: 9, color: breakColor, fontStyle: "italic", padding: 4, background: breakBg }}>
-                          {p.name}
+                        <td key={dayKey} style={{ border: "1px solid #E8E4FF", padding: 3, verticalAlign: "top" as const, background: teacherAbsent ? "#FFFBEB" : undefined }}>
+                          {!cell?.subject
+                            ? <div style={{ minHeight: 32, display: "flex", alignItems: "center", justifyContent: "center", color: "#D8D2FF", fontSize: 11 }}>—</div>
+                            : <EventChip
+                                subject={cell.subject}
+                                section={sec.name}
+                                teacher={isSub ? subTeacher : (cell.teacher ?? "")}
+                                room={cell.room ?? ""}
+                                isSub={isSub}
+                                isClassTeacher={!!cell.isClassTeacher}
+                                showTeacher={showTeacher}
+                                showRoom={showRoom}
+                                hideSection
+                                absent={teacherAbsent}
+                                onClick={() => onCellClick?.(sec.name, dayKey, p.id)}
+                              />
+                          }
                         </td>
                       )
-                    }
-                    const events = getEvents(dayKey, p.id)
-                    const absentFlag = absentHighlights?.some(h => h.day === dayKey)
-                    return (
-                      <td key={dayKey} style={{ border: "1px solid #e2e8f0", padding: 3, verticalAlign: "top" as const, background: absentFlag ? "#fffbeb" : undefined }}>
-                        {events.length === 0
-                          ? <div style={{ height: "100%", minHeight: 36, display: "flex", alignItems: "center", justifyContent: "center", color: "#e2e8f0", fontSize: 9 }}>—</div>
-                          : events.map((ev, ei) => (
-                            <EventChip key={ei} {...ev} showTeacher={showTeacher} showRoom={showRoom}
-                              absent={!!(absentFlag && absentHighlights?.some(h => h.day === dayKey && h.teacher === ev.teacher))}
-                              onClick={() => onCellClick?.(ev.section, dayKey, p.id)} />
-                          ))
-                        }
-                      </td>
-                    )
-                  })}
-                </tr>
-              )
+                    })}
+                  </tr>
+                )
+              })
             })}
           </tbody>
         </table>
@@ -440,72 +474,107 @@ export function CalendarView({
   // ─────────────────────────────────────────────────────────
   const renderWeekTransposed = (weekDays: Date[]) => {
     const visibleDays = weekDays.filter(d => workDays.includes(DOW_KEY[d.getDay()]))
+    const visibleClasses = viewMode === "class" && selectedEntity !== "ALL"
+      ? sections.filter(s => s.name === selectedEntity)
+      : sections
 
     return (
       <div style={{ flex: 1, overflowY: "auto", overflowX: "auto" }}>
         <table style={{ borderCollapse: "collapse", width: "100%" }}>
           <thead>
             <tr>
-              <th style={{ width: 90, background: "#1E1B2E", color: "#B8B4D4", border: "1px solid #374151", padding: "8px 6px", fontSize: 10, fontWeight: 600 }}>Day</th>
+              <th style={{ width: 78, background: "#7C6FE0", color: "#fff", border: "1px solid #9B8EF5", padding: "8px 6px", fontSize: 10, fontWeight: 800, letterSpacing: "0.06em" }}>Class</th>
+              <th style={{ width: 90, background: "#7C6FE0", color: "#fff", border: "1px solid #9B8EF5", padding: "8px 6px", fontSize: 10, fontWeight: 700 }}>Day</th>
               {periods.map(p => {
                 const times = periodTimes.get(p.id)
                 const isBreak = p.type !== "class"
-                const bg = isBreak ? "#3B3660" : "#1E1B2E"
+                const bg = isBreak ? "#9B8EF5" : "#7C6FE0"
                 return (
-                  <th key={p.id} style={{ background: bg, color: isBreak ? "#F5A623" : "#fff", border: "1px solid #374151", padding: "6px 8px", fontSize: 10, fontWeight: 700, minWidth: isBreak ? 56 : 110, textAlign: "center" as const }}>
+                  <th key={p.id} style={{ background: bg, color: isBreak ? "#FEF3C7" : "#fff", border: "1px solid #9B8EF5", padding: "6px 8px", fontSize: 10, fontWeight: 700, minWidth: isBreak ? 56 : 110, textAlign: "center" as const }}>
                     <div>{p.name}</div>
-                    {times && <div style={{ fontSize: 8, opacity: 0.6, fontWeight: 400 }}>{fmtTime(times.start, timeFormat)}</div>}
+                    {times && <div style={{ fontSize: 8, opacity: 0.75, fontWeight: 400 }}>{fmtTime(times.start, timeFormat)}</div>}
                   </th>
                 )
               })}
             </tr>
           </thead>
           <tbody>
-            {visibleDays.map((d, di) => {
-              const dayKey = DOW_KEY[d.getDay()]
-              const todayFlag = isToday(d)
-              const absentFlag = absentHighlights?.some(h => h.day === dayKey)
-              return (
-                <tr key={dayKey} style={{ background: todayFlag ? "#F5F2FF" : di % 2 === 0 ? "#fff" : "#f8fafc" }}>
-                  <td style={{
-                    border: "1px solid #e2e8f0", padding: "6px 10px",
-                    fontWeight: 700, fontSize: 11, color: "#1E1B2E",
-                    background: todayFlag ? "#EDE9FF" : absentFlag ? "#fffbeb" : "#f8fafc",
-                    whiteSpace: "nowrap" as const,
-                    outline: absentFlag ? "2px solid #f59e0b" : "none",
-                    outlineOffset: -2,
-                  }}>
-                    <div>{DAY_ABBR[(d.getDay() + 6) % 7]}</div>
-                    <div style={{ fontSize: 10, color: "#64748b", fontWeight: 500 }}>{d.getDate()} {MONTH_NAMES[d.getMonth()].slice(0,3)}</div>
-                    {absentFlag && <div style={{ fontSize: 8, color: "#D4920E" }}>⚠ absent</div>}
-                  </td>
-                  {periods.map(p => {
-                    const isBreak = p.type !== "class"
-                    if (isBreak) {
-                      const breakBg = p.type === "lunch" ? "#fef3c7" : p.type === "fixed-start" ? "#F5F2FF" : "#fefce8"
-                      const breakColor = p.type === "lunch" ? "#D4920E" : "#ca8a04"
+            {visibleClasses.flatMap((sec, sIdx) => {
+              const classBg = sIdx % 2 === 0 ? "#FAFAFE" : "#FFFFFF"
+              return visibleDays.map((d, di) => {
+                const dayKey = DOW_KEY[d.getDay()]
+                const todayFlag = isToday(d)
+                const absentFlag = absentHighlights?.some(h => h.day === dayKey)
+                const isFirstRow = di === 0
+                return (
+                  <tr key={`${sec.name}-${dayKey}`} style={{ background: todayFlag ? "#F5F2FF" : classBg }}>
+                    {/* Class column — rowSpan across all days for this class */}
+                    {isFirstRow && (
+                      <td rowSpan={visibleDays.length}
+                        style={{
+                          background: "linear-gradient(180deg, #EDE9FF 0%, #F5F2FF 100%)",
+                          border: "1px solid #D8D2FF",
+                          borderBottom: sIdx < visibleClasses.length - 1 ? "3px solid #7C6FE0" : "1px solid #D8D2FF",
+                          padding: "10px 6px", verticalAlign: "middle" as const, textAlign: "center" as const,
+                        }}>
+                        <div style={{ fontSize: 13, fontWeight: 900, color: "#13111E", letterSpacing: "0.04em" }}>{sec.name}</div>
+                        <div style={{ fontSize: 9, fontWeight: 600, color: "#7C6FE0", textTransform: "uppercase" as const, letterSpacing: "0.1em", marginTop: 3 }}>Class</div>
+                      </td>
+                    )}
+                    {/* Day column */}
+                    <td style={{
+                      border: "1px solid #E8E4FF", padding: "6px 10px",
+                      fontWeight: 700, fontSize: 11, color: "#13111E",
+                      background: todayFlag ? "#EDE9FF" : absentFlag ? "#FFFBEB" : "#FAFAFE",
+                      whiteSpace: "nowrap" as const,
+                      outline: absentFlag ? "2px solid #F5A623" : "none",
+                      outlineOffset: -2,
+                    }}>
+                      <div>{DAY_ABBR[(d.getDay() + 6) % 7]}</div>
+                      <div style={{ fontSize: 10, color: "#8B87AD", fontWeight: 500, fontFamily: "'DM Mono', monospace" }}>{d.getDate()} {MONTH_NAMES[d.getMonth()].slice(0,3)}</div>
+                      {absentFlag && <div style={{ fontSize: 8, color: "#D4920E" }}>⚠ absent</div>}
+                    </td>
+                    {/* Period cells — ONE event per cell for this class */}
+                    {periods.map(p => {
+                      const isBreak = p.type !== "class"
+                      if (isBreak) {
+                        const breakBg = p.type === "lunch" ? "#FEF3C7" : p.type === "fixed-start" ? "#EDE9FF" : "#FEFCE8"
+                        const breakColor = p.type === "lunch" ? "#92400E" : "#854D0E"
+                        return (
+                          <td key={p.id} style={{ border: "1px solid #E8E4FF", textAlign: "center" as const, fontSize: 9, color: breakColor, fontStyle: "italic", padding: 4, background: breakBg }}>
+                            {p.name}
+                          </td>
+                        )
+                      }
+                      const cell = classTT[sec.name]?.[dayKey]?.[p.id]
+                      const teacherAbsent = !!(absentFlag && cell?.teacher && absentHighlights?.some(h => h.day === dayKey && h.teacher === cell.teacher))
+                      const subKey = `${sec.name}|${dayKey}|${p.id}`
+                      const isSub = !!substitutions[subKey]
+                      const subTeacher = substitutions[subKey]
                       return (
-                        <td key={p.id} style={{ border: "1px solid #e2e8f0", textAlign: "center" as const, fontSize: 9, color: breakColor, fontStyle: "italic", padding: 4, background: breakBg }}>
-                          {p.name}
+                        <td key={p.id} style={{ border: "1px solid #E8E4FF", padding: 3, verticalAlign: "top" as const, background: teacherAbsent ? "#FFFBEB" : undefined }}>
+                          {!cell?.subject
+                            ? <div style={{ minHeight: 36, display: "flex", alignItems: "center", justifyContent: "center", color: "#D8D2FF", fontSize: 11 }}>—</div>
+                            : <EventChip
+                                subject={cell.subject}
+                                section={sec.name}
+                                teacher={isSub ? subTeacher : (cell.teacher ?? "")}
+                                room={cell.room ?? ""}
+                                isSub={isSub}
+                                isClassTeacher={!!cell.isClassTeacher}
+                                showTeacher={showTeacher}
+                                showRoom={showRoom}
+                                hideSection
+                                absent={teacherAbsent}
+                                onClick={() => onCellClick?.(sec.name, dayKey, p.id)}
+                              />
+                          }
                         </td>
                       )
-                    }
-                    const events = getEvents(dayKey, p.id)
-                    return (
-                      <td key={p.id} style={{ border: "1px solid #e2e8f0", padding: 3, verticalAlign: "top" as const, background: absentFlag ? "#fffbeb" : undefined }}>
-                        {events.length === 0
-                          ? <div style={{ minHeight: 40, display: "flex", alignItems: "center", justifyContent: "center", color: "#e2e8f0", fontSize: 9 }}>—</div>
-                          : events.map((ev, ei) => (
-                            <EventChip key={ei} {...ev} showTeacher={showTeacher} showRoom={showRoom}
-                              absent={!!(absentFlag && absentHighlights?.some(h => h.day === dayKey && h.teacher === ev.teacher))}
-                              onClick={() => onCellClick?.(ev.section, dayKey, p.id)} />
-                          ))
-                        }
-                      </td>
-                    )
-                  })}
-                </tr>
-              )
+                    })}
+                  </tr>
+                )
+              })
             })}
           </tbody>
         </table>
@@ -524,7 +593,7 @@ export function CalendarView({
     return (
       <div style={{ flex: 1, overflowY: "auto", maxWidth: 600, margin: "0 auto" }}>
         {!isWorkDay && (
-          <div style={{ padding: 40, textAlign: "center" as const, color: "#B8B4D4", fontSize: 14 }}>
+          <div style={{ padding: 40, textAlign: "center" as const, color: "#FFFFFF", fontSize: 14 }}>
             <div style={{ fontSize: 32 }}>🏖️</div>
             <div style={{ marginTop: 8 }}>No school on {fmtDate(date, "long").split(",")[0]}</div>
           </div>
@@ -533,9 +602,9 @@ export function CalendarView({
           <table style={{ borderCollapse: "collapse", width: "100%" }}>
             <thead>
               <tr>
-                <th style={{ width: 90, background: "#1E1B2E", color: "#B8B4D4", border: "1px solid #374151", padding: "8px 6px", fontSize: 10, fontWeight: 600 }}>Time</th>
+                <th style={{ width: 90, background: "#7C6FE0", color: "#FFFFFF", border: "1px solid #374151", padding: "8px 6px", fontSize: 10, fontWeight: 600 }}>Time</th>
                 <th style={{
-                  background: todayFlag ? "#4F3FC0" : "#1E1B2E", color: "#fff",
+                  background: todayFlag ? "#D4920E" : "#7C6FE0", color: "#fff",
                   border: "1px solid #374151", padding: "10px 14px",
                   fontSize: 13, fontWeight: 800,
                 }}>
@@ -563,8 +632,8 @@ export function CalendarView({
                       <div style={{ fontSize: 10, fontWeight: 700, color: isBreak ? breakColor : "#475569" }}>{p.name}</div>
                       {times && (
                         <>
-                          <div style={{ fontSize: 8, color: "#B8B4D4" }}>{fmtTime(times.start, timeFormat)}</div>
-                          <div style={{ fontSize: 8, color: "#B8B4D4" }}>→ {fmtTime(times.end, timeFormat)}</div>
+                          <div style={{ fontSize: 8, color: "#FFFFFF" }}>{fmtTime(times.start, timeFormat)}</div>
+                          <div style={{ fontSize: 8, color: "#FFFFFF" }}>→ {fmtTime(times.end, timeFormat)}</div>
                         </>
                       )}
                     </td>
@@ -611,7 +680,7 @@ export function CalendarView({
               {periods.map(p => {
                 const times = periodTimes.get(p.id)
                 const isBreak = p.type !== "class"
-                const bg = isBreak ? "#3B3660" : "#1E1B2E"
+                const bg = isBreak ? "#9B8EF5" : "#7C6FE0"
                 return (
                   <th key={p.id} style={{ background: bg, color: isBreak ? "#F5A623" : "#fff", border: "1px solid #374151", padding: "8px 10px", fontSize: 10, fontWeight: 700, minWidth: isBreak ? 64 : 130, textAlign: "center" as const, verticalAlign: "bottom" as const }}>
                     <div>{p.name}</div>
@@ -680,21 +749,21 @@ export function CalendarView({
         {/* Navigation */}
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
           <button onClick={() => navigate(-1)}
-            style={{ width: 28, height: 28, border: "1px solid #e2e8f0", borderRadius: 6, background: "#fff", cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", color: "#3B3660" }}>
+            style={{ width: 28, height: 28, border: "1px solid #e2e8f0", borderRadius: 6, background: "#fff", cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", color: "#9B8EF5" }}>
             ‹
           </button>
           <button onClick={goToday}
-            style={{ padding: "4px 12px", border: "1px solid #e2e8f0", borderRadius: 6, background: "#fff", cursor: "pointer", fontSize: 11, color: "#3B3660", fontWeight: 500 }}>
+            style={{ padding: "4px 12px", border: "1px solid #e2e8f0", borderRadius: 6, background: "#fff", cursor: "pointer", fontSize: 11, color: "#9B8EF5", fontWeight: 500 }}>
             Today
           </button>
           <button onClick={() => navigate(1)}
-            style={{ width: 28, height: 28, border: "1px solid #e2e8f0", borderRadius: 6, background: "#fff", cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", color: "#3B3660" }}>
+            style={{ width: 28, height: 28, border: "1px solid #e2e8f0", borderRadius: 6, background: "#fff", cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", color: "#9B8EF5" }}>
             ›
           </button>
         </div>
 
         {/* Current range label */}
-        <div style={{ fontSize: 14, fontWeight: 700, color: "#1E1B2E", minWidth: 200 }}>{headerLabel}</div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "#7C6FE0", minWidth: 200 }}>{headerLabel}</div>
 
         <div style={{ flex: 1 }} />
 

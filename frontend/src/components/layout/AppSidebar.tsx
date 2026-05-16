@@ -139,18 +139,21 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
         {!collapsed ? (
           <>
             <a href="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: 9, textDecoration: 'none' }}>
-              <div style={{ width: 30, height: 30, borderRadius: 8, background: ACCENT, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <svg width="18" height="18" viewBox="0 0 52 52" fill="none">
-                  <rect x="12" y="9" width="8" height="33" rx="4" fill="white"/>
-                  <path d="M 20 22 C 23 14 40 15 40 30 C 40 45 23 46 20 42" stroke="white" strokeWidth="8" fill="none" strokeLinecap="round"/>
-                  <circle cx="39" cy="10" r="4.5" fill="#D4920E"/>
+              {/* SchedU mark — stacked time blocks */}
+              <div style={{ width: 32, height: 32, borderRadius: 8, background: ACCENT, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <svg width="20" height="20" viewBox="0 0 52 52" fill="none">
+                  <rect x="10" y="13" width="24" height="4.5" rx="2.25" fill="white"/>
+                  <rect x="10" y="21" width="32" height="4.5" rx="2.25" fill="white" opacity="0.82"/>
+                  <rect x="10" y="29" width="18" height="4.5" rx="2.25" fill="white" opacity="0.65"/>
+                  <rect x="10" y="37" width="26" height="4.5" rx="2.25" fill="white" opacity="0.5"/>
+                  <circle cx="42" cy="11" r="3.5" fill="#D4920E"/>
                 </svg>
               </div>
               <div>
-                <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: GROUP_LABEL, lineHeight: 1, marginBottom: 2 }}>by bhusku</div>
-                <div style={{ fontFamily: "'Inter',sans-serif", fontSize: 15, fontWeight: 900, color: TEXT_ON, letterSpacing: '-0.5px', lineHeight: 1 }}>
-                  Sched<span style={{ color: ACCENT, fontFamily: "'DM Serif Display',Georgia,serif", fontStyle: 'italic', fontSize: 16 }}>U</span>
+                <div style={{ fontFamily: "'Inter',sans-serif", fontSize: 17, fontWeight: 900, color: TEXT_ON, letterSpacing: '-0.6px', lineHeight: 1 }}>
+                  Sched<span style={{ color: ACCENT, fontFamily: "'DM Serif Display',Georgia,serif", fontStyle: 'italic', fontSize: 18 }}>U</span>
                 </div>
+                <div style={{ fontSize: 8, fontWeight: 600, letterSpacing: '0.14em', textTransform: 'uppercase', color: GROUP_LABEL, lineHeight: 1, marginTop: 3 }}>Smart Scheduling</div>
               </div>
             </a>
             <button
@@ -167,12 +170,14 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
             </button>
           </>
         ) : (
-          <a href="/dashboard" style={{ textDecoration: 'none' }} title="SchedU — by Bhusku">
+          <a href="/dashboard" style={{ textDecoration: 'none' }} title="SchedU — Dashboard">
             <div style={{ width: 30, height: 30, borderRadius: 8, background: ACCENT, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <svg width="18" height="18" viewBox="0 0 52 52" fill="none">
-                <rect x="12" y="9" width="8" height="33" rx="4" fill="white"/>
-                <path d="M 20 22 C 23 14 40 15 40 30 C 40 45 23 46 20 42" stroke="white" strokeWidth="8" fill="none" strokeLinecap="round"/>
-                <circle cx="39" cy="10" r="4.5" fill="#D4920E"/>
+              <svg width="19" height="19" viewBox="0 0 52 52" fill="none">
+                <rect x="10" y="13" width="24" height="4.5" rx="2.25" fill="white"/>
+                <rect x="10" y="21" width="32" height="4.5" rx="2.25" fill="white" opacity="0.82"/>
+                <rect x="10" y="29" width="18" height="4.5" rx="2.25" fill="white" opacity="0.65"/>
+                <rect x="10" y="37" width="26" height="4.5" rx="2.25" fill="white" opacity="0.5"/>
+                <circle cx="42" cy="11" r="3.5" fill="#D4920E"/>
               </svg>
             </div>
           </a>
