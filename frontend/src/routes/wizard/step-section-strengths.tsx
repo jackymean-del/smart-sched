@@ -6,10 +6,11 @@
  *   "If a user understands one table, they understand the whole platform."
  */
 
-import { useMemo, useEffect } from 'react'
+import { useMemo, useEffect, useState } from 'react'
 import { useTimetableStore } from '@/store/timetableStore'
-import type { SectionStrength } from '@/types'
+import type { SectionStrength, ScopeMatrix, Section } from '@/types'
 import { DataGrid, DataGridColumn } from '@/components/DataGrid/DataGrid'
+import { ScopeMatrixModal } from '@/components/DataGrid/ScopeMatrixModal'
 import { Grid3x3, Sparkles } from 'lucide-react'
 
 const STREAMS = ['Science', 'Commerce', 'Humanities', 'General', 'Other']
@@ -29,9 +30,12 @@ interface Row extends SectionStrength {
 export function StepSectionStrengths() {
   const {
     sections, subjects, sectionStrengths, setSectionStrengths,
+    setSections, periods, config,
   } = useTimetableStore() as any
 
   const subjectCols: string[] = useMemo(() => subjects.map((s: any) => s.name), [subjects])
+  const [scopeTarget, setScopeTarget] = useState<Section | null>(null)
+  const workDays: string[] = config?.workDays ?? ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY']
 
   // Initialize matrix on first mount
   useEffect(() => {
@@ -162,8 +166,12 @@ export function StepSectionStrengths() {
         rows={rows}
         rowKey={(r) => r.sectionName}
         onChange={handleChange}
+        onScope={(row) => {
+          const sec = sections.find((s: Section) => s.name === row.sectionName)
+          if (sec) setScopeTarget(sec)
+        }}
         toolbar={{
-          add: false,            // sections come from prev step
+          add: false,
           importCSV: true,
           exportCSV: true,
           paste: true,
@@ -172,6 +180,23 @@ export function StepSectionStrengths() {
           bulkActions: true,
         }}
       />
+
+      {/* Scope authoring modal */}
+      {scopeTarget && (
+        <ScopeMatrixModal
+          entityName={scopeTarget.name}
+          entityKind="Section"
+          scope={scopeTarget.scope}
+          workDays={workDays}
+          periods={periods}
+          onSave={(nextScope: ScopeMatrix | undefined) => {
+            setSections(sections.map((s: Section) =>
+              s.name === scopeTarget.name ? { ...s, scope: nextScope } : s
+            ))
+          }}
+          onClose={() => setScopeTarget(null)}
+        />
+      )}
 
       {/* AI explainer */}
       <div style={{

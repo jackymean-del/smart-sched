@@ -355,6 +355,10 @@ export function solveTimetable(input: SolverInput): SolverOutput {
       if (!p) return
       // Skip if Pass 0 already placed an optional block here
       if (classTT[sec.name]?.[day]?.[p.id]) return
+      // schedU Scope: skip if class teacher or section is locked at this slot
+      const sec_state = sec.scope?.cells?.[day]?.[p.id] ?? 'allowed'
+      const ct_state = (ctStaff as any)?.scope?.cells?.[day]?.[p.id] ?? 'allowed'
+      if (sec_state === 'locked' || ct_state === 'locked') return
       if (!teacherBusy[ctName][day].has(p.id)) {
         classTT[sec.name][day][p.id] = {
           subject: ctSubject,
@@ -417,8 +421,33 @@ export function solveTimetable(input: SolverInput): SolverOutput {
         const gradeKey   = sec.grade ? `${sec.grade}::${chosenSub.name}` : ''
         const simpleKey  = chosenSub.name
 
-        const isAvailable = (st: any) =>
-          !teacherBusy[st.name]?.[day]?.has(period.id)
+        // ── schedU Scope System integration ──
+        // Skip placement entirely if SECTION scope LOCKS this slot.
+        // 'disabled' applies a soft penalty but allows placement.
+        const sectionScopeState = sec.scope
+          ? (sec.scope.cells?.[day]?.[period.id] ?? 'allowed')
+          : 'allowed'
+        if (sectionScopeState === 'locked') return
+
+        // Skip if SUBJECT scope LOCKS this slot.
+        const subScopeState = (chosenSub as any).scope
+          ? (((chosenSub as any).scope.cells?.[day]?.[period.id]) ?? 'allowed')
+          : 'allowed'
+        if (subScopeState === 'locked') {
+          penalties.push({ constraint: 'subject-scope-locked', penalty: 0, details: `${chosenSub.name} is scope-locked off ${day} ${period.id}` })
+          return
+        }
+
+        const isAvailable = (st: any) => {
+          if (teacherBusy[st.name]?.[day]?.has(period.id)) return false
+          // TEACHER scope hard exclusion
+          const tScope = (st as any).scope
+          if (tScope) {
+            const s = tScope.cells?.[day]?.[period.id] ?? 'allowed'
+            if (s === 'locked') return false
+          }
+          return true
+        }
 
         const matchesSub = (st: any): boolean => {
           const subs: string[] = st.subjects ?? []
@@ -477,6 +506,20 @@ export function solveTimetable(input: SolverInput): SolverOutput {
         const prevPeriod = classPeriods[pi - 1]
         if (prevPeriod && classTT[sec.name][day][prevPeriod.id]?.subject === chosenSub.name) {
           penalties.push({ constraint: 'consecutive-heavy', penalty: 7, details: `${chosenSub.name} consecutive in ${sec.name}` })
+        }
+
+        // Scope 'disabled' state — soft penalty (placement allowed but discouraged)
+        if (sectionScopeState === 'disabled') {
+          penalties.push({ constraint: 'section-scope-disabled', penalty: 15, details: `${sec.name} marked disabled at ${day} ${period.id}` })
+        }
+        if (subScopeState === 'disabled') {
+          penalties.push({ constraint: 'subject-scope-disabled', penalty: 12, details: `${chosenSub.name} marked disabled at ${day} ${period.id}` })
+        }
+        const tScopeState = (teacher as any).scope
+          ? (((teacher as any).scope.cells?.[day]?.[period.id]) ?? 'allowed')
+          : 'allowed'
+        if (tScopeState === 'disabled') {
+          penalties.push({ constraint: 'teacher-scope-disabled', penalty: 10, details: `${teacher.name} marked disabled at ${day} ${period.id}` })
         }
 
         ensureBusy(teacher.name)

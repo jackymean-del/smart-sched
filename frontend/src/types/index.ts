@@ -201,6 +201,8 @@ export interface Subject {
   capacity?: number
   /** Room type required (e.g. 'lab', 'ground', 'art-room') — drives room allocation */
   roomTypeRequired?: RoomType
+  /** schedU Scope System — when set, subject can only be scheduled where allowed */
+  scope?: ScopeMatrix
 }
 
 export interface SubjectClassConfig {
@@ -1060,6 +1062,7 @@ export const SectionSchema = z.object({
   grade: z.string(),
   classTeacher: z.string().optional().default(''),
   shiftId: z.string().optional(),
+  scope: ScopeMatrixSchema.optional(),   // schedU Scope System
 })
 export type Section = z.infer<typeof SectionSchema>
 
@@ -1076,6 +1079,7 @@ export const StaffSchema = z.object({
   isClassTeacher: z.string().default(''),
   maxPeriodsPerWeek: z.number().int().positive(),
   gender: z.enum(['male', 'female', 'other']).optional(),
+  scope: ScopeMatrixSchema.optional(),   // schedU Scope System
 })
 export type Staff = z.infer<typeof StaffSchema>
 
@@ -1103,6 +1107,8 @@ export interface Room {
   roomType: 'classroom' | 'lab' | 'hall' | 'gym' | 'other'
   capacity: number
   shiftId?: string
+  /** schedU Scope System — when set, room can only be used where allowed */
+  scope?: ScopeMatrix
 }
 
 /** @deprecated Use Teacher instead. */
