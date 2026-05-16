@@ -8,6 +8,8 @@ import {
 import { useAuthStore } from '@/store/authStore'
 import { useTimetableStore } from '@/store/timetableStore'
 import { CalendarView } from '@/components/CalendarView'
+import { EntityTimetableView } from '@/components/views/EntityTimetableView'
+import { OptionalBlockView } from '@/components/views/OptionalBlockView'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { SchedUWordmark, BhuskuFooter } from '@/components/branding/Logos'
 import type { Staff } from '@/types'
@@ -78,6 +80,8 @@ export function DashboardPage() {
   const [absentTeachers, setAbsentTeachers] = useState<string[]>([])
   const [subReasons, setSubReasons] = useState<Record<string, string>>({})
   const [subAssignments, setSubAssignments] = useState<Record<string, string>>(() => ({ ...substitutions }))
+  // schedU Phase 4 — view mode selector for the schedule panel
+  const [scheduleView, setScheduleView] = useState<'class' | 'teacher' | 'room' | 'block'>('class')
 
   if (!user) { window.location.href = '/login'; return null }
 
@@ -456,26 +460,85 @@ export function DashboardPage() {
             )}
           </div>
 
-          {/* Calendar body */}
+          {/* View-mode tabs */}
+          {hasTimetable && (
+            <div style={{
+              padding: '10px 24px', borderBottom: '1px solid #F0EDFF',
+              display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, background: '#FAFAFE',
+            }}>
+              {([
+                { key: 'class',   label: 'Class',          icon: '📚' },
+                { key: 'teacher', label: 'Teacher',        icon: '👤' },
+                { key: 'room',    label: 'Room',           icon: '🚪' },
+                { key: 'block',   label: 'Optional Blocks',icon: '◇' },
+              ] as const).map(t => {
+                const active = scheduleView === t.key
+                const count = t.key === 'block' ? (store as any).optionalBlocks?.length ?? 0 : null
+                return (
+                  <button key={t.key}
+                    onClick={() => setScheduleView(t.key)}
+                    style={{
+                      padding: '6px 13px', borderRadius: 7, fontSize: 12, fontWeight: 600,
+                      border: active ? '1.5px solid #7C6FE0' : '1px solid #E8E4FF',
+                      background: active ? '#EDE9FF' : '#fff',
+                      color: active ? '#13111E' : '#4B5275',
+                      cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6,
+                    }}>
+                    <span style={{ fontSize: 11, opacity: 0.85 }}>{t.icon}</span>
+                    {t.label}
+                    {count != null && count > 0 && (
+                      <span style={{
+                        padding: '1px 7px', borderRadius: 10, fontSize: 9, fontWeight: 700,
+                        background: active ? '#7C6FE0' : '#EDE9FF',
+                        color: active ? '#fff' : '#7C6FE0',
+                      }}>{count}</span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Schedule body — switches by view mode */}
           {hasTimetable ? (
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-              <CalendarView
-                classTT={classTT}
-                teacherTT={teacherTT}
-                periods={periods}
-                workDays={workDays}
-                startTime={config.startTime ?? '09:00'}
-                timeFormat={config.timeFormat as '12h' | '24h' | undefined}
-                staff={staff}
-                sections={sections}
-                subjects={subjects}
-                substitutions={substitutions}
-                viewMode="class"
-                selectedEntity="ALL"
-                showTeacher={true}
-                showRoom={false}
-                absentHighlights={calendarAbsentHighlights}
-              />
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: scheduleView === 'block' ? 14 : 0 }}>
+              {scheduleView === 'class' && (
+                <CalendarView
+                  classTT={classTT}
+                  teacherTT={teacherTT}
+                  periods={periods}
+                  workDays={workDays}
+                  startTime={config.startTime ?? '09:00'}
+                  timeFormat={config.timeFormat as '12h' | '24h' | undefined}
+                  staff={staff}
+                  sections={sections}
+                  subjects={subjects}
+                  substitutions={substitutions}
+                  viewMode="class"
+                  selectedEntity="ALL"
+                  showTeacher={true}
+                  showRoom={false}
+                  absentHighlights={calendarAbsentHighlights}
+                />
+              )}
+              {(scheduleView === 'teacher' || scheduleView === 'room') && (
+                <EntityTimetableView
+                  mode={scheduleView}
+                  classTT={classTT}
+                  staff={staff}
+                  sections={sections}
+                  periods={periods}
+                  workDays={workDays}
+                  rooms={(store as any).rooms ?? []}
+                />
+              )}
+              {scheduleView === 'block' && (
+                <OptionalBlockView
+                  optionalBlocks={(store as any).optionalBlocks ?? []}
+                  subjectCombinations={(store as any).subjectCombinations ?? []}
+                  periods={periods}
+                />
+              )}
             </div>
           ) : (
             /* Empty state */
