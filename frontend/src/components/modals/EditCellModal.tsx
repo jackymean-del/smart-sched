@@ -16,7 +16,7 @@ const DAY_LABEL: Record<string, string> = {
 
 // 8-colour palette for subject pills — cycles via index
 const SUBJECT_COLORS = [
-  { bg: "#eef2ff", border: "#c7d2fe", text: "#4338ca" },  // indigo
+  { bg: "#EDE9FF", border: "#D8D2FF", text: "#4338ca" },  // indigo
   { bg: "#fef3c7", border: "#fcd34d", text: "#92400e" },  // amber
   { bg: "#ecfdf5", border: "#6ee7b7", text: "#065f46" },  // emerald
   { bg: "#fdf2f8", border: "#f9a8d4", text: "#9d174d" },  // pink
@@ -215,7 +215,7 @@ export function EditCellModal({ target, onClose }: Props) {
               ✏️ Edit Period
             </div>
             <div style={{ fontSize: 11, color: "#64748b", marginTop: 3, fontFamily: "monospace" }}>
-              <span style={{ color: "#4f46e5", fontWeight: 600 }}>{target.section}</span>
+              <span style={{ color: "#7C6FE0", fontWeight: 600 }}>{target.section}</span>
               {" · "}{DAY_LABEL[target.day] ?? target.day}
               {" · "}{periodObj?.name ?? target.periodId}
             </div>
@@ -385,7 +385,7 @@ export function EditCellModal({ target, onClose }: Props) {
               <div style={{ display: "flex", flexWrap: "wrap" as const, gap: 6 }}>
                 {selectedSubject && (
                   <span style={{
-                    fontSize: 11, background: "#eef2ff", color: "#4338ca",
+                    fontSize: 11, background: "#EDE9FF", color: "#4338ca",
                     padding: "3px 10px", borderRadius: 5, fontWeight: 600,
                   }}>📚 {selectedSubject}</span>
                 )}
@@ -450,7 +450,7 @@ export function EditCellModal({ target, onClose }: Props) {
               disabled={!canSave}
               style={{
                 padding: "8px 22px", borderRadius: 7, border: "none",
-                background: canSave ? (conflictWith ? "#d97706" : "#4f46e5") : "#e2e8f0",
+                background: canSave ? (conflictWith ? "#d97706" : "#7C6FE0") : "#e2e8f0",
                 color: canSave ? "#fff" : "#94a3b8",
                 fontSize: 12, fontWeight: 700,
                 cursor: canSave ? "pointer" : "not-allowed",

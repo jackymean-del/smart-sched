@@ -3,11 +3,11 @@ import { useTerminology } from "@/hooks/useTerminology"
 import type { Facility } from "@/types"
 
 const FACILITY_TYPES = [
-  { type: 'classroom', label: 'Classroom', icon: '🏫', color: '#4f46e5' },
+  { type: 'classroom', label: 'Classroom', icon: '🏫', color: '#7C6FE0' },
   { type: 'lab',       label: 'Lab',       icon: '🔬', color: '#059669' },
   { type: 'hall',      label: 'Hall',      icon: '🏛️', color: '#d97706' },
   { type: 'gym',       label: 'Gym',       icon: '⚽', color: '#dc2626' },
-  { type: 'other',     label: 'Other',     icon: '🏢', color: '#7c3aed' },
+  { type: 'other',     label: 'Other',     icon: '🏢', color: '#9B8EF5' },
 ] as const
 
 export function Step5Facilities() {
@@ -70,13 +70,13 @@ export function Step5Facilities() {
         <span style={{ fontSize:12, color:"#3730a3", fontWeight:500 }}>⚡ Quick generate classrooms:</span>
         {[10, 20, 30, 40].map(n => (
           <button key={n} onClick={() => autoGenerate(n)}
-            style={{ padding:"5px 14px", borderRadius:6, border:"1px solid #c7d2fe", background:"#fff", color:"#4f46e5", fontSize:12, fontWeight:600, cursor:"pointer" }}>
+            style={{ padding:"5px 14px", borderRadius:6, border:"1px solid #D8D2FF", background:"#fff", color:"#7C6FE0", fontSize:12, fontWeight:600, cursor:"pointer" }}>
             {n} Rooms
           </button>
         ))}
         <input type="number" min={1} max={200} placeholder="Custom count"
           onKeyDown={e => { if (e.key === 'Enter') autoGenerate(+(e.target as HTMLInputElement).value) }}
-          style={{ width:100, padding:"5px 8px", border:"1px solid #c7d2fe", borderRadius:6, fontSize:12, outline:"none" }} />
+          style={{ width:100, padding:"5px 8px", border:"1px solid #D8D2FF", borderRadius:6, fontSize:12, outline:"none" }} />
       </div>
 
       {/* Add buttons by type */}

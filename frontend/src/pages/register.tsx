@@ -69,7 +69,7 @@ export function RegisterPage() {
 
         {/* Logo */}
         <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:28 }}>
-          <div style={{ width:32, height:32, borderRadius:9, background:'linear-gradient(135deg,#34d399,#059669)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <div style={{ width:32, height:32, borderRadius:9, background:'linear-gradient(135deg,#9B8EF5,#059669)', display:'flex', alignItems:'center', justifyContent:'center' }}>
             <CalendarDays size={16} color="#fff" />
           </div>
           <span style={{ fontFamily:"'DM Serif Display',Georgia,serif", fontSize:18, color:'#111827' }}>
@@ -80,7 +80,7 @@ export function RegisterPage() {
         <h1 style={{ fontSize:22, fontWeight:700, color:'#111827', marginBottom:4 }}>Create your account</h1>
         <p style={{ color:'#6b7280', fontSize:13, marginBottom:24 }}>
           Already have one?{' '}
-          <a href="/login" style={{ color:'#4f46e5', fontWeight:600, textDecoration:'none' }}>Sign in</a>
+          <a href="/login" style={{ color:'#7C6FE0', fontWeight:600, textDecoration:'none' }}>Sign in</a>
         </p>
 
         {/* ── Google button ── */}

@@ -11,7 +11,7 @@ function gradeToNum(g: string): number {
   return isNaN(n) ? 0 : n
 }
 
-const POOL_COLORS = ['#4f46e5','#059669','#d97706','#dc2626','#7c3aed','#0891b2','#db2777']
+const POOL_COLORS = ['#7C6FE0','#059669','#d97706','#dc2626','#9B8EF5','#7C6FE0','#db2777']
 
 export function Step4Pools() {
   const store = useTimetableStore()
@@ -90,7 +90,7 @@ export function Step4Pools() {
       </div>
 
       {/* Example */}
-      <div style={{ background:"#eaecf8", borderLeft:"4px solid #4f46e5", borderRadius:"0 8px 8px 0", padding:"10px 14px", marginBottom:20, fontSize:12, color:"#3730a3" }}>
+      <div style={{ background:"#eaecf8", borderLeft:"4px solid #7C6FE0", borderRadius:"0 8px 8px 0", padding:"10px 14px", marginBottom:20, fontSize:12, color:"#3730a3" }}>
         📋 Example: | Pool: "Primary Maths" | Subject: Maths | Grades: 1–5 | Count: 4 |<br/>
         → Auto-generates: Primary Maths Teacher 1, 2, 3, 4 (only assigned to Grades 1–5)
       </div>

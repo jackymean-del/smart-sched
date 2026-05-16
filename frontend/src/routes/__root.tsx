@@ -24,7 +24,7 @@ function RootLayout() {
   // ── App pages: dark sidebar + outlet ──────────────────────
   if (isAppPage) {
     return (
-      <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: '#f4f6fb' }}>
+      <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: '#F9F8FF' }}>
         <AppSidebar
           collapsed={sidebarCollapsed}
           onToggle={() => setSidebarCollapsed(c => !c)}
@@ -59,7 +59,7 @@ function RootLayout() {
 }
 
 // ── Minimal topbar for wizard pages ───────────────────────────
-import { CalendarDays, LogOut } from 'lucide-react'
+import { LogOut } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { WIZARD_STEPS } from '@/components/layout/WizardSidebar'
 
@@ -71,34 +71,41 @@ function WizardTopbar() {
 
   return (
     <header style={{
-      height: 52, background: '#111827', borderBottom: '1px solid #1f2937',
+      height: 52, background: '#13111E', borderBottom: '1px solid #1E1B2E',
       display: 'flex', alignItems: 'center', padding: '0 20px', gap: 14,
       flexShrink: 0, zIndex: 100,
     }}>
-      {/* Logo */}
-      <a href="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none', flexShrink: 0 }}>
-        <div style={{ width: 28, height: 28, borderRadius: 7, background: 'linear-gradient(135deg,#34d399,#059669)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <CalendarDays size={14} color="#fff" />
+      {/* Bhusku-b mark + SchedU wordmark */}
+      <a href="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: 9, textDecoration: 'none', flexShrink: 0 }}>
+        <div style={{ width: 30, height: 30, borderRadius: 8, background: '#7C6FE0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <svg width="18" height="18" viewBox="0 0 52 52" fill="none">
+            <rect x="12" y="9" width="8" height="33" rx="4" fill="white"/>
+            <path d="M 20 22 C 23 14 40 15 40 30 C 40 45 23 46 20 42" stroke="white" strokeWidth="8" fill="none" strokeLinecap="round"/>
+            <circle cx="39" cy="10" r="4.5" fill="#D4920E"/>
+          </svg>
         </div>
-        <span style={{ fontFamily: "'DM Serif Display',Georgia,serif", fontSize: 16, color: '#fff' }}>
-          Sche<span style={{ color: '#34d399' }}>du</span>
-        </span>
+        <div>
+          <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#6b7080', lineHeight: 1, marginBottom: 2 }}>by bhusku</div>
+          <div style={{ fontFamily: "'Inter',sans-serif", fontSize: 15, fontWeight: 900, color: '#fff', letterSpacing: '-0.5px', lineHeight: 1 }}>
+            Sched<span style={{ color: '#9B8EF5', fontFamily: "'DM Serif Display',Georgia,serif", fontStyle: 'italic', fontSize: 16 }}>U</span>
+          </div>
+        </div>
       </a>
 
       {/* Step progress — center */}
       <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 14px', background: 'rgba(255,255,255,0.06)', borderRadius: 20, border: '1px solid #374151' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 14px', background: 'rgba(124,111,224,0.08)', borderRadius: 20, border: '1px solid #2A2642' }}>
           <div style={{ display: 'flex', gap: 5 }}>
             {Array.from({ length: total }).map((_, i) => (
               <div key={i} style={{
                 height: 5, borderRadius: 3,
                 width: i + 1 === step ? 18 : 6,
-                background: i + 1 < step ? '#059669' : i + 1 === step ? '#4f46e5' : '#374151',
+                background: i + 1 < step ? '#7C6FE0' : i + 1 === step ? '#9B8EF5' : '#2A2642',
                 transition: 'all 0.25s',
               }} />
             ))}
           </div>
-          <span style={{ fontSize: 11, color: '#9ca3af' }}>
+          <span style={{ fontSize: 11, color: '#8B87AD' }}>
             Step {step}/{total}: <strong style={{ color: '#e5e7eb' }}>{stepInfo?.label}</strong>
           </span>
         </div>
@@ -109,9 +116,9 @@ function WizardTopbar() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: 12, fontWeight: 600, color: '#e5e7eb' }}>{user.name}</div>
-            {user.schoolName && <div style={{ fontSize: 10, color: '#6b7280' }}>{user.schoolName}</div>}
+            {user.schoolName && <div style={{ fontSize: 10, color: '#8B87AD' }}>{user.schoolName}</div>}
           </div>
-          <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#4f46e5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 12, fontWeight: 700 }}>
+          <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#7C6FE0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 12, fontWeight: 700 }}>
             {user.name[0].toUpperCase()}
           </div>
           <button onClick={() => { logout(); window.location.href = '/login' }}

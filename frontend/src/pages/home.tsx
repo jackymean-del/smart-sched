@@ -15,9 +15,9 @@ const ORG_PILLS = [
 
 const FEATURES = [
   { icon: Brain,          color: 'color:#059669', title: 'AI Constraint Solver',   desc: 'Zero-conflict timetables via genetic optimization in seconds.' },
-  { icon: Globe,          color: 'color:#4f46e5', title: '8+ Country Standards',   desc: 'Auto-loads national labour laws, workload norms for India, US, UK, UAE and more.' },
+  { icon: Globe,          color: 'color:#7C6FE0', title: '8+ Country Standards',   desc: 'Auto-loads national labour laws, workload norms for India, US, UK, UAE and more.' },
   { icon: RefreshCcw,     color: 'color:#d97706', title: 'Smart Substitution',     desc: 'AI instantly finds the best available substitute by subject match.' },
-  { icon: ArrowLeftRight, color: 'color:#7c3aed', title: 'All Periods Shiftable',  desc: 'Assembly, Dispersal, breaks — any slot swappable. Cascades to teacher timetable.' },
+  { icon: ArrowLeftRight, color: 'color:#9B8EF5', title: 'All Periods Shiftable',  desc: 'Assembly, Dispersal, breaks — any slot swappable. Cascades to teacher timetable.' },
   { icon: FileOutput,     color: 'color:#ea580c', title: 'Export Anywhere',        desc: 'PDF auto-fit (any paper/orientation), multi-sheet Excel with teacher headers.' },
   { icon: Settings2,      color: 'color:#0d9488', title: 'Fully Editable',         desc: 'Edit any cell live. Lock/unlock any period. Toggle teacher names and rooms.' },
 ]
@@ -33,7 +33,7 @@ export function HomePage() {
       {/* Icon */}
       <div style={{
         width: 80, height: 80, borderRadius: 22,
-        background: 'linear-gradient(135deg, #34d399, #059669)',
+        background: 'linear-gradient(135deg, #9B8EF5, #059669)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         color: '#fff', marginBottom: 24, boxShadow: '0 10px 25px rgba(5,150,105,0.3)',
       }}>

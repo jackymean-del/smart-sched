@@ -124,7 +124,7 @@ export function SubstitutionModal({ open, onClose }: Props) {
         <div style={{ display:"flex", borderBottom:"1px solid #e2e8f0", flexShrink:0 }}>
           {(["assign","active"] as const).map(t => (
             <button key={t} onClick={() => setTab(t)}
-              style={{ flex:1, padding:"10px", border:"none", borderBottom: tab===t?"2px solid #4f46e5":"2px solid transparent", background:"transparent", fontSize:12, fontWeight:tab===t?600:400, color:tab===t?"#4f46e5":"#64748b", cursor:"pointer" }}>
+              style={{ flex:1, padding:"10px", border:"none", borderBottom: tab===t?"2px solid #7C6FE0":"2px solid transparent", background:"transparent", fontSize:12, fontWeight:tab===t?600:400, color:tab===t?"#7C6FE0":"#64748b", cursor:"pointer" }}>
               {t === "assign" ? "📋 Assign Cover" : `📂 Active (${activeList.length})`}
             </button>
           ))}
@@ -142,7 +142,7 @@ export function SubstitutionModal({ open, onClose }: Props) {
                 <div style={{ display:"flex", gap:6, flexWrap:"wrap" as const }}>
                   {config.workDays.map(d => (
                     <button key={d} onClick={() => { setSelectedDay(d); setAssignments({}) }}
-                      style={{ padding:"5px 12px", borderRadius:6, border:`1.5px solid ${selectedDay===d?"#4f46e5":"#e2e8f0"}`, background:selectedDay===d?"#eef2ff":"#fff", color:selectedDay===d?"#4f46e5":"#64748b", fontSize:11, fontWeight:selectedDay===d?600:400, cursor:"pointer" }}>
+                      style={{ padding:"5px 12px", borderRadius:6, border:`1.5px solid ${selectedDay===d?"#7C6FE0":"#e2e8f0"}`, background:selectedDay===d?"#EDE9FF":"#fff", color:selectedDay===d?"#7C6FE0":"#64748b", fontSize:11, fontWeight:selectedDay===d?600:400, cursor:"pointer" }}>
                       {DAY_LABEL[d]?.slice(0,3) ?? d.slice(0,3)}
                     </button>
                   ))}
@@ -189,7 +189,7 @@ export function SubstitutionModal({ open, onClose }: Props) {
                       Cover Assignments — {DAY_LABEL[selectedDay]}
                     </label>
                     {absentSlots.length > 0 && (
-                      <button onClick={autoFill} style={{ padding:"3px 10px", borderRadius:5, border:"1px solid #c7d2fe", background:"#e0e7ff", color:"#3730a3", fontSize:10, fontWeight:600, cursor:"pointer" }}>
+                      <button onClick={autoFill} style={{ padding:"3px 10px", borderRadius:5, border:"1px solid #D8D2FF", background:"#EDE9FF", color:"#3730a3", fontSize:10, fontWeight:600, cursor:"pointer" }}>
                         ⚡ Auto-fill best
                       </button>
                     )}

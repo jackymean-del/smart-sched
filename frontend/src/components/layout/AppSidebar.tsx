@@ -6,16 +6,16 @@ import {
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 
-// ── Sidebar palette ───────────────────────────────────────────
-const BG       = '#111827'   // sidebar background
-const BG_HOVER = 'rgba(255,255,255,0.05)'
-const BG_ACTIVE= 'rgba(255,255,255,0.08)'
-const TEXT_DIM  = '#6b7280'
-const TEXT_MID  = '#9ca3af'
+// ── Sidebar palette — Bhusku / SchedU Lavender Modern ─────────
+const BG        = '#13111E'   // Ink Purple (Bhusku dark)
+const BG_HOVER  = 'rgba(124,111,224,0.07)'
+const BG_ACTIVE = 'rgba(124,111,224,0.12)'
+const TEXT_DIM  = '#6b7080'
+const TEXT_MID  = '#8B87AD'
 const TEXT_ON   = '#e5e7eb'
 const TEXT_ACT  = '#fff'
-const BORDER    = '#1f2937'
-const ACCENT    = '#059669'  // green — matches logo
+const BORDER    = '#1E1B2E'   // Deep Aubergine
+const ACCENT    = '#7C6FE0'   // Lavender Violet
 
 interface NavItem {
   icon: React.ReactNode
@@ -137,16 +137,19 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
         {!collapsed ? (
           <>
             <a href="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: 9, textDecoration: 'none' }}>
-              <div style={{
-                width: 30, height: 30, borderRadius: 8,
-                background: 'linear-gradient(135deg,#34d399,#059669)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                <CalendarDays size={14} color="#fff" />
+              <div style={{ width: 30, height: 30, borderRadius: 8, background: ACCENT, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <svg width="18" height="18" viewBox="0 0 52 52" fill="none">
+                  <rect x="12" y="9" width="8" height="33" rx="4" fill="white"/>
+                  <path d="M 20 22 C 23 14 40 15 40 30 C 40 45 23 46 20 42" stroke="white" strokeWidth="8" fill="none" strokeLinecap="round"/>
+                  <circle cx="39" cy="10" r="4.5" fill="#D4920E"/>
+                </svg>
               </div>
-              <span style={{ fontFamily: "'DM Serif Display',Georgia,serif", fontSize: 17, color: '#fff' }}>
-                Sche<span style={{ color: '#34d399' }}>du</span>
-              </span>
+              <div>
+                <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: TEXT_DIM, lineHeight: 1, marginBottom: 2 }}>by bhusku</div>
+                <div style={{ fontFamily: "'Inter',sans-serif", fontSize: 15, fontWeight: 900, color: '#fff', letterSpacing: '-0.5px', lineHeight: 1 }}>
+                  Sched<span style={{ color: '#9B8EF5', fontFamily: "'DM Serif Display',Georgia,serif", fontStyle: 'italic', fontSize: 16 }}>U</span>
+                </div>
+              </div>
             </a>
             <button
               onClick={onToggle}
@@ -162,13 +165,13 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
             </button>
           </>
         ) : (
-          <a href="/dashboard" style={{ textDecoration: 'none' }}>
-            <div style={{
-              width: 30, height: 30, borderRadius: 8,
-              background: 'linear-gradient(135deg,#34d399,#059669)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <CalendarDays size={14} color="#fff" />
+          <a href="/dashboard" style={{ textDecoration: 'none' }} title="SchedU — by Bhusku">
+            <div style={{ width: 30, height: 30, borderRadius: 8, background: ACCENT, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <svg width="18" height="18" viewBox="0 0 52 52" fill="none">
+                <rect x="12" y="9" width="8" height="33" rx="4" fill="white"/>
+                <path d="M 20 22 C 23 14 40 15 40 30 C 40 45 23 46 20 42" stroke="white" strokeWidth="8" fill="none" strokeLinecap="round"/>
+                <circle cx="39" cy="10" r="4.5" fill="#D4920E"/>
+              </svg>
             </div>
           </a>
         )}
@@ -213,7 +216,7 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
           <button style={{
             width: '100%', padding: collapsed ? '8px 0' : '8px 12px',
             borderRadius: 8, border: 'none',
-            background: 'linear-gradient(135deg,#4f46e5,#7c3aed)',
+            background: ACCENT,
             color: '#fff', fontWeight: 600, fontSize: 12, cursor: 'pointer',
             display: 'flex', alignItems: 'center',
             justifyContent: collapsed ? 'center' : 'center',
@@ -247,7 +250,7 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
           <div
             style={{
               width: 32, height: 32, borderRadius: '50%',
-              background: '#4f46e5', display: 'flex', alignItems: 'center',
+              background: ACCENT, display: 'flex', alignItems: 'center',
               justifyContent: 'center', color: '#fff', fontSize: 12,
               fontWeight: 700, flexShrink: 0, cursor: collapsed ? 'pointer' : 'default',
             }}

@@ -75,7 +75,7 @@ export function Step2Country() {
         <input
           type={type} value={String(standard?.[key] ?? "")}
           onChange={e => setStandard(prev => prev ? { ...prev, [key]: type==="number" ? +e.target.value : e.target.value } : prev)}
-          style={{ padding:'4px 8px', border:'1.5px solid #4f46e5', borderRadius:6, fontSize:12, fontFamily: type==="number"?"'DM Mono',monospace":'inherit', textAlign: type==="number"?"right":'left', outline:'none', width:'100%' }}
+          style={{ padding:'4px 8px', border:'1.5px solid #7C6FE0', borderRadius:6, fontSize:12, fontFamily: type==="number"?"'DM Mono',monospace":'inherit', textAlign: type==="number"?"right":'left', outline:'none', width:'100%' }}
         />
       ) : (
         <span style={{ fontSize:12, fontFamily: type==="number"?"'DM Mono',monospace":'inherit', fontWeight:600, textAlign:'right' }}>
@@ -104,11 +104,11 @@ export function Step2Country() {
               style={{
                 display:'flex', alignItems:'center', gap:12,
                 padding:'12px 14px', borderRadius:10, textAlign:'left',
-                border: sel ? '2px solid #4f46e5' : '1.5px solid #e8e5de',
+                border: sel ? '2px solid #7C6FE0' : '1.5px solid #e8e5de',
                 background: sel ? '#eaecf8' : '#fff',
                 cursor:'pointer', transition:'all 0.15s',
               }}
-              onMouseEnter={e => { if(!sel){ (e.currentTarget as HTMLElement).style.borderColor='#34d399'; (e.currentTarget as HTMLElement).style.background='#f0fdf4'; }}}
+              onMouseEnter={e => { if(!sel){ (e.currentTarget as HTMLElement).style.borderColor='#9B8EF5'; (e.currentTarget as HTMLElement).style.background='#f0fdf4'; }}}
               onMouseLeave={e => { if(!sel){ (e.currentTarget as HTMLElement).style.borderColor='#e8e5de'; (e.currentTarget as HTMLElement).style.background='#fff'; }}}
             >
               <span style={{ fontSize:24 }}>{c.flag}</span>
@@ -151,7 +151,7 @@ export function Step2Country() {
             <div style={{ display:'flex', gap:6 }}>
               {!editingStd && (
                 <button onClick={() => setEditingStd(true)}
-                  style={{ padding:'5px 12px', borderRadius:6, border:'1.5px solid #d4d1c8', background:'#fff', fontSize:11, fontWeight:600, cursor:'pointer', color:'#4f46e5' }}>
+                  style={{ padding:'5px 12px', borderRadius:6, border:'1.5px solid #d4d1c8', background:'#fff', fontSize:11, fontWeight:600, cursor:'pointer', color:'#7C6FE0' }}>
                   ✏️ Customize
                 </button>
               )}
@@ -185,7 +185,7 @@ export function Step2Country() {
           </div>
 
           {editingStd && (
-            <div style={{ padding:'8px 14px', background:'#eaecf8', fontSize:11, color:'#3730a3', borderTop:'1px solid #c7d2fe' }}>
+            <div style={{ padding:'8px 14px', background:'#eaecf8', fontSize:11, color:'#3730a3', borderTop:'1px solid #D8D2FF' }}>
               💡 Your customized standard is saved locally per browser. Click <strong>"Save as My Standard"</strong> to apply it to all future timetables for <strong>{selected.name} · {org.name}</strong>.
             </div>
           )}

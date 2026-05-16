@@ -95,7 +95,7 @@ export function Step3Subjects() {
         <div style={{ fontSize:11, fontWeight:700, textTransform:"uppercase" as const, letterSpacing:"0.06em", color:"#a8a59e", marginBottom:10 }}>Scheduling Mode</div>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, maxWidth:560 }}>
           {([
-            ['period-based','📅','Mode 1 — Period Based',`Specify ${T.sessions.toLowerCase()}s/week directly.`,'#4f46e5','#eaecf8','#3730a3'],
+            ['period-based','📅','Mode 1 — Period Based',`Specify ${T.sessions.toLowerCase()}s/week directly.`,'#7C6FE0','#eaecf8','#3730a3'],
             ['duration-based','⏱','Mode 2 — Duration Based',`Specify total hours/year. Auto-calculates ${T.sessions.toLowerCase()}s/week.`,'#059669','#f0fdf4','#14532d'],
           ] as const).map(([mode,icon,title,desc,bdr,bg,tc]) => {
             const active = store.schedulingMode === mode
@@ -137,7 +137,7 @@ export function Step3Subjects() {
                 <th style={{...thS, width:95}}>{T.sessions}/week</th>
                 <th style={{...thS, width:90}}>Min/session</th>
               </>}
-              <th style={{...thS, width:100, color:"#4f46e5"}}>⚙ Class-wise</th>
+              <th style={{...thS, width:100, color:"#7C6FE0"}}>⚙ Class-wise</th>
               <th style={{...thS, width:32}}></th>
             </tr>
           </thead>
@@ -163,7 +163,7 @@ export function Step3Subjects() {
                           style={{...nS, width:54}} />
                       </td>
                       <td style={{...tdS, textAlign:"center" as const}}>
-                        <span style={{ fontSize:12, fontWeight:600, color:"#4f46e5", background:"#eaecf8", padding:"2px 7px", borderRadius:4 }}>{perDay}</span>
+                        <span style={{ fontSize:12, fontWeight:600, color:"#7C6FE0", background:"#eaecf8", padding:"2px 7px", borderRadius:4 }}>{perDay}</span>
                       </td>
                       <td style={tdS}>
                         <div style={{ display:"flex", alignItems:"center", gap:3 }}>
@@ -201,7 +201,7 @@ export function Step3Subjects() {
                     </>}
                     <td style={tdS}>
                       <button onClick={() => setExpandedId(isExp ? null : s.id)}
-                        style={{ fontSize:11, padding:"3px 8px", borderRadius:5, border:`1px solid ${isExp?"#4f46e5":"#e8e5de"}`, background: isExp?"#eaecf8":hasCC?"#f0fdf4":"#fff", color: isExp?"#4f46e5":hasCC?"#059669":"#6a6860", cursor:"pointer", fontWeight:500 }}>
+                        style={{ fontSize:11, padding:"3px 8px", borderRadius:5, border:`1px solid ${isExp?"#7C6FE0":"#e8e5de"}`, background: isExp?"#eaecf8":hasCC?"#f0fdf4":"#fff", color: isExp?"#7C6FE0":hasCC?"#059669":"#6a6860", cursor:"pointer", fontWeight:500 }}>
                         {isExp ? "▲ Hide" : hasCC ? "✓ Set" : "⚙ Set"}
                       </button>
                     </td>
@@ -214,15 +214,15 @@ export function Step3Subjects() {
                   {/* Class-wise panel — flat rows, not nested table */}
                   {isExp && (
                     <tr key={s.id+'-cw'}>
-                      <td colSpan={colSpan} style={{ padding:0, background:"#f5f3ff", borderBottom:"2px solid #4f46e5" }}>
+                      <td colSpan={colSpan} style={{ padding:0, background:"#f5f3ff", borderBottom:"2px solid #7C6FE0" }}>
                         <div style={{ padding:"12px 16px" }}>
                           <div style={{ fontSize:12, fontWeight:600, color:"#3730a3", marginBottom:10 }}>
                             ⚙ Class-wise settings for <strong>{s.name}</strong>
                             <span style={{ fontWeight:400, color:"#6a6860", marginLeft:8, fontSize:11 }}>— different values per class group</span>
                           </div>
-                          <div style={{ display:"grid", gap:0, border:"1px solid #ddd6fe", borderRadius:8, overflow:"hidden" }}>
+                          <div style={{ display:"grid", gap:0, border:"1px solid #D8D2FF", borderRadius:8, overflow:"hidden" }}>
                             {/* Header */}
-                            <div style={{ display:"grid", gridTemplateColumns:"120px 1fr 1fr 1fr 32px", background:"#ede9fe", padding:"6px 12px", fontSize:10, fontWeight:700, textTransform:"uppercase" as const, letterSpacing:"0.06em", color:"#7c3aed", gap:8 }}>
+                            <div style={{ display:"grid", gridTemplateColumns:"120px 1fr 1fr 1fr 32px", background:"#ede9fe", padding:"6px 12px", fontSize:10, fontWeight:700, textTransform:"uppercase" as const, letterSpacing:"0.06em", color:"#9B8EF5", gap:8 }}>
                               <span>Class Group</span>
                               {store.schedulingMode === 'period-based' ? <>
                                 <span>{T.sessions}/week</span>
@@ -238,8 +238,8 @@ export function Step3Subjects() {
                             {allGroups.map((cls, ci) => {
                               const cc = getCC(i, cls)
                               return (
-                                <div key={cls} style={{ display:"grid", gridTemplateColumns:"120px 1fr 1fr 1fr 32px", padding:"8px 12px", background: ci%2===0?"#faf5ff":"#f5f0ff", borderTop:"1px solid #ede9fe", alignItems:"center", gap:8 }}>
-                                  <span style={{ fontSize:12, fontWeight:600, color:"#4f46e5" }}>{cls}</span>
+                                <div key={cls} style={{ display:"grid", gridTemplateColumns:"120px 1fr 1fr 1fr 32px", padding:"8px 12px", background: ci%2===0?"#EDE9FF":"#f5f0ff", borderTop:"1px solid #ede9fe", alignItems:"center", gap:8 }}>
+                                  <span style={{ fontSize:12, fontWeight:600, color:"#7C6FE0" }}>{cls}</span>
                                   {store.schedulingMode === 'period-based' ? <>
                                     <div>
                                       <input type="number" min={1} defaultValue={cc.periodsPerWeek} key={cls+'-pw-'+s.id}
@@ -281,7 +281,7 @@ export function Step3Subjects() {
                               )
                             })}
                           </div>
-                          <div style={{ fontSize:10, color:"#7c3aed", marginTop:8 }}>
+                          <div style={{ fontSize:10, color:"#9B8EF5", marginTop:8 }}>
                             💡 Default values (from main row) apply to classes not listed here.
                             Class groups auto-populate once you set up your classes.
                           </div>

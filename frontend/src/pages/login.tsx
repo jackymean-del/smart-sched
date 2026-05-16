@@ -71,11 +71,11 @@ export function LoginPage() {
 
         <div style={{ position:'relative', zIndex:1 }}>
           <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:52 }}>
-            <div style={{ width:36, height:36, borderRadius:10, background:'linear-gradient(135deg,#34d399,#059669)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+            <div style={{ width:36, height:36, borderRadius:10, background:'linear-gradient(135deg,#9B8EF5,#059669)', display:'flex', alignItems:'center', justifyContent:'center' }}>
               <CalendarDays size={18} color="#fff" />
             </div>
             <span style={{ fontFamily:"'DM Serif Display',Georgia,serif", fontSize:20, color:'#fff' }}>
-              Sche<span style={{ color:'#34d399' }}>du</span>
+              Sche<span style={{ color:'#9B8EF5' }}>du</span>
             </span>
           </div>
 
@@ -91,7 +91,7 @@ export function LoginPage() {
           <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
             {['Zero double-bookings, guaranteed', 'XI–XII optional subjects handled automatically', 'Export to Excel & PDF in one click'].map(f => (
               <div key={f} style={{ display:'flex', alignItems:'center', gap:10 }}>
-                <div style={{ width:18, height:18, borderRadius:'50%', background:'#34d399', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, fontSize:10, color:'#fff', fontWeight:700 }}>✓</div>
+                <div style={{ width:18, height:18, borderRadius:'50%', background:'#9B8EF5', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, fontSize:10, color:'#fff', fontWeight:700 }}>✓</div>
                 <span style={{ color:'#d1d5db', fontSize:13 }}>{f}</span>
               </div>
             ))}
@@ -105,7 +105,7 @@ export function LoginPage() {
           <h1 style={{ fontSize:26, fontWeight:700, color:'#111827', marginBottom:6 }}>Welcome back</h1>
           <p style={{ color:'#6b7280', fontSize:14, marginBottom:32 }}>
             Sign in to continue to your timetables.{' '}
-            <a href="/register" style={{ color:'#4f46e5', fontWeight:600, textDecoration:'none' }}>Create account</a>
+            <a href="/register" style={{ color:'#7C6FE0', fontWeight:600, textDecoration:'none' }}>Create account</a>
           </p>
 
           {/* Google button */}
@@ -166,7 +166,7 @@ export function LoginPage() {
             <button type="submit" disabled={loading || googleLoading}
               style={{
                 padding:'12px', borderRadius:9, border:'none',
-                background: (loading || googleLoading) ? '#d1d5db' : '#4f46e5',
+                background: (loading || googleLoading) ? '#d1d5db' : '#7C6FE0',
                 color:'#fff', fontSize:14, fontWeight:600, cursor: (loading || googleLoading) ? 'default' : 'pointer',
                 display:'flex', alignItems:'center', justifyContent:'center', gap:8, marginTop:4,
                 transition:'background 0.15s',
@@ -203,5 +203,5 @@ const inputStyle: React.CSSProperties = {
   border:'1.5px solid #e5e7eb', borderRadius:8, fontSize:14,
   outline:'none', background:'#fff', boxSizing:'border-box', color:'#111827',
 }
-const focusIn  = (el: HTMLInputElement) => { el.style.borderColor = '#4f46e5'; el.style.boxShadow = '0 0 0 3px rgba(79,70,229,0.08)' }
+const focusIn  = (el: HTMLInputElement) => { el.style.borderColor = '#7C6FE0'; el.style.boxShadow = '0 0 0 3px rgba(79,70,229,0.08)' }
 const focusOut = (el: HTMLInputElement) => { el.style.borderColor = '#e5e7eb'; el.style.boxShadow = 'none' }

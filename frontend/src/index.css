@@ -42,13 +42,13 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 /* Green primary button */
 .bg-emerald-600         { background-color: #059669 !important; }
 .hover\:bg-emerald-700:hover { background-color: #047857 !important; }
-.bg-indigo-600          { background-color: #4f46e5 !important; }
+.bg-indigo-600          { background-color: #7C6FE0 !important; }
 .hover\:bg-indigo-700:hover  { background-color: #4338ca !important; }
 
 /* Outline button hover */
 .hover\:bg-gray-50:hover     { background-color: #f9fafb !important; }
 .hover\:bg-emerald-50:hover  { background-color: #ecfdf5 !important; }
-.hover\:border-emerald-400:hover { border-color: #34d399 !important; }
+.hover\:border-emerald-400:hover { border-color: #9B8EF5 !important; }
 .hover\:shadow-md:hover      { box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1) !important; }
 .hover\:-translate-y-1:hover { transform: translateY(-4px) !important; }
 .transition-all { transition: all 0.15s ease !important; }

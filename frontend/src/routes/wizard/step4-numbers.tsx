@@ -59,7 +59,7 @@ export function Step4Numbers() {
         </div>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, maxWidth:600, marginBottom:12 }}>
           <button onClick={() => store.setSchedulingMode('period-based')}
-            style={{ padding:"14px", borderRadius:10, textAlign:"left" as const, cursor:"pointer", border: store.schedulingMode!=='duration-based'?"2px solid #4f46e5":"1.5px solid #e8e5de", background: store.schedulingMode!=='duration-based'?"#eaecf8":"#fff" }}>
+            style={{ padding:"14px", borderRadius:10, textAlign:"left" as const, cursor:"pointer", border: store.schedulingMode!=='duration-based'?"2px solid #7C6FE0":"1.5px solid #e8e5de", background: store.schedulingMode!=='duration-based'?"#eaecf8":"#fff" }}>
             <div style={{ fontSize:13, fontWeight:700, color: store.schedulingMode!=='duration-based'?"#3730a3":"#1c1b18", marginBottom:4 }}>📅 Mode 1: Period-Based</div>
             <div style={{ fontSize:11, color:"#6a6860", lineHeight:1.5 }}>Enter periods/week per subject directly. Schedu allocates teachers and prevents clashes.</div>
           </button>
@@ -83,7 +83,7 @@ export function Step4Numbers() {
         )}
       </div>
 
-      <div style={{ background:"#eaecf8", borderLeft:"4px solid #4f46e5", borderRadius:"0 8px 8px 0", padding:"10px 14px", marginBottom:20, fontSize:12, color:"#3730a3", lineHeight:1.6 }}>
+      <div style={{ background:"#eaecf8", borderLeft:"4px solid #7C6FE0", borderRadius:"0 8px 8px 0", padding:"10px 14px", marginBottom:20, fontSize:12, color:"#3730a3", lineHeight:1.6 }}>
         ✨ AI will generate realistic {org.staffsLabel.toLowerCase()}, {org.sectionsLabel.toLowerCase()}, {org.subjectsLabel.toLowerCase()} and {slots.breakLabel.toLowerCase()} based on <strong>{country.name}</strong> norms. Everything is editable in the next step.
       </div>
 

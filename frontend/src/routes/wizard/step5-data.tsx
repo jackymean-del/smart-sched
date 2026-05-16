@@ -11,7 +11,7 @@ const delBtn: React.CSSProperties = { width:24, height:24, borderRadius:4, borde
 const addRow: React.CSSProperties = { width:"100%", padding:"8px 12px", border:"none", borderTop:"1.5px dashed #e8e5de", background:"transparent", cursor:"pointer", fontSize:12, color:"#a8a59e", textAlign:"left" as const }
 const navBtn = (p: boolean): React.CSSProperties => ({ padding:"9px 18px", borderRadius:8, border: p?"none":"1.5px solid #e8e5de", background: p?"#059669":"#fff", color: p?"#fff":"#1c1b18", fontSize:13, fontWeight:600, cursor:"pointer" })
 
-const SHIFT_COLORS = ['#4f46e5','#059669','#d97706','#dc2626','#7c3aed','#0891b2']
+const SHIFT_COLORS = ['#7C6FE0','#059669','#d97706','#dc2626','#9B8EF5','#7C6FE0']
 
 export function Step5Data() {
   const { config, sections, staff, subjects, breaks,
@@ -45,7 +45,7 @@ export function Step5Data() {
       <p style={{ color:"#6a6860", fontSize:13, marginBottom:14, lineHeight:1.65 }}>
         AI generated {sections.length} {org.sectionsLabel.toLowerCase()}, {staff.length} {org.staffsLabel.toLowerCase()}, {subjects.length} {org.subjectsLabel.toLowerCase()}. Edit anything inline.
       </p>
-      <div style={{ background:"#eaecf8", borderLeft:"4px solid #4f46e5", borderRadius:"0 8px 8px 0", padding:"8px 14px", marginBottom:18, fontSize:12, color:"#3730a3" }}>
+      <div style={{ background:"#eaecf8", borderLeft:"4px solid #7C6FE0", borderRadius:"0 8px 8px 0", padding:"8px 14px", marginBottom:18, fontSize:12, color:"#3730a3" }}>
         🪄 Click any field to edit. New rows auto-fill room numbers. Add or delete as needed.
       </div>
 
@@ -53,7 +53,7 @@ export function Step5Data() {
       <div style={{ display:"flex", borderBottom:"2px solid #e8e5de", marginBottom:16 }}>
         {TABS.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
-            style={{ padding:"8px 16px", border:"none", borderBottom: tab===t.key?"2px solid #4f46e5":"2px solid transparent", marginBottom:-2, background:"transparent", fontSize:12, fontWeight: tab===t.key?700:500, color: tab===t.key?"#4f46e5":"#6a6860", cursor:"pointer", whiteSpace:"nowrap" as const }}>
+            style={{ padding:"8px 16px", border:"none", borderBottom: tab===t.key?"2px solid #7C6FE0":"2px solid transparent", marginBottom:-2, background:"transparent", fontSize:12, fontWeight: tab===t.key?700:500, color: tab===t.key?"#7C6FE0":"#6a6860", cursor:"pointer", whiteSpace:"nowrap" as const }}>
             {t.label}
           </button>
         ))}
@@ -143,7 +143,7 @@ export function Step5Data() {
                   setConfig({ defaultSessionDuration: dur })
                   setSubjects(subjects.map(s => ({ ...s, sessionDuration: dur } as any)))
                 }}
-                style={{ width:54, padding:"4px 6px", border:"1.5px solid #4f46e5", borderRadius:6, fontSize:13, fontFamily:"monospace", textAlign:"center" as const, outline:"none" }} />
+                style={{ width:54, padding:"4px 6px", border:"1.5px solid #7C6FE0", borderRadius:6, fontSize:13, fontFamily:"monospace", textAlign:"center" as const, outline:"none" }} />
               <span style={{ color:"#6a6860" }}>min/period</span>
             </label>
             <span style={{ color:"#d1d5db" }}>|</span>
@@ -166,7 +166,7 @@ export function Step5Data() {
                     <th style={{...thS, width:64}}>Max/day<br/><span style={{fontWeight:400,fontSize:9,color:"#b0ada6"}}>global</span></th>
                     {/* One column per base class */}
                     {baseClasses.map(cls => (
-                      <th key={cls} style={{...thS, minWidth:155, background:"#f0f0ff", color:"#3730a3", borderLeft:"2px solid #c7d2fe"}}>
+                      <th key={cls} style={{...thS, minWidth:155, background:"#f0f0ff", color:"#3730a3", borderLeft:"2px solid #D8D2FF"}}>
                         <div style={{ fontSize:11, fontWeight:700 }}>{cls}</div>
                         <div style={{ fontSize:9, fontWeight:400, color:"#818cf8", marginTop:1 }}>Per/wk · Min · Max/day</div>
                       </th>
@@ -235,28 +235,28 @@ export function Step5Data() {
                           }
 
                           return (
-                            <td key={cls} style={{ ...tdS, borderLeft:"2px solid #e0e7ff", background: isOverride ? (i%2===0?"#f5f3ff":"#ede9fe") : (i%2===0?"#fff":"#fafaf9") }}>
+                            <td key={cls} style={{ ...tdS, borderLeft:"2px solid #EDE9FF", background: isOverride ? (i%2===0?"#f5f3ff":"#ede9fe") : (i%2===0?"#fff":"#fafaf9") }}>
                               <div style={{ display:"flex", alignItems:"center", gap:3 }}>
                                 {/* Per/week */}
                                 <input type="number" min={1} max={30}
-                                  style={{ width:36, padding:"2px 3px", border:`1px solid ${isOverride?"#a78bfa":"#e8e5de"}`, borderRadius:4, fontSize:11, fontFamily:"monospace", textAlign:"center" as const, outline:"none", background: isOverride?"#fdf4ff":"#fff" }}
+                                  style={{ width:36, padding:"2px 3px", border:`1px solid ${isOverride?"#9B8EF5":"#e8e5de"}`, borderRadius:4, fontSize:11, fontFamily:"monospace", textAlign:"center" as const, outline:"none", background: isOverride?"#fdf4ff":"#fff" }}
                                   value={pw}
                                   onChange={e => upsertCC({ periodsPerWeek: Math.max(1,+e.target.value) })} />
                                 <span style={{ color:"#c8c5bc", fontSize:10 }}>·</span>
                                 {/* Duration */}
                                 <input type="number" min={10} max={180}
-                                  style={{ width:38, padding:"2px 3px", border:`1px solid ${isOverride?"#a78bfa":"#e8e5de"}`, borderRadius:4, fontSize:11, fontFamily:"monospace", textAlign:"center" as const, outline:"none", background: isOverride?"#fdf4ff":"#fff" }}
+                                  style={{ width:38, padding:"2px 3px", border:`1px solid ${isOverride?"#9B8EF5":"#e8e5de"}`, borderRadius:4, fontSize:11, fontFamily:"monospace", textAlign:"center" as const, outline:"none", background: isOverride?"#fdf4ff":"#fff" }}
                                   value={mn}
                                   onChange={e => upsertCC({ sessionDuration: Math.max(10,+e.target.value) })} />
                                 <span style={{ color:"#c8c5bc", fontSize:10 }}>·</span>
                                 {/* Max/day */}
                                 <input type="number" min={1} max={6}
-                                  style={{ width:30, padding:"2px 3px", border:`1px solid ${isOverride?"#a78bfa":"#e8e5de"}`, borderRadius:4, fontSize:11, fontFamily:"monospace", textAlign:"center" as const, outline:"none", background: isOverride?"#fdf4ff":"#fff" }}
+                                  style={{ width:30, padding:"2px 3px", border:`1px solid ${isOverride?"#9B8EF5":"#e8e5de"}`, borderRadius:4, fontSize:11, fontFamily:"monospace", textAlign:"center" as const, outline:"none", background: isOverride?"#fdf4ff":"#fff" }}
                                   value={mx}
                                   onChange={e => upsertCC({ maxPeriodsPerDay: Math.max(1,+e.target.value) })} />
                               </div>
                               {isOverride && (
-                                <div style={{ fontSize:9, color:"#7c3aed", marginTop:2 }}>
+                                <div style={{ fontSize:9, color:"#9B8EF5", marginTop:2 }}>
                                   ✦ override · {Math.round(pw * mn / 60 * 10)/10}h/wk
                                 </div>
                               )}
@@ -273,12 +273,12 @@ export function Step5Data() {
             </div>
             <div style={{ padding:"7px 14px", background:"#f7f6f2", borderTop:"1px solid #e8e5de", fontSize:11, color:"#6a6860", display:"flex", alignItems:"center", gap:12 }}>
               <span>💡 <strong>Global columns</strong> = default for all classes. <strong>Class columns</strong> = override for that class only.</span>
-              <span style={{ color:"#7c3aed", fontWeight:600 }}>✦ purple = overridden</span>
+              <span style={{ color:"#9B8EF5", fontWeight:600 }}>✦ purple = overridden</span>
             </div>
             <button style={addRow} onClick={() => setSubjects([...subjects, {
               id: crypto.randomUUID(), name: `${org.subjectLabel} ${subjects.length + 1}`,
               periodsPerWeek: 5, sessionDuration: 40, maxPeriodsPerDay: 2,
-              color: "#6366f1", sections: [], classConfigs: []
+              color: "#7C6FE0", sections: [], classConfigs: []
             } as any])}>
               ＋ Add {org.subjectLabel}
             </button>

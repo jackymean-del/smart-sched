@@ -35,7 +35,7 @@ const lbl = (text: string) => (
   </div>
 )
 
-const SHIFT_COLORS = ['#4f46e5','#059669','#d97706','#dc2626','#7c3aed','#0891b2']
+const SHIFT_COLORS = ['#7C6FE0','#059669','#d97706','#dc2626','#9B8EF5','#7C6FE0']
 
 export function Step3Schedule() {
   const { config, setConfig, setStep } = useTimetableStore()
@@ -87,8 +87,8 @@ export function Step3Schedule() {
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, maxWidth:380 }}>
           {(['12h','24h'] as const).map(f => (
             <button key={f} onClick={() => setConfig({ timeFormat: f })}
-              style={{ padding:'16px', borderRadius:10, cursor:'pointer', textAlign:'center', border: fmt===f?'2px solid #4f46e5':'1.5px solid #e8e5de', background: fmt===f?'#eaecf8':'#fff', transition:'all 0.15s' }}>
-              <div style={{ fontFamily:"'DM Mono',monospace", fontSize:22, fontWeight:700, color: fmt===f?'#4f46e5':'#1c1b18' }}>
+              style={{ padding:'16px', borderRadius:10, cursor:'pointer', textAlign:'center', border: fmt===f?'2px solid #7C6FE0':'1.5px solid #e8e5de', background: fmt===f?'#eaecf8':'#fff', transition:'all 0.15s' }}>
+              <div style={{ fontFamily:"'DM Mono',monospace", fontSize:22, fontWeight:700, color: fmt===f?'#7C6FE0':'#1c1b18' }}>
                 {f === '12h' ? '10:00 AM' : '14:00'}
               </div>
               <div style={{ fontSize:11, color:'#6a6860', marginTop:4 }}>
@@ -107,7 +107,7 @@ export function Step3Schedule() {
             const on = config.workDays.includes(day)
             return (
               <button key={day} onClick={() => toggleDay(day)}
-                style={{ width:40, height:40, borderRadius:'50%', cursor:'pointer', transition:'all 0.15s', border: on?'none':'1.5px solid #d4d1c8', background: on?'#4f46e5':'#fff', color: on?'#fff':'#6a6860', fontSize:12, fontWeight:700 }}>
+                style={{ width:40, height:40, borderRadius:'50%', cursor:'pointer', transition:'all 0.15s', border: on?'none':'1.5px solid #d4d1c8', background: on?'#7C6FE0':'#fff', color: on?'#fff':'#6a6860', fontSize:12, fontWeight:700 }}>
                 {DAY_SHORT[day]}
               </button>
             )
@@ -121,8 +121,8 @@ export function Step3Schedule() {
         {lbl("Class Timing Mode")}
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, maxWidth:500 }}>
           <button onClick={() => { setMultiShift(false); setConfig({ shifts: [] }) }}
-            style={{ padding:'14px', borderRadius:10, border: !multiShift?'2px solid #4f46e5':'1.5px solid #e8e5de', background: !multiShift?'#eaecf8':'#fff', cursor:'pointer', textAlign:'left' as const }}>
-            <div style={{ fontSize:13, fontWeight:600, color: !multiShift?'#4f46e5':'#1c1b18', marginBottom:4 }}>🕐 Single Timing</div>
+            style={{ padding:'14px', borderRadius:10, border: !multiShift?'2px solid #7C6FE0':'1.5px solid #e8e5de', background: !multiShift?'#eaecf8':'#fff', cursor:'pointer', textAlign:'left' as const }}>
+            <div style={{ fontSize:13, fontWeight:600, color: !multiShift?'#7C6FE0':'#1c1b18', marginBottom:4 }}>🕐 Single Timing</div>
             <div style={{ fontSize:11, color:'#6a6860' }}>All classes have the same start & end time</div>
           </button>
           <button onClick={() => { setMultiShift(true); if ((config.shifts ?? []).length === 0) addShift() }}

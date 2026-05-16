@@ -153,7 +153,7 @@ export function StepHours() {
     <div>
       {/* Header */}
       <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:6 }}>
-        <div style={{ width:40, height:40, borderRadius:12, background:"linear-gradient(135deg,#7c3aed,#6d28d9)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:20 }}>📊</div>
+        <div style={{ width:40, height:40, borderRadius:12, background:"linear-gradient(135deg,#9B8EF5,#6d28d9)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:20 }}>📊</div>
         <div>
           <h1 style={{ fontFamily:"'DM Serif Display',Georgia,serif", fontSize:28, margin:0 }}>Subject Hours Matrix</h1>
           <p style={{ color:"#6a6860", fontSize:12, margin:0 }}>Step 4 of 6 — Periods/Week per Subject per Class</p>
@@ -165,14 +165,14 @@ export function StepHours() {
 
       <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16, flexWrap:"wrap" }}>
         <button onClick={autoCbse}
-          style={{ padding:"7px 14px", borderRadius:8, border:"1.5px solid #7c3aed", background:"#f5f3ff", fontSize:12, fontWeight:600, cursor:"pointer", color:"#5b21b6" }}>
+          style={{ padding:"7px 14px", borderRadius:8, border:"1.5px solid #9B8EF5", background:"#f5f3ff", fontSize:12, fontWeight:600, cursor:"pointer", color:"#5b21b6" }}>
           🏫 Auto-fill CBSE norms
         </button>
         <div style={{ fontSize:11, color:"#6a6860" }}>
           📅 {workDaysCount} days/week · {periodsPerDay} periods/day · {totalSlotsPerClass} slots/class/week
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:6, marginLeft:"auto" }}>
-          <span style={{ display:"inline-block", width:12, height:12, borderRadius:2, background:"#7c3aed20", border:"1.5px solid #7c3aed" }} />
+          <span style={{ display:"inline-block", width:12, height:12, borderRadius:2, background:"#9B8EF520", border:"1.5px solid #9B8EF5" }} />
           <span style={{ fontSize:10, color:"#6a6860" }}>Class-specific override</span>
         </div>
       </div>
@@ -210,7 +210,7 @@ export function StepHours() {
                     <td style={{...tdLeft, background: si%2===0?"#fff":"#fafaf9"}}>
                       <div style={{ fontSize:12, fontWeight:600, color:"#1c1b18" }}>{s.name}</div>
                       {s.isOptional && (
-                        <span style={{ fontSize:9, padding:"1px 5px", borderRadius:10, background:"#f5f3ff", color:"#7c3aed", fontWeight:600 }}>Optional</span>
+                        <span style={{ fontSize:9, padding:"1px 5px", borderRadius:10, background:"#f5f3ff", color:"#9B8EF5", fontWeight:600 }}>Optional</span>
                       )}
                     </td>
 
@@ -222,7 +222,7 @@ export function StepHours() {
                           const v = Math.max(0, +e.target.value)
                           setSubjects(subjects.map(x => x.id === s.id ? { ...x, periodsPerWeek: v } : x))
                         }}
-                        onFocus={e => (e.target as HTMLInputElement).style.borderColor="#7c3aed"}
+                        onFocus={e => (e.target as HTMLInputElement).style.borderColor="#9B8EF5"}
                         onBlur={e => (e.target as HTMLInputElement).style.borderColor="#e8e5de"} />
                     </td>
 
@@ -235,7 +235,7 @@ export function StepHours() {
                           const v = Math.max(20, +e.target.value)
                           setSubjects(subjects.map(x => x.id === s.id ? { ...x, sessionDuration: v } : x))
                         }}
-                        onFocus={e => (e.target as HTMLInputElement).style.borderColor="#7c3aed"}
+                        onFocus={e => (e.target as HTMLInputElement).style.borderColor="#9B8EF5"}
                         onBlur={e => (e.target as HTMLInputElement).style.borderColor="#e8e5de"} />
                     </td>
 
@@ -248,7 +248,7 @@ export function StepHours() {
                           const v = Math.max(1, +e.target.value)
                           setSubjects(subjects.map(x => x.id === s.id ? { ...x, maxPeriodsPerDay: v } : x))
                         }}
-                        onFocus={e => (e.target as HTMLInputElement).style.borderColor="#7c3aed"}
+                        onFocus={e => (e.target as HTMLInputElement).style.borderColor="#9B8EF5"}
                         onBlur={e => (e.target as HTMLInputElement).style.borderColor="#e8e5de"} />
                     </td>
 
@@ -265,21 +265,21 @@ export function StepHours() {
                       return (
                         <td key={c.id} style={{
                           ...tdS, padding:"4px 6px",
-                          background: ov ? "#7c3aed10" : "transparent",
-                          border: ov ? "1px solid #7c3aed40" : undefined,
+                          background: ov ? "#9B8EF510" : "transparent",
+                          border: ov ? "1px solid #9B8EF540" : undefined,
                         }}>
                           <div style={{ display:"flex", gap:3, justifyContent:"center", alignItems:"center" }}>
                             <input type="number" min={0} max={14} value={cPw}
                               title="Periods/week"
                               style={{ ...numInp, width:28, background: ov?"#f5f3ff":"#fff", borderColor: ov?"#c4b5fd":"#e8e5de" }}
                               onChange={e => setOverride(s.id, c.id, "periodsPerWeek", Math.max(0, +e.target.value))}
-                              onFocus={e => (e.target as HTMLInputElement).style.borderColor="#7c3aed"}
+                              onFocus={e => (e.target as HTMLInputElement).style.borderColor="#9B8EF5"}
                               onBlur={e => (e.target as HTMLInputElement).style.borderColor=ov?"#c4b5fd":"#e8e5de"} />
                           </div>
                           {ov && (
                             <div style={{ display:"flex", justifyContent:"center", marginTop:2 }}>
                               <button onClick={() => clearOverride(s.id, c.id)}
-                                style={{ fontSize:8, color:"#7c3aed", background:"none", border:"none", cursor:"pointer", padding:0, textDecoration:"underline" }}>
+                                style={{ fontSize:8, color:"#9B8EF5", background:"none", border:"none", cursor:"pointer", padding:0, textDecoration:"underline" }}>
                                 reset
                               </button>
                             </div>
@@ -318,7 +318,7 @@ export function StepHours() {
         </div>
       </div>
 
-      <div style={{ marginTop:12, padding:"9px 14px", background:"#faf5ff", border:"1px solid #e9d5ff", borderRadius:8, fontSize:11, color:"#6d28d9", lineHeight:1.7 }}>
+      <div style={{ marginTop:12, padding:"9px 14px", background:"#EDE9FF", border:"1px solid #e9d5ff", borderRadius:8, fontSize:11, color:"#6d28d9", lineHeight:1.7 }}>
         💡 <strong>Tip:</strong> Click a class column cell to override periods for that specific class.
         Grey = using global value. Purple = class-specific override. Red total = overloaded (exceeds {totalSlotsPerClass} weekly slots).
       </div>
@@ -330,7 +330,7 @@ export function StepHours() {
           ← Back
         </button>
         <button onClick={handleContinue}
-          style={{ padding:"11px 28px", borderRadius:9, border:"none", fontSize:14, fontWeight:600, cursor:"pointer", background:"#7c3aed", color:"#fff" }}>
+          style={{ padding:"11px 28px", borderRadius:9, border:"none", fontSize:14, fontWeight:600, cursor:"pointer", background:"#9B8EF5", color:"#fff" }}>
           Continue → Review & Generate
         </button>
       </div>

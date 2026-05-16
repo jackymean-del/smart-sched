@@ -54,8 +54,8 @@ export function WizardSidebar({ currentStep, onStepClick }: Props) {
                 width: 24, height: 24, borderRadius: '50%', flexShrink: 0,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 10, fontWeight: 700,
-                background: done ? '#059669' : active ? '#4f46e5' : 'transparent',
-                border: done ? '1.5px solid #059669' : active ? '1.5px solid #4f46e5' : '1.5px solid #d4d1c8',
+                background: done ? '#059669' : active ? '#7C6FE0' : 'transparent',
+                border: done ? '1.5px solid #059669' : active ? '1.5px solid #7C6FE0' : '1.5px solid #d4d1c8',
                 color: done || active ? '#fff' : '#a8a59e',
               }}>
                 {done ? '✓' : step.n}

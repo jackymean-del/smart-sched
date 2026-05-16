@@ -91,7 +91,7 @@ export function Step2Setup() {
           ["assign",   "✅ Assign Subjects to Classes"],
         ] as [Tab,string][]).map(([t,l]) => (
           <button key={t} onClick={() => setTab(t)}
-            style={{ padding:"9px 18px", border:"none", borderBottom: tab===t?"2px solid #4f46e5":"2px solid transparent", marginBottom:-2, background:"transparent", fontSize:12, fontWeight: tab===t?700:500, color: tab===t?"#4f46e5":"#6a6860", cursor:"pointer", whiteSpace:"nowrap" as const }}>
+            style={{ padding:"9px 18px", border:"none", borderBottom: tab===t?"2px solid #7C6FE0":"2px solid transparent", marginBottom:-2, background:"transparent", fontSize:12, fontWeight: tab===t?700:500, color: tab===t?"#7C6FE0":"#6a6860", cursor:"pointer", whiteSpace:"nowrap" as const }}>
             {l}
           </button>
         ))}
@@ -123,7 +123,7 @@ export function Step2Setup() {
                     <td style={tdS}>
                       <input style={inp} value={s.name}
                         onChange={e=>{const n=[...sections];n[i]={...n[i],name:e.target.value};setSections(n)}}
-                        onFocus={e=>(e.target as HTMLInputElement).style.borderBottomColor="#4f46e5"}
+                        onFocus={e=>(e.target as HTMLInputElement).style.borderBottomColor="#7C6FE0"}
                         onBlur={e=>(e.target as HTMLInputElement).style.borderBottomColor="transparent"} />
                     </td>
                     <td style={tdS}>
@@ -178,7 +178,7 @@ export function Step2Setup() {
                     <td style={tdS}>
                       <input style={inp} value={s.name}
                         onChange={e=>{const n=[...subjects] as any[];n[i]={...n[i],name:e.target.value};setSubjects(n)}}
-                        onFocus={e=>(e.target as HTMLInputElement).style.borderBottomColor="#4f46e5"}
+                        onFocus={e=>(e.target as HTMLInputElement).style.borderBottomColor="#7C6FE0"}
                         onBlur={e=>(e.target as HTMLInputElement).style.borderBottomColor="transparent"} />
                     </td>
                     <td style={tdS}>

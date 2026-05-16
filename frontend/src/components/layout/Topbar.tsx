@@ -23,7 +23,7 @@ export function Topbar({ step, totalSteps, stepLabel }: TopbarProps) {
     }}>
       {/* Logo */}
       <a href={isAuthenticated ? '/dashboard' : '/'} style={{ display:'flex', alignItems:'center', gap:8, textDecoration:'none', flexShrink:0 }}>
-        <div style={{ width:30, height:30, borderRadius:8, background:'linear-gradient(135deg,#34d399,#059669)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+        <div style={{ width:30, height:30, borderRadius:8, background:'linear-gradient(135deg,#9B8EF5,#059669)', display:'flex', alignItems:'center', justifyContent:'center' }}>
           <CalendarDays size={15} color="#fff" />
         </div>
         <span style={{ fontFamily:"'DM Serif Display',Georgia,serif", fontSize:16 }}>
@@ -39,7 +39,7 @@ export function Topbar({ step, totalSteps, stepLabel }: TopbarProps) {
               {Array.from({ length: totalSteps }).map((_, i) => (
                 <div key={i} style={{
                   width: i + 1 === step ? 16 : 6, height:6, borderRadius:3,
-                  background: i + 1 < step ? '#059669' : i + 1 === step ? '#4f46e5' : '#d1d5db',
+                  background: i + 1 < step ? '#059669' : i + 1 === step ? '#7C6FE0' : '#d1d5db',
                   transition:'all 0.2s',
                 }} />
               ))}
@@ -63,7 +63,7 @@ export function Topbar({ step, totalSteps, stepLabel }: TopbarProps) {
               </a>
             )}
             <div style={{ display:'flex', alignItems:'center', gap:8, padding:'4px 10px', background:'#f9fafb', borderRadius:8, border:'1px solid #e5e7eb' }}>
-              <div style={{ width:24, height:24, borderRadius:'50%', background:'#4f46e5', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontSize:10, fontWeight:700, flexShrink:0 }}>
+              <div style={{ width:24, height:24, borderRadius:'50%', background:'#7C6FE0', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontSize:10, fontWeight:700, flexShrink:0 }}>
                 {user.name[0].toUpperCase()}
               </div>
               <div style={{ lineHeight:1.2 }}>

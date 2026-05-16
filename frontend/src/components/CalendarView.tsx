@@ -310,7 +310,7 @@ export function CalendarView({
                     background: !isCurrentMonth ? "#f8fafc" : todayFlag ? "#eff6ff" : absentSlot ? "#fffbeb" : "#fff",
                     cursor: "pointer",
                     opacity: isCurrentMonth ? 1 : 0.4,
-                    outline: isSelected ? "2px solid #4f46e5" : "none",
+                    outline: isSelected ? "2px solid #7C6FE0" : "none",
                     outlineOffset: -2,
                     transition: "background 0.12s",
                   }}
@@ -320,7 +320,7 @@ export function CalendarView({
                       width: 22, height: 22, borderRadius: "50%",
                       display: "inline-flex", alignItems: "center", justifyContent: "center",
                       fontSize: 11, fontWeight: 700,
-                      background: todayFlag ? "#4f46e5" : "transparent",
+                      background: todayFlag ? "#7C6FE0" : "transparent",
                       color: todayFlag ? "#fff" : !isCurrentMonth ? "#94a3b8" : "#1e293b",
                     }}>{day.getDate()}</span>
                     {absentSlot && <span style={{ fontSize: 8, color: "#d97706", fontWeight: 600 }}>⚠ absent</span>}
@@ -667,7 +667,7 @@ export function CalendarView({
         <div style={{ display: "flex", border: "1px solid #e2e8f0", borderRadius: 7, overflow: "hidden" }}>
           {(["month","week","day"] as CalMode[]).map(m => (
             <button key={m} onClick={() => setCalMode(m)}
-              style={{ padding: "5px 14px", border: "none", background: calMode === m ? "#4f46e5" : "#fff", color: calMode === m ? "#fff" : "#64748b", fontSize: 11, fontWeight: 500, cursor: "pointer" }}>
+              style={{ padding: "5px 14px", border: "none", background: calMode === m ? "#7C6FE0" : "#fff", color: calMode === m ? "#fff" : "#64748b", fontSize: 11, fontWeight: 500, cursor: "pointer" }}>
               {modeLabel[m]}
             </button>
           ))}
@@ -698,11 +698,11 @@ export function CalendarView({
         {calMode !== "month" && (
           <div style={{ display: "flex", border: "1px solid #e2e8f0", borderRadius: 7, overflow: "hidden" }}>
             <button onClick={() => setTransposed(false)}
-              style={{ padding: "4px 12px", border: "none", background: !transposed ? "#4f46e5" : "#fff", color: !transposed ? "#fff" : "#64748b", fontSize: 11, fontWeight: 500, cursor: "pointer" }}>
+              style={{ padding: "4px 12px", border: "none", background: !transposed ? "#7C6FE0" : "#fff", color: !transposed ? "#fff" : "#64748b", fontSize: 11, fontWeight: 500, cursor: "pointer" }}>
               ☰ Normal
             </button>
             <button onClick={() => setTransposed(true)}
-              style={{ padding: "4px 12px", border: "none", background: transposed ? "#4f46e5" : "#fff", color: transposed ? "#fff" : "#64748b", fontSize: 11, fontWeight: 500, cursor: "pointer" }}>
+              style={{ padding: "4px 12px", border: "none", background: transposed ? "#7C6FE0" : "#fff", color: transposed ? "#fff" : "#64748b", fontSize: 11, fontWeight: 500, cursor: "pointer" }}>
               ⊞ Transposed
             </button>
           </div>

@@ -85,7 +85,7 @@ export function Step2Country() {
         {editingStd && !ro
           ? <input type="number" defaultValue={val} key={val}
               onBlur={e => standard && setStandard(recalculate(standard, k, +e.target.value))}
-              style={{ padding:"4px 8px", border:"1.5px solid #4f46e5", borderRadius:6, fontSize:12, fontFamily:"'DM Mono',monospace", textAlign:"right", outline:"none", width:"100%", background:"#fff" }} />
+              style={{ padding:"4px 8px", border:"1.5px solid #7C6FE0", borderRadius:6, fontSize:12, fontFamily:"'DM Mono',monospace", textAlign:"right", outline:"none", width:"100%", background:"#fff" }} />
           : <div style={{ display:"flex", alignItems:"center", justifyContent:"flex-end", gap:4 }}>
               {ro && editingStd && <span style={{ fontSize:9, background:"#f0fdf4", color:"#059669", padding:"1px 5px", borderRadius:4, fontWeight:600 }}>AUTO</span>}
               <span style={{ fontSize:13, fontFamily:"'DM Mono',monospace", fontWeight:700, color: ro&&editingStd?"#059669":"#1c1b18" }}>{val}</span>
@@ -110,8 +110,8 @@ export function Step2Country() {
           return (
             <button key={c.code}
               onClick={() => { setConfig({ countryCode: c.code }); setSearch("") }}
-              style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 14px", borderRadius:10, textAlign:"left", border: sel?"2px solid #4f46e5":"1.5px solid #e8e5de", background: sel?"#eaecf8":"#fff", cursor:"pointer", transition:"all 0.15s" }}
-              onMouseEnter={e => { if(!sel){ (e.currentTarget as HTMLElement).style.borderColor="#34d399"; (e.currentTarget as HTMLElement).style.background="#f0fdf4" }}}
+              style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 14px", borderRadius:10, textAlign:"left", border: sel?"2px solid #7C6FE0":"1.5px solid #e8e5de", background: sel?"#eaecf8":"#fff", cursor:"pointer", transition:"all 0.15s" }}
+              onMouseEnter={e => { if(!sel){ (e.currentTarget as HTMLElement).style.borderColor="#9B8EF5"; (e.currentTarget as HTMLElement).style.background="#f0fdf4" }}}
               onMouseLeave={e => { if(!sel){ (e.currentTarget as HTMLElement).style.borderColor="#e8e5de"; (e.currentTarget as HTMLElement).style.background="#fff" }}}
             >
               <span style={{ fontSize:24 }}>{c.flag}</span>
@@ -128,10 +128,10 @@ export function Step2Country() {
       <div ref={searchRef} style={{ position:"relative", marginBottom:20 }}>
         <input value={search} onChange={e => { setSearch(e.target.value); setShowDropdown(true) }} onFocus={() => setShowDropdown(true)}
           placeholder="🔍 Search all other countries of the world..."
-          style={{ width:"100%", padding:"10px 14px", borderRadius:10, border: showDropdown?"1.5px solid #4f46e5":"1.5px solid #e8e5de", fontSize:13, outline:"none", boxSizing:"border-box", background:"#fff" }}
+          style={{ width:"100%", padding:"10px 14px", borderRadius:10, border: showDropdown?"1.5px solid #7C6FE0":"1.5px solid #e8e5de", fontSize:13, outline:"none", boxSizing:"border-box", background:"#fff" }}
         />
         {showDropdown && (
-          <div style={{ position:"absolute", top:"100%", left:0, right:0, zIndex:200, background:"#fff", border:"1.5px solid #4f46e5", borderRadius:10, boxShadow:"0 8px 24px rgba(0,0,0,0.12)", marginTop:4, maxHeight:260, overflowY:"auto" }}>
+          <div style={{ position:"absolute", top:"100%", left:0, right:0, zIndex:200, background:"#fff", border:"1.5px solid #7C6FE0", borderRadius:10, boxShadow:"0 8px 24px rgba(0,0,0,0.12)", marginTop:4, maxHeight:260, overflowY:"auto" }}>
             {filteredCountries.length === 0
               ? <div style={{ padding:"14px", fontSize:12, color:"#a8a59e", textAlign:"center" }}>No countries found for "{search}"</div>
               : filteredCountries.map(c => {
@@ -148,7 +148,7 @@ export function Step2Country() {
                         <div style={{ fontSize:13, fontWeight: sel?700:500, color: sel?"#3730a3":"#1c1b18" }}>{c.name}</div>
                         <div style={{ fontSize:10, color:"#a8a59e" }}>{c.code}</div>
                       </div>
-                      {sel && <span style={{ color:"#4f46e5", fontSize:14, fontWeight:700 }}>✓</span>}
+                      {sel && <span style={{ color:"#7C6FE0", fontSize:14, fontWeight:700 }}>✓</span>}
                     </button>
                   )
                 })
@@ -176,7 +176,7 @@ export function Step2Country() {
             </div>
             <div style={{ display:"flex", gap:6, flexWrap:"wrap", flexShrink:0 }}>
               {!editingStd
-                ? <button onClick={() => setEditingStd(true)} style={{ padding:"5px 12px", borderRadius:6, border:"1.5px solid #d4d1c8", background:"#fff", fontSize:11, fontWeight:600, cursor:"pointer", color:"#4f46e5" }}>✏️ Customize</button>
+                ? <button onClick={() => setEditingStd(true)} style={{ padding:"5px 12px", borderRadius:6, border:"1.5px solid #d4d1c8", background:"#fff", fontSize:11, fontWeight:600, cursor:"pointer", color:"#7C6FE0" }}>✏️ Customize</button>
                 : <>
                     <button onClick={saveStandard} style={{ padding:"5px 12px", borderRadius:6, border:"none", background:"#059669", color:"#fff", fontSize:11, fontWeight:600, cursor:"pointer" }}>💾 Save</button>
                     <button onClick={() => setEditingStd(false)} style={{ padding:"5px 12px", borderRadius:6, border:"1.5px solid #e8e5de", background:"#fff", fontSize:11, cursor:"pointer" }}>Cancel</button>
@@ -213,13 +213,13 @@ export function Step2Country() {
               <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
                 {standard.links.map((link, i) => (
                   <a key={i} href={link.url} target="_blank" rel="noopener noreferrer"
-                    style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 12px", borderRadius:8, background:"#f5f3ff", border:"1px solid #ddd6fe", textDecoration:"none", color:"#4f46e5", fontSize:12, fontWeight:500, transition:"all 0.15s" }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background="#ede9fe"; (e.currentTarget as HTMLElement).style.borderColor="#a78bfa" }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background="#f5f3ff"; (e.currentTarget as HTMLElement).style.borderColor="#ddd6fe" }}
+                    style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 12px", borderRadius:8, background:"#f5f3ff", border:"1px solid #D8D2FF", textDecoration:"none", color:"#7C6FE0", fontSize:12, fontWeight:500, transition:"all 0.15s" }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background="#ede9fe"; (e.currentTarget as HTMLElement).style.borderColor="#9B8EF5" }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background="#f5f3ff"; (e.currentTarget as HTMLElement).style.borderColor="#D8D2FF" }}
                   >
                     <span style={{ fontSize:16, flexShrink:0 }}>🔗</span>
                     <span style={{ flex:1, lineHeight:1.4 }}>{link.label}</span>
-                    <span style={{ fontSize:12, color:"#7c3aed", fontWeight:700, flexShrink:0 }}>↗</span>
+                    <span style={{ fontSize:12, color:"#9B8EF5", fontWeight:700, flexShrink:0 }}>↗</span>
                   </a>
                 ))}
               </div>
@@ -227,7 +227,7 @@ export function Step2Country() {
           )}
 
           {editingStd && (
-            <div style={{ padding:"8px 14px", background:"#eaecf8", fontSize:11, color:"#3730a3", borderTop:"1px solid #c7d2fe" }}>
+            <div style={{ padding:"8px 14px", background:"#eaecf8", fontSize:11, color:"#3730a3", borderTop:"1px solid #D8D2FF" }}>
               📌 Saved per browser for <strong>{displayName} · {org.name}</strong>. Auto-loads next time.
             </div>
           )}

@@ -7,7 +7,7 @@ import type { ClassOptionalConfig, OptionalLine, OptionalCombination } from "@/t
 const S = {
   card: (active: boolean): React.CSSProperties => ({
     padding:16, borderRadius:10, cursor:"pointer", textAlign:"left" as const,
-    border: active?"2px solid #4f46e5":"1.5px solid #e8e5de",
+    border: active?"2px solid #7C6FE0":"1.5px solid #e8e5de",
     background: active?"#eaecf8":"#fff",
   }),
   badge: (color: string): React.CSSProperties => ({
@@ -15,7 +15,7 @@ const S = {
     background: color+"22", color, border:`1px solid ${color}44`,
   }),
   inp: { padding:"6px 10px", border:"1.5px solid #e8e5de", borderRadius:7, fontSize:12, outline:"none", width:"100%" } as React.CSSProperties,
-  tag: (color = "#4f46e5"): React.CSSProperties => ({
+  tag: (color = "#7C6FE0"): React.CSSProperties => ({
     display:"inline-flex", alignItems:"center", gap:4, padding:"3px 8px",
     borderRadius:20, fontSize:11, fontWeight:600,
     background: color+"15", color, border:`1px solid ${color}33`,
@@ -114,7 +114,7 @@ export function Step3bOptionals() {
     return validateStrengths(c, combos).valid
   })
 
-  const LINE_COLORS = ["#4f46e5", "#059669", "#d97706", "#dc2626", "#7c3aed"]
+  const LINE_COLORS = ["#7C6FE0", "#059669", "#d97706", "#dc2626", "#9B8EF5"]
 
   return (
     <div>
@@ -139,7 +139,7 @@ export function Step3bOptionals() {
               const isSelected = s.name === selectedSection
               return (
                 <button key={s.name} onClick={() => setSelectedSection(s.name)}
-                  style={{ padding:"8px 12px", borderRadius:8, border:`1.5px solid ${isSelected?"#4f46e5":"#e8e5de"}`, background: isSelected?"#eaecf8":"#fff", cursor:"pointer", textAlign:"left" as const, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                  style={{ padding:"8px 12px", borderRadius:8, border:`1.5px solid ${isSelected?"#7C6FE0":"#e8e5de"}`, background: isSelected?"#eaecf8":"#fff", cursor:"pointer", textAlign:"left" as const, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
                   <span style={{ fontSize:12, fontWeight: isSelected?600:400, color: isSelected?"#3730a3":"#1c1b18" }}>{s.name}</span>
                   <span style={S.badge(scfg.hasOptionals ? "#059669" : "#a8a59e")}>
                     {scfg.hasOptionals ? "Optional" : "Normal"}
@@ -155,7 +155,7 @@ export function Step3bOptionals() {
             <div style={{ color:"#059669" }}>✓ {optionalSections.length} with optionals</div>
             <div style={{ color:"#64748b" }}>○ {normalSections.length} normal</div>
             {allPoolsValid && optionalSections.length > 0 && (
-              <div style={{ color:"#4f46e5", marginTop:4 }}>🏊 Pools ready</div>
+              <div style={{ color:"#7C6FE0", marginTop:4 }}>🏊 Pools ready</div>
             )}
           </div>
         </div>
@@ -201,7 +201,7 @@ export function Step3bOptionals() {
                     <div style={{ fontSize:11, color:"#6a6860", marginTop:2 }}>Subjects in the same line run simultaneously — students pick one from each line.</div>
                   </div>
                   <button onClick={addLine}
-                    style={{ padding:"6px 14px", borderRadius:7, border:"none", background:"#4f46e5", color:"#fff", fontSize:12, fontWeight:600, cursor:"pointer" }}>
+                    style={{ padding:"6px 14px", borderRadius:7, border:"none", background:"#7C6FE0", color:"#fff", fontSize:12, fontWeight:600, cursor:"pointer" }}>
                     + Add Line
                   </button>
                 </div>
@@ -327,15 +327,15 @@ export function Step3bOptionals() {
 
               {/* Step 7: Subject pools preview */}
               {validation?.valid && (
-                <div style={{ background:"#eaecf8", border:"1.5px solid #c7d2fe", borderRadius:10, padding:"12px 14px" }}>
+                <div style={{ background:"#eaecf8", border:"1.5px solid #D8D2FF", borderRadius:10, padding:"12px 14px" }}>
                   <div style={{ fontSize:12, fontWeight:700, color:"#3730a3", marginBottom:8 }}>
                     📊 Subject Pool Preview (across all optional sections)
                   </div>
                   <div style={{ display:"flex", flexWrap:"wrap" as const, gap:8 }}>
                     {store.subjectPools.map(pool => (
-                      <div key={pool.subjectName} style={{ padding:"6px 12px", borderRadius:8, background:"#fff", border:"1px solid #c7d2fe", fontSize:11 }}>
+                      <div key={pool.subjectName} style={{ padding:"6px 12px", borderRadius:8, background:"#fff", border:"1px solid #D8D2FF", fontSize:11 }}>
                         <div style={{ fontWeight:700, color:"#3730a3" }}>{pool.subjectName}</div>
-                        <div style={{ color:"#4f46e5", fontFamily:"monospace", marginTop:2 }}>{pool.totalStudents} students</div>
+                        <div style={{ color:"#7C6FE0", fontFamily:"monospace", marginTop:2 }}>{pool.totalStudents} students</div>
                         <div style={{ color:"#a8a59e", fontSize:9, marginTop:1 }}>{pool.sections.join(", ")}</div>
                       </div>
                     ))}

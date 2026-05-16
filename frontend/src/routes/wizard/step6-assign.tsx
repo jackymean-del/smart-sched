@@ -122,7 +122,7 @@ export function Step6Assign() {
       <div style={{ display:"flex", borderBottom:"2px solid #e8e5de", marginBottom:16 }}>
         {([["matrix",`1️⃣ ${org.subjectLabel} → Class Matrix`],["staff",`2️⃣ ${org.staffLabel} Assignments`]] as [Tab,string][]).map(([t,l]) => (
           <button key={t} onClick={() => setTab(t)}
-            style={{ padding:"9px 18px", border:"none", borderBottom: tab===t?"2px solid #4f46e5":"2px solid transparent", marginBottom:-2, background:"transparent", fontSize:12, fontWeight: tab===t?700:500, color: tab===t?"#4f46e5":"#6a6860", cursor:"pointer", whiteSpace:"nowrap" as const }}>
+            style={{ padding:"9px 18px", border:"none", borderBottom: tab===t?"2px solid #7C6FE0":"2px solid transparent", marginBottom:-2, background:"transparent", fontSize:12, fontWeight: tab===t?700:500, color: tab===t?"#7C6FE0":"#6a6860", cursor:"pointer", whiteSpace:"nowrap" as const }}>
             {l}
           </button>
         ))}
@@ -186,7 +186,7 @@ export function Step6Assign() {
           </div>
           <div style={{ display:"flex", justifyContent:"flex-end", marginTop:14 }}>
             <button onClick={() => setTab("staff")}
-              style={{ padding:"9px 20px", borderRadius:8, border:"none", background:"#4f46e5", color:"#fff", fontSize:13, fontWeight:600, cursor:"pointer" }}>
+              style={{ padding:"9px 20px", borderRadius:8, border:"none", background:"#7C6FE0", color:"#fff", fontSize:13, fontWeight:600, cursor:"pointer" }}>
               Continue to {org.staffLabel} Assignments →
             </button>
           </div>
@@ -201,17 +201,17 @@ export function Step6Assign() {
           </div>
 
           {/* Auto-allocate */}
-          <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:14, padding:"12px 16px", background: allocated?"#f0fdf4":"#eaecf8", borderRadius:10, border:`1.5px solid ${allocated?"#86efac":"#c7d2fe"}` }}>
+          <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:14, padding:"12px 16px", background: allocated?"#f0fdf4":"#eaecf8", borderRadius:10, border:`1.5px solid ${allocated?"#86efac":"#D8D2FF"}` }}>
             <div style={{ flex:1 }}>
               <div style={{ fontSize:13, fontWeight:600, color: allocated?"#14532d":"#3730a3" }}>
                 {allocated ? "✅ Sections auto-allocated!" : "🤖 AI Auto-allocate Everything"}
               </div>
-              <div style={{ fontSize:11, color: allocated?"#059669":"#4f46e5", marginTop:2 }}>
+              <div style={{ fontSize:11, color: allocated?"#059669":"#7C6FE0", marginTop:2 }}>
                 {allocated ? "Classes, sections and subjects auto-assigned. Review and edit below." : "AI will assign all classes, sections and subjects to teachers optimally. You can edit after."}
               </div>
             </div>
             <button onClick={handleAutoAllocate}
-              style={{ padding:"9px 18px", borderRadius:8, border:"none", background: allocated?"#059669":"#4f46e5", color:"#fff", fontSize:13, fontWeight:600, cursor:"pointer", whiteSpace:"nowrap" as const }}>
+              style={{ padding:"9px 18px", borderRadius:8, border:"none", background: allocated?"#059669":"#7C6FE0", color:"#fff", fontSize:13, fontWeight:600, cursor:"pointer", whiteSpace:"nowrap" as const }}>
               {allocated ? "Re-allocate" : "🤖 Auto-allocate"}
             </button>
           </div>
@@ -234,7 +234,7 @@ export function Step6Assign() {
                 <div key={st.id} style={{ border:"1.5px solid #e8e5de", borderRadius:12, overflow:"hidden" }}>
                   {/* Teacher header */}
                   <div style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 14px", background:"#f7f6f2", borderBottom:"1px solid #e8e5de" }}>
-                    <div style={{ width:32, height:32, borderRadius:"50%", background:"#4f46e5", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:700, flexShrink:0 }}>
+                    <div style={{ width:32, height:32, borderRadius:"50%", background:"#7C6FE0", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:700, flexShrink:0 }}>
                       {i+1}
                     </div>
                     <div style={{ flex:1 }}>
@@ -262,7 +262,7 @@ export function Step6Assign() {
                         const isChecked = (st.classes ?? []).some(c => c === cls || secs.includes(c))
                         return (
                           <label key={cls} style={{ display:"flex", alignItems:"center", gap:6, cursor:"pointer", padding:"4px 6px", borderRadius:5, marginBottom:2, background: isChecked?"#eaecf8":"transparent" }}>
-                            <input type="checkbox" checked={isChecked} style={{ accentColor:"#4f46e5", width:13, height:13 }}
+                            <input type="checkbox" checked={isChecked} style={{ accentColor:"#7C6FE0", width:13, height:13 }}
                               onChange={e => {
                                 const n=[...staff]
                                 const curClasses = n[i].classes ?? []
@@ -298,7 +298,7 @@ export function Step6Assign() {
                         return (
                           <div key={cls} style={{ minWidth:150, borderRight: ci < assignedBaseClasses.length-1 ? "1px solid #f0ede7" : "none", padding:"10px 12px", flexShrink:0 }}>
                             {/* Class header */}
-                            <div style={{ fontSize:11, fontWeight:700, color:"#4f46e5", marginBottom:2 }}>{cls}</div>
+                            <div style={{ fontSize:11, fontWeight:700, color:"#7C6FE0", marginBottom:2 }}>{cls}</div>
                             <div style={{ fontSize:9, color:"#a8a59e", marginBottom:8 }}>
                               {getSectionsForClass(sections, cls).join(", ")}
                             </div>

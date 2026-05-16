@@ -163,7 +163,7 @@ export function StepBell() {
     <div>
       {/* Header */}
       <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:6 }}>
-        <div style={{ width:40, height:40, borderRadius:12, background:"linear-gradient(135deg,#0891b2,#0e7490)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:20 }}>🔔</div>
+        <div style={{ width:40, height:40, borderRadius:12, background:"linear-gradient(135deg,#7C6FE0,#0e7490)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:20 }}>🔔</div>
         <div>
           <h1 style={{ fontFamily:"'DM Serif Display',Georgia,serif", fontSize:28, margin:0 }}>Bell Schedule</h1>
           <p style={{ color:"#6a6860", fontSize:12, margin:0 }}>Step 2 of 6 — Working Days, Periods & Breaks</p>
@@ -185,7 +185,7 @@ export function StepBell() {
                 const on = workDays.includes(d)
                 return (
                   <button key={d} onClick={() => toggleDay(d)}
-                    style={{ padding:"8px 12px", borderRadius:8, border: on?"2px solid #0891b2":"1.5px solid #e8e5de", background: on?"#ecfeff":"#fff", cursor:"pointer", fontSize:12, fontWeight: on?700:400, color: on?"#0e7490":"#4a4844" }}>
+                    style={{ padding:"8px 12px", borderRadius:8, border: on?"2px solid #7C6FE0":"1.5px solid #e8e5de", background: on?"#ecfeff":"#fff", cursor:"pointer", fontSize:12, fontWeight: on?700:400, color: on?"#0e7490":"#4a4844" }}>
                     {DAY_LABEL[d]}
                   </button>
                 )
@@ -235,7 +235,7 @@ export function StepBell() {
             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
               <label style={{ ...lbl, marginBottom:0 }}>Breaks, Lunch & Assembly</label>
               <button onClick={addBreak}
-                style={{ padding:"5px 12px", borderRadius:7, border:"1.5px solid #4f46e5", background:"#eaecf8", color:"#3730a3", fontSize:12, fontWeight:600, cursor:"pointer" }}>
+                style={{ padding:"5px 12px", borderRadius:7, border:"1.5px solid #7C6FE0", background:"#eaecf8", color:"#3730a3", fontSize:12, fontWeight:600, cursor:"pointer" }}>
                 + Add Break
               </button>
             </div>
@@ -300,7 +300,7 @@ export function StepBell() {
                   ? (entry.periodNum! % 2 === 0 ? "#f8faff" : "#fff")
                   : isLunch ? "#fefce8" : isAssembly ? "#f0fdf4" : isDispersal ? "#fdf4ff" : "#fafaf9"
                 const borderColor = isPeriod
-                  ? "#e0e7ff"
+                  ? "#EDE9FF"
                   : isLunch ? "#fde68a" : isAssembly ? "#86efac" : isDispersal ? "#d8b4fe" : "#e8e5de"
                 const labelColor = isPeriod ? "#3730a3" : isLunch ? "#92400e" : isAssembly ? "#14532d" : isDispersal ? "#6b21a8" : "#374151"
 
@@ -328,7 +328,7 @@ export function StepBell() {
             </div>
 
             {/* Summary */}
-            <div style={{ marginTop:12, padding:"10px 12px", background:"#f5f3ff", border:"1px solid #ddd6fe", borderRadius:8, fontSize:11, color:"#4c1d95" }}>
+            <div style={{ marginTop:12, padding:"10px 12px", background:"#f5f3ff", border:"1px solid #D8D2FF", borderRadius:8, fontSize:11, color:"#4c1d95" }}>
               <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
                 <span>📅 {workDays.length} days/week</span>
                 <span>📘 {numPeriods} periods/day</span>

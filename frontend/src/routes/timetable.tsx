@@ -73,7 +73,7 @@ function SubjectCell({ subject, teacher, room, isClassTeacher, isSub, subTeacher
       onDragOver={e => { e.preventDefault(); onDragOver?.(e) }}
       onDrop={onDrop}
       onDragLeave={onDragLeave}>
-      <div onClick={onClick} style={{ height:44, background: dragOver?"#e0e7ff":"#f8fafc", borderRadius:5, display:"flex", alignItems:"center", justifyContent:"center", color: dragOver?"#4f46e5":"#cbd5e1", fontSize:10, cursor: dragOver?"copy":"default", border: dragOver?"2px dashed #4f46e5":"none", transition:"all 0.12s" }}>
+      <div onClick={onClick} style={{ height:44, background: dragOver?"#EDE9FF":"#f8fafc", borderRadius:5, display:"flex", alignItems:"center", justifyContent:"center", color: dragOver?"#7C6FE0":"#cbd5e1", fontSize:10, cursor: dragOver?"copy":"default", border: dragOver?"2px dashed #7C6FE0":"none", transition:"all 0.12s" }}>
         {dragOver ? "Drop here" : "—"}
       </div>
     </td>
@@ -371,7 +371,7 @@ export function TimetablePage() {
       <div>
         <div style={{ padding:"12px 16px", background:"#f8fafc", borderBottom:"1px solid #e2e8f0" }}>
           <div style={{ display:"grid", gridTemplateColumns:"auto 1fr auto", gap:16, alignItems:"start" }}>
-            <div style={{ width:42, height:42, borderRadius:"50%", background:"#4f46e5", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontSize:17, fontWeight:700 }}>{tn[0]}</div>
+            <div style={{ width:42, height:42, borderRadius:"50%", background:"#7C6FE0", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontSize:17, fontWeight:700 }}>{tn[0]}</div>
             <div>
               <div style={{ fontSize:15, fontWeight:700, color:"#1e293b", fontFamily:"'DM Serif Display',Georgia,serif" }}>{tn}</div>
               {st?.role && <div style={{ fontSize:11, color:"#64748b" }}>{st.role}</div>}
@@ -850,13 +850,13 @@ export function TimetablePage() {
     <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"calc(100vh - 52px)", flexDirection:"column" as const, gap:16 }}>
       <div style={{ fontSize:48 }}>📅</div>
       <div style={{ fontSize:18, color:"#64748b", fontFamily:"'DM Serif Display',Georgia,serif" }}>No timetable generated yet</div>
-      <button onClick={() => window.location.href="/wizard"} style={{ padding:"10px 24px", borderRadius:8, border:"none", background:"#4f46e5", color:"#fff", fontSize:14, fontWeight:600, cursor:"pointer" }}>✨ Go to Wizard</button>
+      <button onClick={() => window.location.href="/wizard"} style={{ padding:"10px 24px", borderRadius:8, border:"none", background:"#7C6FE0", color:"#fff", fontSize:14, fontWeight:600, cursor:"pointer" }}>✨ Go to Wizard</button>
     </div>
   )
 
   // ── Toolbar button helper ────────────────────────────────
   const TBtn = (active: boolean, onClick: ()=>void, label: string, icon?: string) => (
-    <button onClick={onClick} style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 11px", borderRadius:6, border:`1px solid ${active?"#4f46e5":"#e2e8f0"}`, background:active?"#eef2ff":"#fff", color:active?"#4f46e5":"#64748b", fontSize:11, fontWeight:500, cursor:"pointer", whiteSpace:"nowrap" as const }}>
+    <button onClick={onClick} style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 11px", borderRadius:6, border:`1px solid ${active?"#7C6FE0":"#e2e8f0"}`, background:active?"#EDE9FF":"#fff", color:active?"#7C6FE0":"#64748b", fontSize:11, fontWeight:500, cursor:"pointer", whiteSpace:"nowrap" as const }}>
       {icon && <span>{icon}</span>}{label}
     </button>
   )
@@ -953,8 +953,8 @@ export function TimetablePage() {
           {/* Transpose — hidden for calendar */}
           {viewMode !== "calendar" && (
             <div style={{ display:"flex", border:"1px solid #e2e8f0", borderRadius:7, overflow:"hidden" }}>
-              <button onClick={() => setTransposed(false)} style={{ padding:"5px 12px", border:"none", background:!transposed?"#4f46e5":"#fff", color:!transposed?"#fff":"#64748b", fontSize:11, fontWeight:500, cursor:"pointer" }}>☰ Normal</button>
-              <button onClick={() => setTransposed(true)}  style={{ padding:"5px 12px", border:"none", background:transposed?"#4f46e5":"#fff",  color:transposed?"#fff":"#64748b",  fontSize:11, fontWeight:500, cursor:"pointer" }}>⊞ Transposed</button>
+              <button onClick={() => setTransposed(false)} style={{ padding:"5px 12px", border:"none", background:!transposed?"#7C6FE0":"#fff", color:!transposed?"#fff":"#64748b", fontSize:11, fontWeight:500, cursor:"pointer" }}>☰ Normal</button>
+              <button onClick={() => setTransposed(true)}  style={{ padding:"5px 12px", border:"none", background:transposed?"#7C6FE0":"#fff",  color:transposed?"#fff":"#64748b",  fontSize:11, fontWeight:500, cursor:"pointer" }}>⊞ Transposed</button>
             </div>
           )}
 
@@ -964,7 +964,7 @@ export function TimetablePage() {
           <div style={{ display:"flex", border:"1px solid #e2e8f0", borderRadius:7, overflow:"hidden" }}>
             {VIEW_TABS.map(v => (
               <button key={v.key} onClick={() => { setViewMode(v.key); setSelectedEntity("ALL"); setTransposed(false) }}
-                style={{ padding:"5px 12px", border:"none", background:viewMode===v.key?"#4f46e5":"#fff", color:viewMode===v.key?"#fff":"#64748b", fontSize:11, fontWeight:500, cursor:"pointer", display:"flex", alignItems:"center", gap:4 }}>
+                style={{ padding:"5px 12px", border:"none", background:viewMode===v.key?"#7C6FE0":"#fff", color:viewMode===v.key?"#fff":"#64748b", fontSize:11, fontWeight:500, cursor:"pointer", display:"flex", alignItems:"center", gap:4 }}>
                 {v.icon} {v.label}
               </button>
             ))}
@@ -1105,7 +1105,7 @@ export function TimetablePage() {
                         Slots for {subAbsentTeacher} on {DAY_SHORT[subAbsentDay]??subAbsentDay}
                       </div>
                       <button onClick={autoFillBest}
-                        style={{ padding:"4px 10px", borderRadius:6, border:"1px solid #4f46e5", background:"#eef2ff", color:"#4f46e5", fontSize:10, fontWeight:600, cursor:"pointer" }}>
+                        style={{ padding:"4px 10px", borderRadius:6, border:"1px solid #7C6FE0", background:"#EDE9FF", color:"#7C6FE0", fontSize:10, fontWeight:600, cursor:"pointer" }}>
                         ⚡ Auto-fill best
                       </button>
                     </div>
@@ -1131,9 +1131,9 @@ export function TimetablePage() {
                               const isSelected = selected === cand.st.name
                               return (
                                 <div key={cand.st.id}
-                                  style={{ padding:"7px 10px", borderRadius:7, border:`1.5px solid ${isSelected?"#4f46e5":cand.isBusy?"#fca5a5":"#e2e8f0"}`, background:isSelected?"#eef2ff":cand.isBusy?"#fff5f5":"#fff", display:"flex", alignItems:"center", gap:8 }}>
+                                  style={{ padding:"7px 10px", borderRadius:7, border:`1.5px solid ${isSelected?"#7C6FE0":cand.isBusy?"#fca5a5":"#e2e8f0"}`, background:isSelected?"#EDE9FF":cand.isBusy?"#fff5f5":"#fff", display:"flex", alignItems:"center", gap:8 }}>
                                   {/* Avatar */}
-                                  <div style={{ width:28, height:28, borderRadius:"50%", background:isSelected?"#4f46e5":"#94a3b8", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, flexShrink:0 }}>
+                                  <div style={{ width:28, height:28, borderRadius:"50%", background:isSelected?"#7C6FE0":"#94a3b8", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, flexShrink:0 }}>
                                     {cand.st.name[0]}
                                   </div>
                                   {/* Info */}
@@ -1148,14 +1148,14 @@ export function TimetablePage() {
                                     <div style={{ marginTop:3 }}>
                                       <div style={{ fontSize:8, color:"#94a3b8", marginBottom:1 }}>{cand.workloadToday} today · {cand.workloadWeek}/{cand.maxW} week · Subbed {cand.subFreq}× term</div>
                                       <div style={{ height:3, background:"#e2e8f0", borderRadius:2, overflow:"hidden" }}>
-                                        <div style={{ height:"100%", width:`${Math.min(100, Math.round(cand.workloadWeek/cand.maxW*100))}%`, background: cand.workloadWeek/cand.maxW > 0.9 ? "#dc2626" : "#4f46e5", borderRadius:2 }} />
+                                        <div style={{ height:"100%", width:`${Math.min(100, Math.round(cand.workloadWeek/cand.maxW*100))}%`, background: cand.workloadWeek/cand.maxW > 0.9 ? "#dc2626" : "#7C6FE0", borderRadius:2 }} />
                                       </div>
                                     </div>
                                   </div>
                                   {/* Select button */}
                                   <button
                                     onClick={() => setSubAssignments(prev => isSelected ? Object.fromEntries(Object.entries(prev).filter(([k]) => k !== slot.periodId)) : { ...prev, [slot.periodId]: cand.st.name })}
-                                    style={{ padding:"4px 8px", borderRadius:5, border:"none", background:isSelected?"#4f46e5":"#e2e8f0", color:isSelected?"#fff":"#374151", fontSize:10, fontWeight:600, cursor:"pointer", flexShrink:0 }}>
+                                    style={{ padding:"4px 8px", borderRadius:5, border:"none", background:isSelected?"#7C6FE0":"#e2e8f0", color:isSelected?"#fff":"#374151", fontSize:10, fontWeight:600, cursor:"pointer", flexShrink:0 }}>
                                     {isSelected ? "✓" : "Select"}
                                   </button>
                                 </div>

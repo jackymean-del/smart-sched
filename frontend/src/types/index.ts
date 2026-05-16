@@ -214,7 +214,7 @@ export const SubjectSchema = z.object({
   periodsPerWeek: z.number().int().min(0).default(5),
   sessionDuration: z.number().default(40),
   maxPeriodsPerDay: z.number().default(2),
-  color: z.string().default('#6366f1'),
+  color: z.string().default('#7C6FE0'),
   classConfigs: z.array(z.object({
     classId: z.string(),
     periodsPerWeek: z.number(),

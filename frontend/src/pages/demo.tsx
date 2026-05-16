@@ -49,7 +49,7 @@ export function DemoPage() {
     }}>
       <div style={{
         width: 72, height: 72, borderRadius: 18,
-        background: 'linear-gradient(135deg, #34d399, #059669)',
+        background: 'linear-gradient(135deg, #9B8EF5, #059669)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         color: '#fff', boxShadow: '0 8px 20px rgba(5,150,105,0.3)',
       }}>

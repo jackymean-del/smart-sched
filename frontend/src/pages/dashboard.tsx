@@ -151,14 +151,14 @@ export function DashboardPage() {
 
   // ── STATS ──────────────────────────────────────────────────
   const stats = [
-    { icon: <CalendarDays size={18} color="#4f46e5" />, label: 'Timetables', value: hasTimetable ? 1 : 0, bg: '#eef2ff', color: '#4f46e5' },
+    { icon: <CalendarDays size={18} color="#7C6FE0" />, label: 'Timetables', value: hasTimetable ? 1 : 0, bg: '#EDE9FF', color: '#7C6FE0' },
     { icon: <Users        size={18} color="#059669" />, label: 'Teachers',   value: staffCount,            bg: '#f0fdf4', color: '#059669' },
-    { icon: <BookOpen     size={18} color="#7c3aed" />, label: 'Classes',    value: sectionCount,          bg: '#faf5ff', color: '#7c3aed' },
+    { icon: <BookOpen     size={18} color="#9B8EF5" />, label: 'Classes',    value: sectionCount,          bg: '#EDE9FF', color: '#9B8EF5' },
     { icon: <Clock        size={18} color="#d97706" />, label: 'Subjects',   value: subjectCount,          bg: '#fffbeb', color: '#d97706' },
   ]
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f4f6fb' }}>
+    <div style={{ minHeight: '100vh', background: '#F9F8FF' }}>
 
       {/* ── Page header ──────────────────────────────────────── */}
       <PageHeader
@@ -169,7 +169,7 @@ export function DashboardPage() {
         actions={
           <div style={{
             padding: '3px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600,
-            background: '#eef2ff', color: '#4f46e5', border: '1px solid #c7d2fe',
+            background: '#EDE9FF', color: '#7C6FE0', border: '1px solid #D8D2FF',
             display: 'flex', alignItems: 'center', gap: 5,
           }}>
             <CheckCircle2 size={11} /> Owner
@@ -230,7 +230,7 @@ export function DashboardPage() {
                 style={{
                   display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px',
                   borderRadius: 10, border: 'none', cursor: 'pointer',
-                  background: 'linear-gradient(135deg,#4f46e5,#7c3aed)', color: '#fff',
+                  background: 'linear-gradient(135deg,#7C6FE0,#9B8EF5)', color: '#fff',
                   textAlign: 'left', width: '100%',
                 }}>
                 <div style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -364,7 +364,7 @@ export function DashboardPage() {
               </div>
               {activeSubKeys.length > 5 && (
                 <div style={{ padding: '8px 14px', textAlign: 'center' }}>
-                  <a href="/timetable" style={{ fontSize: 11, color: '#4f46e5', fontWeight: 600, textDecoration: 'none' }}>
+                  <a href="/timetable" style={{ fontSize: 11, color: '#7C6FE0', fontWeight: 600, textDecoration: 'none' }}>
                     View all {activeSubKeys.length} substitutions →
                   </a>
                 </div>
@@ -384,7 +384,7 @@ export function DashboardPage() {
             borderBottom: '1px solid #f3f4f6',
             display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0,
           }}>
-            <CalendarDays size={18} color="#4f46e5" />
+            <CalendarDays size={18} color="#7C6FE0" />
             <span style={{ fontSize: 15, fontWeight: 700, color: '#111827' }}>My Schedule</span>
 
             {hasTimetable && (
@@ -462,11 +462,11 @@ export function DashboardPage() {
               padding: '60px 40px', textAlign: 'center',
             }}>
               <div style={{
-                width: 72, height: 72, borderRadius: 20, background: '#eef2ff',
+                width: 72, height: 72, borderRadius: 20, background: '#EDE9FF',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 marginBottom: 20,
               }}>
-                <CalendarDays size={32} color="#4f46e5" />
+                <CalendarDays size={32} color="#7C6FE0" />
               </div>
               <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827', marginBottom: 8 }}>
                 No schedule yet
@@ -478,7 +478,7 @@ export function DashboardPage() {
                 onClick={() => window.location.href = '/wizard'}
                 style={{
                   padding: '10px 22px', borderRadius: 8, border: 'none',
-                  background: '#4f46e5', color: '#fff', fontWeight: 700,
+                  background: '#7C6FE0', color: '#fff', fontWeight: 700,
                   fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7,
                 }}>
                 <Plus size={14} /> Start Setup Wizard
@@ -526,11 +526,11 @@ export function DashboardPage() {
                   disabled={t.key === 'cover' && absentTeachers.length === 0}
                   style={{
                     flex: 1, padding: '10px 4px', border: 'none',
-                    borderBottom: subTab === t.key ? '2px solid #4f46e5' : '2px solid transparent',
+                    borderBottom: subTab === t.key ? '2px solid #7C6FE0' : '2px solid transparent',
                     background: 'transparent',
                     cursor: t.key === 'cover' && absentTeachers.length === 0 ? 'not-allowed' : 'pointer',
                     fontSize: 11, fontWeight: subTab === t.key ? 700 : 400,
-                    color: subTab === t.key ? '#4f46e5' : t.key === 'cover' && absentTeachers.length === 0 ? '#d1d5db' : '#6b7280',
+                    color: subTab === t.key ? '#7C6FE0' : t.key === 'cover' && absentTeachers.length === 0 ? '#d1d5db' : '#6b7280',
                     marginBottom: -2,
                   }}>
                   {t.label}
@@ -553,9 +553,9 @@ export function DashboardPage() {
                         <button key={d} onClick={() => setAbsentDay(d)}
                           style={{
                             padding: '5px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600,
-                            border: `1.5px solid ${absentDay === d ? '#4f46e5' : '#e5e7eb'}`,
-                            background: absentDay === d ? '#eef2ff' : '#fff',
-                            color: absentDay === d ? '#4f46e5' : '#374151',
+                            border: `1.5px solid ${absentDay === d ? '#7C6FE0' : '#e5e7eb'}`,
+                            background: absentDay === d ? '#EDE9FF' : '#fff',
+                            color: absentDay === d ? '#7C6FE0' : '#374151',
                             cursor: 'pointer',
                           }}>
                           {DAY_DISPLAY[d] ?? d}
@@ -608,7 +608,7 @@ export function DashboardPage() {
                         </div>
                       ))}
                       <button onClick={() => setSubTab('cover')}
-                        style={{ width: '100%', padding: '11px', borderRadius: 8, border: 'none', background: '#4f46e5', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', marginTop: 8 }}>
+                        style={{ width: '100%', padding: '11px', borderRadius: 8, border: 'none', background: '#7C6FE0', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', marginTop: 8 }}>
                         Next: Assign Cover →
                       </button>
                     </>
@@ -626,7 +626,7 @@ export function DashboardPage() {
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                           <span style={{ fontSize: 13, fontWeight: 700, color: '#dc2626' }}>⚠ {teacherName}</span>
                           <button onClick={() => autoFill(teacherName)}
-                            style={{ padding: '4px 12px', borderRadius: 6, border: 'none', background: '#4f46e5', color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                            style={{ padding: '4px 12px', borderRadius: 6, border: 'none', background: '#7C6FE0', color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
                             ⚡ Auto-fill best
                           </button>
                         </div>
@@ -674,7 +674,7 @@ export function DashboardPage() {
                                       <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 2, marginBottom: 5 }}>Subbed {subFreq}× so far</div>
                                       <button style={{
                                         width: '100%', padding: '3px', borderRadius: 5, border: 'none', fontSize: 10, fontWeight: 700, cursor: 'pointer',
-                                        background: selected ? '#059669' : '#4f46e5', color: '#fff',
+                                        background: selected ? '#059669' : '#7C6FE0', color: '#fff',
                                       }}>
                                         {selected ? '✓ Selected' : 'Select'}
                                       </button>

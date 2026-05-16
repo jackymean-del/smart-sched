@@ -17,11 +17,11 @@ const TIMEZONES = [
 ]
 
 const GRADE_GROUPS = [
-  { id:"pre",       label:"Pre-School",               grades:"Nursery, LKG, UKG",  profile:"fixed",    color:"#0891b2",  desc:"Students stay fixed, teachers rotate" },
-  { id:"primary",   label:"Primary  (Class I – V)",   grades:"I, II, III, IV, V",  profile:"fixed",    color:"#0891b2",  desc:"Students stay fixed, teachers rotate" },
+  { id:"pre",       label:"Pre-School",               grades:"Nursery, LKG, UKG",  profile:"fixed",    color:"#7C6FE0",  desc:"Students stay fixed, teachers rotate" },
+  { id:"primary",   label:"Primary  (Class I – V)",   grades:"I, II, III, IV, V",  profile:"fixed",    color:"#7C6FE0",  desc:"Students stay fixed, teachers rotate" },
   { id:"middle",    label:"Middle   (Class VI – VIII)",grades:"VI, VII, VIII",      profile:"standard", color:"#059669",  desc:"Subject-wise teaching, teacher movement" },
   { id:"secondary", label:"Secondary (Class IX – X)",  grades:"IX, X",              profile:"standard", color:"#059669",  desc:"Subject-wise teaching, teacher movement" },
-  { id:"senior",    label:"Senior Secondary (XI – XII)",grades:"XI, XII",           profile:"dynamic",  color:"#7c3aed",  desc:"Optional subjects, instructional clusters, parallel blocks" },
+  { id:"senior",    label:"Senior Secondary (XI – XII)",grades:"XI, XII",           profile:"dynamic",  color:"#9B8EF5",  desc:"Optional subjects, instructional clusters, parallel blocks" },
 ]
 
 const MODE_LABEL: Record<string,string> = {
@@ -69,7 +69,7 @@ export function Step1Org() {
   return (
     <div>
       <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:6 }}>
-        <div style={{ width:40, height:40, borderRadius:12, background:"linear-gradient(135deg,#4f46e5,#7c3aed)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:20 }}>🏫</div>
+        <div style={{ width:40, height:40, borderRadius:12, background:"linear-gradient(135deg,#7C6FE0,#9B8EF5)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:20 }}>🏫</div>
         <div>
           <h1 style={{ fontFamily:"'DM Serif Display',Georgia,serif", fontSize:28, margin:0 }}>School Setup</h1>
           <p style={{ color:"#6a6860", fontSize:12, margin:0 }}>Step 1 of 6 — Organization & Academic Profile</p>
@@ -85,7 +85,7 @@ export function Step1Org() {
         <input value={name} onChange={e => setName(e.target.value)}
           placeholder="e.g. Delhi Public School, Vasant Kunj"
           style={inp({ fontSize:16 })}
-          onFocus={e => (e.target as HTMLInputElement).style.borderColor="#4f46e5"}
+          onFocus={e => (e.target as HTMLInputElement).style.borderColor="#7C6FE0"}
           onBlur={e  => (e.target as HTMLInputElement).style.borderColor="#e8e5de"} />
       </div>
 
@@ -100,7 +100,7 @@ export function Step1Org() {
               const sel = board === b.value
               return (
                 <button key={b.value} onClick={() => setBoard(b.value as BoardType)}
-                  style={{ padding:"10px 6px", borderRadius:8, border: sel?"2px solid #4f46e5":"1.5px solid #e8e5de", background: sel?"#eaecf8":"#fff", cursor:"pointer", textAlign:"center" as const }}>
+                  style={{ padding:"10px 6px", borderRadius:8, border: sel?"2px solid #7C6FE0":"1.5px solid #e8e5de", background: sel?"#eaecf8":"#fff", cursor:"pointer", textAlign:"center" as const }}>
                   <div style={{ fontSize:12, fontWeight:700, color: sel?"#3730a3":"#1c1b18" }}>{b.label}</div>
                   <div style={{ fontSize:9, color:"#a8a59e", marginTop:2, lineHeight:1.3 }}>{b.sub}</div>
                 </button>
@@ -150,7 +150,7 @@ export function Step1Org() {
         </div>
 
         {hasXIXII && (
-          <div style={{ marginTop:12, padding:"12px 16px", background:"#f5f3ff", border:"1.5px solid #a78bfa", borderRadius:9, fontSize:12, color:"#4c1d95", lineHeight:1.7 }}>
+          <div style={{ marginTop:12, padding:"12px 16px", background:"#f5f3ff", border:"1.5px solid #9B8EF5", borderRadius:9, fontSize:12, color:"#4c1d95", lineHeight:1.7 }}>
             🔀 <strong>XI–XII Dynamic Mode detected.</strong> After setting up resources, you'll configure the <strong>Academic Combination Matrix</strong> — where students choose optional subjects (Maths OR Biology, PE OR Painting) using AND/OR/NONE expressions. Schedu will automatically build instructional clusters and parallel blocks.
           </div>
         )}
@@ -173,7 +173,7 @@ export function Step1Org() {
                 value={f.value}
                 onChange={e => f.set(Math.max(f.min, Math.min(f.max, +e.target.value || f.min)))}
                 style={{ width:"100%", padding:"8px", border:"1.5px solid #e8e5de", borderRadius:9, fontSize:26, fontWeight:700, fontFamily:"'DM Mono',monospace", textAlign:"center" as const, outline:"none", background:"#fff" }}
-                onFocus={e => (e.target as HTMLInputElement).style.borderColor="#4f46e5"}
+                onFocus={e => (e.target as HTMLInputElement).style.borderColor="#7C6FE0"}
                 onBlur={e => (e.target as HTMLInputElement).style.borderColor="#e8e5de"} />
             </div>
           ))}

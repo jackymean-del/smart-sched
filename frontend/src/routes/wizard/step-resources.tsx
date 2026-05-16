@@ -19,7 +19,7 @@ const inp = (x?: React.CSSProperties): React.CSSProperties => ({
   borderRadius:5, fontSize:12, background:"transparent", outline:"none", color:"#111827", ...x,
 })
 const onFocus = (e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) => {
-  (e.target as HTMLElement).style.borderColor = "#6366f1"
+  (e.target as HTMLElement).style.borderColor = "#7C6FE0"
   ;(e.target as HTMLElement).style.background  = "#fff"
 }
 const onBlur = (e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -178,13 +178,13 @@ export function StepResources() {
           {TABS.map(t => (
             <button key={t.key} onClick={() => setTab(t.key)}
               style={{
-                padding:"10px 20px", border:"none", borderBottom: tab===t.key?"2px solid #4f46e5":"2px solid transparent",
+                padding:"10px 20px", border:"none", borderBottom: tab===t.key?"2px solid #7C6FE0":"2px solid transparent",
                 marginBottom:-1.5, background:"transparent", fontSize:13,
-                fontWeight: tab===t.key?600:400, color: tab===t.key?"#4f46e5":"#6b7280",
+                fontWeight: tab===t.key?600:400, color: tab===t.key?"#7C6FE0":"#6b7280",
                 cursor:"pointer", display:"flex", alignItems:"center", gap:6, whiteSpace:"nowrap",
               }}>
               {t.label}
-              <span style={{ fontSize:10, padding:"1px 7px", borderRadius:10, background: tab===t.key?"#eff6ff":"#f3f4f6", color: tab===t.key?"#4f46e5":"#9ca3af", fontWeight:500 }}>
+              <span style={{ fontSize:10, padding:"1px 7px", borderRadius:10, background: tab===t.key?"#eff6ff":"#f3f4f6", color: tab===t.key?"#7C6FE0":"#9ca3af", fontWeight:500 }}>
                 {t.count}
               </span>
             </button>
@@ -245,7 +245,7 @@ export function StepResources() {
           {sections.length} classes · {staff.length} teachers · {subjects.length} subjects
         </div>
         <button onClick={handleContinue}
-          style={{ padding:"9px 22px", borderRadius:7, border:"none", fontSize:13, fontWeight:600, cursor:"pointer", background:"#4f46e5", color:"#fff" }}>
+          style={{ padding:"9px 22px", borderRadius:7, border:"none", fontSize:13, fontWeight:600, cursor:"pointer", background:"#7C6FE0", color:"#fff" }}>
           Continue → Generate ✨
         </button>
       </div>
@@ -406,7 +406,7 @@ function SubjectsTable({
             ⇄ {transposed ? 'Classes as rows' : 'Subjects as rows'}
           </button>
           <button onClick={() => setSubjects(subjects.map(s => ({...s, periodsPerWeek: suggestPW(s.name)})))}
-            style={{ padding:'4px 10px', borderRadius:5, border:'1px solid #c7d2fe', background:'#e0e7ff', color:'#3730a3', fontSize:11, fontWeight:600, cursor:'pointer' }}>
+            style={{ padding:'4px 10px', borderRadius:5, border:'1px solid #D8D2FF', background:'#EDE9FF', color:'#3730a3', fontSize:11, fontWeight:600, cursor:'pointer' }}>
             🏫 Auto-fill CBSE norms
           </button>
         </div>
@@ -427,9 +427,9 @@ function SubjectsTable({
               <th style={{ ...th, position:'sticky' as const, left:0,  zIndex:3, background:'#f9fafb', width:36,  textAlign:'center' }}>#</th>
               <th style={{ ...th, position:'sticky' as const, left:36, zIndex:3, background:'#f9fafb', width:180, boxShadow:'3px 0 6px -2px rgba(0,0,0,0.08)' }}>CLASS / SECTION</th>
               {subjects.map(sub => (
-                <th key={sub.id} style={{ ...th, textAlign:'center', background:'#fdf4ff', color:'#7c3aed', borderLeft:'1px solid #ede9fe', fontSize:10, padding:'6px 4px', maxWidth:CELL_W }}>
+                <th key={sub.id} style={{ ...th, textAlign:'center', background:'#fdf4ff', color:'#9B8EF5', borderLeft:'1px solid #ede9fe', fontSize:10, padding:'6px 4px', maxWidth:CELL_W }}>
                   <div style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{sub.shortName || sub.name}</div>
-                  <div style={{ fontSize:8, fontWeight:400, color:'#a78bfa', marginTop:1 }}>{sub.periodsPerWeek ?? suggestPW(sub.name)}/wk</div>
+                  <div style={{ fontSize:8, fontWeight:400, color:'#9B8EF5', marginTop:1 }}>{sub.periodsPerWeek ?? suggestPW(sub.name)}/wk</div>
                 </th>
               ))}
             </tr>
@@ -453,13 +453,13 @@ function SubjectsTable({
                         onClick={() => setActiveCell({r, c})}
                         onDoubleClick={() => clearVal(sub.id, sec.id)}
                         title={overridden ? `Override: ${val} (global: ${gPW}) — double-click to reset` : `${val}/week (inherited) — click to override`}
-                        style={{ ...td, textAlign:'center', cursor:'pointer', background: isActive?'#eef2ff': overridden?'#eff6ff':rowBg, borderLeft:'1px solid #f0f0f0', outline: isActive?'2px solid #4f46e5':'none', outlineOffset:-2, padding:'3px 4px' }}>
+                        style={{ ...td, textAlign:'center', cursor:'pointer', background: isActive?'#EDE9FF': overridden?'#eff6ff':rowBg, borderLeft:'1px solid #f0f0f0', outline: isActive?'2px solid #7C6FE0':'none', outlineOffset:-2, padding:'3px 4px' }}>
                         {isActive ? (
                           <input type="number" min={0} max={14} autoFocus value={val}
                             onChange={e => setVal(sub.id, sec.id, Math.max(0, +e.target.value))}
                             onKeyDown={e => handleKey(e, r, c)}
                             onBlur={() => setActiveCell(null)}
-                            style={{ width:'100%', border:'none', outline:'none', textAlign:'center', fontSize:13, fontWeight:700, fontFamily:'monospace', background:'transparent', color:'#4f46e5' }} />
+                            style={{ width:'100%', border:'none', outline:'none', textAlign:'center', fontSize:13, fontWeight:700, fontFamily:'monospace', background:'transparent', color:'#7C6FE0' }} />
                         ) : (
                           <span style={{ fontSize:12, fontWeight:overridden?700:400, fontFamily:'monospace', color:overridden?'#1d4ed8':'#9ca3af' }}>{val}</span>
                         )}
@@ -571,12 +571,12 @@ function SubjectsTable({
 
                   {/* Optional */}
                   <td style={{...stickyTd(7,rowBg), textAlign:'center'}}>
-                    <Toggle on={sub.isOptional??false} onChange={v=>updSub(sub.id,'isOptional',v)} color="#7c3aed"/>
+                    <Toggle on={sub.isOptional??false} onChange={v=>updSub(sub.id,'isOptional',v)} color="#9B8EF5"/>
                   </td>
 
                   {/* Lab */}
                   <td style={{...stickyTd(8,rowBg), textAlign:'center'}}>
-                    <Toggle on={sub.requiresLab??false} onChange={v=>updSub(sub.id,'requiresLab',v)} color="#0891b2"/>
+                    <Toggle on={sub.requiresLab??false} onChange={v=>updSub(sub.id,'requiresLab',v)} color="#7C6FE0"/>
                   </td>
 
                   {/* Delete */}
@@ -592,7 +592,7 @@ function SubjectsTable({
                     const val       = getVal(sub.id, sec.id, gPW)
                     const overridden = isOverridden(sub.id, sec.id, gPW)
                     const isActive  = activeCell?.r===r && activeCell?.c===c
-                    const cellBg    = isActive ? '#eef2ff' : overridden ? '#eff6ff' : rowBg
+                    const cellBg    = isActive ? '#EDE9FF' : overridden ? '#eff6ff' : rowBg
 
                     return (
                       <td key={sec.id}
@@ -606,7 +606,7 @@ function SubjectsTable({
                           textAlign:'center', cursor:'pointer',
                           background: cellBg,
                           borderLeft:'1px solid #f0f0f0',
-                          outline: isActive ? '2px solid #4f46e5' : 'none',
+                          outline: isActive ? '2px solid #7C6FE0' : 'none',
                           outlineOffset: -2,
                           padding:'3px 4px',
                         }}>
@@ -615,7 +615,7 @@ function SubjectsTable({
                             onChange={e => setVal(sub.id, sec.id, Math.max(0,+e.target.value))}
                             onKeyDown={e => handleKey(e, r, c)}
                             onBlur={() => setActiveCell(null)}
-                            style={{ width:'100%', border:'none', outline:'none', textAlign:'center', fontSize:13, fontWeight:700, fontFamily:'monospace', background:'transparent', color:'#4f46e5' }}
+                            style={{ width:'100%', border:'none', outline:'none', textAlign:'center', fontSize:13, fontWeight:700, fontFamily:'monospace', background:'transparent', color:'#7C6FE0' }}
                           />
                         ) : (
                           <span style={{ fontSize:12, fontWeight: overridden?700:400, fontFamily:'monospace', color: overridden?'#1d4ed8':'#9ca3af' }}>
@@ -650,7 +650,7 @@ function SubjectsTable({
             <tr>
               <td colSpan={FCOLS.length + sections.length} style={{ padding:0 }}>
                 <button
-                  onClick={() => setSubjects([...subjects, { id:makeId(), name:`Subject ${subjects.length+1}`, shortName:`S${subjects.length+1}`, category:'Core', periodsPerWeek:4, sessionDuration:45, maxPeriodsPerDay:2, isOptional:false, requiresLab:false, color:'#6366f1', sections:[], classConfigs:[] }])}
+                  onClick={() => setSubjects([...subjects, { id:makeId(), name:`Subject ${subjects.length+1}`, shortName:`S${subjects.length+1}`, category:'Core', periodsPerWeek:4, sessionDuration:45, maxPeriodsPerDay:2, isOptional:false, requiresLab:false, color:'#7C6FE0', sections:[], classConfigs:[] }])}
                   style={{ width:'100%', padding:'9px 16px', border:'none', borderTop:'1.5px dashed #e5e7eb', background:'transparent', cursor:'pointer', fontSize:12, color:'#9ca3af', textAlign:'left' as const, display:'flex', alignItems:'center', gap:6 }}>
                   <Plus size={14}/> Add subject
                 </button>
@@ -779,9 +779,9 @@ function TeachersTable({ staff, setStaff, subjects, sections, teacherMatrix, set
         title={assignedStaff ? `${assignedStaff.name} — click to change` : 'Click to assign a teacher'}
         style={{
           ...td, textAlign:'center', cursor:'pointer', padding:'4px 5px',
-          background: isActive ? '#eef2ff' : assignedId ? pal.bg : rowBg,
+          background: isActive ? '#EDE9FF' : assignedId ? pal.bg : rowBg,
           borderLeft:'1px solid #f0f0f0',
-          outline: isActive ? '2px solid #4f46e5' : 'none', outlineOffset:-2,
+          outline: isActive ? '2px solid #7C6FE0' : 'none', outlineOffset:-2,
           minWidth: CELL_W,
         }}>
         {isActive ? (
@@ -789,7 +789,7 @@ function TeachersTable({ staff, setStaff, subjects, sections, teacherMatrix, set
             onChange={e => { setAssigned(secId, subId, e.target.value); setActiveCell(null) }}
             onKeyDown={e => handleKey(e, r, c)}
             onBlur={() => setActiveCell(null)}
-            style={{ width:'100%', fontSize:11, border:'1px solid #6366f1', borderRadius:5, padding:'3px 4px', background:'#fff', color:'#111827', outline:'none', cursor:'pointer' }}>
+            style={{ width:'100%', fontSize:11, border:'1px solid #7C6FE0', borderRadius:5, padding:'3px 4px', background:'#fff', color:'#111827', outline:'none', cursor:'pointer' }}>
             <option value="">— None —</option>
             {staff.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
@@ -813,9 +813,9 @@ function TeachersTable({ staff, setStaff, subjects, sections, teacherMatrix, set
           <button key={v} onClick={() => setView(v)}
             style={{
               padding:'8px 14px', border:'none',
-              borderBottom: view===v ? '2px solid #4f46e5' : '2px solid transparent',
+              borderBottom: view===v ? '2px solid #7C6FE0' : '2px solid transparent',
               marginBottom:-1, background:'transparent', fontSize:12,
-              fontWeight: view===v ? 600 : 400, color: view===v ? '#4f46e5' : '#6b7280',
+              fontWeight: view===v ? 600 : 400, color: view===v ? '#7C6FE0' : '#6b7280',
               cursor:'pointer',
             }}>
             {v === 'list' ? '👤  Teacher List' : '📋  Class-wise Assignment'}
@@ -829,7 +829,7 @@ function TeachersTable({ staff, setStaff, subjects, sections, teacherMatrix, set
               {unassigned > 0 ? `⚠️ ${unassigned} unassigned` : `✅ All ${totalSlots} slots assigned`}
             </span>
             <button onClick={autoAssign}
-              style={{ padding:'4px 11px', borderRadius:5, border:'1px solid #c7d2fe', background:'#e0e7ff', color:'#3730a3', fontSize:11, fontWeight:600, cursor:'pointer' }}>
+              style={{ padding:'4px 11px', borderRadius:5, border:'1px solid #D8D2FF', background:'#EDE9FF', color:'#3730a3', fontSize:11, fontWeight:600, cursor:'pointer' }}>
               ⚡ Auto-assign
             </button>
             <button onClick={() => { setTeacherMatrix({}); setActiveCell(null) }}
@@ -957,7 +957,7 @@ function TeachersTable({ staff, setStaff, subjects, sections, teacherMatrix, set
                   <th style={{ ...th, position:'sticky' as const, left:0,  zIndex:3, background:'#f9fafb', width:36,  textAlign:'center' }}>#</th>
                   <th style={{ ...th, position:'sticky' as const, left:36, zIndex:3, background:'#f9fafb', width:150, boxShadow:'3px 0 6px -2px rgba(0,0,0,0.08)' }}>CLASS</th>
                   {subjects.map(sub => (
-                    <th key={sub.id} style={{ ...th, textAlign:'center', background:'#fdf4ff', color:'#7c3aed', borderLeft:'1px solid #ede9fe', fontSize:10, padding:'5px 4px' }}>
+                    <th key={sub.id} style={{ ...th, textAlign:'center', background:'#fdf4ff', color:'#9B8EF5', borderLeft:'1px solid #ede9fe', fontSize:10, padding:'5px 4px' }}>
                       <div style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' as const }}>{sub.shortName || sub.name}</div>
                     </th>
                   ))}

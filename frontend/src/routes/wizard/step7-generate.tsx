@@ -161,7 +161,7 @@ export function Step7Generate() {
         </div>
       )}
       {status === "idle" && (
-        <div style={{ width:64, height:64, borderRadius:18, background:"linear-gradient(135deg,#34d399,#059669)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:30 }}>
+        <div style={{ width:64, height:64, borderRadius:18, background:"linear-gradient(135deg,#9B8EF5,#059669)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:30 }}>
           ✨
         </div>
       )}
@@ -176,7 +176,7 @@ export function Step7Generate() {
       {/* Mode badge */}
       {status === "idle" && (
         <div style={{ display:"flex", gap:8 }}>
-          <span style={{ padding:"4px 12px", borderRadius:20, fontSize:11, fontWeight:600, background: store.schedulingMode==='duration-based'?"#f0fdf4":"#eaecf8", color: store.schedulingMode==='duration-based'?"#059669":"#4f46e5", border:`1px solid ${store.schedulingMode==='duration-based'?"#86efac":"#c7d2fe"}` }}>
+          <span style={{ padding:"4px 12px", borderRadius:20, fontSize:11, fontWeight:600, background: store.schedulingMode==='duration-based'?"#f0fdf4":"#eaecf8", color: store.schedulingMode==='duration-based'?"#059669":"#7C6FE0", border:`1px solid ${store.schedulingMode==='duration-based'?"#86efac":"#D8D2FF"}` }}>
             {store.schedulingMode === 'duration-based' ? '⏱ Duration-Based Mode' : '📅 Period-Based Mode'}
           </span>
           <span style={{ padding:"4px 12px", borderRadius:20, fontSize:11, background:"#f7f6f2", color:"#6a6860" }}>
@@ -188,7 +188,7 @@ export function Step7Generate() {
       {/* Progress bar */}
       {status !== "idle" && (
         <div style={{ width:"100%", maxWidth:480, height:6, background:"#e8e5de", borderRadius:4, overflow:"hidden" }}>
-          <div style={{ height:"100%", width:`${progress}%`, background:"linear-gradient(90deg,#34d399,#059669)", borderRadius:4, transition:"width 0.25s" }} />
+          <div style={{ height:"100%", width:`${progress}%`, background:"linear-gradient(90deg,#9B8EF5,#059669)", borderRadius:4, transition:"width 0.25s" }} />
         </div>
       )}
 
@@ -196,7 +196,7 @@ export function Step7Generate() {
       {logLines.length > 0 && (
         <div ref={logRef} style={{ width:"100%", maxWidth:520, background:"#fff", border:"1.5px solid #e8e5de", borderRadius:12, padding:"12px 14px", maxHeight:200, overflowY:"auto", textAlign:"left" as const, fontFamily:"monospace", fontSize:11 }}>
           {logLines.map((l,i) => (
-            <div key={i} style={{ color: l.type==='ok'?'#059669':l.type==='warn'?'#d97706':l.type==='error'?'#dc2626':'#4f46e5', lineHeight:1.8 }}>
+            <div key={i} style={{ color: l.type==='ok'?'#059669':l.type==='warn'?'#d97706':l.type==='error'?'#dc2626':'#7C6FE0', lineHeight:1.8 }}>
               {l.msg}
             </div>
           ))}
@@ -209,7 +209,7 @@ export function Step7Generate() {
           {[
             { v: result.conflicts, l: "Conflicts", color: result.conflicts>0?"#dc2626":"#059669" },
             { v: result.score,     l: "Penalty Score", color: result.score<20?"#059669":"#d97706" },
-            { v: result.suggestions, l: "Suggestions", color: "#4f46e5" },
+            { v: result.suggestions, l: "Suggestions", color: "#7C6FE0" },
           ].map(({ v, l, color }) => (
             <div key={l} style={{ background:"#fff", border:"1.5px solid #e8e5de", borderRadius:10, padding:"12px", textAlign:"center" as const }}>
               <div style={{ fontSize:22, fontWeight:700, fontFamily:"monospace", color }}>{v}</div>

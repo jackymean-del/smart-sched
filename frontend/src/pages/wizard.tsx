@@ -11,10 +11,10 @@ import { CheckCircle2 } from "lucide-react"
 const STEPS = [Step1Org, StepBell, StepResources, Step6Generate]
 
 const STEP_META = [
-  { label:"School",      sub:"Board, grades & scale",       icon:"🏫", color:"#4f46e5" },
-  { label:"Schedule",    sub:"Days, periods & breaks",      icon:"🔔", color:"#0891b2" },
-  { label:"Resources",   sub:"Classes, teachers & subjects",icon:"📋", color:"#059669" },
-  { label:"Generate",    sub:"Build & review timetable",    icon:"✨", color:"#7c3aed" },
+  { label:"School",      sub:"Board, grades & scale",       icon:"🏫", color:"#7C6FE0" },
+  { label:"Schedule",    sub:"Days, periods & breaks",      icon:"🔔", color:"#9B8EF5" },
+  { label:"Resources",   sub:"Classes, teachers & subjects",icon:"📋", color:"#7C6FE0" },
+  { label:"Generate",    sub:"Build & review timetable",    icon:"✨", color:"#D4920E" },
 ]
 
 // ── Error boundary ────────────────────────────────────────────
@@ -45,13 +45,14 @@ class StepErrorBoundary extends Component<
   }
 }
 
-// ── Sidebar palette (matches AppSidebar) ─────────────────────
-const SB_BG     = '#111827'
-const SB_BORDER = '#1f2937'
-const SB_DIM    = '#6b7280'
-const SB_MID    = '#9ca3af'
+// ── Sidebar palette — Bhusku / SchedU Lavender Modern ─────────
+const SB_BG     = '#13111E'   // Ink Purple
+const SB_BORDER = '#1E1B2E'   // Deep Aubergine
+const SB_DIM    = '#6b7080'
+const SB_MID    = '#8B87AD'
 const SB_ON     = '#e5e7eb'
 const SB_WHITE  = '#fff'
+const SB_ACCENT = '#7C6FE0'   // Lavender
 
 // ── Main ─────────────────────────────────────────────────────
 export function WizardPage() {
@@ -113,8 +114,8 @@ export function WizardPage() {
                   <div style={{
                     width: 28, height: 28, borderRadius: "50%", flexShrink: 0,
                     display: "flex", alignItems: "center", justifyContent: "center",
-                    background: done ? "#059669" : active ? s.color : "#1f2937",
-                    border: future ? `1.5px solid #374151` : "none",
+                    background: done ? SB_ACCENT : active ? s.color : "#1E1B2E",
+                    border: future ? `1.5px solid #2A2642` : "none",
                     transition: "background 0.2s",
                   }}>
                     {done
@@ -141,7 +142,7 @@ export function WizardPage() {
                 {i < total - 1 && (
                   <div style={{
                     width: 1.5, height: 8, marginLeft: 27, marginTop: 1, marginBottom: 1,
-                    background: done ? "#059669" : SB_BORDER,
+                    background: done ? SB_ACCENT : SB_BORDER,
                     transition: "background 0.3s",
                   }} />
                 )}
@@ -154,12 +155,12 @@ export function WizardPage() {
         <div style={{ padding: "14px 16px", borderTop: `1px solid ${SB_BORDER}` }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
             <span style={{ fontSize: 10, color: SB_DIM }}>Progress</span>
-            <span style={{ fontSize: 10, fontWeight: 700, color: pct === 100 ? "#34d399" : SB_MID }}>{pct}% complete</span>
+            <span style={{ fontSize: 10, fontWeight: 700, color: pct === 100 ? "#9B8EF5" : SB_MID }}>{pct}% complete</span>
           </div>
-          <div style={{ height: 4, background: "#1f2937", borderRadius: 2, overflow: "hidden" }}>
+          <div style={{ height: 4, background: "#1E1B2E", borderRadius: 2, overflow: "hidden" }}>
             <div style={{
               height: "100%", borderRadius: 2, transition: "width 0.35s ease",
-              background: pct === 100 ? "#059669" : "linear-gradient(90deg, #4f46e5, #059669)",
+              background: pct === 100 ? SB_ACCENT : "linear-gradient(90deg, #7C6FE0, #9B8EF5)",
               width: `${pct}%`,
             }} />
           </div>
@@ -169,7 +170,7 @@ export function WizardPage() {
       {/* ═══════════════════════════════════
           CONTENT AREA
       ═══════════════════════════════════ */}
-      <div style={{ flex: 1, overflowY: "auto", background: "#f4f6fb", display: "flex", flexDirection: "column" }}>
+      <div style={{ flex: 1, overflowY: "auto", background: "#F9F8FF", display: "flex", flexDirection: "column" }}>
 
         {/* ── Sticky sub-header bar ── */}
         <div style={{

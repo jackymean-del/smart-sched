@@ -147,7 +147,7 @@ export function Step6Generate() {
 
   const ringColor =
     job?.status === "completed" ? "#059669" :
-    job?.status === "failed"    ? "#dc2626" : "#4f46e5"
+    job?.status === "failed"    ? "#dc2626" : "#7C6FE0"
 
   const elapsed = job?.startedAt ? ((Date.now() - job.startedAt) / 1000).toFixed(1) : "0.0"
 
@@ -195,7 +195,7 @@ export function Step6Generate() {
               <defs>
                 <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="0%">
                   <stop offset="0%" stopColor="#818cf8" stopOpacity="0"/>
-                  <stop offset="100%" stopColor="#4f46e5"/>
+                  <stop offset="100%" stopColor="#7C6FE0"/>
                 </linearGradient>
               </defs>
             </svg>
@@ -235,7 +235,7 @@ export function Step6Generate() {
         <div key={job.currentStep}
           style={{ animation:"fade-up 0.3s ease", fontSize:14, color: job.status==="failed"?"#dc2626": job.status==="completed"?"#059669":"#374151", fontWeight:500, maxWidth:420, lineHeight:1.5 }}>
           {job.status === "running" && (
-            <span style={{ display:"inline-block", width:8, height:8, borderRadius:"50%", background:"#4f46e5", marginRight:8, animation:"pulse-dot 1s ease-in-out infinite", verticalAlign:"middle" }}/>
+            <span style={{ display:"inline-block", width:8, height:8, borderRadius:"50%", background:"#7C6FE0", marginRight:8, animation:"pulse-dot 1s ease-in-out infinite", verticalAlign:"middle" }}/>
           )}
           {job.currentStep}
         </div>
@@ -307,7 +307,7 @@ export function Step6Generate() {
         {!job && (
           <>
             <button onClick={startGenerate}
-              style={{ display:"flex", alignItems:"center", gap:8, padding:"13px 36px", borderRadius:10, border:"none", background:"#4f46e5", color:"#fff", fontSize:15, fontWeight:700, cursor:"pointer", boxShadow:"0 4px 20px rgba(79,70,229,0.35)" }}>
+              style={{ display:"flex", alignItems:"center", gap:8, padding:"13px 36px", borderRadius:10, border:"none", background:"#7C6FE0", color:"#fff", fontSize:15, fontWeight:700, cursor:"pointer", boxShadow:"0 4px 20px rgba(79,70,229,0.35)" }}>
               ✨ Generate {T.schedule}
             </button>
             <button onClick={() => setStep(3)}

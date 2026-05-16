@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "brand-preview",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["serve", "-s", "brand-preview", "-l", "4200", "--no-clipboard"],
+      "port": 4200
+    }
+  ]
+}
