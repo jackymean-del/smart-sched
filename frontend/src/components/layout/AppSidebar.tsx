@@ -3,6 +3,7 @@ import {
   CalendarDays, LayoutDashboard, BookOpen, BarChart2,
   Users, Settings, HelpCircle, FileText, ChevronLeft,
   ChevronRight, LogOut, Sparkles, Calendar, CheckCircle2,
+  Database,
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 
@@ -34,7 +35,8 @@ const NAV_MAIN: NavItem[] = [
 ]
 
 const NAV_MGMT: NavItem[] = [
-  { icon: <Users    size={15} />, label: 'Resources',  href: '/wizard' },
+  { icon: <Database size={15} />, label: 'Master Data', href: '/master-data' },
+  { icon: <Users    size={15} />, label: 'Resources',   href: '/wizard' },
   { icon: <Settings size={15} />, label: 'Settings',   href: '#' },
 ]
 

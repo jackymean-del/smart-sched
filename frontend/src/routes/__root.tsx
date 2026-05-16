@@ -9,7 +9,7 @@ export const Route = createRootRoute({
 })
 
 // Pages that get the dark sidebar app-shell (no topbar)
-const APP_PATHS = ['/dashboard', '/timetable', '/demo']
+const APP_PATHS = ['/dashboard', '/timetable', '/demo', '/master-data']
 
 // Wizard pages render their own dark sidebar; we only show the slim topbar
 const WIZARD_PATH = '/wizard'
