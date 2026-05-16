@@ -24,7 +24,7 @@ function RootLayout() {
   // ── App pages: dark sidebar + outlet ──────────────────────
   if (isAppPage) {
     return (
-      <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: '#F9F8FF' }}>
+      <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: '#F5F2FF' }}>
         <AppSidebar
           collapsed={sidebarCollapsed}
           onToggle={() => setSidebarCollapsed(c => !c)}
@@ -71,7 +71,7 @@ function WizardTopbar() {
 
   return (
     <header style={{
-      height: 52, background: '#13111E', borderBottom: '1px solid #1E1B2E',
+      height: 52, background: '#FFFFFF', borderBottom: '1px solid #E8E4FF',
       display: 'flex', alignItems: 'center', padding: '0 20px', gap: 14,
       flexShrink: 0, zIndex: 100,
     }}>
@@ -85,28 +85,28 @@ function WizardTopbar() {
           </svg>
         </div>
         <div>
-          <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#6b7080', lineHeight: 1, marginBottom: 2 }}>by bhusku</div>
-          <div style={{ fontFamily: "'Inter',sans-serif", fontSize: 15, fontWeight: 900, color: '#fff', letterSpacing: '-0.5px', lineHeight: 1 }}>
-            Sched<span style={{ color: '#9B8EF5', fontFamily: "'DM Serif Display',Georgia,serif", fontStyle: 'italic', fontSize: 16 }}>U</span>
+          <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#8B87AD', lineHeight: 1, marginBottom: 2 }}>by bhusku</div>
+          <div style={{ fontFamily: "'Inter',sans-serif", fontSize: 15, fontWeight: 900, color: '#13111E', letterSpacing: '-0.5px', lineHeight: 1 }}>
+            Sched<span style={{ color: '#7C6FE0', fontFamily: "'DM Serif Display',Georgia,serif", fontStyle: 'italic', fontSize: 16 }}>U</span>
           </div>
         </div>
       </a>
 
       {/* Step progress — center */}
       <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 14px', background: 'rgba(124,111,224,0.08)', borderRadius: 20, border: '1px solid #2A2642' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 14px', background: '#F5F2FF', borderRadius: 20, border: '1px solid #E8E4FF' }}>
           <div style={{ display: 'flex', gap: 5 }}>
             {Array.from({ length: total }).map((_, i) => (
               <div key={i} style={{
                 height: 5, borderRadius: 3,
                 width: i + 1 === step ? 18 : 6,
-                background: i + 1 < step ? '#7C6FE0' : i + 1 === step ? '#9B8EF5' : '#2A2642',
+                background: i + 1 < step ? '#7C6FE0' : i + 1 === step ? '#9B8EF5' : '#D8D2FF',
                 transition: 'all 0.25s',
               }} />
             ))}
           </div>
-          <span style={{ fontSize: 11, color: '#8B87AD' }}>
-            Step {step}/{total}: <strong style={{ color: '#e5e7eb' }}>{stepInfo?.label}</strong>
+          <span style={{ fontSize: 11, color: '#4B5275' }}>
+            Step {step}/{total}: <strong style={{ color: '#13111E' }}>{stepInfo?.label}</strong>
           </span>
         </div>
       </div>
@@ -115,14 +115,14 @@ function WizardTopbar() {
       {user && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
           <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: '#e5e7eb' }}>{user.name}</div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#13111E' }}>{user.name}</div>
             {user.schoolName && <div style={{ fontSize: 10, color: '#8B87AD' }}>{user.schoolName}</div>}
           </div>
           <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#7C6FE0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 12, fontWeight: 700 }}>
             {user.name[0].toUpperCase()}
           </div>
           <button onClick={() => { logout(); window.location.href = '/login' }}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6b7280', display: 'flex', alignItems: 'center', padding: 4 }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8B87AD', display: 'flex', alignItems: 'center', padding: 4 }}
             title="Logout">
             <LogOut size={14} />
           </button>

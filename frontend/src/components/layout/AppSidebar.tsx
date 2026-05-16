@@ -6,16 +6,18 @@ import {
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 
-// ── Sidebar palette — Bhusku / SchedU Lavender Modern ─────────
-const BG        = '#13111E'   // Ink Purple (Bhusku dark)
-const BG_HOVER  = 'rgba(124,111,224,0.07)'
-const BG_ACTIVE = 'rgba(124,111,224,0.12)'
-const TEXT_DIM  = '#6b7080'
-const TEXT_MID  = '#8B87AD'
-const TEXT_ON   = '#e5e7eb'
-const TEXT_ACT  = '#fff'
-const BORDER    = '#1E1B2E'   // Deep Aubergine
-const ACCENT    = '#7C6FE0'   // Lavender Violet
+// ── Sidebar palette — Bhusku / SchedU White Lavender ──────────
+const BG          = '#FFFFFF'   // Pure white sidebar
+const BG_HOVER    = '#F5F2FF'   // Very light lavender hover
+const BG_ACTIVE   = '#EDE9FF'   // Lavender mist (active)
+const TEXT_DIM    = '#9CA3AF'   // Cool grey (inactive icons)
+const TEXT_MID    = '#4B5275'   // Mid purple-grey (inactive labels)
+const TEXT_ON     = '#13111E'   // Deep ink (active label)
+const TEXT_ACT    = '#7C6FE0'   // Lavender (active icon)
+const BORDER      = '#E8E4FF'   // Lavender border (divisions)
+const BORDER_SOFT = '#F0EDFF'   // Softer divider
+const ACCENT      = '#7C6FE0'   // Lavender Violet
+const GROUP_LABEL = '#8B87AD'   // Group label text
 
 interface NavItem {
   icon: React.ReactNode
@@ -56,9 +58,9 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
     <div style={{ marginBottom: 4 }}>
       {!collapsed && (
         <div style={{
-          fontSize: 9, fontWeight: 700, letterSpacing: '0.1em',
-          color: TEXT_DIM, textTransform: 'uppercase',
-          padding: '10px 16px 4px',
+          fontSize: 9, fontWeight: 700, letterSpacing: '0.12em',
+          color: GROUP_LABEL, textTransform: 'uppercase',
+          padding: '12px 16px 6px',
         }}>
           {label}
         </div>
@@ -82,8 +84,8 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
               textDecoration: 'none',
               background: isActive ? BG_ACTIVE : 'transparent',
               borderLeft: isActive ? `3px solid ${ACCENT}` : '3px solid transparent',
-              color: isActive ? TEXT_ACT : TEXT_MID,
-              fontWeight: isActive ? 600 : 400,
+              color: isActive ? TEXT_ON : TEXT_MID,
+              fontWeight: isActive ? 600 : 500,
               fontSize: 12,
               justifyContent: collapsed ? 'center' : 'flex-start',
               transition: 'background 0.12s',
@@ -95,7 +97,7 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
               if (!isActive) (e.currentTarget as HTMLAnchorElement).style.background = 'transparent'
             }}
           >
-            <span style={{ flexShrink: 0, color: isActive ? ACCENT : TEXT_DIM }}>{item.icon}</span>
+            <span style={{ flexShrink: 0, color: isActive ? TEXT_ACT : TEXT_DIM, display: 'flex' }}>{item.icon}</span>
             {!collapsed && (
               <>
                 <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -145,9 +147,9 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
                 </svg>
               </div>
               <div>
-                <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: TEXT_DIM, lineHeight: 1, marginBottom: 2 }}>by bhusku</div>
-                <div style={{ fontFamily: "'Inter',sans-serif", fontSize: 15, fontWeight: 900, color: '#fff', letterSpacing: '-0.5px', lineHeight: 1 }}>
-                  Sched<span style={{ color: '#9B8EF5', fontFamily: "'DM Serif Display',Georgia,serif", fontStyle: 'italic', fontSize: 16 }}>U</span>
+                <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: GROUP_LABEL, lineHeight: 1, marginBottom: 2 }}>by bhusku</div>
+                <div style={{ fontFamily: "'Inter',sans-serif", fontSize: 15, fontWeight: 900, color: TEXT_ON, letterSpacing: '-0.5px', lineHeight: 1 }}>
+                  Sched<span style={{ color: ACCENT, fontFamily: "'DM Serif Display',Georgia,serif", fontStyle: 'italic', fontSize: 16 }}>U</span>
                 </div>
               </div>
             </a>
@@ -156,7 +158,7 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
               title="Collapse sidebar"
               style={{
                 width: 24, height: 24, borderRadius: 5,
-                border: `1px solid ${BORDER}`, background: 'rgba(255,255,255,0.04)',
+                border: `1px solid ${BORDER}`, background: BG_HOVER,
                 cursor: 'pointer', display: 'flex', alignItems: 'center',
                 justifyContent: 'center', color: TEXT_DIM,
               }}
@@ -182,7 +184,7 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
         <button onClick={onToggle} title="Expand"
           style={{
             margin: '8px auto 4px', width: 34, height: 26, borderRadius: 6,
-            border: `1px solid ${BORDER}`, background: 'rgba(255,255,255,0.04)',
+            border: `1px solid ${BORDER}`, background: BG_HOVER,
             cursor: 'pointer', display: 'flex', alignItems: 'center',
             justifyContent: 'center', color: TEXT_DIM,
           }}>
@@ -196,14 +198,14 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
           padding: '12px 16px', borderBottom: `1px solid ${BORDER}`,
           flexShrink: 0,
         }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: TEXT_DIM, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: GROUP_LABEL, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>
             My Workspace
           </div>
-          <div style={{ fontSize: 12, color: TEXT_ACT, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <div style={{ fontSize: 12, color: TEXT_ON, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {user.schoolName || user.name}
           </div>
           {user.schoolName && (
-            <div style={{ fontSize: 10, color: TEXT_DIM, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <div style={{ fontSize: 10, color: GROUP_LABEL, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {user.name}
             </div>
           )}

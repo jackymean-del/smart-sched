@@ -45,13 +45,16 @@ class StepErrorBoundary extends Component<
   }
 }
 
-// ── Sidebar palette — Bhusku / SchedU Lavender Modern ─────────
-const SB_BG     = '#13111E'   // Ink Purple
-const SB_BORDER = '#1E1B2E'   // Deep Aubergine
-const SB_DIM    = '#6b7080'
-const SB_MID    = '#8B87AD'
-const SB_ON     = '#e5e7eb'
-const SB_WHITE  = '#fff'
+// ── Sidebar palette — Bhusku / SchedU White Lavender ──────────
+const SB_BG     = '#FFFFFF'   // Pure white sidebar
+const SB_BORDER = '#E8E4FF'   // Lavender border (divisions)
+const SB_HOVER  = '#F5F2FF'   // Light lavender hover
+const SB_ACTIVE = '#EDE9FF'   // Lavender mist (active step)
+const SB_DIM    = '#9CA3AF'   // Cool grey
+const SB_MID    = '#4B5275'   // Mid purple-grey
+const SB_ON     = '#13111E'   // Deep ink (active text)
+const SB_WHITE  = '#13111E'   // (renamed: now deep ink, kept name for compat)
+const SB_LABEL  = '#8B87AD'   // Group label
 const SB_ACCENT = '#7C6FE0'   // Lavender
 
 // ── Main ─────────────────────────────────────────────────────
@@ -103,19 +106,19 @@ export function WizardPage() {
                     width: "100%", display: "flex", alignItems: "center", gap: 12,
                     padding: "10px 16px", border: "none", textAlign: "left",
                     borderLeft: active ? `3px solid ${s.color}` : "3px solid transparent",
-                    background: active ? "rgba(255,255,255,0.06)" : "transparent",
+                    background: active ? SB_ACTIVE : "transparent",
                     cursor: done ? "pointer" : "default",
                     transition: "background 0.12s",
                   }}
-                  onMouseEnter={e => { if (done) (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.04)" }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = active ? "rgba(255,255,255,0.06)" : "transparent" }}
+                  onMouseEnter={e => { if (done) (e.currentTarget as HTMLButtonElement).style.background = SB_HOVER }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = active ? SB_ACTIVE : "transparent" }}
                 >
                   {/* Circle indicator */}
                   <div style={{
                     width: 28, height: 28, borderRadius: "50%", flexShrink: 0,
                     display: "flex", alignItems: "center", justifyContent: "center",
-                    background: done ? SB_ACCENT : active ? s.color : "#1E1B2E",
-                    border: future ? `1.5px solid #2A2642` : "none",
+                    background: done ? SB_ACCENT : active ? s.color : "#F0EDFF",
+                    border: future ? `1.5px solid ${SB_BORDER}` : "none",
                     transition: "background 0.2s",
                   }}>
                     {done
@@ -132,7 +135,7 @@ export function WizardPage() {
                     }}>
                       {s.label}
                     </div>
-                    <div style={{ fontSize: 10, color: active ? "#9ca3af" : "#374151", marginTop: 2 }}>
+                    <div style={{ fontSize: 10, color: active ? SB_MID : SB_DIM, marginTop: 2 }}>
                       {s.sub}
                     </div>
                   </div>
@@ -157,7 +160,7 @@ export function WizardPage() {
             <span style={{ fontSize: 10, color: SB_DIM }}>Progress</span>
             <span style={{ fontSize: 10, fontWeight: 700, color: pct === 100 ? "#9B8EF5" : SB_MID }}>{pct}% complete</span>
           </div>
-          <div style={{ height: 4, background: "#1E1B2E", borderRadius: 2, overflow: "hidden" }}>
+          <div style={{ height: 4, background: SB_BORDER, borderRadius: 2, overflow: "hidden" }}>
             <div style={{
               height: "100%", borderRadius: 2, transition: "width 0.35s ease",
               background: pct === 100 ? SB_ACCENT : "linear-gradient(90deg, #7C6FE0, #9B8EF5)",
