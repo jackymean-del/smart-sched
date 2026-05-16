@@ -8,10 +8,11 @@
  *   - Utilization summary + capacity warnings
  */
 
-import { useMemo } from 'react'
-import type { OptionalBlock, SubjectCombination, Period } from '@/types'
+import { useMemo, useState } from 'react'
+import type { OptionalBlock, SubjectCombination, Period, Staff, ClassTimetable } from '@/types'
 import { getSubjectColor } from '@/lib/orgData'
-import { Calendar, Users2, MapPin, AlertTriangle, CheckCircle2, Layers } from 'lucide-react'
+import { Calendar, Users2, MapPin, AlertTriangle, CheckCircle2, Layers, Sparkles } from 'lucide-react'
+import { WhatIfModal } from './WhatIfModal'
 
 const DAY_LABEL: Record<string, string> = {
   MONDAY: 'Mon', TUESDAY: 'Tue', WEDNESDAY: 'Wed',
@@ -22,9 +23,14 @@ interface Props {
   optionalBlocks: OptionalBlock[]
   subjectCombinations: SubjectCombination[]
   periods: Period[]
+  // Phase 5 — optional props for What-If simulator
+  classTT?: ClassTimetable
+  staff?: Staff[]
+  workDays?: string[]
 }
 
-export function OptionalBlockView({ optionalBlocks, subjectCombinations, periods }: Props) {
+export function OptionalBlockView({ optionalBlocks, subjectCombinations, periods, classTT, staff, workDays }: Props) {
+  const [whatIfBlock, setWhatIfBlock] = useState<OptionalBlock | null>(null)
   const periodById = useMemo(() => {
     const m = new Map<string, Period>()
     periods.forEach(p => m.set(p.id, p))
@@ -56,7 +62,7 @@ export function OptionalBlockView({ optionalBlocks, subjectCombinations, periods
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: 4 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))', gap: 14 }}>
+      <div data-app-shell="block-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))', gap: 14 }}>
         {optionalBlocks.map(block => {
           const totalCap = block.options.reduce((s, o) => s + (o.capacity ?? 0), 0)
           const totalAlloc = block.options.reduce((s, o) => s + (o.allocatedStrength ?? 0), 0)
@@ -202,10 +208,40 @@ export function OptionalBlockView({ optionalBlocks, subjectCombinations, periods
                   }} />
                 </div>
               )}
+
+              {/* What-If button */}
+              {classTT && staff && workDays && (
+                <div style={{ padding: '10px 14px', borderTop: '1px solid #E8E4FF', background: '#fff' }}>
+                  <button
+                    onClick={() => setWhatIfBlock(block)}
+                    style={{
+                      width: '100%', padding: '8px 12px', borderRadius: 8,
+                      border: '1px solid #D8D2FF', background: 'linear-gradient(135deg, #EDE9FF 0%, #FAFAFE 100%)',
+                      color: '#7C6FE0', fontSize: 11.5, fontWeight: 700, cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                      letterSpacing: '0.02em',
+                    }}>
+                    <Sparkles size={12} /> Run What-If Simulation
+                  </button>
+                </div>
+              )}
             </div>
           )
         })}
       </div>
+
+      {/* What-If modal */}
+      {whatIfBlock && classTT && staff && workDays && (
+        <WhatIfModal
+          block={whatIfBlock}
+          subjectCombinations={subjectCombinations}
+          classTT={classTT}
+          staff={staff}
+          periods={periods}
+          workDays={workDays}
+          onClose={() => setWhatIfBlock(null)}
+        />
+      )}
     </div>
   )
 }

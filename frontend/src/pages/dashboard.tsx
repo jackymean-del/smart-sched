@@ -47,10 +47,28 @@ function scoreCandidate(
       s.endsWith(`::${slot.subject}`) ||
       (!s.includes('::') && s === slot.subject)
   )
+  // schedU Phase 5 — block-aware busy check
+  // A candidate is "busy" if at the absent slot:
+  //   (a) they teach a regular cell in another section, OR
+  //   (b) they're inside an Optional Block option at that slot
+  //       (in any section sharing the block)
   const isBusy = Object.entries(classTT).some(
-    ([sec, sd]: [string, any]) =>
-      sec !== slot.sectionName && sd[absentDay]?.[slot.periodId]?.teacher === st.name
+    ([sec, sd]: [string, any]) => {
+      if (sec === slot.sectionName) return false
+      const cell: any = sd[absentDay]?.[slot.periodId]
+      if (!cell) return false
+      if (cell.teacher === st.name) return true
+      if (cell.options && Array.isArray(cell.options)) {
+        return cell.options.some((o: any) => o.teacher === st.name)
+      }
+      return false
+    }
   )
+  // Additional check: is this slot itself part of a block where st is already assigned?
+  const cellAtSlot: any = classTT[slot.sectionName]?.[absentDay]?.[slot.periodId]
+  const inSameBlock = cellAtSlot?.options && Array.isArray(cellAtSlot.options)
+    ? cellAtSlot.options.some((o: any) => o.teacher === st.name)
+    : false
   const workloadToday = Object.values(
     teacherTT[st.name]?.schedule?.[absentDay] ?? {}
   ).filter((x: any) => x?.subject).length
@@ -60,13 +78,15 @@ function scoreCandidate(
     a + Object.values(d).filter((x: any) => x?.subject).length, 0)
   const maxW = st.maxPeriodsPerWeek ?? 30
   const subFreq = Object.values(substitutions).filter(v => v === st.name).length
+  // Block-conflict penalty: candidate already in same block? Hard exclusion.
   const score =
     (subjectMatch ? 50 : 0) +
     (isBusy ? 0 : 30) +
+    (inSameBlock ? -1000 : 0) +     // Phase 5: hard exclusion for in-block teachers
     (workloadToday < 4 ? 20 : workloadToday < 6 ? 10 : 0) +
     (workloadWeek < maxW * 0.8 ? 10 : 0) +
     (subFreq < 3 ? 5 : 0)
-  return { subjectMatch, isBusy, workloadToday, workloadWeek, maxW, subFreq, score }
+  return { subjectMatch, isBusy, inSameBlock, workloadToday, workloadWeek, maxW, subFreq, score }
 }
 
 export function DashboardPage() {
@@ -172,12 +192,12 @@ export function DashboardPage() {
     <div style={{ minHeight: '100vh', background: '#F9F8FF', display: 'flex', flexDirection: 'column' }}>
 
       {/* ── SchedU branding strip ─────────────────────────────── */}
-      <div style={{
+      <div data-app-shell="brand-strip" style={{
         background: '#FFFFFF', borderBottom: '1px solid #E8E4FF',
         padding: '12px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16,
       }}>
         <SchedUWordmark iconSize={36} fontSize={18} showTagline />
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }} data-mobile-hide="true">
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#8B87AD' }}>
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22C55E' }} />
             All systems normal
@@ -203,7 +223,7 @@ export function DashboardPage() {
       />
 
       {/* ── Two-column body ──────────────────────────────────── */}
-      <div style={{
+      <div data-app-shell="dashboard-2col" style={{
         display: 'grid',
         gridTemplateColumns: '280px minmax(0, 1fr)',
         gap: 0,
@@ -537,6 +557,9 @@ export function DashboardPage() {
                   optionalBlocks={(store as any).optionalBlocks ?? []}
                   subjectCombinations={(store as any).subjectCombinations ?? []}
                   periods={periods}
+                  classTT={classTT}
+                  staff={staff}
+                  workDays={workDays}
                 />
               )}
             </div>

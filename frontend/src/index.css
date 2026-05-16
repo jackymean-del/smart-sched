@@ -87,3 +87,53 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 input[type=number]::-webkit-inner-spin-button,
 input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 input[type=number] { -moz-appearance: textfield; appearance: textfield; }
+
+/* ─────────────────────────────────────────────────────────
+   Mobile responsive (Phase 5)
+   Tablet:  ≤ 1024px — narrower sidebar, smaller paddings
+   Mobile:  ≤ 768px  — single column, stacked stats, collapsed nav
+   ───────────────────────────────────────────────────────── */
+@media (max-width: 1024px) {
+  html { font-size: 12px; }
+  /* Tighten the dashboard 2-column to put more weight on the schedule */
+  [data-app-shell="dashboard-2col"] {
+    grid-template-columns: 240px minmax(0, 1fr) !important;
+  }
+}
+
+@media (max-width: 768px) {
+  html { font-size: 12px; }
+  /* Stack dashboard columns */
+  [data-app-shell="dashboard-2col"] {
+    display: block !important;
+    grid-template-columns: 1fr !important;
+  }
+  /* Sidebar collapses to a top strip on mobile */
+  [data-app-shell="app-sidebar"] {
+    width: 100% !important; height: auto !important;
+    position: relative !important; flex-direction: row !important;
+    overflow-x: auto !important; padding: 6px 10px !important;
+    border-right: none !important; border-bottom: 1px solid #E8E4FF !important;
+  }
+  /* Optional Block cards stack full-width */
+  [data-app-shell="block-grid"] {
+    grid-template-columns: 1fr !important;
+  }
+  /* What-If modal becomes single column */
+  [data-app-shell="whatif-body"] {
+    grid-template-columns: 1fr !important;
+  }
+  /* Tables horizontally scrollable */
+  table { font-size: 10px; }
+  /* Tighter card padding */
+  .responsive-card { padding: 12px !important; }
+  /* Branding strip more compact */
+  [data-app-shell="brand-strip"] {
+    padding: 10px 14px !important; gap: 8px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Tiny screens — hide all-systems badge, condense further */
+  [data-mobile-hide="true"] { display: none !important; }
+}
