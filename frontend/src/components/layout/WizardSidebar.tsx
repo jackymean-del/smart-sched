@@ -1,13 +1,12 @@
 import { useTimetableStore } from "@/store/timetableStore"
 
 export const WIZARD_STEPS = [
-  { n: 1, label: 'Organization type' },
-  { n: 2, label: 'Country & standards' },
-  { n: 3, label: 'Schedule settings' },
-  { n: 4, label: 'How many of each?' },
-  { n: 5, label: 'Review & edit data' },
-  { n: 6, label: 'Assign subjects & staff' },
-  { n: 7, label: 'Generate timetable' },
+  { n: 1, label: 'School' },
+  { n: 2, label: 'Schedule' },
+  { n: 3, label: 'Resources' },
+  { n: 4, label: 'Optional Blocks' },
+  { n: 5, label: 'Combinations' },
+  { n: 6, label: 'Generate' },
 ]
 
 interface Props {

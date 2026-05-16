@@ -43,6 +43,10 @@ import type {
   SubjectPool,
   OptionalCombination,
 
+  // schedU Phase 2 — Optional Blocks + Combinations (Final Doc)
+  OptionalBlock,
+  SubjectCombination,
+
   // Legacy (used by existing wizard + engine)
   Section,
   Staff,
@@ -129,6 +133,10 @@ interface ScheduState {
   subjectPools: SubjectPool[]
   schedulingMode: 'period-based' | 'duration-based'
   workingDaysPerYear: number
+
+  // ── schedU Phase 2 — Optional Blocks + Combinations ──
+  optionalBlocks: OptionalBlock[]
+  subjectCombinations: SubjectCombination[]
 
   // ─────────────────────────────────────────────────────────────
   //  ACTIONS — Schedu model
@@ -219,6 +227,14 @@ interface ScheduState {
   togglePeriodShiftable: (periodId: string) => void
   updateCell: (section: string, day: string, periodId: string, cell: Partial<TimetableCell>) => void
 
+  // ── schedU Phase 2 actions ──
+  setOptionalBlocks: (b: OptionalBlock[]) => void
+  upsertOptionalBlock: (b: OptionalBlock) => void
+  removeOptionalBlock: (id: string) => void
+  setSubjectCombinations: (c: SubjectCombination[]) => void
+  upsertSubjectCombination: (c: SubjectCombination) => void
+  removeSubjectCombination: (id: string) => void
+
   resetWizard: () => void
   resetAll: () => void
 }
@@ -250,6 +266,8 @@ const initialState: Omit<ScheduState,
   | 'setParticipantPools' | 'setFacilities' | 'setTeacherPools' | 'setRooms'
   | 'setOptionalConfigs' | 'setSubjectPools' | 'setSchedulingMode' | 'setWorkingDaysPerYear'
   | 'togglePeriodShiftable' | 'updateCell'
+  | 'setOptionalBlocks' | 'upsertOptionalBlock' | 'removeOptionalBlock'
+  | 'setSubjectCombinations' | 'upsertSubjectCombination' | 'removeSubjectCombination'
   | 'resetWizard' | 'resetAll'
 > = {
   step: 1,
@@ -304,6 +322,8 @@ const initialState: Omit<ScheduState,
   rooms: [],
   optionalConfigs: [],
   subjectPools: [],
+  optionalBlocks: [],
+  subjectCombinations: [],
   schedulingMode: 'period-based',
   workingDaysPerYear: 220,
 }
@@ -459,6 +479,28 @@ export const useTimetableStore = create<ScheduState>()(
         setSubjectPools: (subjectPools) => set({ subjectPools }),
         setSchedulingMode: (schedulingMode) => set({ schedulingMode }),
         setWorkingDaysPerYear: (workingDaysPerYear) => set({ workingDaysPerYear }),
+
+        // ── schedU Phase 2 — Optional Blocks + Combinations ──
+        setOptionalBlocks: (optionalBlocks) => set({ optionalBlocks }),
+        upsertOptionalBlock: (b) => set((s) => {
+          const i = s.optionalBlocks.findIndex(x => x.id === b.id)
+          return i >= 0
+            ? { optionalBlocks: s.optionalBlocks.map((x, idx) => idx === i ? b : x) }
+            : { optionalBlocks: [...s.optionalBlocks, b] }
+        }),
+        removeOptionalBlock: (id) => set((s) => ({
+          optionalBlocks: s.optionalBlocks.filter(x => x.id !== id),
+        })),
+        setSubjectCombinations: (subjectCombinations) => set({ subjectCombinations }),
+        upsertSubjectCombination: (c) => set((s) => {
+          const i = s.subjectCombinations.findIndex(x => x.id === c.id)
+          return i >= 0
+            ? { subjectCombinations: s.subjectCombinations.map((x, idx) => idx === i ? c : x) }
+            : { subjectCombinations: [...s.subjectCombinations, c] }
+        }),
+        removeSubjectCombination: (id) => set((s) => ({
+          subjectCombinations: s.subjectCombinations.filter(x => x.id !== id),
+        })),
 
         togglePeriodShiftable: (periodId) => set((s) => ({
           periods: s.periods.map(p =>
