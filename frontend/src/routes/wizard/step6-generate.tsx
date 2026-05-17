@@ -3,6 +3,7 @@ import { useTimetableStore } from "@/store/timetableStore"
 import { useTerminology } from "@/hooks/useTerminology"
 import { buildPeriodSequence } from "@/lib/aiEngine"
 import { solveTimetable, generateSuggestions, durationToWeeklyPeriods } from "@/lib/schedulingEngine"
+import { ReviewDashboard } from "@/components/master/ReviewDashboard"
 import { getCountry } from "@/lib/orgData"
 
 type JobStatus = "idle" | "running" | "completed" | "failed"
@@ -49,6 +50,7 @@ export function Step6Generate() {
           setStep, setConfig, setTimetableStatus } = store
   const T = useTerminology()
   const [job, setJob] = useState<Job | null>(null)
+  const [solverOutput, setSolverOutput] = useState<ReturnType<typeof solveTimetable> | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // Timetable identity — pre-filled with sensible defaults
@@ -122,6 +124,7 @@ export function Step6Generate() {
       setClassTT(output.classTT)
       setTeacherTT(output.teacherTT)
       setConflicts(output.conflicts)
+      setSolverOutput(output)
       setSuggestions(suggestions)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
@@ -310,6 +313,27 @@ export function Step6Generate() {
               The timetable is saved as a <strong>Draft</strong> after generation. Review it, then publish when ready.
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── Review dashboard (post-generation analytics) ── */}
+      {job?.status === 'completed' && solverOutput && (
+        <div style={{ width: '100%', animation: 'fade-up 0.4s ease 0.2s both' }}>
+          <ReviewDashboard
+            classTT={solverOutput.classTT}
+            sections={store.sections}
+            staff={store.staff}
+            subjects={store.subjects}
+            periods={store.periods}
+            workDays={store.config?.workDays ?? []}
+            optionalBlocks={solverOutput.optionalBlocks ?? []}
+            teacherWeeklyLoad={solverOutput.teacherWeeklyLoad}
+            teacherLoadStddev={solverOutput.teacherLoadStddev}
+            conflicts={solverOutput.conflicts}
+            penalties={solverOutput.penalties}
+            rooms={(store as any).rooms ?? []}
+            score={solverOutput.score}
+          />
         </div>
       )}
 
