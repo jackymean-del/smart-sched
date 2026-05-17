@@ -203,6 +203,13 @@ export interface Subject {
   roomTypeRequired?: RoomType
   /** schedU Scope System — when set, subject can only be scheduled where allowed */
   scope?: ScopeMatrix
+  /** schedU Cross-Class Grouping behavior (Doc: Part 3).
+   *  Controls how the AI may merge sections for parallel/optional sessions.
+   *    NO_GROUPING         — isolated to one section only
+   *    SAME_GRADE_ONLY     — only siblings within the same grade may pool
+   *    CROSS_GRADE_ALLOWED — different grades may pool (PE, assembly, etc.)
+   *    FLEXIBLE_GROUPING   — AI decides dynamically based on capacity + room */
+  groupingBehavior?: 'NO_GROUPING' | 'SAME_GRADE_ONLY' | 'CROSS_GRADE_ALLOWED' | 'FLEXIBLE_GROUPING'
 }
 
 export interface SubjectClassConfig {

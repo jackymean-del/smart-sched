@@ -27,22 +27,19 @@ interface NavItem {
   count?: number
 }
 
-const NAV_MAIN: NavItem[] = [
-  { icon: <LayoutDashboard size={15} />, label: 'Dashboard',          href: '/dashboard' },
-  { icon: <FileText        size={15} />, label: 'My Timetables',      href: '/timetable' },
-  { icon: <Calendar        size={15} />, label: 'Calendar',           href: '/timetable?view=calendar' },
-  { icon: <BarChart2       size={15} />, label: 'Reports',            href: '/timetable?view=reports' },
+// Flat 7-item nav per the schedU wireframe spec — bullet-dot pill style.
+// Two groups visually separated by a hairline, no group labels.
+const NAV_PRIMARY: NavItem[] = [
+  { icon: <span />, label: 'Create new',   href: '/wizard' },
+  { icon: <span />, label: 'Guide',        href: '/guide' },
+  { icon: <span />, label: 'Master',       href: '/master-data' },
 ]
 
-const NAV_MGMT: NavItem[] = [
-  { icon: <Database size={15} />, label: 'Master Data', href: '/master-data' },
-  { icon: <Users    size={15} />, label: 'Resources',   href: '/wizard' },
-  { icon: <Settings size={15} />, label: 'Settings',   href: '#' },
-]
-
-const NAV_HELP: NavItem[] = [
-  { icon: <HelpCircle size={15} />, label: 'Support',   href: '#' },
-  { icon: <BookOpen   size={15} />, label: 'Help Docs', href: '#' },
+const NAV_SECONDARY: NavItem[] = [
+  { icon: <span />, label: 'Settings',     href: '/settings' },
+  { icon: <span />, label: 'Configure',    href: '/configure' },
+  { icon: <span />, label: 'Profile',      href: '/profile' },
+  { icon: <span />, label: 'Subscription', href: '/subscription' },
 ]
 
 interface AppSidebarProps {
@@ -58,7 +55,7 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
 
   const NavGroup = ({ label, items }: { label: string; items: NavItem[] }) => (
     <div style={{ marginBottom: 4 }}>
-      {!collapsed && (
+      {!collapsed && label && (
         <div style={{
           fontSize: 9, fontWeight: 700, letterSpacing: '0.12em',
           color: GROUP_LABEL, textTransform: 'uppercase',
@@ -70,8 +67,9 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
       {collapsed && <div style={{ height: 10 }} />}
 
       {items.map(item => {
+        // Active match for wizard items so /wizard, /master-data, etc. light up correctly
         const isActive = path === item.href ||
-          (item.href !== '/dashboard' && !item.href.includes('?') && path.startsWith(item.href))
+          (item.href !== '/dashboard' && item.href !== '/' && !item.href.includes('?') && path.startsWith(item.href))
         return (
           <a
             key={item.label}
@@ -80,17 +78,16 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
             style={{
               display: 'flex', alignItems: 'center',
               gap: collapsed ? 0 : 10,
-              padding: collapsed ? '9px 0' : '8px 14px',
-              margin: '1px 6px',
+              padding: collapsed ? '8px 0' : '8px 16px',
+              margin: '1px 4px',
               borderRadius: 7,
               textDecoration: 'none',
               background: isActive ? BG_ACTIVE : 'transparent',
-              borderLeft: isActive ? `3px solid ${ACCENT}` : '3px solid transparent',
               color: isActive ? TEXT_ON : TEXT_MID,
-              fontWeight: isActive ? 600 : 500,
-              fontSize: 12,
+              fontWeight: isActive ? 700 : 500,
+              fontSize: 13,
               justifyContent: collapsed ? 'center' : 'flex-start',
-              transition: 'background 0.12s',
+              transition: 'background 0.12s, color 0.12s',
             }}
             onMouseEnter={e => {
               if (!isActive) (e.currentTarget as HTMLAnchorElement).style.background = BG_HOVER
@@ -99,21 +96,18 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
               if (!isActive) (e.currentTarget as HTMLAnchorElement).style.background = 'transparent'
             }}
           >
-            <span style={{ flexShrink: 0, color: isActive ? TEXT_ACT : TEXT_DIM, display: 'flex' }}>{item.icon}</span>
+            {/* Bullet-dot indicator — purple when active, soft when inactive */}
+            <span style={{
+              flexShrink: 0,
+              width: 7, height: 7, borderRadius: '50%',
+              background: isActive ? ACCENT : '#D8D2FF',
+              boxShadow: isActive ? `0 0 0 3px rgba(124,111,224,0.18)` : 'none',
+              transition: 'all 0.15s',
+            }} />
             {!collapsed && (
-              <>
-                <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {item.label}
-                </span>
-                {item.count != null && (
-                  <span style={{
-                    fontSize: 9, fontWeight: 700, padding: '1px 6px',
-                    borderRadius: 8, background: ACCENT, color: '#fff',
-                  }}>
-                    {item.count}
-                  </span>
-                )}
-              </>
+              <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', letterSpacing: '-0.1px' }}>
+                {item.label}
+              </span>
             )}
           </a>
         )
@@ -237,13 +231,11 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
         </a>
       </div>
 
-      {/* ── Nav ── */}
-      <nav style={{ flex: 1, overflowY: 'auto', paddingTop: 4 }}>
-        <NavGroup label="Main" items={NAV_MAIN} />
-        <div style={{ height: 1, background: BORDER, margin: '6px 14px' }} />
-        <NavGroup label="Management" items={NAV_MGMT} />
-        <div style={{ height: 1, background: BORDER, margin: '6px 14px' }} />
-        <NavGroup label="Help & Support" items={NAV_HELP} />
+      {/* ── Nav (bullet-pill, two groups separated by hairline) ── */}
+      <nav style={{ flex: 1, overflowY: 'auto', paddingTop: 12 }}>
+        <NavGroup label="" items={NAV_PRIMARY} />
+        <div style={{ height: 1, background: BORDER, margin: '12px 14px' }} />
+        <NavGroup label="" items={NAV_SECONDARY} />
       </nav>
 
       {/* ── User card ── */}
