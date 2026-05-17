@@ -59,6 +59,63 @@ import type {
   ParticipantPool,
 } from '@/types'
 import { defaultWizardConfig } from '@/types'
+import { parseAllocation } from '@/lib/allocationSyntax'
+
+// ── Bidirectional sync helpers (period ↔ teacher) ───────────
+//   computeNewTarget: parse a cell-syntax string into a numeric total
+//   reflowTeachersForCell: adjust existing teacher assignments so their
+//     sum matches the new target — additions go to the most-loaded
+//     existing teacher; removals drain the least-loaded first. When no
+//     teachers exist yet, the map is returned unchanged (the user can
+//     run "Auto-assign" later).
+
+function computeNewTarget(cellSyntax: string): number {
+  if (!cellSyntax || !cellSyntax.trim()) return 0
+  const parsed = parseAllocation(cellSyntax)
+  return parsed.valid ? parsed.weeklyTotal : 0
+}
+
+function reflowTeachersForCell(
+  matrix: Record<string, Record<string, Record<string, number>>>,
+  section: string, subject: string, newTotal: number,
+): Record<string, Record<string, Record<string, number>>> {
+  // Snapshot existing teachers for this (section, subject)
+  const teachers = Object.entries(matrix)
+    .map(([name, t]) => ({ name, periods: t[section]?.[subject] ?? 0 }))
+    .filter(t => t.periods > 0)
+  const currentSum = teachers.reduce((a, t) => a + t.periods, 0)
+  const diff = newTotal - currentSum
+  if (diff === 0 || teachers.length === 0) return matrix
+
+  const next: Record<string, Record<string, Record<string, number>>> = { ...matrix }
+  if (diff > 0) {
+    // Increase: top up the most-loaded teacher (preserves continuity)
+    teachers.sort((a, b) => b.periods - a.periods)
+    const head = teachers[0]
+    const sec = { ...(next[head.name][section] ?? {}) }
+    sec[subject] = head.periods + diff
+    next[head.name] = { ...next[head.name], [section]: sec }
+  } else {
+    // Decrease: drain from the least-loaded teachers first
+    let remaining = -diff
+    teachers.sort((a, b) => a.periods - b.periods)
+    for (const t of teachers) {
+      if (remaining <= 0) break
+      const take = Math.min(remaining, t.periods)
+      const newP = t.periods - take
+      const sec = { ...(next[t.name][section] ?? {}) }
+      if (newP === 0) delete sec[subject]
+      else sec[subject] = newP
+      const tRow = { ...next[t.name] }
+      if (Object.keys(sec).length === 0) delete tRow[section]
+      else tRow[section] = sec
+      if (Object.keys(tRow).length === 0) delete next[t.name]
+      else next[t.name] = tRow
+      remaining -= take
+    }
+  }
+  return next
+}
 
 // ─────────────────────────────────────────────────────────────
 // STATE SHAPE
@@ -148,6 +205,13 @@ interface ScheduState {
   //    Empty/unset cell ⇒ engine falls back to Subject.periodsPerWeek default.
   //    Named `subjectAllocations` to avoid colliding with engine output `periodAllocations`.
   subjectAllocations: Record<string, Record<string, string>>
+
+  // ── Doc 2 Step 3 — Teacher Allocation matrix ──
+  //    Shape: { [teacherName]: { [sectionName]: { [subjectName]: periods } } }
+  //    Bidirectionally synced with subjectAllocations:
+  //      - Sum of teacherAllocations[*][sec][sub] == parsed total of subjectAllocations[sec][sub]
+  //      - Edit either side → the other reflows.
+  teacherAllocations: Record<string, Record<string, Record<string, number>>>
 
   // ─────────────────────────────────────────────────────────────
   //  ACTIONS — Schedu model
@@ -254,6 +318,10 @@ interface ScheduState {
   setSubjectAllocations: (a: Record<string, Record<string, string>>) => void
   setSubjectAllocationCell: (section: string, subject: string, value: string) => void
 
+  // ── Doc 2 Step 3 — Teacher Allocation (bidirectional sync) ──
+  setTeacherAllocations: (t: Record<string, Record<string, Record<string, number>>>) => void
+  setTeacherAllocationCell: (teacher: string, section: string, subject: string, periods: number) => void
+
   resetWizard: () => void
   resetAll: () => void
 }
@@ -289,6 +357,7 @@ const initialState: Omit<ScheduState,
   | 'setSubjectCombinations' | 'upsertSubjectCombination' | 'removeSubjectCombination'
   | 'setSectionStrengths' | 'upsertSectionStrength'
   | 'setSubjectAllocations' | 'setSubjectAllocationCell'
+  | 'setTeacherAllocations' | 'setTeacherAllocationCell'
   | 'resetWizard' | 'resetAll'
 > = {
   step: 1,
@@ -347,6 +416,7 @@ const initialState: Omit<ScheduState,
   subjectCombinations: [],
   sectionStrengths: [],
   subjectAllocations: {},
+  teacherAllocations: {},
   schedulingMode: 'period-based',
   workingDaysPerYear: 220,
 }
@@ -543,7 +613,42 @@ export const useTimetableStore = create<ScheduState>()(
           else sectionRow[subject] = v
           const next = { ...st.subjectAllocations, [section]: sectionRow }
           if (Object.keys(sectionRow).length === 0) delete next[section]
-          return { subjectAllocations: next }
+
+          // ── Bidirectional sync (period → teacher) ──
+          //   Adjust existing teacher assignments so their sum == new total.
+          //   No auto-assign of new teachers here; the "Auto-assign" button
+          //   in the wizard owns that path.
+          const target = computeNewTarget(v)
+          const teacherNext = reflowTeachersForCell(st.teacherAllocations, section, subject, target)
+          return { subjectAllocations: next, teacherAllocations: teacherNext }
+        }),
+
+        // ── Doc 2 Step 3 — Teacher Allocation actions (bidirectional sync) ──
+        setTeacherAllocations: (teacherAllocations) => set({ teacherAllocations }),
+        setTeacherAllocationCell: (teacher, section, subject, periods) => set(st => {
+          // 1. Write the teacher's new cell value
+          const tRow = { ...(st.teacherAllocations[teacher] ?? {}) }
+          const sRow = { ...(tRow[section] ?? {}) }
+          const p = Math.max(0, Math.round(periods || 0))
+          if (p === 0) delete sRow[subject]
+          else sRow[subject] = p
+          if (Object.keys(sRow).length === 0) delete tRow[section]
+          else tRow[section] = sRow
+          const tNext = { ...st.teacherAllocations }
+          if (Object.keys(tRow).length === 0) delete tNext[teacher]
+          else tNext[teacher] = tRow
+
+          // 2. Sync subjectAllocations: total = sum across all teachers for (sec, sub)
+          const totalForCell = Object.values(tNext).reduce(
+            (a, t) => a + (t[section]?.[subject] ?? 0), 0
+          )
+          const sectionRow = { ...(st.subjectAllocations[section] ?? {}) }
+          if (totalForCell === 0) delete sectionRow[subject]
+          else sectionRow[subject] = String(totalForCell)
+          const saNext = { ...st.subjectAllocations, [section]: sectionRow }
+          if (Object.keys(sectionRow).length === 0) delete saNext[section]
+
+          return { teacherAllocations: tNext, subjectAllocations: saNext }
         }),
 
         togglePeriodShiftable: (periodId) => set((s) => ({

@@ -10,10 +10,11 @@
 
 import { useState } from 'react'
 import { AllocationGrid } from '@/components/master/AllocationGrid'
+import { TeacherAllocationGrid } from '@/components/master/TeacherAllocationGrid'
 import { StepSectionStrengths } from './step-section-strengths'
-import { Grid3x3, Users2 } from 'lucide-react'
+import { Grid3x3, Users2, Users } from 'lucide-react'
 
-type Sub = 'periods' | 'strengths'
+type Sub = 'periods' | 'teachers' | 'strengths'
 
 export function StepAllocation() {
   const [sub, setSub] = useState<Sub>('periods')
@@ -42,10 +43,12 @@ export function StepAllocation() {
         background: '#F8F7FF', padding: 4, borderRadius: 10, width: 'fit-content',
       }}>
         <SubTab active={sub === 'periods'}   onClick={() => setSub('periods')}   icon={<Grid3x3 size={13} />} label="Period Allocation" />
+        <SubTab active={sub === 'teachers'}  onClick={() => setSub('teachers')}  icon={<Users   size={13} />} label="Teacher Allocation" />
         <SubTab active={sub === 'strengths'} onClick={() => setSub('strengths')} icon={<Users2  size={13} />} label="Student Strengths" />
       </div>
 
       {sub === 'periods'   && <AllocationGrid />}
+      {sub === 'teachers'  && <TeacherAllocationGrid />}
       {sub === 'strengths' && (
         <div style={{ marginLeft: -24, marginRight: -24, marginTop: -20 /* compensate for nested padding */ }}>
           <StepSectionStrengths />
