@@ -3,7 +3,7 @@ import { useTimetableStore } from "@/store/timetableStore"
 import { useAuthStore } from "@/store/authStore"
 import { StepResourcesV2 }         from "@/routes/wizard/step-resources-v2"
 import { StepBell }                from "@/routes/wizard/step-bell"
-import { StepSectionStrengths }    from "@/routes/wizard/step-section-strengths"
+import { StepAllocation }          from "@/routes/wizard/step-allocation"
 import { StepConstraints }         from "@/routes/wizard/step-constraints"
 import { Step6Generate }           from "@/routes/wizard/step6-generate"
 import { CheckCircle2 } from "lucide-react"
@@ -11,10 +11,10 @@ import { CheckCircle2 } from "lucide-react"
 // ── 5-step user-facing wizard (final spec flow) ──
 //   1. Resources       — AI counts: courses/teachers/subjects/rooms
 //   2. Shifts & Timing — Bell schedule (days, periods, breaks)
-//   3. Allocation      — Section × subject strength matrix
+//   3. Allocation      — Period × Subject + Student Strengths (2 tabs)
 //   4. Constraint      — Scope rules + compliance
 //   5. Generate        — AI builds the timetable
-const STEPS = [StepResourcesV2, StepBell, StepSectionStrengths, StepConstraints, Step6Generate]
+const STEPS = [StepResourcesV2, StepBell, StepAllocation, StepConstraints, Step6Generate]
 
 // User-facing 5-step model. Internal step implementations unchanged —
 // we just relabel + reorder presentation while the engine consumes the

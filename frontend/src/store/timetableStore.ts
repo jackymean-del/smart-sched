@@ -143,6 +143,12 @@ interface ScheduState {
   // ── schedU Phase 6 — Section-Strength Matrix (the new simple input) ──
   sectionStrengths: SectionStrength[]
 
+  // ── Doc Part 1 — Period Allocation matrix (cell syntax strings) ──
+  //    Shape: { [sectionName]: { [subjectName]: "5+1" | "3(2X)" | ... } }
+  //    Empty/unset cell ⇒ engine falls back to Subject.periodsPerWeek default.
+  //    Named `subjectAllocations` to avoid colliding with engine output `periodAllocations`.
+  subjectAllocations: Record<string, Record<string, string>>
+
   // ─────────────────────────────────────────────────────────────
   //  ACTIONS — Schedu model
   // ─────────────────────────────────────────────────────────────
@@ -244,6 +250,10 @@ interface ScheduState {
   setSectionStrengths: (s: SectionStrength[]) => void
   upsertSectionStrength: (s: SectionStrength) => void
 
+  // ── Doc Part 1 — Subject Period Allocations (cell-syntax matrix) ──
+  setSubjectAllocations: (a: Record<string, Record<string, string>>) => void
+  setSubjectAllocationCell: (section: string, subject: string, value: string) => void
+
   resetWizard: () => void
   resetAll: () => void
 }
@@ -278,6 +288,7 @@ const initialState: Omit<ScheduState,
   | 'setOptionalBlocks' | 'upsertOptionalBlock' | 'removeOptionalBlock'
   | 'setSubjectCombinations' | 'upsertSubjectCombination' | 'removeSubjectCombination'
   | 'setSectionStrengths' | 'upsertSectionStrength'
+  | 'setSubjectAllocations' | 'setSubjectAllocationCell'
   | 'resetWizard' | 'resetAll'
 > = {
   step: 1,
@@ -335,6 +346,7 @@ const initialState: Omit<ScheduState,
   optionalBlocks: [],
   subjectCombinations: [],
   sectionStrengths: [],
+  subjectAllocations: {},
   schedulingMode: 'period-based',
   workingDaysPerYear: 220,
 }
@@ -520,6 +532,18 @@ export const useTimetableStore = create<ScheduState>()(
           return i >= 0
             ? { sectionStrengths: st.sectionStrengths.map((x, idx) => idx === i ? s : x) }
             : { sectionStrengths: [...st.sectionStrengths, s] }
+        }),
+
+        // ── Doc Part 1 — Subject Period Allocation actions ──
+        setSubjectAllocations: (subjectAllocations) => set({ subjectAllocations }),
+        setSubjectAllocationCell: (section, subject, value) => set(st => {
+          const sectionRow = { ...(st.subjectAllocations[section] ?? {}) }
+          const v = (value ?? '').trim()
+          if (v === '') delete sectionRow[subject]
+          else sectionRow[subject] = v
+          const next = { ...st.subjectAllocations, [section]: sectionRow }
+          if (Object.keys(sectionRow).length === 0) delete next[section]
+          return { subjectAllocations: next }
         }),
 
         togglePeriodShiftable: (periodId) => set((s) => ({
