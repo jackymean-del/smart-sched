@@ -14,6 +14,7 @@
  */
 
 import type { Section, Staff, Subject, Period, ClassTimetable, TeacherSchedule, Conflict, Suggestion, SchedulingRequirement } from '@/types'
+import { parseAllocation } from './allocationSyntax'
 
 // ─── Mode 2: Duration → Weekly Periods Formula ───────────
 export interface DurationInput {
@@ -71,6 +72,10 @@ export interface SolverInput {
    *  When provided AND optionalBlocks is empty, the engine AUTO-INFERS
    *  optional blocks from the matrix (the "simple input" mode). */
   sectionStrengths?: import('@/types').SectionStrength[]
+  /** Doc Part 1: per-(section, subject) period allocation cell syntax.
+   *  Shape: { [sectionName]: { [subjectName]: "5+1" | "3(2X)" | ... } }
+   *  Empty/missing → fall back to Subject.periodsPerWeek. */
+  subjectAllocations?: Record<string, Record<string, string>>
 }
 
 /** schedU Phase 6 — Auto-infer Optional Blocks from section strengths.
@@ -245,6 +250,42 @@ export function solveTimetable(input: SolverInput): SolverOutput {
     subjects.forEach(sub => { subjectCount[sec.name][sub.name] = 0 })
   })
 
+  // ── Doc Part 1: per-(section, subject) target periods/week ──
+  //   Read subjectAllocations matrix (cell syntax → numeric weekly total),
+  //   fall back to Subject.periodsPerWeek when not overridden.
+  const subjectAllocations = input.subjectAllocations ?? {}
+  const targetPeriods: Record<string, Record<string, number>> = {}
+  sections.forEach(sec => {
+    targetPeriods[sec.name] = {}
+    subjects.forEach(sub => {
+      const cell = subjectAllocations[sec.name]?.[sub.name]
+      if (cell) {
+        const p = parseAllocation(cell)
+        targetPeriods[sec.name][sub.name] = p.valid ? p.weeklyTotal : (sub.periodsPerWeek ?? 0)
+      } else {
+        targetPeriods[sec.name][sub.name] = sub.periodsPerWeek ?? 0
+      }
+    })
+  })
+
+  // ── AI teacher-load balancing baselines ──
+  //   Compute the total periods we need to place across all sections,
+  //   then derive a target weekly load per teacher. The scorer prefers
+  //   teachers below their target and penalises those near max load.
+  const totalRequiredPeriods = sections.reduce(
+    (s, sec) => s + Object.values(targetPeriods[sec.name] ?? {}).reduce((a, n) => a + n, 0), 0)
+  const targetWeeklyLoadPerTeacher = Math.ceil(totalRequiredPeriods / Math.max(1, staff.length))
+
+  // Running per-teacher trackers (updated as we place)
+  const teacherWeeklyLoad: Record<string, number> = {}
+  staff.forEach(t => { teacherWeeklyLoad[t.name] = 0 })
+  // Subjects each teacher has already taught (for vertical continuity)
+  const teacherSubjectSet: Record<string, Set<string>> = {}
+  staff.forEach(t => { teacherSubjectSet[t.name] = new Set() })
+  // Sections each teacher has been seen in (for section familiarity)
+  const teacherSectionSet: Record<string, Set<string>> = {}
+  staff.forEach(t => { teacherSectionSet[t.name] = new Set() })
+
   // Class teacher map — resolve IDs to names (UI stores staff.id, engine needs staff.name)
   const classTeacherMap: Record<string, string> = {}
   staff.forEach(st => { if (st.isClassTeacher) classTeacherMap[st.isClassTeacher] = st.name })
@@ -392,14 +433,17 @@ export function solveTimetable(input: SolverInput): SolverOutput {
         // Skip if already filled
         if (classTT[sec.name][day][period.id]) return
 
-        // Find best subject to place (rotating, respecting max per day)
+        // Find best subject to place (rotating, respecting max per day).
+        // Target periods comes from subjectAllocations matrix (Doc Part 1) or
+        // falls back to Subject.periodsPerWeek default.
         const availableSubs = sorted.filter(sub => {
           const weeklyDone = subjectCount[sec.name][sub.name] ?? 0
+          const target = targetPeriods[sec.name]?.[sub.name] ?? (sub.periodsPerWeek ?? 0)
+          if (target <= 0) return false
           const maxPD = (sub as any).maxPeriodsPerDay ?? 2
-          // Check daily limit
           const todayCount = Object.values(classTT[sec.name][day] ?? {})
             .filter(cell => cell?.subject === sub.name).length
-          return weeklyDone < sub.periodsPerWeek && todayCount < maxPD
+          return weeklyDone < target && todayCount < maxPD
         })
 
         if (!availableSubs.length) {
@@ -479,17 +523,71 @@ export function solveTimetable(input: SolverInput): SolverOutput {
           eligibleTeachers = staff.filter(st => isAvailable(st))
         }
 
-        // Soft constraint: prefer teacher with fewer periods today
-        // Pre-compute teacher load counts for this day to avoid O(n²) sort
+        // ── AI teacher selection — composite scoring ──
+        // Replaces simple "least-busy-today" with a weighted score:
+        //   + vertical continuity (already teaches this subject elsewhere)
+        //   + section familiarity (already seen in this section)
+        //   + load-balance bias (under target weekly load = preferred)
+        //   − overload penalty (near max weekly periods = avoid)
+        //   − today's load (avoid back-to-back exhaustion)
+        //   − scope-disabled soft penalty
+        //   − consecutive same-subject taught by same teacher
+
+        // Pre-compute today's load for each teacher (cheap O(staff))
         const teacherLoadToday: Record<string, number> = {}
         Object.values(classTT).forEach(secData => {
-          Object.values(secData[day] ?? {}).forEach(cell => {
+          Object.values(secData[day] ?? {}).forEach((cell: any) => {
             if (cell?.teacher) teacherLoadToday[cell.teacher] = (teacherLoadToday[cell.teacher] ?? 0) + 1
           })
         })
-        const sortedTeachers = eligibleTeachers.sort((a, b) =>
-          (teacherLoadToday[a.name] ?? 0) - (teacherLoadToday[b.name] ?? 0)
-        )
+
+        const scoreTeacher = (st: any): number => {
+          let score = 0
+          const name = st.name
+          const weeklyLoad = teacherWeeklyLoad[name] ?? 0
+          const todayLoad = teacherLoadToday[name] ?? 0
+          const maxWeek = (st as any).maxPeriodsPerWeek ?? 40
+
+          // Vertical continuity — already teaches this subject in another section
+          if (teacherSubjectSet[name]?.has(chosenSub.name)) score += 25
+          // Section familiarity — already teaches something in this section
+          if (teacherSectionSet[name]?.has(sec.name)) score += 8
+
+          // Load-balance bias: prefer teachers under the global target
+          if (weeklyLoad < targetWeeklyLoadPerTeacher) {
+            score += Math.min(30, (targetWeeklyLoadPerTeacher - weeklyLoad) * 2)
+          } else {
+            // Over target — penalise proportionally
+            score -= Math.min(40, (weeklyLoad - targetWeeklyLoadPerTeacher) * 3)
+          }
+          // Strong avoid near max load (90%+)
+          if (maxWeek > 0 && weeklyLoad >= maxWeek * 0.9) score -= 60
+
+          // Avoid exhaustion today (each period taught today = -3)
+          score -= todayLoad * 3
+
+          // Scope-disabled soft penalty
+          const tScope = (st as any).scope
+          if (tScope) {
+            const s = tScope.cells?.[day]?.[period.id] ?? 'allowed'
+            if (s === 'disabled') score -= 10
+          }
+
+          // Anti-back-to-back: penalise if this teacher taught the same subject
+          // in the previous period in this section
+          const prev = classPeriods[pi - 1]
+          if (prev) {
+            const prevCell: any = classTT[sec.name]?.[day]?.[prev.id]
+            if (prevCell?.teacher === name && prevCell?.subject === chosenSub.name) score -= 8
+          }
+
+          return score
+        }
+
+        const sortedTeachers = eligibleTeachers
+          .map(t => ({ t, s: scoreTeacher(t) }))
+          .sort((a, b) => b.s - a.s)
+          .map(x => x.t)
 
         const teacher = sortedTeachers[0]
         if (!teacher) {
@@ -530,6 +628,10 @@ export function solveTimetable(input: SolverInput): SolverOutput {
         }
         teacherBusy[teacher.name][day].add(period.id)
         subjectCount[sec.name][chosenSub.name] = (subjectCount[sec.name][chosenSub.name] ?? 0) + 1
+        // ── AI trackers: bump load + record subject/section pairing ──
+        teacherWeeklyLoad[teacher.name] = (teacherWeeklyLoad[teacher.name] ?? 0) + 1
+        teacherSubjectSet[teacher.name]?.add(chosenSub.name)
+        teacherSectionSet[teacher.name]?.add(sec.name)
       })
     })
   })
@@ -586,6 +688,37 @@ export function solveTimetable(input: SolverInput): SolverOutput {
       })
     })
   })
+
+  // ── Final workload-balance health check ──
+  //   Standard deviation of teacher weekly loads vs the target. The lower
+  //   the better. Emitted as a soft penalty so the score reflects fairness.
+  const loads = Object.values(teacherWeeklyLoad)
+  if (loads.length > 0) {
+    const mean = loads.reduce((a, b) => a + b, 0) / loads.length
+    const variance = loads.reduce((a, l) => a + (l - mean) ** 2, 0) / loads.length
+    const stddev = Math.sqrt(variance)
+    // Penalty: 1 point per 1 stddev unit. Clamped to keep score readable.
+    const balancePenalty = Math.min(50, Math.round(stddev * 4))
+    if (balancePenalty > 0) {
+      penalties.push({
+        constraint: 'workload-imbalance',
+        penalty: balancePenalty,
+        details: `Teacher loads stddev=${stddev.toFixed(2)} around target=${targetWeeklyLoadPerTeacher}`,
+      })
+    }
+    // Per-teacher overload penalties — exceeded individual max
+    staff.forEach(t => {
+      const load = teacherWeeklyLoad[t.name] ?? 0
+      const max = (t as any).maxPeriodsPerWeek ?? 40
+      if (load > max) {
+        penalties.push({
+          constraint: 'teacher-overload',
+          penalty: (load - max) * 5,
+          details: `${t.name} has ${load} periods/week (max ${max})`,
+        })
+      }
+    })
+  }
 
   const totalPenalty = penalties.reduce((a, p) => a + p.penalty, 0)
 
