@@ -26,6 +26,18 @@ export interface FixSuggestion {
   diff?: string[]
   /** When provided, calling apply() mutates the store via the actions param. */
   apply?: () => void
+  /** Structured changes — drives the conflict-aware Fix preview engine
+   *  so it can simulate the fix and tell the user what score deltas to
+   *  expect. Each entry is one (teacher, section, subject) cell write. */
+  changes?: FixChange[]
+}
+
+export interface FixChange {
+  teacher: string
+  section: string
+  subject: string
+  before: number
+  after: number
 }
 
 export interface FixContext {
@@ -143,6 +155,10 @@ export function suggestFixes(penalty: Penalty, ctx: FixContext): FixSuggestion[]
                 `${name} · ${big.section} ${big.subject}: ${big.periods} → ${newSrcPeriods}`,
                 `${target.teacher.name} · ${big.section} ${big.subject}: ${existingTarget} → ${newTargetPeriods}`,
               ],
+              changes: [
+                { teacher: name, section: big.section, subject: big.subject, before: big.periods, after: newSrcPeriods },
+                { teacher: target.teacher.name, section: big.section, subject: big.subject, before: existingTarget, after: newTargetPeriods },
+              ],
               apply: () => {
                 ctx.actions.setTeacherAllocationCell(name, big.section, big.subject, newSrcPeriods)
                 ctx.actions.setTeacherAllocationCell(target.teacher.name, big.section, big.subject, newTargetPeriods)
@@ -197,6 +213,10 @@ export function suggestFixes(penalty: Penalty, ctx: FixContext): FixSuggestion[]
             diff: [
               `${top.name}: ${top.load} → ${top.load - moveN}`,
               `${bottom.name}: ${bottom.load} → ${bottom.load + moveN}`,
+            ],
+            changes: [
+              { teacher: top.name, section: big.section, subject: big.subject, before: big.periods, after: newSrc },
+              { teacher: bottom.name, section: big.section, subject: big.subject, before: existingTarget, after: newTarget },
             ],
             apply: () => {
               ctx.actions.setTeacherAllocationCell(top.name, big.section, big.subject, newSrc)

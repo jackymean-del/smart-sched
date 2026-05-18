@@ -16,6 +16,7 @@ import { useMemo, useState } from 'react'
 import type { Section, Subject, Staff, Period, OptionalBlock, Conflict, ClassTimetable } from '@/types'
 import { computeCapacity, inferBandFromSection, utilisationStatus } from '@/lib/capacityEngine'
 import { suggestFixes, type FixSuggestion } from '@/lib/fixSuggester'
+import { previewFix, type FixPreview } from '@/lib/fixPreview'
 import {
   type BlockedSlot, type DynamicLearningGroup,
   blockedCategoryLabel, blockedRemedy,
@@ -549,6 +550,9 @@ function IssueRow({ severity, label, desc, weight }: {
 
 function FixCard({ fix }: { fix: FixSuggestion }) {
   const [applied, setApplied] = useState(false)
+  const [showPreview, setShowPreview] = useState(false)
+  const store = useTimetableStore() as any
+
   const categoryStyle: Record<string, { bg: string; fg: string }> = {
     rebalance: { bg: '#EDE9FF', fg: '#7C6FE0' },
     reassign:  { bg: '#DBEAFE', fg: '#1D4ED8' },
@@ -560,6 +564,25 @@ function FixCard({ fix }: { fix: FixSuggestion }) {
     fix.apply?.()
     setApplied(true)
   }
+
+  const preview: FixPreview | null = useMemo(() => {
+    if (!fix.changes || fix.changes.length === 0 || applied) return null
+    try {
+      return previewFix(fix, {
+        staff: store.staff ?? [],
+        teacherAllocations: store.teacherAllocations ?? {},
+      })
+    } catch { return null }
+  }, [fix, applied, store])
+
+  const hasPreview = preview != null
+  const scoreDelta = preview?.scoreDelta ?? 0
+  const previewTone = !preview
+    ? '#8B87AD'
+    : scoreDelta < 0 ? '#16A34A'
+    : scoreDelta > 0 ? '#DC2626'
+    : '#4B5275'
+
   return (
     <div style={{
       background: '#FAFAFE', border: '1px solid #ECEAFB', borderRadius: 7,
@@ -591,21 +614,121 @@ function FixCard({ fix }: { fix: FixSuggestion }) {
             </div>
           )}
         </div>
-        {fix.apply && (
-          <button onClick={handleApply} disabled={applied}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 4,
-              padding: '5px 10px', borderRadius: 6, border: 'none',
-              background: applied ? '#DCFCE7' : s.fg, color: applied ? '#15803D' : '#fff',
-              fontSize: 10.5, fontWeight: 700, cursor: applied ? 'default' : 'pointer',
-              fontFamily: 'inherit', flexShrink: 0,
-            }}>
-            {applied
-              ? <><CheckCircle2 size={10} /> Applied</>
-              : <><Zap size={10} /> Apply</>}
-          </button>
-        )}
+        <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 4, flexShrink: 0, alignItems: 'flex-end' as const }}>
+          {hasPreview && !applied && (
+            <button onClick={() => setShowPreview(v => !v)}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                padding: '4px 8px', borderRadius: 5,
+                background: '#fff', border: '1px solid #ECEAFB',
+                color: previewTone, fontSize: 9.5, fontWeight: 700, cursor: 'pointer',
+                fontFamily: 'inherit',
+                letterSpacing: '0.04em',
+              }}>
+              {showPreview ? <ChevronDown size={9} /> : <ChevronRight size={9} />}
+              IMPACT {scoreDelta > 0 ? '+' : ''}{scoreDelta}
+            </button>
+          )}
+          {fix.apply && (
+            <button onClick={handleApply} disabled={applied}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                padding: '5px 10px', borderRadius: 6, border: 'none',
+                background: applied ? '#DCFCE7' : s.fg, color: applied ? '#15803D' : '#fff',
+                fontSize: 10.5, fontWeight: 700, cursor: applied ? 'default' : 'pointer',
+                fontFamily: 'inherit',
+              }}>
+              {applied
+                ? <><CheckCircle2 size={10} /> Applied</>
+                : <><Zap size={10} /> Apply</>}
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Conflict-aware preview panel */}
+      {hasPreview && showPreview && preview && (
+        <div style={{
+          marginTop: 8, padding: '8px 10px',
+          background: '#fff', border: '1px solid #ECEAFB', borderRadius: 6,
+        }}>
+          <div style={{
+            fontSize: 9, fontWeight: 800, letterSpacing: '0.12em',
+            textTransform: 'uppercase' as const, color: '#8B87AD', marginBottom: 6,
+          }}>
+            If applied · projected impact
+          </div>
+          {/* Resolves */}
+          {preview.summary.resolves.map((r, i) => (
+            <div key={`r${i}`} style={{ display: 'flex', alignItems: 'flex-start', gap: 6, marginBottom: 3, fontSize: 10.5, color: '#15803D' }}>
+              <CheckCircle2 size={10} style={{ marginTop: 1, flexShrink: 0 }} />
+              <span>{r}</span>
+            </div>
+          ))}
+          {/* Introduces */}
+          {preview.summary.introduces.map((n, i) => (
+            <div key={`n${i}`} style={{ display: 'flex', alignItems: 'flex-start', gap: 6, marginBottom: 3, fontSize: 10.5, color: '#DC2626' }}>
+              <Zap size={10} style={{ marginTop: 1, flexShrink: 0 }} />
+              <span>{n}</span>
+            </div>
+          ))}
+          {/* Warnings */}
+          {preview.summary.warnings.map((w, i) => (
+            <div key={`w${i}`} style={{ display: 'flex', alignItems: 'flex-start', gap: 6, marginBottom: 3, fontSize: 10.5, color: '#D4920E' }}>
+              <span style={{ marginTop: 1, flexShrink: 0 }}>⚠</span>
+              <span>{w}</span>
+            </div>
+          ))}
+          {/* Load deltas */}
+          {preview.loadDeltas.length > 0 && (
+            <div style={{ marginTop: 8, paddingTop: 6, borderTop: '1px dashed #ECEAFB' }}>
+              <div style={{
+                fontSize: 9, fontWeight: 800, letterSpacing: '0.1em',
+                textTransform: 'uppercase' as const, color: '#8B87AD', marginBottom: 4,
+              }}>
+                Teacher load changes
+              </div>
+              {preview.loadDeltas.map((d, i) => {
+                const overBefore = d.before > d.max
+                const overAfter  = d.after > d.max
+                const goodNow = overBefore && !overAfter
+                const badNow  = !overBefore && overAfter
+                const color = goodNow ? '#15803D' : badNow ? '#DC2626' : '#13111E'
+                return (
+                  <div key={i} style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    fontSize: 10, fontFamily: "'DM Mono', monospace",
+                    color, marginBottom: 2,
+                  }}>
+                    <span style={{ flex: 1 }}>{d.teacher}</span>
+                    <span>{d.before} → {d.after}</span>
+                    <span style={{ color: '#8B87AD' }}>/ {d.max}</span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+          {/* Score delta */}
+          <div style={{
+            marginTop: 8, paddingTop: 6, borderTop: '1px solid #ECEAFB',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          }}>
+            <span style={{ fontSize: 10, color: '#4B5275', fontWeight: 600 }}>
+              Estimated score delta
+            </span>
+            <span style={{
+              fontSize: 11, fontWeight: 800, fontFamily: "'DM Mono', monospace",
+              color: previewTone,
+            }}>
+              {scoreDelta > 0 ? '+' : ''}{scoreDelta}
+              {' '}
+              <span style={{ fontWeight: 500, opacity: 0.7 }}>
+                ({scoreDelta < 0 ? 'better' : scoreDelta > 0 ? 'worse' : 'neutral'})
+              </span>
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
