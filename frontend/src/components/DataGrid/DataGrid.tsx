@@ -154,6 +154,9 @@ export function DataGrid<T>({
   const [selection, setSelection] = useState<{ r: number; c: number } | null>(null)
   const [selectionEnd, setSelectionEnd] = useState<{ r: number; c: number } | null>(null)
   const [editing, setEditing] = useState<{ r: number; c: number } | null>(null)
+  // v3: drag-fill state — source cell + current drag target
+  const [fillFrom, setFillFrom] = useState<{ r: number; c: number } | null>(null)
+  const [fillTo, setFillTo] = useState<{ r: number; c: number } | null>(null)
   const [pasteOpen, setPasteOpen] = useState(false)
   const [pasteText, setPasteText] = useState('')
   const [bulkOpen, setBulkOpen] = useState(false)
@@ -457,6 +460,45 @@ export function DataGrid<T>({
     setBulkOpen(false)
     setBulkValue('')
   }, [selection, selectionEnd, rows, columns, originalIndex, setCell, onChange])
+
+  // ── v3: Drag-fill — copy source cell value across a rectangle ──
+  const applyDragFill = useCallback((from: { r: number; c: number }, to: { r: number; c: number }) => {
+    const r0 = Math.min(from.r, to.r), r1 = Math.max(from.r, to.r)
+    const c0 = Math.min(from.c, to.c), c1 = Math.max(from.c, to.c)
+    if (r0 === r1 && c0 === c1) return  // single cell — nothing to fill
+    const sourceRow = filteredRows[from.r]
+    if (!sourceRow) return
+    const sourceCol = columns[from.c]
+    const sourceValue = getCell(sourceRow, sourceCol)
+    let next = rows.slice()
+    for (let r = r0; r <= r1; r++) {
+      const origR = originalIndex(r)
+      if (origR < 0) continue
+      for (let c = c0; c <= c1; c++) {
+        if (r === from.r && c === from.c) continue  // skip source itself
+        const col = columns[c]
+        if (col.readonly || col.type === 'computed') continue
+        next[origR] = setCell(next[origR], col, sourceValue)
+      }
+    }
+    onChange(next)
+  }, [filteredRows, columns, rows, originalIndex, setCell, getCell, onChange])
+
+  // v3: global mouseup commits any in-progress drag-fill
+  useEffect(() => {
+    if (!fillFrom) return
+    const onUp = () => {
+      if (fillFrom && fillTo) {
+        applyDragFill(fillFrom, fillTo)
+        setSelection(fillFrom)
+        setSelectionEnd(fillTo)
+      }
+      setFillFrom(null)
+      setFillTo(null)
+    }
+    window.addEventListener('mouseup', onUp)
+    return () => window.removeEventListener('mouseup', onUp)
+  }, [fillFrom, fillTo, applyDragFill])
 
   // ── v2: Fill Down (Ctrl+D) ───────────────────────────────
   const applyFillDown = useCallback(() => {
@@ -784,6 +826,16 @@ export function DataGrid<T>({
                   const isInRange = inSelection(ri, ci)
                   const isEditing = editing?.r === ri && editing?.c === ci
                   const custom = col.cellStyle?.(value, row)
+                  // v3: cell is in the drag-fill target rectangle?
+                  const isInFillRange = (() => {
+                    if (!fillFrom || !fillTo) return false
+                    const r0 = Math.min(fillFrom.r, fillTo.r), r1 = Math.max(fillFrom.r, fillTo.r)
+                    const c0 = Math.min(fillFrom.c, fillTo.c), c1 = Math.max(fillFrom.c, fillTo.c)
+                    return ri >= r0 && ri <= r1 && ci >= c0 && ci <= c1
+                  })()
+                  const isFillSource = fillFrom?.r === ri && fillFrom?.c === ci
+                  // Show fill handle on the selected cell (with no range), when not editing
+                  const showFillHandle = isSelected && !selectionEnd && !editing && !col.readonly && col.type !== 'computed'
                   return (
                     <td key={col.key}
                       onMouseDown={e => {
@@ -794,23 +846,34 @@ export function DataGrid<T>({
                         }
                       }}
                       onMouseEnter={e => {
-                        if (e.buttons === 1 && selection) setSelectionEnd({ r: ri, c: ci })
+                        if (fillFrom && e.buttons === 1) {
+                          // Drag-fill in progress
+                          setFillTo({ r: ri, c: ci })
+                        } else if (e.buttons === 1 && selection) {
+                          setSelectionEnd({ r: ri, c: ci })
+                        }
                       }}
                       onDoubleClick={() => {
                         if (!col.readonly && col.type !== 'computed') setEditing({ r: ri, c: ci })
                       }}
                       style={{
-                        background: isSelected ? TOK.selectedBg : isInRange ? TOK.accentSoft : col.sticky ? '#FFFFFF' : 'transparent',
+                        background: isInFillRange && !isFillSource
+                          ? '#DBEAFE'
+                          : isSelected ? TOK.selectedBg
+                          : isInRange ? TOK.accentSoft
+                          : col.sticky ? '#FFFFFF' : 'transparent',
                         color: TOK.textOn,
                         fontSize: TOK.cellFont,
                         padding: 0,
                         textAlign: (col.align ?? (col.type === 'number' ? 'right' : 'left')) as any,
                         borderBottom: `1px solid ${TOK.divider}`,
-                        position: col.sticky ? 'sticky' : 'static',
+                        position: col.sticky ? 'sticky' : 'relative',
                         left: col.sticky ? stickyOffsets[ci] : undefined,
                         zIndex: col.sticky ? 1 : undefined,
                         cursor: col.readonly || col.type === 'computed' ? 'default' : 'cell',
-                        outline: isSelected ? `2px solid ${TOK.selectedBorder}` : 'none',
+                        outline: isInFillRange && !isFillSource
+                          ? `1.5px dashed #1D4ED8`
+                          : isSelected ? `2px solid ${TOK.selectedBorder}` : 'none',
                         outlineOffset: -2,
                         ...custom,
                       }}>
@@ -828,6 +891,28 @@ export function DataGrid<T>({
                                {value == null || value === '' ? <span style={{ color: TOK.textDim }}>{col.placeholder ?? '—'}</span> : String(value)}
                              </div>
                            )}
+                      {/* v3: drag-fill handle — small square at bottom-right of selected cell */}
+                      {showFillHandle && (
+                        <span
+                          onMouseDown={e => {
+                            e.stopPropagation()
+                            e.preventDefault()
+                            setFillFrom({ r: ri, c: ci })
+                            setFillTo({ r: ri, c: ci })
+                          }}
+                          title="Drag to fill"
+                          style={{
+                            position: 'absolute' as const,
+                            right: -3, bottom: -3,
+                            width: 8, height: 8,
+                            background: TOK.accent,
+                            border: '1.5px solid #fff',
+                            borderRadius: 2,
+                            cursor: 'crosshair',
+                            zIndex: 3,
+                          }}
+                        />
+                      )}
                     </td>
                   )
                 })}
