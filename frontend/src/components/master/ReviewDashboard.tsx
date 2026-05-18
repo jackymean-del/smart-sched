@@ -12,12 +12,13 @@
  * Consumes the SolverOutput plus raw store data. Pure display component.
  */
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect, useRef } from 'react'
 import type { Section, Subject, Staff, Period, OptionalBlock, Conflict, ClassTimetable } from '@/types'
 import { computeCapacity, inferBandFromSection, utilisationStatus } from '@/lib/capacityEngine'
 import { suggestFixes, type FixSuggestion } from '@/lib/fixSuggester'
 import { previewFix, type FixPreview } from '@/lib/fixPreview'
 import { recomputeWorkloadPenalties, mergeLivePenalties } from '@/lib/penaltyRecompute'
+import { PenaltyTrendChart, type ScorePoint } from './PenaltyTrendChart'
 import {
   type BlockedSlot, type DynamicLearningGroup,
   blockedCategoryLabel, blockedRemedy,
@@ -146,6 +147,20 @@ export function ReviewDashboard({
     () => livePenalties.reduce((a, p) => a + p.penalty, 0),
     [livePenalties]
   )
+
+  // ── Score-history sparkline tracking ──
+  //   Initial point = solver-emitted score. Each subsequent change to
+  //   liveScore appends a new tick. Drives the PenaltyTrendChart.
+  const [scoreHistory, setScoreHistory] = useState<ScorePoint[]>(() => [
+    { score, event: 'initial' },
+  ])
+  const lastTrackedScore = useRef(score)
+  useEffect(() => {
+    if (liveScore !== lastTrackedScore.current) {
+      setScoreHistory(h => [...h, { score: liveScore, event: 'fix' }])
+      lastTrackedScore.current = liveScore
+    }
+  }, [liveScore])
 
   const softPenalties = livePenalties.filter(p => p.penalty > 0)
   const overloadedTeachers = teacherLoads.filter(t => t.load > t.max)
@@ -313,6 +328,9 @@ export function ReviewDashboard({
           <Pill color="#DC2626" bg="#FEE2E2" label={`${hardConflicts} hard`} />
           <Pill color="#D4920E" bg="#FEF3C7" label={`${softPenalties.length} soft`} />
           <Pill color="#7C6FE0" bg="#EDE9FF" label={`Score: ${liveScore}${liveScore !== score ? ` (was ${score})` : ''}`} />
+          {scoreHistory.length >= 2 && (
+            <PenaltyTrendChart history={scoreHistory} />
+          )}
           {overloadedTeachers.length > 0 && (
             <Pill color="#DC2626" bg="#FEE2E2" label={`${overloadedTeachers.length} overloaded`} />
           )}
