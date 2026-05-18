@@ -221,6 +221,19 @@ interface ScheduState {
     reasons: Array<{ category: string; detail: string; affected?: string }>
   }>
 
+  // ── Doc Part 3 — Dynamic Learning Groups from last solve ──
+  dynamicLearningGroups: Array<{
+    id: string
+    subject: string
+    sectionNames: string[]
+    totalStrength: number
+    teacher: string
+    room: string
+    behavior: string
+    day: string
+    periodId: string
+  }>
+
   // ─────────────────────────────────────────────────────────────
   //  ACTIONS — Schedu model
   // ─────────────────────────────────────────────────────────────
@@ -332,6 +345,8 @@ interface ScheduState {
 
   // ── Doc Part 2 — Blocked slots setter ──
   setBlockedSlots: (b: Array<{ section: string; day: string; periodId: string; reasons: Array<{ category: string; detail: string; affected?: string }> }>) => void
+  // ── Doc Part 3 — DLG setter ──
+  setDynamicLearningGroups: (g: ScheduState['dynamicLearningGroups']) => void
 
   resetWizard: () => void
   resetAll: () => void
@@ -370,6 +385,7 @@ const initialState: Omit<ScheduState,
   | 'setSubjectAllocations' | 'setSubjectAllocationCell'
   | 'setTeacherAllocations' | 'setTeacherAllocationCell'
   | 'setBlockedSlots'
+  | 'setDynamicLearningGroups'
   | 'resetWizard' | 'resetAll'
 > = {
   step: 1,
@@ -430,6 +446,7 @@ const initialState: Omit<ScheduState,
   subjectAllocations: {},
   teacherAllocations: {},
   blockedSlots: [],
+  dynamicLearningGroups: [],
   schedulingMode: 'period-based',
   workingDaysPerYear: 220,
 }
@@ -639,6 +656,7 @@ export const useTimetableStore = create<ScheduState>()(
         // ── Doc 2 Step 3 — Teacher Allocation actions (bidirectional sync) ──
         setTeacherAllocations: (teacherAllocations) => set({ teacherAllocations }),
         setBlockedSlots: (blockedSlots) => set({ blockedSlots }),
+        setDynamicLearningGroups: (dynamicLearningGroups) => set({ dynamicLearningGroups }),
         setTeacherAllocationCell: (teacher, section, subject, periods) => set(st => {
           // 1. Write the teacher's new cell value
           const tRow = { ...(st.teacherAllocations[teacher] ?? {}) }

@@ -758,6 +758,8 @@ export function TimetablePage() {
         showTeacher={showTeacher}
         showRoom={showRoom}
         blockedSlots={(store as any).blockedSlots ?? []}
+        dynamicLearningGroups={(store as any).dynamicLearningGroups ?? []}
+        rooms={(store as any).rooms ?? []}
         onCellClick={(section, day, periodId) => {
           if (editMode) setEditTarget({ section, day, periodId })
         }}

@@ -130,6 +130,8 @@ export function Step6Generate() {
       // Persist blocked-slot telemetry to the store so any view (timetable
       // cells, dashboard, conflict panel) can surface "why is this empty?"
       ;(store as any).setBlockedSlots?.(output.blockedSlots ?? [])
+      // Persist DLG metadata for the timetable-cell inspector
+      ;(store as any).setDynamicLearningGroups?.(output.dynamicLearningGroups ?? [])
       setSuggestions(suggestions)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)

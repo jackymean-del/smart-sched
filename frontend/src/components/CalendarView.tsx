@@ -13,8 +13,9 @@ import { useState, useMemo } from "react"
 import type { Period, Section, Staff } from "@/types"
 import type { ClassTimetable, TeacherSchedule } from "@/types"
 import { getSubjectColor } from "@/lib/orgData"
-import type { BlockedSlot } from "@/lib/schedulingEngine"
+import type { BlockedSlot, DynamicLearningGroup } from "@/lib/schedulingEngine"
 import { BlockedSlotIcon, buildBlockedMap } from "@/components/master/BlockedSlotIcon"
+import { DLGCellIcon, buildDLGMap } from "@/components/master/DLGCellIcon"
 
 // ─────────────────────────────────────────────
 // Types
@@ -41,6 +42,12 @@ export interface CalendarViewProps {
   /** Optional: solver-emitted reasons for empty cells.
    *  When present, empty cells get a clickable ? icon → reasons popover. */
   blockedSlots?: BlockedSlot[]
+  /** Optional: Dynamic Learning Groups from the last solve.
+   *  When present, cells that belong to a DLG get a small Layers icon
+   *  → popover showing parallel options at that slot. */
+  dynamicLearningGroups?: DynamicLearningGroup[]
+  /** Rooms — used for capacity gauges in the DLG popover. */
+  rooms?: Array<{ actualName?: string; generatedName?: string; name?: string; capacity?: number }>
 }
 
 // ─────────────────────────────────────────────
@@ -278,12 +285,18 @@ export function CalendarView({
   viewMode, selectedEntity,
   showTeacher, showRoom,
   onCellClick, absentHighlights, blockedSlots,
+  dynamicLearningGroups, rooms,
 }: CalendarViewProps) {
 
   // O(1) lookup map for blocked-slot reasons (Doc Part 2)
   const blockedMap = useMemo(
     () => buildBlockedMap(blockedSlots ?? []),
     [blockedSlots],
+  )
+  // O(1) lookup map for DLG cell membership (Doc Part 3)
+  const dlgMap = useMemo(
+    () => buildDLGMap(dynamicLearningGroups ?? []),
+    [dynamicLearningGroups],
   )
 
   const [currentDate, setCurrentDate] = useState(new Date())
@@ -509,7 +522,16 @@ export function CalendarView({
                       const isSub = !!substitutions[subKey]
                       const subTeacher = substitutions[subKey]
                       return (
-                        <td key={dayKey} style={{ border: "1px solid #E8E4FF", padding: 3, verticalAlign: "top" as const, background: teacherAbsent ? "#FFFBEB" : undefined }}>
+                        <td key={dayKey} style={{ border: "1px solid #E8E4FF", padding: 3, verticalAlign: "top" as const, background: teacherAbsent ? "#FFFBEB" : undefined, position: "relative" as const }}>
+                          {/* DLG icon overlay — top-right when cell is part of a DLG */}
+                          {cell?.subject && (() => {
+                            const dlgs = dlgMap.get(`${sec.name}|${dayKey}|${p.id}`)
+                            return dlgs && dlgs.length > 0 ? (
+                              <span style={{ position: "absolute" as const, top: 2, right: 4, zIndex: 2 }}>
+                                <DLGCellIcon dlgs={dlgs} currentSubject={cell.subject} rooms={rooms} />
+                              </span>
+                            ) : null
+                          })()}
                           {!cell?.subject
                             ? (() => {
                                 const reasons = blockedMap.get(`${sec.name}|${dayKey}|${p.id}`)
@@ -631,7 +653,16 @@ export function CalendarView({
                       const isSub = !!substitutions[subKey]
                       const subTeacher = substitutions[subKey]
                       return (
-                        <td key={p.id} style={{ border: "1px solid #E8E4FF", padding: 3, verticalAlign: "top" as const, background: teacherAbsent ? "#FFFBEB" : undefined }}>
+                        <td key={p.id} style={{ border: "1px solid #E8E4FF", padding: 3, verticalAlign: "top" as const, background: teacherAbsent ? "#FFFBEB" : undefined, position: "relative" as const }}>
+                          {/* DLG icon overlay — top-right when cell is part of a DLG */}
+                          {cell?.subject && (() => {
+                            const dlgs = dlgMap.get(`${sec.name}|${dayKey}|${p.id}`)
+                            return dlgs && dlgs.length > 0 ? (
+                              <span style={{ position: "absolute" as const, top: 2, right: 4, zIndex: 2 }}>
+                                <DLGCellIcon dlgs={dlgs} currentSubject={cell.subject} rooms={rooms} />
+                              </span>
+                            ) : null
+                          })()}
                           {!cell?.subject
                             ? (() => {
                                 const reasons = blockedMap.get(`${sec.name}|${dayKey}|${p.id}`)
