@@ -335,6 +335,7 @@ export function Step6Generate() {
             penalties={solverOutput.penalties}
             rooms={(store as any).rooms ?? []}
             score={solverOutput.score}
+            blockedSlots={solverOutput.blockedSlots}
           />
         </div>
       )}

@@ -16,11 +16,15 @@ import { useMemo, useState } from 'react'
 import type { Section, Subject, Staff, Period, OptionalBlock, Conflict, ClassTimetable } from '@/types'
 import { computeCapacity, inferBandFromSection, utilisationStatus } from '@/lib/capacityEngine'
 import { suggestFixes, type FixSuggestion } from '@/lib/fixSuggester'
+import {
+  type BlockedSlot, blockedCategoryLabel, blockedRemedy,
+} from '@/lib/schedulingEngine'
 import { useTimetableStore } from '@/store/timetableStore'
 import {
   Users2, BookOpen, Building2, Layers, Sparkles,
   AlertTriangle, CheckCircle2, TrendingUp, Gauge, Clock,
-  Wrench, ChevronDown, ChevronRight, Zap,
+  Wrench, ChevronDown, ChevronRight, Zap, Calendar as CalendarIcon,
+  Ban,
 } from 'lucide-react'
 
 interface Props {
@@ -37,12 +41,13 @@ interface Props {
   penalties: { constraint: string; penalty: number; details: string }[]
   rooms?: any[]
   score: number
+  blockedSlots?: BlockedSlot[]
 }
 
 export function ReviewDashboard({
   classTT, sections, staff, subjects, periods, workDays,
   optionalBlocks = [], teacherWeeklyLoad, teacherLoadStddev,
-  conflicts, penalties, rooms = [], score,
+  conflicts, penalties, rooms = [], score, blockedSlots = [],
 }: Props) {
 
   // ── Capacity summary per band ──
@@ -271,6 +276,87 @@ export function ReviewDashboard({
           </div>
         )}
       </Card>
+
+      {/* ─── F. Unplaced Slots (Why-this-was-blocked) ─── */}
+      {blockedSlots.length > 0 && (
+        <Card
+          title="Unplaced Slots"
+          icon={<Ban size={14} />}
+          accent="#D4920E"
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap' as const }}>
+            <Pill color="#D4920E" bg="#FEF3C7" label={`${blockedSlots.length} slot${blockedSlots.length !== 1 ? 's' : ''} blocked`} />
+            <span style={{ fontSize: 11, color: '#4B5275' }}>
+              Engine couldn't place anything in these (section, day, period) cells.
+            </span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 6, maxHeight: 280, overflowY: 'auto' as const }}>
+            {blockedSlots.slice(0, 40).map((slot, i) => (
+              <BlockedRow key={`b${i}`} slot={slot} periods={periods} />
+            ))}
+            {blockedSlots.length > 40 && (
+              <div style={{ fontSize: 10.5, color: '#8B87AD', padding: '4px 8px', textAlign: 'center' as const }}>
+                … +{blockedSlots.length - 40} more
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
+    </div>
+  )
+}
+
+// ─── BlockedRow ───────────────────────────────────────────
+function BlockedRow({ slot, periods }: { slot: BlockedSlot; periods: Period[] }) {
+  const period = periods.find(p => p.id === slot.periodId)
+  const primary = slot.reasons[0]
+  const day = slot.day.slice(0, 3).toUpperCase()
+
+  return (
+    <div style={{
+      background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 7,
+      padding: '8px 10px',
+      display: 'flex', alignItems: 'flex-start', gap: 10,
+    }}>
+      <div style={{
+        flexShrink: 0,
+        padding: '3px 8px', borderRadius: 5,
+        background: '#D4920E', color: '#fff',
+        fontSize: 9, fontWeight: 800, letterSpacing: '0.06em',
+        fontFamily: "'DM Mono', monospace",
+        minWidth: 90, textAlign: 'center' as const,
+      }}>
+        {slot.section} · {day}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          fontSize: 11.5, fontWeight: 700, color: '#13111E',
+          display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' as const,
+        }}>
+          <CalendarIcon size={10} color="#92400E" />
+          {period?.name ?? slot.periodId}
+          <span style={{ color: '#D8D2FF' }}>·</span>
+          <span style={{
+            fontSize: 9.5, padding: '1px 6px', borderRadius: 4,
+            background: '#FEF3C7', color: '#92400E',
+            border: '1px solid #FDE68A',
+            fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' as const,
+          }}>
+            {blockedCategoryLabel(primary.category)}
+          </span>
+        </div>
+        <div style={{ fontSize: 11, color: '#92400E', marginTop: 3, lineHeight: 1.5 }}>
+          {primary.detail}
+        </div>
+        <div style={{ fontSize: 10.5, color: '#4B5275', marginTop: 4, fontStyle: 'italic' as const }}>
+          💡 {blockedRemedy(primary.category)}
+        </div>
+        {slot.reasons.length > 1 && (
+          <div style={{ fontSize: 10, color: '#8B87AD', marginTop: 3 }}>
+            +{slot.reasons.length - 1} additional reason{slot.reasons.length - 1 !== 1 ? 's' : ''}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

@@ -403,6 +403,54 @@ export interface SolverOutput {
   teacherWeeklyLoad?: Record<string, number>
   /** Stddev of teacher loads — lower is more balanced. */
   teacherLoadStddev?: number
+  /** Slots the engine could not fill, with structured reasons. */
+  blockedSlots?: BlockedSlot[]
+}
+
+export type BlockedReasonCategory =
+  | 'subject-scope-locked'
+  | 'section-scope-locked'
+  | 'no-eligible-teachers'
+  | 'subject-quota-met'
+  | 'subject-max-per-day'
+  | 'all-subjects-exhausted'
+
+export interface BlockedReason {
+  category: BlockedReasonCategory
+  detail: string
+  /** Entity name involved — teacher / subject / section depending on category. */
+  affected?: string
+}
+
+export interface BlockedSlot {
+  section: string
+  day: string
+  periodId: string
+  reasons: BlockedReason[]
+}
+
+/** Pretty-print a blocked-slot category as a UI label. */
+export function blockedCategoryLabel(c: BlockedReasonCategory): string {
+  switch (c) {
+    case 'subject-scope-locked':   return 'Subject scope-locked'
+    case 'section-scope-locked':   return 'Section scope-locked'
+    case 'no-eligible-teachers':   return 'No eligible teacher'
+    case 'subject-quota-met':      return 'All subjects met quota'
+    case 'subject-max-per-day':    return 'Daily limit reached'
+    case 'all-subjects-exhausted': return 'No subject left'
+  }
+}
+
+/** Short remedy hint per category — surfaces in the UI as suggested action. */
+export function blockedRemedy(c: BlockedReasonCategory): string {
+  switch (c) {
+    case 'subject-scope-locked':   return 'Loosen the subject scope OR allow another subject at this slot'
+    case 'section-scope-locked':   return 'Unlock this section scope at this slot'
+    case 'no-eligible-teachers':   return 'Add a teacher to the subject pool or expand subject lists'
+    case 'subject-quota-met':      return 'Increase the periods-per-week target for this section'
+    case 'subject-max-per-day':    return 'Raise maxPeriodsPerDay for this subject'
+    case 'all-subjects-exhausted': return 'Add more subjects or increase quotas'
+  }
 }
 
 /** A Dynamic Learning Group is a pooled cohort across sections for one
@@ -453,6 +501,21 @@ export function solveTimetable(input: SolverInput): SolverOutput {
   const classPeriods = periods.filter(p => p.type === 'class')
   const classTT: ClassTimetable = {}
   const penalties: SolverOutput['penalties'] = []
+  // ── Blocked slots tracker ──
+  //   Records why an (section, day, period) ended up empty so the UI
+  //   can answer "why is this slot blank?" with concrete reasons.
+  const blockedSlots: BlockedSlot[] = []
+  const recordBlock = (section: string, day: string, periodId: string,
+                       category: BlockedReasonCategory, detail: string, affected?: string) => {
+    let slot = blockedSlots.find(b =>
+      b.section === section && b.day === day && b.periodId === periodId
+    )
+    if (!slot) {
+      slot = { section, day, periodId, reasons: [] }
+      blockedSlots.push(slot)
+    }
+    slot.reasons.push({ category, detail, affected })
+  }
   
   // Initialize empty timetable
   sections.forEach(sec => {
@@ -672,6 +735,8 @@ export function solveTimetable(input: SolverInput): SolverOutput {
 
         if (!availableSubs.length) {
           // No subject fits — mark as free
+          recordBlock(sec.name, day, period.id, 'subject-quota-met',
+            `All subjects for ${sec.name} have either met their weekly quota or hit max-per-day`)
           return
         }
 
@@ -695,7 +760,11 @@ export function solveTimetable(input: SolverInput): SolverOutput {
         const sectionScopeState = sec.scope
           ? (sec.scope.cells?.[day]?.[period.id] ?? 'allowed')
           : 'allowed'
-        if (sectionScopeState === 'locked') return
+        if (sectionScopeState === 'locked') {
+          recordBlock(sec.name, day, period.id, 'section-scope-locked',
+            `${sec.name} is scope-locked at this slot`, sec.name)
+          return
+        }
 
         // Skip if SUBJECT scope LOCKS this slot.
         const subScopeState = (chosenSub as any).scope
@@ -703,6 +772,8 @@ export function solveTimetable(input: SolverInput): SolverOutput {
           : 'allowed'
         if (subScopeState === 'locked') {
           penalties.push({ constraint: 'subject-scope-locked', penalty: 0, details: `${chosenSub.name} is scope-locked off ${day} ${period.id}` })
+          recordBlock(sec.name, day, period.id, 'subject-scope-locked',
+            `${chosenSub.name} is scope-locked at this slot — engine couldn't place another subject either`, chosenSub.name)
           return
         }
 
@@ -821,6 +892,8 @@ export function solveTimetable(input: SolverInput): SolverOutput {
             penalty: 5,
             details: `No teacher for ${chosenSub.name} in ${sec.name} ${day} ${period.id}`,
           })
+          recordBlock(sec.name, day, period.id, 'no-eligible-teachers',
+            `No eligible teacher available for ${chosenSub.name} — all subject-matched teachers are busy or scope-locked`, chosenSub.name)
           return
         }
 
@@ -959,6 +1032,7 @@ export function solveTimetable(input: SolverInput): SolverOutput {
     dynamicLearningGroups: extractDynamicLearningGroups(effectiveBlocks, subjects),
     teacherWeeklyLoad,
     teacherLoadStddev: finalStddev,
+    blockedSlots,
   }
 }
 
