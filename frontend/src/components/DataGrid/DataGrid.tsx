@@ -132,6 +132,96 @@ const TOK = {
 }
 
 // ─────────────────────────────────────────────────────────────
+// Smart-fill v2 — string-series detection helpers
+// Pure functions, declared at module level so they aren't recreated
+// on every render.
+// ─────────────────────────────────────────────────────────────
+
+const DAY_CYCLES: string[][] = [
+  ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'],
+  ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],
+  ['Mo','Tu','We','Th','Fr','Sa','Su'],
+  // Work-week only variants — checked after full-week so 5-day input
+  // gets the shorter cycle when all values fit within Mon-Fri
+  ['Monday','Tuesday','Wednesday','Thursday','Friday'],
+  ['Mon','Tue','Wed','Thu','Fri'],
+]
+
+const MONTH_CYCLES: string[][] = [
+  ['January','February','March','April','May','June',
+   'July','August','September','October','November','December'],
+  ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
+]
+
+interface StringSeries {
+  type: 'day' | 'month' | 'alpha'
+  cycle: string[]
+  /** Index in cycle of the FIRST source value */
+  startIdx: number
+  /** Step between consecutive source values */
+  step: number
+}
+
+/** Try to match an array of strings against one of the provided cycles.
+ *  Returns a StringSeries if every value maps to the cycle with a constant
+ *  positive step, null otherwise. */
+function detectStringCycle(
+  vals: string[],
+  cycles: string[][],
+  type: StringSeries['type'],
+): StringSeries | null {
+  if (vals.length === 0) return null
+  for (const cycle of cycles) {
+    const lower = cycle.map(c => c.toLowerCase())
+    const indices = vals.map(v => lower.indexOf(v.trim().toLowerCase()))
+    if (indices.some(i => i < 0)) continue
+    if (indices.length === 1) return { type, cycle, startIdx: indices[0], step: 1 }
+    const steps = indices.map((idx, i) =>
+      i === 0 ? 0 : ((idx - indices[i - 1] + cycle.length) % cycle.length)
+    ).slice(1)
+    const step = steps[0]
+    if (step > 0 && steps.every(s => s === step)) {
+      return { type, cycle, startIdx: indices[0], step }
+    }
+  }
+  return null
+}
+
+/** Detect single-character alphabetic sequences (A→B→C or a→b→c). */
+function detectAlphabetic(vals: string[]): StringSeries | null {
+  if (vals.length === 0) return null
+  const norm = vals.map(v => String(v ?? '').trim())
+  if (norm.some(v => v.length !== 1)) return null
+  const codes = norm.map(v => v.charCodeAt(0))
+  const isUpper = codes.every(c => c >= 65 && c <= 90)
+  const isLower = codes.every(c => c >= 97 && c <= 122)
+  if (!isUpper && !isLower) return null
+  const base = isUpper ? 65 : 97
+  const cycle = Array.from({ length: 26 }, (_, i) => String.fromCharCode(base + i))
+  if (norm.length === 1) return { type: 'alpha', cycle, startIdx: codes[0] - base, step: 1 }
+  const step = codes[1] - codes[0]
+  if (step <= 0) return null
+  if (!codes.every((c, i) => i === 0 || c - codes[i - 1] === step)) return null
+  return { type: 'alpha', cycle, startIdx: codes[0] - base, step }
+}
+
+/** Run all string-series detectors in priority order. */
+function detectStringSeries(vals: string[]): StringSeries | null {
+  return (
+    detectStringCycle(vals, DAY_CYCLES,   'day')   ??
+    detectStringCycle(vals, MONTH_CYCLES, 'month') ??
+    detectAlphabetic(vals)
+  )
+}
+
+/** Extrapolate a string series N steps beyond the last source value. */
+function extrapolateStringSeries(series: StringSeries, srcLen: number, offset: number): string {
+  const rawIdx = series.startIdx + (srcLen - 1 + offset) * series.step
+  const cycleIdx = ((rawIdx % series.cycle.length) + series.cycle.length) % series.cycle.length
+  return series.cycle[cycleIdx]
+}
+
+// ─────────────────────────────────────────────────────────────
 // Component
 // ─────────────────────────────────────────────────────────────
 
@@ -161,6 +251,8 @@ export function DataGrid<T>({
   const [fillSourceRange, setFillSourceRange] = useState<
     { startR: number; startC: number; endR: number; endC: number } | null
   >(null)
+  // v3.2: cursor position for drag-fill preview tooltip
+  const [fillCursor, setFillCursor] = useState<{ x: number; y: number } | null>(null)
   const [pasteOpen, setPasteOpen] = useState(false)
   const [pasteText, setPasteText] = useState('')
   const [bulkOpen, setBulkOpen] = useState(false)
@@ -497,26 +589,22 @@ export function DataGrid<T>({
     // source on one edge, so we need to skip those source cells.
     let next = rows.slice()
 
-    // Helper: gather source numeric values along the active axis
-    const collectSeries = (axis: 'vertical' | 'horizontal'): number[] => {
-      const vals: number[] = []
+    // Helper: collect raw string values from the source range along one axis
+    const collectStrSeries = (axis: 'vertical' | 'horizontal'): string[] => {
+      const vals: string[] = []
       if (axis === 'vertical') {
         for (let r = srcR0; r <= srcR1; r++) {
           const row = filteredRows[r]
           if (!row) return []
           const v = getCell(row, columns[srcC0])
-          const n = parseFloat(String(v ?? ''))
-          if (isNaN(n)) return []
-          vals.push(n)
+          vals.push(v == null ? '' : String(v))
         }
       } else {
         const row = filteredRows[srcR0]
         if (!row) return []
         for (let c = srcC0; c <= srcC1; c++) {
           const v = getCell(row, columns[c])
-          const n = parseFloat(String(v ?? ''))
-          if (isNaN(n)) return []
-          vals.push(n)
+          vals.push(v == null ? '' : String(v))
         }
       }
       return vals
@@ -532,8 +620,6 @@ export function DataGrid<T>({
       return { start: vals[0], step }
     }
 
-    const isNumericCol = (col: DataGridColumn<T>) => col.type === 'number'
-
     // ── Apply fill ──
     for (let r = r0; r <= r1; r++) {
       const origR = originalIndex(r)
@@ -546,39 +632,40 @@ export function DataGrid<T>({
 
         let value: any = null
 
-        // Vertical fill (column extends down)
-        if (isVerticalRange && c === srcC0 && isNumericCol(col)) {
-          const series = collectSeries('vertical')
-          const arith = detectArithmetic(series)
-          if (arith) {
-            // Extrapolate: r relative to srcR1
-            const offset = r - srcR1
-            value = arith.start + (srcHeight - 1 + offset) * arith.step
-          } else if (series.length > 0) {
-            // Cycle through source values
-            const idx = (r - srcR1 - 1 + series.length * 100) % series.length
-            value = series[idx]
-          }
-        }
-        // Horizontal fill (row extends right)
-        else if (isHorizontalRange && r === srcR0 && isNumericCol(col)) {
-          const series = collectSeries('horizontal')
-          const arith = detectArithmetic(series)
-          if (arith) {
-            const offset = c - srcC1
-            value = arith.start + (srcWidth - 1 + offset) * arith.step
-          } else if (series.length > 0) {
-            const idx = (c - srcC1 - 1 + series.length * 100) % series.length
-            value = series[idx]
+        // ── Smart-fill for 1-D source ranges ──
+        if ((isVerticalRange && c === srcC0) || (isHorizontalRange && r === srcR0)) {
+          const axis: 'vertical' | 'horizontal' = isVerticalRange ? 'vertical' : 'horizontal'
+          const strVals = collectStrSeries(axis)
+          const nums = strVals.map(v => parseFloat(v))
+          const allNumeric = nums.every(n => !isNaN(n))
+
+          if (allNumeric && nums.length > 0) {
+            // ── Numeric path: arithmetic extrapolation or cycle ──
+            const arith = detectArithmetic(nums)
+            const srcLen = isVerticalRange ? srcHeight : srcWidth
+            const offset = isVerticalRange ? (r - srcR1) : (c - srcC1)
+            if (arith) {
+              value = arith.start + (srcLen - 1 + offset) * arith.step
+            } else {
+              // Cycle through source values
+              const idx = ((offset - 1) % nums.length + nums.length) % nums.length
+              value = nums[idx]
+            }
+          } else if (strVals.length > 0) {
+            // ── String path: day / month / alphabetic cycle ──
+            const series = detectStringSeries(strVals)
+            if (series) {
+              const srcLen = isVerticalRange ? srcHeight : srcWidth
+              const offset = isVerticalRange ? (r - srcR1) : (c - srcC1)
+              value = extrapolateStringSeries(series, srcLen, offset)
+            }
           }
         }
 
         // Fallback: copy nearest source cell (existing behavior)
         if (value === null) {
-          const srcRowIdx = isVerticalRange ? srcR0 : srcR0
-          const srcColIdx = isHorizontalRange ? srcC0 : srcC0
-          const srcRow = filteredRows[srcRowIdx]
-          const srcCol = columns[srcColIdx]
+          const srcRow = filteredRows[srcR0]
+          const srcCol = columns[srcC0]
           value = srcRow ? getCell(srcRow, srcCol) : null
         }
 
@@ -600,10 +687,19 @@ export function DataGrid<T>({
       setFillFrom(null)
       setFillTo(null)
       setFillSourceRange(null)
+      setFillCursor(null)
     }
     window.addEventListener('mouseup', onUp)
     return () => window.removeEventListener('mouseup', onUp)
   }, [fillFrom, fillTo, fillSourceRange, applyDragFill])
+
+  // v3.2: track mouse position during fill drag for preview tooltip
+  useEffect(() => {
+    if (!fillFrom) return
+    const onMove = (e: MouseEvent) => setFillCursor({ x: e.clientX, y: e.clientY })
+    window.addEventListener('mousemove', onMove)
+    return () => window.removeEventListener('mousemove', onMove)
+  }, [fillFrom])
 
   // ── v2: Fill Down (Ctrl+D) ───────────────────────────────
   const applyFillDown = useCallback(() => {
@@ -798,6 +894,77 @@ export function DataGrid<T>({
     )
   }
 
+  // ── v3.2: fill preview — compute cell count + mode during drag ──
+  const fillPreview = useMemo(() => {
+    if (!fillFrom || !fillTo) return null
+    const r0 = Math.min(fillFrom.r, fillTo.r), r1 = Math.max(fillFrom.r, fillTo.r)
+    const c0 = Math.min(fillFrom.c, fillTo.c), c1 = Math.max(fillFrom.c, fillTo.c)
+
+    // Source range bounds
+    const src = fillSourceRange ?? { startR: fillFrom.r, startC: fillFrom.c, endR: fillFrom.r, endC: fillFrom.c }
+    const srcR0 = Math.min(src.startR, src.endR), srcR1 = Math.max(src.startR, src.endR)
+    const srcC0 = Math.min(src.startC, src.endC), srcC1 = Math.max(src.startC, src.endC)
+    const srcWidth  = srcC1 - srcC0 + 1
+    const srcHeight = srcR1 - srcR0 + 1
+
+    // Count non-source cells in fill rectangle
+    let count = 0
+    for (let r = r0; r <= r1; r++) {
+      for (let c = c0; c <= c1; c++) {
+        if (r >= srcR0 && r <= srcR1 && c >= srcC0 && c <= srcC1) continue
+        count++
+      }
+    }
+    if (count === 0) return null
+
+    // Detect smart-fill mode for preview tooltip
+    const isVerticalRange   = srcWidth === 1 && srcHeight > 1
+    const isHorizontalRange = srcHeight === 1 && srcWidth > 1
+    type FillMode = 'series' | 'days' | 'months' | 'alpha' | 'copy'
+    let mode: FillMode = 'copy'
+
+    if (isVerticalRange || isHorizontalRange) {
+      // Collect raw string values along the active axis
+      const strVals: string[] = []
+      if (isVerticalRange) {
+        for (let r = srcR0; r <= srcR1; r++) {
+          const row = filteredRows[r]
+          if (!row) break
+          const v = getCell(row, columns[srcC0])
+          strVals.push(v == null ? '' : String(v))
+        }
+      } else {
+        const row = filteredRows[srcR0]
+        if (row) {
+          for (let c = srcC0; c <= srcC1; c++) {
+            const v = getCell(row, columns[c])
+            strVals.push(v == null ? '' : String(v))
+          }
+        }
+      }
+      if (strVals.length >= 2) {
+        const nums = strVals.map(v => parseFloat(v))
+        if (nums.every(n => !isNaN(n))) {
+          // Numeric: check for constant step
+          const step = nums[1] - nums[0]
+          if (nums.every((v, i) => i === 0 || Math.abs((v - nums[i - 1]) - step) < 1e-9)) {
+            mode = 'series'
+          }
+        } else {
+          // String: check for day/month/alpha cycle
+          const series = detectStringSeries(strVals)
+          if (series) {
+            mode = series.type === 'day' ? 'days'
+              : series.type === 'month' ? 'months'
+              : 'alpha'
+          }
+        }
+      }
+    }
+
+    return { count, mode }
+  }, [fillFrom, fillTo, fillSourceRange, filteredRows, columns, getCell])
+
   // ── v2: cumulative left offsets for multi-column freeze ──
   const stickyOffsets = useMemo(() => {
     const out: number[] = []
@@ -957,8 +1124,32 @@ export function DataGrid<T>({
                       }}
                       onMouseEnter={e => {
                         if (fillFrom && e.buttons === 1) {
-                          // Drag-fill in progress
-                          setFillTo({ r: ri, c: ci })
+                          // v3.3: axis-constrained fill for 1-D source ranges.
+                          // A vertical source (single column, multiple rows) should
+                          // only extend downward — constraining c to the source
+                          // column prevents accidental sideways 2-D fills.
+                          // A horizontal source (single row, multiple columns) only
+                          // extends rightward. A 2-D source or single-cell source
+                          // has no axis constraint (existing behaviour).
+                          if (fillSourceRange) {
+                            const sR0 = Math.min(fillSourceRange.startR, fillSourceRange.endR)
+                            const sR1 = Math.max(fillSourceRange.startR, fillSourceRange.endR)
+                            const sC0 = Math.min(fillSourceRange.startC, fillSourceRange.endC)
+                            const sC1 = Math.max(fillSourceRange.startC, fillSourceRange.endC)
+                            const srcW = sC1 - sC0 + 1
+                            const srcH = sR1 - sR0 + 1
+                            if (srcW === 1 && srcH > 1) {
+                              // Vertical 1-D — lock column to source column
+                              setFillTo({ r: ri, c: sC0 })
+                            } else if (srcH === 1 && srcW > 1) {
+                              // Horizontal 1-D — lock row to source row
+                              setFillTo({ r: sR0, c: ci })
+                            } else {
+                              setFillTo({ r: ri, c: ci })
+                            }
+                          } else {
+                            setFillTo({ r: ri, c: ci })
+                          }
                         } else if (e.buttons === 1 && selection) {
                           setSelectionEnd({ r: ri, c: ci })
                         }
@@ -1070,6 +1261,48 @@ export function DataGrid<T>({
 
       {/* Paste modal */}
       {pasteOpen && <PasteModal text={pasteText} setText={setPasteText} onCancel={() => { setPasteOpen(false); setPasteText('') }} onApply={() => { applyPaste(pasteText, selection ?? { r: filteredRows.length, c: 0 }); setPasteOpen(false); setPasteText('') }} />}
+
+      {/* v3.2: drag-fill preview tooltip — floats near cursor during drag */}
+      {fillCursor && fillPreview && (
+        <div
+          style={{
+            position: 'fixed',
+            left: fillCursor.x + 14,
+            top:  fillCursor.y + 16,
+            zIndex: 10000,
+            pointerEvents: 'none',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 5,
+            padding: '4px 10px',
+            borderRadius: 10,
+            background: '#13111E',
+            color: '#fff',
+            fontSize: 10.5,
+            fontWeight: 600,
+            fontFamily: "'Inter', sans-serif",
+            boxShadow: '0 4px 14px rgba(19,17,30,0.35)',
+            whiteSpace: 'nowrap' as const,
+          }}
+        >
+          {(() => {
+            const modeLabel =
+              fillPreview.mode === 'series'  ? { tag: 'SERIES',  color: '#A78BFA' } :
+              fillPreview.mode === 'days'    ? { tag: 'DAYS',    color: '#34D399' } :
+              fillPreview.mode === 'months'  ? { tag: 'MONTHS',  color: '#60A5FA' } :
+              fillPreview.mode === 'alpha'   ? { tag: 'A→Z',     color: '#FB923C' } :
+                                               { tag: 'COPY',    color: '#94A3B8' }
+            return (
+              <>
+                <span style={{ color: modeLabel.color, fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase' as const }}>
+                  {modeLabel.tag}
+                </span>
+                <span>→ fill {fillPreview.count} cell{fillPreview.count !== 1 ? 's' : ''}</span>
+              </>
+            )
+          })()}
+        </div>
+      )}
 
       {/* Bulk fill modal */}
       {bulkOpen && (

@@ -118,6 +118,7 @@ export function Step6Generate() {
         sectionStrengths,
         subjectAllocations,
         rooms,
+        teacherAvailability: (store as any).teacherAvailability ?? {},
       })
       solveMs = Date.now() - startedAt
 

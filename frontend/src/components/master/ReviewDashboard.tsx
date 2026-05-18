@@ -23,14 +23,19 @@ import { ScoreBreakdownPopover } from './ScoreBreakdownPopover'
 import {
   type BlockedSlot, type DynamicLearningGroup,
   blockedCategoryLabel, blockedRemedy,
+  reoptimizeTeachers,
 } from '@/lib/schedulingEngine'
 import { DLGInspector } from './DLGInspector'
+import { ConflictResolutionWizard } from './ConflictResolutionWizard'
+import { PublishExportPanel } from './PublishExportPanel'
+import { TimetableSwapModal } from './TimetableSwapModal'
+import { TeacherAvailabilityEditor } from './TeacherAvailabilityEditor'
 import { useTimetableStore } from '@/store/timetableStore'
 import {
   Users2, BookOpen, Building2, Layers, Sparkles,
   AlertTriangle, CheckCircle2, TrendingUp, Gauge, Clock,
   Wrench, ChevronDown, ChevronRight, Zap, Calendar as CalendarIcon,
-  Ban,
+  Ban, RefreshCw, Wand2, Download, PencilRuler, CalendarCheck,
 } from 'lucide-react'
 
 interface Props {
@@ -49,13 +54,15 @@ interface Props {
   score: number
   blockedSlots?: BlockedSlot[]
   dynamicLearningGroups?: DynamicLearningGroup[]
+  /** Called with the modified classTT after the conflict wizard applies fixes. */
+  onApplyConflictFixes?: (updatedClassTT: ClassTimetable) => void
 }
 
 export function ReviewDashboard({
   classTT, sections, staff, subjects, periods, workDays,
   optionalBlocks = [], teacherWeeklyLoad, teacherLoadStddev,
   conflicts, penalties, rooms = [], score, blockedSlots = [],
-  dynamicLearningGroups = [],
+  dynamicLearningGroups = [], onApplyConflictFixes,
 }: Props) {
 
   // ── Capacity summary per band ──
@@ -80,26 +87,39 @@ export function ReviewDashboard({
     }))
   }, [classTT, sections])
 
+  // ── Re-optimise teachers state — declared before teacherLoads/loadStats memos ──
+  const [reoptimizing, setReoptimizing] = useState(false)
+  const [reoptimizeResult, setReoptimizeResult] = useState<{
+    reassignedCount: number; stddevBefore: number; stddevAfter: number
+  } | null>(null)
+  // Local override for the bar-chart loads after a re-optimise run
+  const [reoptimizedLoad, setReoptimizedLoad] = useState<Record<string, number> | null>(null)
+
   // ── Teacher load chart ──
+  // Uses reoptimizedLoad override when available, falls back to solver-emitted load
   const teacherLoads = useMemo(() => {
+    const src = reoptimizedLoad ?? teacherWeeklyLoad
     const list = staff.map(t => ({
       name: t.name,
-      load: teacherWeeklyLoad?.[t.name] ?? 0,
+      load: src?.[t.name] ?? 0,
       max: (t as any).maxPeriodsPerWeek ?? 40,
     }))
     return list.sort((a, b) => b.load - a.load)
-  }, [staff, teacherWeeklyLoad])
+  }, [staff, teacherWeeklyLoad, reoptimizedLoad])
   const loadStats = useMemo(() => {
     const loads = teacherLoads.map(t => t.load).filter(l => l > 0)
     if (loads.length === 0) return { mean: 0, min: 0, max: 0, stddev: 0 }
     const mean = loads.reduce((a, b) => a + b, 0) / loads.length
     const min  = Math.min(...loads)
     const max  = Math.max(...loads)
-    const stddev = teacherLoadStddev ?? Math.sqrt(
-      loads.reduce((a, l) => a + (l - mean) ** 2, 0) / loads.length
-    )
+    // After re-optimise, use fresh stddev; otherwise use solver-emitted value
+    const stddev = reoptimizeResult
+      ? reoptimizeResult.stddevAfter
+      : (teacherLoadStddev ?? Math.sqrt(
+          loads.reduce((a, l) => a + (l - mean) ** 2, 0) / loads.length
+        ))
     return { mean, min, max, stddev }
-  }, [teacherLoads, teacherLoadStddev])
+  }, [teacherLoads, teacherLoadStddev, reoptimizeResult])
   const maxLoadInChart = Math.max(1, ...teacherLoads.map(t => t.load))
 
   // ── Room utilisation ──
@@ -149,22 +169,78 @@ export function ReviewDashboard({
     [livePenalties]
   )
 
-  // ── Score-history sparkline tracking ──
-  //   Initial point = solver-emitted score. Each subsequent change to
-  //   liveScore appends a new tick. Drives the PenaltyTrendChart.
+  // ── Score-history sparkline + breakdown tracking ──
+  //   Initial point = solver-emitted score + initial penalty breakdown.
+  //   Each subsequent change appends a new tick with the current breakdown.
+  //   Drives the PenaltyTrendChart and ScoreBreakdownPopover trend tab.
+  const buildBreakdown = (ps: { constraint: string; penalty: number }[]): Record<string, number> => {
+    const m: Record<string, number> = {}
+    ps.forEach(p => { m[p.constraint] = (m[p.constraint] ?? 0) + p.penalty })
+    return m
+  }
   const [scoreHistory, setScoreHistory] = useState<ScorePoint[]>(() => [
-    { score, event: 'initial' },
+    { score, event: 'initial', breakdown: buildBreakdown(penalties) },
   ])
   const lastTrackedScore = useRef(score)
+  // Keep a ref to livePenalties so the effect can capture it without
+  // being re-triggered on every re-render (only fires on score change).
+  const livePenaltiesRef = useRef(livePenalties)
+  useEffect(() => { livePenaltiesRef.current = livePenalties })
   useEffect(() => {
     if (liveScore !== lastTrackedScore.current) {
-      setScoreHistory(h => [...h, { score: liveScore, event: 'fix' }])
+      const bd = buildBreakdown(livePenaltiesRef.current)
+      setScoreHistory(h => [...h, { score: liveScore, event: 'fix', breakdown: bd }])
       lastTrackedScore.current = liveScore
     }
   }, [liveScore])
 
   const softPenalties = livePenalties.filter(p => p.penalty > 0)
   const overloadedTeachers = teacherLoads.filter(t => t.load > t.max)
+
+  const handleReoptimize = () => {
+    setReoptimizing(true)
+    // Slight defer so React can paint the loading state before heavy work
+    setTimeout(() => {
+      const liveStore = useTimetableStore.getState() as any
+      const result = reoptimizeTeachers({
+        classTT,
+        sections,
+        staff,
+        subjects,
+        periods,
+        workDays,
+        subjectAllocations: liveStore.subjectAllocations ?? {},
+      })
+      const stddevBefore = loadStats.stddev
+      setReoptimizedLoad(result.teacherWeeklyLoad)
+      setReoptimizeResult({
+        reassignedCount: result.reassignedCount,
+        stddevBefore,
+        stddevAfter: result.teacherLoadStddev,
+      })
+      // Push a score history point reflecting the updated workload balance
+      const newWorkloadScore = result.penalties.reduce((a, p) => a + p.penalty, 0)
+      const otherPenalties = livePenalties.filter(p =>
+        p.constraint !== 'workload-imbalance' && p.constraint !== 'teacher-overload'
+      )
+      const newTotal = otherPenalties.reduce((a, p) => a + p.penalty, 0) + newWorkloadScore
+      const reoptBd = buildBreakdown([...otherPenalties, ...result.penalties])
+      setScoreHistory(h => [...h, { score: newTotal, event: 'reoptimize', breakdown: reoptBd }])
+      setReoptimizing(false)
+    }, 16)
+  }
+
+  // ── Conflict resolution wizard state ──
+  const [wizardOpen, setWizardOpen] = useState(false)
+
+  // ── Publish & Export panel state ──
+  const [publishOpen, setPublishOpen] = useState(false)
+
+  // ── Timetable Swap Modal state ──
+  const [swapOpen, setSwapOpen] = useState(false)
+
+  // ── Teacher Availability Editor state ──
+  const [availOpen, setAvailOpen] = useState(false)
 
   // ── Auto-fix safe — applies every green-delta fix in one pass ──
   const [autoFixResult, setAutoFixResult] = useState<{ applied: number; skipped: number; delta: number } | null>(null)
@@ -218,7 +294,40 @@ export function ReviewDashboard({
     }}>
 
       {/* ─── A. Academic Summary ─── */}
-      <Card title="Academic Summary" icon={<Sparkles size={14} />}>
+      <Card
+        title="Academic Summary"
+        icon={<Sparkles size={14} />}
+        action={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+            <button
+              onClick={() => setSwapOpen(true)}
+              title="Interactively swap or move cells on the timetable grid"
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                padding: '6px 13px', borderRadius: 8,
+                border: '1.5px solid #D8D2FF', background: '#F8F7FF',
+                color: '#7C6FE0', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              <PencilRuler size={12} /> Edit Grid
+            </button>
+            <button
+              onClick={() => setPublishOpen(true)}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                padding: '6px 14px', borderRadius: 8, border: 'none',
+                background: 'linear-gradient(135deg, #7C6FE0 0%, #9B8EF5 100%)',
+                color: '#fff', fontSize: 11, fontWeight: 800, cursor: 'pointer',
+                fontFamily: 'inherit', letterSpacing: '0.04em',
+                boxShadow: '0 2px 8px rgba(124,111,224,0.30)',
+              }}
+            >
+              <Download size={12} /> Publish &amp; Export
+            </button>
+          </div>
+        }
+      >
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10 }}>
           <Stat icon={<Users2 size={14} />}    color="#7C6FE0" label="Classes"   value={sections.length} />
           <Stat icon={<BookOpen size={14} />}  color="#9B8EF5" label="Subjects"  value={subjects.length} />
@@ -261,7 +370,25 @@ export function ReviewDashboard({
       </Card>
 
       {/* ─── C. Teacher Load Analysis ─── */}
-      <Card title="Teacher Load Analysis" icon={<TrendingUp size={14} />}>
+      <Card
+        title="Teacher Load Analysis"
+        icon={<TrendingUp size={14} />}
+        action={
+          <button
+            onClick={() => setAvailOpen(true)}
+            title="Configure per-teacher day/period availability before the next solve"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              padding: '5px 12px', borderRadius: 7,
+              border: '1.5px solid #BBF7D0', background: '#F0FDF4',
+              color: '#15803D', fontSize: 10.5, fontWeight: 700,
+              cursor: 'pointer', fontFamily: 'inherit',
+            }}
+          >
+            <CalendarCheck size={11} /> Availability
+          </button>
+        }
+      >
         <div style={{ display: 'flex', flexWrap: 'wrap' as const, alignItems: 'center', gap: 12, marginBottom: 12, fontSize: 11 }}>
           <Tag label="Mean"    value={loadStats.mean.toFixed(1)} color="#7C6FE0" />
           <Tag label="Min"     value={String(loadStats.min)}     color="#0EA5E9" />
@@ -269,7 +396,51 @@ export function ReviewDashboard({
           <Tag label="Stddev"  value={loadStats.stddev.toFixed(2)} color="#9B8EF5" />
           <div style={{ flex: 1 }} />
           <FairnessChip status={fairness} label={fairnessLabel} />
+          {/* Re-optimise teachers button */}
+          <button
+            onClick={handleReoptimize}
+            disabled={reoptimizing}
+            title="Re-run AI teacher assignment to rebalance workloads without a full re-solve"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+              padding: '5px 11px', borderRadius: 7,
+              background: reoptimizing ? '#F5F2FF' : '#EDE9FF',
+              color: '#7C6FE0', border: '1px solid #D8D2FF',
+              fontSize: 10.5, fontWeight: 700, cursor: reoptimizing ? 'default' : 'pointer',
+              fontFamily: 'inherit', opacity: reoptimizing ? 0.7 : 1,
+            }}
+          >
+            <RefreshCw size={11} style={{ animation: reoptimizing ? 'spin 0.8s linear infinite' : 'none' }} />
+            {reoptimizing ? 'Optimising…' : 'Re-optimize Teachers'}
+          </button>
         </div>
+
+        {/* Re-optimise result banner */}
+        {reoptimizeResult && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' as const,
+            padding: '6px 10px', borderRadius: 7,
+            background: reoptimizeResult.stddevAfter < reoptimizeResult.stddevBefore ? '#F0FDF4' : '#FFFBEB',
+            border: `1px solid ${reoptimizeResult.stddevAfter < reoptimizeResult.stddevBefore ? '#BBF7D0' : '#FDE68A'}`,
+            marginBottom: 10, fontSize: 11,
+          }}>
+            <span style={{ fontWeight: 700, color: reoptimizeResult.stddevAfter < reoptimizeResult.stddevBefore ? '#15803D' : '#92400E' }}>
+              {reoptimizeResult.stddevAfter < reoptimizeResult.stddevBefore ? '✓ Improved' : '↔ No change'}
+            </span>
+            <span style={{ color: '#4B5275' }}>
+              {reoptimizeResult.reassignedCount} slot{reoptimizeResult.reassignedCount !== 1 ? 's' : ''} reassigned
+            </span>
+            <span style={{ color: '#8B87AD', fontFamily: "'DM Mono', monospace" }}>
+              stddev: {reoptimizeResult.stddevBefore.toFixed(2)} → {reoptimizeResult.stddevAfter.toFixed(2)}
+            </span>
+            <button
+              onClick={() => { setReoptimizeResult(null); setReoptimizedLoad(null) }}
+              style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#8B87AD', cursor: 'pointer', fontSize: 12, lineHeight: 1, padding: '0 2px' }}
+              title="Dismiss"
+            >×</button>
+          </div>
+        )}
+
         <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 4, maxHeight: 280, overflowY: 'auto' as const }}>
           {teacherLoads.length === 0 && <Empty text="No teachers yet" />}
           {teacherLoads.map(t => {
@@ -328,7 +499,7 @@ export function ReviewDashboard({
         <div style={{ display: 'flex', gap: 10, marginBottom: 10, flexWrap: 'wrap' as const, alignItems: 'center' }}>
           <Pill color="#DC2626" bg="#FEE2E2" label={`${hardConflicts} hard`} />
           <Pill color="#D4920E" bg="#FEF3C7" label={`${softPenalties.length} soft`} />
-          <ScoreBreakdownPopover penalties={livePenalties} liveScore={liveScore} originalScore={score} />
+          <ScoreBreakdownPopover penalties={livePenalties} liveScore={liveScore} originalScore={score} history={scoreHistory} />
           {scoreHistory.length >= 2 && (
             <PenaltyTrendChart history={scoreHistory} />
           )}
@@ -336,6 +507,22 @@ export function ReviewDashboard({
             <Pill color="#DC2626" bg="#FEE2E2" label={`${overloadedTeachers.length} overloaded`} />
           )}
           <div style={{ flex: 1 }} />
+          {hardConflicts > 0 && (
+            <button
+              onClick={() => setWizardOpen(true)}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+                padding: '5px 11px', borderRadius: 6,
+                background: '#FEE2E2', color: '#DC2626',
+                border: '1px solid #FECACA',
+                fontSize: 10.5, fontWeight: 700, cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+              title="Step through each hard conflict and apply targeted fixes"
+            >
+              <Wand2 size={10} /> Resolve Conflicts
+            </button>
+          )}
           {softPenalties.length > 0 && (
             <button onClick={handleAutoFix}
               style={{
@@ -442,6 +629,65 @@ export function ReviewDashboard({
           </div>
         </Card>
       )}
+
+      {/* ─── Conflict Resolution Wizard ─── */}
+      {wizardOpen && conflicts.length > 0 && (
+        <ConflictResolutionWizard
+          conflicts={conflicts}
+          classTT={classTT}
+          sections={sections}
+          staff={staff}
+          subjects={subjects}
+          periods={periods}
+          workDays={workDays}
+          onClose={() => setWizardOpen(false)}
+          onApplyFixes={updated => {
+            onApplyConflictFixes?.(updated)
+            setWizardOpen(false)
+          }}
+        />
+      )}
+
+      {/* ─── Publish & Export panel ─── */}
+      {publishOpen && (
+        <PublishExportPanel
+          onClose={() => setPublishOpen(false)}
+          exportOptions={{
+            classTT,
+            sections,
+            staff,
+            subjects,
+            periods,
+            workDays,
+          }}
+        />
+      )}
+
+      {/* ─── Teacher Availability Editor ─── */}
+      {availOpen && (
+        <TeacherAvailabilityEditor
+          staff={staff}
+          periods={periods}
+          workDays={workDays}
+          onClose={() => setAvailOpen(false)}
+        />
+      )}
+
+      {/* ─── Timetable Swap Modal ─── */}
+      {swapOpen && (
+        <TimetableSwapModal
+          classTT={classTT}
+          sections={sections}
+          staff={staff}
+          periods={periods}
+          workDays={workDays}
+          onClose={() => setSwapOpen(false)}
+          onApplyFixes={updated => {
+            onApplyConflictFixes?.(updated)
+            setSwapOpen(false)
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -503,8 +749,17 @@ function BlockedRow({ slot, periods }: { slot: BlockedSlot; periods: Period[] })
 
 // ─── sub-components ───────────────────────────────────────
 
-function Card({ title, icon, accent, children }: {
-  title: string; icon?: React.ReactNode; accent?: string; children: React.ReactNode;
+// Spinner keyframe injected once
+if (typeof document !== 'undefined' && !document.getElementById('rd-spin-kf')) {
+  const s = document.createElement('style')
+  s.id = 'rd-spin-kf'
+  s.textContent = '@keyframes spin { to { transform: rotate(360deg); } }'
+  document.head.appendChild(s)
+}
+
+function Card({ title, icon, accent, action, children }: {
+  title: string; icon?: React.ReactNode; accent?: string;
+  action?: React.ReactNode; children: React.ReactNode;
 }) {
   return (
     <div style={{
@@ -516,6 +771,7 @@ function Card({ title, icon, accent, children }: {
         <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#4B5275' }}>
           {title}
         </span>
+        {action && <div style={{ marginLeft: 'auto' }}>{action}</div>}
       </div>
       {children}
     </div>

@@ -80,6 +80,10 @@ export interface SolverInput {
    *  enforces "∑ students ≤ room capacity" by bin-packing sections into
    *  multiple pools when a single pool exceeds a subject's room cap. */
   rooms?: Array<{ id?: string; actualName?: string; generatedName?: string; name?: string; capacity?: number; roomType?: string }>
+  /** Teacher availability matrix (teacherName → day → periodId → status).
+   *  'blocked' slots are treated as permanently busy — solver will never
+   *  place a lesson there.  'preferred' slots get a soft scoring bonus. */
+  teacherAvailability?: import('@/types').TeacherAvailability
 }
 
 /** schedU Phase 6 — Auto-infer Optional Blocks from section strengths.
@@ -530,6 +534,33 @@ export function solveTimetable(input: SolverInput): SolverOutput {
     workDays.forEach(day => { teacherBusy[st.name][day] = new Set() })
   })
 
+  // Pre-mark 'blocked' slots from the availability matrix as permanently busy.
+  // This means the solver's assignment loop will skip them just like already-occupied slots.
+  if (input.teacherAvailability) {
+    Object.entries(input.teacherAvailability).forEach(([tName, dayMap]) => {
+      Object.entries(dayMap).forEach(([day, periodMap]) => {
+        Object.entries(periodMap).forEach(([periodId, status]) => {
+          if (status === 'blocked') {
+            if (!teacherBusy[tName]) {
+              teacherBusy[tName] = Object.fromEntries(workDays.map(d => [d, new Set<string>()]))
+            }
+            teacherBusy[tName][day]?.add(periodId)
+          }
+        })
+      })
+    })
+  }
+  // 'preferred' slots are used as a soft scoring bonus — see assignment scoring below.
+  const teacherPreferredSlots: Set<string> = new Set(
+    Object.entries(input.teacherAvailability ?? {}).flatMap(([tName, dayMap]) =>
+      Object.entries(dayMap).flatMap(([day, periodMap]) =>
+        Object.entries(periodMap)
+          .filter(([, st]) => st === 'preferred')
+          .map(([periodId]) => `${tName}::${day}::${periodId}`)
+      )
+    )
+  )
+
   // Build subject frequency tracker
   const subjectCount: Record<string, Record<string, number>> = {}
   sections.forEach(sec => {
@@ -868,6 +899,9 @@ export function solveTimetable(input: SolverInput): SolverOutput {
             if (s === 'disabled') score -= 10
           }
 
+          // Teacher availability preference bonus
+          if (teacherPreferredSlots.has(`${name}::${day}::${period.id}`)) score += 15
+
           // Anti-back-to-back: penalise if this teacher taught the same subject
           // in the previous period in this section
           const prev = classPeriods[pi - 1]
@@ -1034,6 +1068,228 @@ export function solveTimetable(input: SolverInput): SolverOutput {
     teacherLoadStddev: finalStddev,
     blockedSlots,
   }
+}
+
+// ─── Teacher Re-optimisation Pass ────────────────────────
+/**
+ * reoptimizeTeachers — re-run the AI teacher-assignment scoring on an
+ * existing classTT WITHOUT changing subject placements.
+ *
+ * Use this after the user applies manual fixes that skew the workload
+ * balance. Only cells with a concrete subject (and no optionalBlockId /
+ * isClassTeacher pin) have their teacher replaced. Pinned cells stay
+ * exactly as-is.
+ *
+ * Pure function — uses the same composite scoring algorithm as Pass 2 of
+ * the main solver (vertical continuity, familiarity, load-balance bias,
+ * overload penalty, today exhaustion, scope-disabled soft penalty,
+ * consecutive back-to-back penalty).
+ */
+export interface ReoptimizeInput {
+  classTT: ClassTimetable
+  sections: Section[]
+  staff: Staff[]
+  subjects: Subject[]
+  periods: Period[]
+  workDays: string[]
+  subjectAllocations?: Record<string, Record<string, string>>
+}
+
+export interface ReoptimizeResult {
+  classTT: ClassTimetable
+  teacherWeeklyLoad: Record<string, number>
+  teacherLoadStddev: number
+  penalties: { constraint: string; penalty: number; details: string }[]
+  /** How many cells had their teacher changed. */
+  reassignedCount: number
+}
+
+export function reoptimizeTeachers(input: ReoptimizeInput): ReoptimizeResult {
+  const { sections, staff, subjects, periods, workDays } = input
+  const classPeriods = periods.filter(p => p.type === 'class')
+
+  // Deep-clone classTT — we mutate the clone, never the caller's data
+  const classTT: ClassTimetable = JSON.parse(JSON.stringify(input.classTT))
+
+  // ── Phase 1: identify pinned vs re-assignable cells ──
+  //   Pinned = optional-block cells (optionalBlockId) + class-teacher Period-1
+  //   cells (isClassTeacher). These keep their teacher; we mark them busy.
+  const teacherBusy: Record<string, Record<string, Set<string>>> = {}
+  const ensureBusy = (name: string) => {
+    if (!teacherBusy[name]) {
+      teacherBusy[name] = Object.fromEntries(workDays.map(d => [d, new Set<string>()]))
+    }
+  }
+  staff.forEach(st => ensureBusy(st.name))
+
+  type WorkItem = {
+    secName: string; day: string; periodId: string
+    subject: string; periodIdx: number
+  }
+  const workItems: WorkItem[] = []
+
+  sections.forEach(sec => {
+    const secData = classTT[sec.name] ?? {}
+    workDays.forEach(day => {
+      classPeriods.forEach((period, pi) => {
+        const cell: any = secData[day]?.[period.id]
+        if (!cell?.subject) return
+        if (cell.optionalBlockId || cell.isClassTeacher) {
+          if (cell.teacher) {
+            ensureBusy(cell.teacher)
+            teacherBusy[cell.teacher]?.[day]?.add(period.id)
+          }
+        } else {
+          cell.teacher = ''   // clear — will be re-assigned below
+          workItems.push({ secName: sec.name, day, periodId: period.id, subject: cell.subject, periodIdx: pi })
+        }
+      })
+    })
+  })
+
+  // ── Phase 2: load tracking state ──
+  const teacherWeeklyLoad: Record<string, number> = {}
+  staff.forEach(t => { teacherWeeklyLoad[t.name] = 0 })
+  const teacherSubjectSet: Record<string, Set<string>> = {}
+  staff.forEach(t => { teacherSubjectSet[t.name] = new Set() })
+  const teacherSectionSet: Record<string, Set<string>> = {}
+  staff.forEach(t => { teacherSectionSet[t.name] = new Set() })
+
+  // Target weekly load per teacher (mirrors the main solver formula)
+  const subjectAllocations = input.subjectAllocations ?? {}
+  let totalRequired = 0
+  sections.forEach(sec => {
+    subjects.forEach(sub => {
+      const cell = subjectAllocations[sec.name]?.[sub.name]
+      const parsed = cell ? parseAllocation(cell) : null
+      totalRequired += (parsed?.valid ? parsed.weeklyTotal : (sub.periodsPerWeek ?? 0))
+    })
+  })
+  const targetWeeklyLoadPerTeacher = Math.ceil(totalRequired / Math.max(1, staff.length))
+
+  let reassignedCount = 0
+
+  // ── Phase 3: re-assign teachers using composite scoring ──
+  workItems.forEach(({ secName, day, periodId, subject, periodIdx }) => {
+    const sec   = sections.find(s => s.name === secName)
+    const sectionKey = `${secName}::${subject}`
+    const gradeKey   = sec?.grade ? `${(sec as any).grade}::${subject}` : ''
+
+    const isAvailable = (st: Staff): boolean => {
+      if (teacherBusy[st.name]?.[day]?.has(periodId)) return false
+      const tScope = (st as any).scope
+      if (tScope) {
+        const s = tScope.cells?.[day]?.[periodId] ?? 'allowed'
+        if (s === 'locked') return false
+      }
+      return true
+    }
+
+    const matchesSub = (st: Staff): boolean => {
+      const subs: string[] = (st as any).subjects ?? []
+      if (!subs.length) return false
+      if (subs.some((s: string) => s.includes('::'))) {
+        return subs.some((s: string) =>
+          s === sectionKey || (gradeKey !== '' && s === gradeKey)
+        )
+      }
+      return subs.includes(subject)
+    }
+
+    let eligible = staff.filter(st => matchesSub(st) && isAvailable(st))
+    if (!eligible.length) eligible = staff.filter(st =>
+      ((st as any).subjects ?? []).includes(subject) && isAvailable(st)
+    )
+    if (!eligible.length) eligible = staff.filter(st => isAvailable(st))
+    if (!eligible.length) return   // no teacher available — slot stays blank
+
+    // Today's load snapshot (for exhaustion penalty)
+    const teacherLoadToday: Record<string, number> = {}
+    Object.values(classTT).forEach(sd => {
+      Object.values((sd as any)[day] ?? {}).forEach((c: any) => {
+        if (c?.teacher) teacherLoadToday[c.teacher] = (teacherLoadToday[c.teacher] ?? 0) + 1
+      })
+    })
+
+    // Back-to-back reference cell (same section, previous period)
+    const prevPeriod = periodIdx > 0 ? classPeriods[periodIdx - 1] : null
+
+    const scoreTeacher = (st: Staff): number => {
+      const name = st.name
+      let s = 0
+      const wkLoad  = teacherWeeklyLoad[name] ?? 0
+      const dayLoad = teacherLoadToday[name] ?? 0
+      const maxWeek = (st as any).maxPeriodsPerWeek ?? 40
+
+      if (teacherSubjectSet[name]?.has(subject)) s += 25
+      if (teacherSectionSet[name]?.has(secName)) s += 8
+      if (wkLoad < targetWeeklyLoadPerTeacher) {
+        s += Math.min(30, (targetWeeklyLoadPerTeacher - wkLoad) * 2)
+      } else {
+        s -= Math.min(40, (wkLoad - targetWeeklyLoadPerTeacher) * 3)
+      }
+      if (maxWeek > 0 && wkLoad >= maxWeek * 0.9) s -= 60
+      s -= dayLoad * 3
+      const tScope = (st as any).scope
+      if (tScope) {
+        const sc = tScope.cells?.[day]?.[periodId] ?? 'allowed'
+        if (sc === 'disabled') s -= 10
+      }
+      if (prevPeriod) {
+        const prevCell: any = classTT[secName]?.[day]?.[prevPeriod.id]
+        if (prevCell?.teacher === name && prevCell?.subject === subject) s -= 8
+      }
+      return s
+    }
+
+    const teacher = eligible
+      .map(t => ({ t, s: scoreTeacher(t) }))
+      .sort((a, b) => b.s - a.s)[0]?.t
+    if (!teacher) return
+
+    // Commit assignment
+    ;(classTT[secName][day] as any)[periodId] = {
+      ...(classTT[secName][day] as any)[periodId],
+      teacher: teacher.name,
+    }
+    ensureBusy(teacher.name)
+    teacherBusy[teacher.name][day].add(periodId)
+    teacherWeeklyLoad[teacher.name] = (teacherWeeklyLoad[teacher.name] ?? 0) + 1
+    teacherSubjectSet[teacher.name]?.add(subject)
+    teacherSectionSet[teacher.name]?.add(secName)
+    reassignedCount++
+  })
+
+  // ── Phase 4: compute stddev + workload penalties ──
+  const penalties: ReoptimizeResult['penalties'] = []
+  const activeLoads = Object.values(teacherWeeklyLoad).filter(l => l > 0)
+  let teacherLoadStddev = 0
+  if (activeLoads.length > 0) {
+    const mean = activeLoads.reduce((a, b) => a + b, 0) / activeLoads.length
+    const variance = activeLoads.reduce((a, l) => a + (l - mean) ** 2, 0) / activeLoads.length
+    teacherLoadStddev = Math.sqrt(variance)
+    const balancePenalty = Math.min(50, Math.round(teacherLoadStddev * 4))
+    if (balancePenalty > 0) {
+      penalties.push({
+        constraint: 'workload-imbalance',
+        penalty: balancePenalty,
+        details: `Teacher loads stddev=${teacherLoadStddev.toFixed(2)} after re-optimise (target=${targetWeeklyLoadPerTeacher})`,
+      })
+    }
+    staff.forEach(t => {
+      const load = teacherWeeklyLoad[t.name] ?? 0
+      const max = (t as any).maxPeriodsPerWeek ?? 40
+      if (load > max) {
+        penalties.push({
+          constraint: 'teacher-overload',
+          penalty: (load - max) * 5,
+          details: `${t.name} has ${load} periods/week (max ${max})`,
+        })
+      }
+    })
+  }
+
+  return { classTT, teacherWeeklyLoad, teacherLoadStddev, penalties, reassignedCount }
 }
 
 // ─── Auto Suggestions Engine ─────────────────────────────

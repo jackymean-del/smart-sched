@@ -57,6 +57,10 @@ import type {
   TeacherPool,
   Facility,
   ParticipantPool,
+
+  // Teacher Availability
+  TeacherAvailability,
+  SlotStatus,
 } from '@/types'
 import { defaultWizardConfig } from '@/types'
 import { parseAllocation } from '@/lib/allocationSyntax'
@@ -221,6 +225,9 @@ interface ScheduState {
     reasons: Array<{ category: string; detail: string; affected?: string }>
   }>
 
+  // ── Teacher Availability — pre-solve per-teacher slot matrix ──
+  teacherAvailability: TeacherAvailability
+
   // ── Doc Part 3 — Dynamic Learning Groups from last solve ──
   dynamicLearningGroups: Array<{
     id: string
@@ -348,6 +355,14 @@ interface ScheduState {
   // ── Doc Part 3 — DLG setter ──
   setDynamicLearningGroups: (g: ScheduState['dynamicLearningGroups']) => void
 
+  // ── Teacher Availability actions ──
+  /** Replace the entire availability matrix */
+  setTeacherAvailability: (a: TeacherAvailability) => void
+  /** Set a single slot's status.  Passing 'available' removes the entry (default). */
+  setTeacherSlotStatus: (teacher: string, day: string, periodId: string, status: SlotStatus) => void
+  /** Clear all slot data for one teacher. */
+  clearTeacherAvailability: (teacher: string) => void
+
   resetWizard: () => void
   resetAll: () => void
 }
@@ -386,6 +401,7 @@ const initialState: Omit<ScheduState,
   | 'setTeacherAllocations' | 'setTeacherAllocationCell'
   | 'setBlockedSlots'
   | 'setDynamicLearningGroups'
+  | 'setTeacherAvailability' | 'setTeacherSlotStatus' | 'clearTeacherAvailability'
   | 'resetWizard' | 'resetAll'
 > = {
   step: 1,
@@ -447,6 +463,7 @@ const initialState: Omit<ScheduState,
   teacherAllocations: {},
   blockedSlots: [],
   dynamicLearningGroups: [],
+  teacherAvailability: {},
   schedulingMode: 'period-based',
   workingDaysPerYear: 220,
 }
@@ -657,6 +674,32 @@ export const useTimetableStore = create<ScheduState>()(
         setTeacherAllocations: (teacherAllocations) => set({ teacherAllocations }),
         setBlockedSlots: (blockedSlots) => set({ blockedSlots }),
         setDynamicLearningGroups: (dynamicLearningGroups) => set({ dynamicLearningGroups }),
+
+        // ── Teacher Availability ──────────────────────────────
+        setTeacherAvailability: (teacherAvailability) => set({ teacherAvailability }),
+        setTeacherSlotStatus: (teacher, day, periodId, status) => set((s) => {
+          const ta = { ...s.teacherAvailability }
+          if (status === 'available') {
+            // Remove entry (available is the implicit default — no need to store it)
+            if (!ta[teacher]) return {}
+            const tDay = { ...(ta[teacher][day] ?? {}) }
+            delete tDay[periodId]
+            const tTeacher = { ...ta[teacher], [day]: tDay }
+            if (Object.keys(tDay).length === 0) delete tTeacher[day]
+            const next = { ...ta, [teacher]: tTeacher }
+            if (Object.keys(tTeacher).length === 0) delete next[teacher]
+            return { teacherAvailability: next }
+          }
+          const tTeacher = { ...(ta[teacher] ?? {}) }
+          const tDay = { ...(tTeacher[day] ?? {}) }
+          tDay[periodId] = status
+          return { teacherAvailability: { ...ta, [teacher]: { ...tTeacher, [day]: tDay } } }
+        }),
+        clearTeacherAvailability: (teacher) => set((s) => {
+          const next = { ...s.teacherAvailability }
+          delete next[teacher]
+          return { teacherAvailability: next }
+        }),
         setTeacherAllocationCell: (teacher, section, subject, periods) => set(st => {
           // 1. Write the teacher's new cell value
           const tRow = { ...(st.teacherAllocations[teacher] ?? {}) }
@@ -774,6 +817,7 @@ export const useTimetableStore = create<ScheduState>()(
           subjectPools: state.subjectPools,
           schedulingMode: state.schedulingMode,
           workingDaysPerYear: state.workingDaysPerYear,
+          teacherAvailability: state.teacherAvailability,
         }),
       }
     ),

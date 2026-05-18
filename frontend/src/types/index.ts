@@ -287,6 +287,18 @@ export interface TeacherPreferences {
   preferredOffDay: string | null  // e.g. "SATURDAY"
 }
 
+/**
+ * Per-teacher slot availability matrix.
+ *   'available'  — normal teachable slot (default)
+ *   'preferred'  — soft preference to schedule here (solver bonus)
+ *   'blocked'    — hard constraint — solver must NOT place lessons here
+ *
+ * Shape: teacherName → day (uppercase) → periodId → SlotStatus
+ * Absence of a key is treated as 'available'.
+ */
+export type SlotStatus = 'available' | 'preferred' | 'blocked'
+export type TeacherAvailability = Record<string, Record<string, Record<string, SlotStatus>>>
+
 export interface Teacher {
   id: string
   organizationId: string
