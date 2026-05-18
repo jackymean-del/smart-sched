@@ -76,6 +76,10 @@ export interface SolverInput {
    *  Shape: { [sectionName]: { [subjectName]: "5+1" | "3(2X)" | ... } }
    *  Empty/missing → fall back to Subject.periodsPerWeek. */
   subjectAllocations?: Record<string, Record<string, string>>
+  /** Doc Part 3: rooms with capacities. When provided, DLG splitter
+   *  enforces "∑ students ≤ room capacity" by bin-packing sections into
+   *  multiple pools when a single pool exceeds a subject's room cap. */
+  rooms?: Array<{ id?: string; actualName?: string; generatedName?: string; name?: string; capacity?: number; roomType?: string }>
 }
 
 /** schedU Phase 6 — Auto-infer Optional Blocks from section strengths.
@@ -97,6 +101,7 @@ function inferOptionalBlocksFromStrengths(
   classPeriods: Period[],
   workDays: string[],
   subjects: Subject[] = [],
+  rooms: SolverInput['rooms'] = [],
 ): import('@/types').OptionalBlock[] {
   if (!sectionStrengths.length || !classPeriods.length || !workDays.length) return []
 
@@ -143,6 +148,10 @@ function inferOptionalBlocksFromStrengths(
     sectionNames: string[]
     subjects: string[]
     capacityBySubject: Record<string, number>
+    /** Per-section per-subject strengths — kept so the capacity splitter
+     *  can rebalance sections into multiple pools when one pool exceeds
+     *  a subject's room cap. */
+    sectionContribs: Record<string, Record<string, number>>
     behavior: string
   }
   const behaviorRank: Record<string, number> = {
@@ -179,11 +188,101 @@ function inferOptionalBlocksFromStrengths(
   const mergeSets = (sets: ParallelSet[], subjs: string[]): PoolEntry => {
     const cap: Record<string, number> = Object.fromEntries(subjs.map(s => [s, 0]))
     const secs: string[] = []
+    const contribs: Record<string, Record<string, number>> = {}
     sets.forEach(ps => {
       secs.push(ps.sectionName)
-      subjs.forEach(s => { cap[s] += (ps.perSubjectStrength[s] ?? 0) })
+      contribs[ps.sectionName] = {}
+      subjs.forEach(s => {
+        const v = ps.perSubjectStrength[s] ?? 0
+        cap[s] += v
+        contribs[ps.sectionName][s] = v
+      })
     })
-    return { sectionNames: secs, subjects: subjs, capacityBySubject: cap, behavior: '' }
+    return { sectionNames: secs, subjects: subjs, capacityBySubject: cap, sectionContribs: contribs, behavior: '' }
+  }
+
+  // ── Doc Part 3 capacity check ──
+  //   Lookup the preferred room capacity for a subject:
+  //     1. Match by exact actualName/generatedName == guessRoom(subject)
+  //     2. Match by roomType keyword (Lab, Ground, etc.)
+  //     3. Otherwise undefined → no cap enforcement
+  const roomCapFor = (subjectName: string): number | undefined => {
+    if (!rooms || rooms.length === 0) return undefined
+    const guessed = guessRoom(subjectName, sections)
+    const exact = rooms.find(r =>
+      (r.actualName ?? r.name ?? r.generatedName) === guessed
+    )
+    if (exact && exact.capacity && exact.capacity > 0) return exact.capacity
+    // Fuzzy by keyword
+    const u = subjectName.toUpperCase()
+    const wantType = /(PE|PHYSICAL|SPORT|GAMES|YOGA)/.test(u) ? 'ground'
+      : /(ART|CRAFT|DRAWING|PAINTING)/.test(u) ? 'art'
+      : /(MUSIC|DANCE|DRAMA)/.test(u) ? 'music'
+      : /(LAB|COMPUTER|IT|ICT|CHEMISTRY|PHYSICS|BIOLOGY|SCIENCE)/.test(u) ? 'lab'
+      : null
+    if (wantType) {
+      const byType = rooms.find(r => (r.roomType ?? '').toLowerCase().includes(wantType))
+      if (byType && byType.capacity && byType.capacity > 0) return byType.capacity
+    }
+    return undefined
+  }
+
+  /** Doc Part 3 — Split one pool into multiple pools whenever any
+   *  subject in the pool exceeds its preferred room's capacity. Uses
+   *  greedy bin-packing: sort sections by total contribution descending,
+   *  drop each into the first bin that can accommodate it across ALL
+   *  subjects in the parallel set. If no bin fits, opens a new bin. */
+  const splitByRoomCapacity = (pool: PoolEntry): PoolEntry[] => {
+    // Resolve capacities once
+    const caps: Record<string, number | undefined> = {}
+    pool.subjects.forEach(s => { caps[s] = roomCapFor(s) })
+
+    // If no caps defined or no overflow, keep pool intact
+    const anyOverflow = pool.subjects.some(s => {
+      const c = caps[s]
+      return c != null && pool.capacityBySubject[s] > c
+    })
+    if (!anyOverflow) return [pool]
+
+    // Sort sections by total contribution desc — largest sections placed first
+    const orderedSecs = [...pool.sectionNames].sort((a, b) => {
+      const totA = pool.subjects.reduce((acc, s) => acc + (pool.sectionContribs[a]?.[s] ?? 0), 0)
+      const totB = pool.subjects.reduce((acc, s) => acc + (pool.sectionContribs[b]?.[s] ?? 0), 0)
+      return totB - totA
+    })
+
+    const bins: Array<{ secs: string[]; bySubject: Record<string, number> }> = []
+    for (const sec of orderedSecs) {
+      const contrib = pool.sectionContribs[sec] ?? {}
+      let placed = false
+      for (const bin of bins) {
+        const fits = pool.subjects.every(s => {
+          const cap = caps[s]
+          if (cap == null) return true
+          return (bin.bySubject[s] ?? 0) + (contrib[s] ?? 0) <= cap
+        })
+        if (fits) {
+          bin.secs.push(sec)
+          pool.subjects.forEach(s => { bin.bySubject[s] = (bin.bySubject[s] ?? 0) + (contrib[s] ?? 0) })
+          placed = true
+          break
+        }
+      }
+      if (!placed) {
+        const fresh = { secs: [sec], bySubject: { ...contrib } }
+        // Ensure all subjects have an entry
+        pool.subjects.forEach(s => { if (fresh.bySubject[s] == null) fresh.bySubject[s] = 0 })
+        bins.push(fresh)
+      }
+    }
+
+    return bins.map(bin => ({
+      sectionNames: bin.secs,
+      subjects: pool.subjects,
+      capacityBySubject: bin.bySubject,
+      sectionContribs: Object.fromEntries(bin.secs.map(s => [s, pool.sectionContribs[s] ?? {}])),
+      behavior: pool.behavior + (bins.length > 1 ? '+cap-split' : ''),
+    }))
   }
 
   sigToSets.forEach(sets => {
@@ -219,12 +318,18 @@ function inferOptionalBlocksFromStrengths(
     }
   })
 
+  // 3.5) Doc Part 3 — Room capacity splitting.
+  //      For every pool, if any subject's pooled strength exceeds its
+  //      preferred room capacity, bin-pack the sections into multiple
+  //      smaller pools so no bin violates capacity.
+  const finalPools: PoolEntry[] = pools.flatMap(p => splitByRoomCapacity(p))
+
   // 4) Assign each pool to a (day, period) — first available across
   //    every section in the pool.
   const usedSlot = new Set<string>() // "section|day|period"
   const inferred: import('@/types').OptionalBlock[] = []
   let blockIdx = 1
-  pools.forEach(entry => {
+  finalPools.forEach(entry => {
     let placedDay = workDays[0], placedPid = classPeriods[0]?.id ?? ''
     outer: for (const day of workDays) {
       for (const p of classPeriods) {
@@ -428,7 +533,7 @@ export function solveTimetable(input: SolverInput): SolverOutput {
   const effectiveBlocks: import('@/types').OptionalBlock[] = (input.optionalBlocks && input.optionalBlocks.length > 0)
     ? input.optionalBlocks
     : inferOptionalBlocksFromStrengths(
-        input.sectionStrengths ?? [], staff, sections, classPeriods, workDays, subjects,
+        input.sectionStrengths ?? [], staff, sections, classPeriods, workDays, subjects, input.rooms ?? [],
       )
 
   // ── Pass 0: Place Optional Blocks (schedU Phase 3) ────

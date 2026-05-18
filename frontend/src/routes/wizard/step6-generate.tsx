@@ -109,6 +109,7 @@ export function Step6Generate() {
       const subjectCombinations = (store as any).subjectCombinations ?? []
       const sectionStrengths    = (store as any).sectionStrengths ?? []
       const subjectAllocations  = (store as any).subjectAllocations ?? {}
+      const rooms                = (store as any).rooms ?? []
       output  = solveTimetable({
         sections, staff, subjects: resolvedSubjects, periods, workDays,
         requirements: [],
@@ -116,6 +117,7 @@ export function Step6Generate() {
         subjectCombinations,
         sectionStrengths,
         subjectAllocations,
+        rooms,
       })
       solveMs = Date.now() - startedAt
 
