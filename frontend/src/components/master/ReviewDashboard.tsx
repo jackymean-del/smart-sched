@@ -19,6 +19,7 @@ import { suggestFixes, type FixSuggestion } from '@/lib/fixSuggester'
 import { previewFix, type FixPreview } from '@/lib/fixPreview'
 import { recomputeWorkloadPenalties, mergeLivePenalties } from '@/lib/penaltyRecompute'
 import { PenaltyTrendChart, type ScorePoint } from './PenaltyTrendChart'
+import { ScoreBreakdownPopover } from './ScoreBreakdownPopover'
 import {
   type BlockedSlot, type DynamicLearningGroup,
   blockedCategoryLabel, blockedRemedy,
@@ -327,7 +328,7 @@ export function ReviewDashboard({
         <div style={{ display: 'flex', gap: 10, marginBottom: 10, flexWrap: 'wrap' as const, alignItems: 'center' }}>
           <Pill color="#DC2626" bg="#FEE2E2" label={`${hardConflicts} hard`} />
           <Pill color="#D4920E" bg="#FEF3C7" label={`${softPenalties.length} soft`} />
-          <Pill color="#7C6FE0" bg="#EDE9FF" label={`Score: ${liveScore}${liveScore !== score ? ` (was ${score})` : ''}`} />
+          <ScoreBreakdownPopover penalties={livePenalties} liveScore={liveScore} originalScore={score} />
           {scoreHistory.length >= 2 && (
             <PenaltyTrendChart history={scoreHistory} />
           )}
