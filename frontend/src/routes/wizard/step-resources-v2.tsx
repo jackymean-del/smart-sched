@@ -26,7 +26,7 @@ import {
 import type { Section, Subject, Staff } from '@/types'
 import {
   Sparkles, Users, BookOpen, Building2, GraduationCap, CheckCircle2,
-  RefreshCw, AlertCircle, Layers,
+  RefreshCw, AlertCircle, Layers, ChevronRight, Pencil, Trash2, Plus,
 } from 'lucide-react'
 
 const BANDS: { key: string; label: string; sub: string; defaultStrength: number; sectionSize: number }[] = [
@@ -42,9 +42,10 @@ function makeId() { return Math.random().toString(36).slice(2, 8) }
 export function StepResourcesV2() {
   const store = useTimetableStore() as any
   const {
-    config, sections, staff, subjects, setSections, setStaff, setBreaks,
+    config, sections, staff, subjects, setSections, setStaff, setBreaks, setStep,
   } = store
   const setSubjects = store.setSubjects ?? store.setLegacySubjects
+  const [previewTab, setPreviewTab] = useState<'classes'|'teachers'|'subjects'|'rooms'>('classes')
 
   // Local input state — student strengths per band
   const [strengths, setStrengths] = useState<Record<string, number>>(() => {
@@ -330,6 +331,131 @@ export function StepResourcesV2() {
           <ProgressRow label="Rooms"              have={(store.rooms ?? []).length} need={roomsCount} />
         </div>
       </div>
+
+      {/* ── Generated entity preview ──────────────────── */}
+      {(sections.length > 0 || staff.length > 0 || subjects.length > 0 || (store.rooms ?? []).length > 0) && (
+        <div style={{ marginTop: 14 }}>
+          <div style={{
+            background: '#fff', border: '1px solid #ECEAFB', borderRadius: 14, overflow: 'hidden',
+          }}>
+            {/* Tab bar */}
+            <div style={{
+              display: 'flex', gap: 4, padding: '8px 12px',
+              background: '#F8F7FF', borderBottom: '1px solid #E8E4FF',
+              alignItems: 'center',
+            }}>
+              <span style={{ fontSize: 10, fontWeight: 800, color: '#8B87AD', letterSpacing: '0.1em', textTransform: 'uppercase', marginRight: 4 }}>
+                Generated
+              </span>
+              {([
+                { key: 'classes', label: `Classes (${sections.length})`, show: sections.length > 0 },
+                { key: 'teachers', label: `Teachers (${staff.length})`, show: staff.length > 0 },
+                { key: 'subjects', label: `Subjects (${subjects.length})`, show: subjects.length > 0 },
+                { key: 'rooms', label: `Rooms (${(store.rooms ?? []).length})`, show: (store.rooms ?? []).length > 0 },
+              ] as const).filter(t => t.show).map(t => (
+                <button key={t.key} onClick={() => setPreviewTab(t.key)}
+                  style={{
+                    padding: '4px 12px', borderRadius: 6, border: 'none', cursor: 'pointer',
+                    background: previewTab === t.key ? '#7C6FE0' : 'transparent',
+                    color: previewTab === t.key ? '#fff' : '#4B5275',
+                    fontSize: 11, fontWeight: 700, fontFamily: 'inherit',
+                  }}>
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Table content */}
+            <div style={{ padding: '12px 14px', maxHeight: 260, overflowY: 'auto' as const }}>
+
+              {/* Classes table */}
+              {previewTab === 'classes' && sections.length > 0 && (
+                <EntityTable
+                  headers={['Section', 'Grade', 'Room', '']}
+                  widths={['140px', '80px', '1fr', '60px']}
+                  rows={sections.slice(0, 30).map((sec: Section) => [
+                    sec.name,
+                    (sec as any).grade ?? '—',
+                    (sec as any).room ?? '—',
+                  ])}
+                  onDelete={(i) => setSections(sections.filter((_: any, j: number) => j !== i))}
+                />
+              )}
+
+              {/* Teachers table */}
+              {previewTab === 'teachers' && staff.length > 0 && (
+                <EntityTable
+                  headers={['Teacher', 'Subjects', 'Max Periods/Wk', '']}
+                  widths={['160px', '1fr', '120px', '60px']}
+                  rows={staff.slice(0, 30).map((t: Staff) => [
+                    t.name,
+                    ((t.subjects ?? []) as string[]).slice(0, 3).join(', ') || '—',
+                    String((t as any).maxPeriodsPerWeek ?? 40),
+                  ])}
+                  onDelete={(i) => setStaff(staff.filter((_: any, j: number) => j !== i))}
+                />
+              )}
+
+              {/* Subjects table */}
+              {previewTab === 'subjects' && subjects.length > 0 && (
+                <EntityTable
+                  headers={['Subject', 'Category', 'Periods/wk', '']}
+                  widths={['160px', '100px', '100px', '60px']}
+                  rows={subjects.slice(0, 30).map((s: Subject) => [
+                    s.name,
+                    (s as any).category ?? 'Core',
+                    String(s.periodsPerWeek ?? '—'),
+                  ])}
+                  onDelete={(i) => {
+                    const next = subjects.filter((_: any, j: number) => j !== i)
+                    setSubjects(next)
+                  }}
+                />
+              )}
+
+              {/* Rooms table */}
+              {previewTab === 'rooms' && (store.rooms ?? []).length > 0 && (
+                <EntityTable
+                  headers={['Room', 'Type', 'Capacity', '']}
+                  widths={['140px', '100px', '100px', '60px']}
+                  rows={(store.rooms ?? []).slice(0, 30).map((r: any) => [
+                    r.actualName ?? r.generatedName,
+                    r.roomType ?? 'classroom',
+                    String(r.capacity ?? 40),
+                  ])}
+                  onDelete={(i) => {
+                    const next = (store.rooms ?? []).filter((_: any, j: number) => j !== i)
+                    store.setRooms?.(next)
+                  }}
+                />
+              )}
+
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Navigation footer ─────────────────────────── */}
+      <div style={{
+        display: 'flex', justifyContent: 'flex-end', marginTop: 16,
+        paddingTop: 16, borderTop: '1px solid #F0EDFF',
+      }}>
+        <button
+          onClick={() => setStep(2)}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 7,
+            padding: '9px 20px', borderRadius: 8, border: 'none',
+            background: sections.length > 0
+              ? 'linear-gradient(135deg, #7C6FE0, #9B8EF5)'
+              : '#E8E4FF',
+            color: sections.length > 0 ? '#fff' : '#B8B4D4',
+            fontSize: 12, fontWeight: 700, cursor: sections.length > 0 ? 'pointer' : 'not-allowed',
+            fontFamily: 'inherit',
+            boxShadow: sections.length > 0 ? '0 2px 8px rgba(124,111,224,0.35)' : 'none',
+          }}>
+          Next: Shifts & Timing <ChevronRight size={14} />
+        </button>
+      </div>
     </div>
   )
 }
@@ -415,3 +541,51 @@ const btnPri = (disabled: boolean): React.CSSProperties => ({
   opacity: disabled ? 0.7 : 1,
   fontFamily: 'inherit',
 })
+
+// ── EntityTable ───────────────────────────────────────────────
+function EntityTable({ headers, widths, rows, onDelete }: {
+  headers: string[]
+  widths: string[]
+  rows: string[][]
+  onDelete: (i: number) => void
+}) {
+  const gridCols = widths.join(' ')
+  return (
+    <div>
+      <div style={{
+        display: 'grid', gridTemplateColumns: gridCols, gap: 8,
+        paddingBottom: 6, borderBottom: '1px solid #F0EDFF',
+        fontSize: 9, fontWeight: 800, color: '#B8B4D4',
+        textTransform: 'uppercase' as const, letterSpacing: '0.08em',
+      }}>
+        {headers.map(h => <div key={h}>{h}</div>)}
+      </div>
+      {rows.map((row, i) => (
+        <div key={i} style={{
+          display: 'grid', gridTemplateColumns: gridCols, gap: 8,
+          alignItems: 'center', padding: '5px 0',
+          borderBottom: '1px solid #FAFAFE',
+        }}
+          onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = '#FAFAFE'}
+          onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = 'transparent'}
+        >
+          {row.map((cell, ci) => (
+            <div key={ci} style={{
+              fontSize: 11, color: ci === 0 ? '#13111E' : '#4B5275',
+              fontWeight: ci === 0 ? 600 : 400,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const,
+            }}>
+              {cell}
+            </div>
+          ))}
+          <button onClick={() => onDelete(i)} style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: '#FCA5A5', padding: 2, display: 'flex', alignItems: 'center',
+          }}>
+            <Trash2 size={11} />
+          </button>
+        </div>
+      ))}
+    </div>
+  )
+}

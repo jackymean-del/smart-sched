@@ -191,7 +191,7 @@ export function Step6Generate() {
            "Something went wrong"}
         </h2>
         {job && (
-          <p style={{ fontSize:12, color:"#a8a59e", margin:0, fontFamily:"monospace" }}>
+          <p style={{ fontSize:12, color:"#8B87AD", margin:0, fontFamily:"monospace" }}>
             Job {job.id.slice(0,8)}
             {job.status === "running" && ` · ${elapsed}s`}
           </p>
@@ -242,10 +242,10 @@ export function Step6Generate() {
               <span style={{ fontSize:36 }}>❌</span>
             ) : (
               <>
-                <span style={{ fontSize:30, fontWeight:800, fontFamily:"'DM Mono',monospace", color:"#1c1b18", lineHeight:1 }}>
+                <span style={{ fontSize:30, fontWeight:800, fontFamily:"'DM Mono',monospace", color:"#13111E", lineHeight:1 }}>
                   {progress}
                 </span>
-                <span style={{ fontSize:12, color:"#a8a59e", fontWeight:600 }}>%</span>
+                <span style={{ fontSize:12, color:"#8B87AD", fontWeight:600 }}>%</span>
               </>
             )}
           </div>
@@ -255,7 +255,7 @@ export function Step6Generate() {
       {/* ── Current step label ── */}
       {job && (
         <div key={job.currentStep}
-          style={{ animation:"fade-up 0.3s ease", fontSize:14, color: job.status==="failed"?"#dc2626": job.status==="completed"?"#7C6FE0":"#374151", fontWeight:500, maxWidth:420, lineHeight:1.5 }}>
+          style={{ animation:"fade-up 0.3s ease", fontSize:14, color: job.status==="failed"?"#dc2626": job.status==="completed"?"#7C6FE0":"#4B5275", fontWeight:500, maxWidth:420, lineHeight:1.5 }}>
           {job.status === "running" && (
             <span style={{ display:"inline-block", width:8, height:8, borderRadius:"50%", background:"#7C6FE0", marginRight:8, animation:"pulse-dot 1s ease-in-out infinite", verticalAlign:"middle" }}/>
           )}
@@ -269,54 +269,54 @@ export function Step6Generate() {
           <div key={s.label} style={{
             display:"flex", flexDirection:"column" as const, alignItems:"center", gap:3,
             padding:"12px 16px", borderRadius:12,
-            background: job?.status==="completed" ? "#f0fdf4" : "#f7f6f2",
-            border: `1.5px solid ${job?.status==="completed" ? "#D8D2FF" : "#e8e5de"}`,
+            background: job?.status==="completed" ? "#f0fdf4" : "#F8F7FF",
+            border: `1.5px solid ${job?.status==="completed" ? "#D8D2FF" : "#E8E4FF"}`,
             minWidth:72,
             transition:"all 0.3s ease",
             animationDelay: `${0.3 + i * 0.05}s`,
           }}>
             <span style={{ fontSize:20 }}>{s.icon}</span>
-            <span style={{ fontSize:22, fontWeight:800, fontFamily:"'DM Mono',monospace", color:"#1c1b18", lineHeight:1 }}>{s.value}</span>
-            <span style={{ fontSize:10, color:"#a8a59e", fontWeight:600, textTransform:"uppercase" as const, letterSpacing:"0.05em" }}>{s.label}</span>
+            <span style={{ fontSize:22, fontWeight:800, fontFamily:"'DM Mono',monospace", color:"#13111E", lineHeight:1 }}>{s.value}</span>
+            <span style={{ fontSize:10, color:"#8B87AD", fontWeight:600, textTransform:"uppercase" as const, letterSpacing:"0.05em" }}>{s.label}</span>
           </div>
         ))}
       </div>
 
       {/* ── Timetable identity form (shown before generate) ── */}
       {!job && (
-        <div style={{ width:"100%", maxWidth:460, background:"#f7f6f2", borderRadius:12, border:"1.5px solid #e8e5de", padding:"20px 24px", animation:"fade-up 0.4s ease 0.25s both", textAlign:"left" as const }}>
-          <div style={{ fontSize:11, fontWeight:700, textTransform:"uppercase" as const, letterSpacing:"0.08em", color:"#a8a59e", marginBottom:14 }}>📋 Timetable Details</div>
+        <div style={{ width:"100%", maxWidth:460, background:"#FAFAFE", borderRadius:12, border:"1px solid #E8E4FF", padding:"20px 24px", animation:"fade-up 0.4s ease 0.25s both", textAlign:"left" as const }}>
+          <div style={{ fontSize:11, fontWeight:700, textTransform:"uppercase" as const, letterSpacing:"0.08em", color:"#8B87AD", marginBottom:14 }}>📋 Timetable Details</div>
           <div style={{ display:"flex", flexDirection:"column" as const, gap:12 }}>
 
             {/* Name */}
             <div>
-              <label style={{ fontSize:11, fontWeight:600, color:"#374151", display:"block", marginBottom:4 }}>Timetable Name</label>
+              <label style={{ fontSize:11, fontWeight:600, color:"#4B5275", display:"block", marginBottom:4 }}>Timetable Name</label>
               <input
                 value={ttName} onChange={e => setTtName(e.target.value)}
                 placeholder="e.g. Annual Timetable 2025-26"
-                style={{ width:"100%", padding:"9px 12px", border:"1.5px solid #e8e5de", borderRadius:8, fontSize:13, outline:"none", boxSizing:"border-box" as const, background:"#fff" }}
+                style={{ width:"100%", padding:"9px 12px", border:"1px solid #E8E4FF", borderRadius:8, fontSize:13, outline:"none", boxSizing:"border-box" as const, background:"#fff" }}
               />
             </div>
 
             {/* Dates */}
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
               <div>
-                <label style={{ fontSize:11, fontWeight:600, color:"#374151", display:"block", marginBottom:4 }}>Start Date</label>
+                <label style={{ fontSize:11, fontWeight:600, color:"#4B5275", display:"block", marginBottom:4 }}>Start Date</label>
                 <input
                   type="date" value={ttStart} onChange={e => setTtStart(e.target.value)}
-                  style={{ width:"100%", padding:"8px 10px", border:"1.5px solid #e8e5de", borderRadius:8, fontSize:12, outline:"none", boxSizing:"border-box" as const, background:"#fff", cursor:"pointer" }}
+                  style={{ width:"100%", padding:"8px 10px", border:"1px solid #E8E4FF", borderRadius:8, fontSize:12, outline:"none", boxSizing:"border-box" as const, background:"#fff", cursor:"pointer" }}
                 />
               </div>
               <div>
-                <label style={{ fontSize:11, fontWeight:600, color:"#374151", display:"block", marginBottom:4 }}>End Date</label>
+                <label style={{ fontSize:11, fontWeight:600, color:"#4B5275", display:"block", marginBottom:4 }}>End Date</label>
                 <input
                   type="date" value={ttEnd} onChange={e => setTtEnd(e.target.value)}
-                  style={{ width:"100%", padding:"8px 10px", border:"1.5px solid #e8e5de", borderRadius:8, fontSize:12, outline:"none", boxSizing:"border-box" as const, background:"#fff", cursor:"pointer" }}
+                  style={{ width:"100%", padding:"8px 10px", border:"1px solid #E8E4FF", borderRadius:8, fontSize:12, outline:"none", boxSizing:"border-box" as const, background:"#fff", cursor:"pointer" }}
                 />
               </div>
             </div>
 
-            <div style={{ fontSize:10, color:"#a8a59e", display:"flex", alignItems:"center", gap:6 }}>
+            <div style={{ fontSize:10, color:"#8B87AD", display:"flex", alignItems:"center", gap:6 }}>
               <span style={{ fontSize:14 }}>💡</span>
               The timetable is saved as a <strong>Draft</strong> after generation. Review it, then publish when ready.
             </div>
@@ -356,7 +356,7 @@ export function Step6Generate() {
               ✨ Generate {T.schedule}
             </button>
             <button onClick={() => setStep(3)}
-              style={{ padding:"13px 20px", borderRadius:10, border:"1.5px solid #e8e5de", background:"#fff", fontSize:13, color:"#374151", cursor:"pointer" }}>
+              style={{ padding:"13px 20px", borderRadius:10, border:"1px solid #E8E4FF", background:"#fff", fontSize:13, color:"#4B5275", cursor:"pointer" }}>
               ← Back
             </button>
           </>
@@ -369,7 +369,7 @@ export function Step6Generate() {
               View {T.schedule} (Draft) →
             </button>
             <button onClick={() => setJob(null)}
-              style={{ padding:"13px 18px", borderRadius:10, border:"1.5px solid #e8e5de", background:"#fff", fontSize:13, color:"#374151", cursor:"pointer" }}>
+              style={{ padding:"13px 18px", borderRadius:10, border:"1px solid #E8E4FF", background:"#fff", fontSize:13, color:"#4B5275", cursor:"pointer" }}>
               ↺ Re-generate
             </button>
           </>
