@@ -36,22 +36,51 @@ interface BellRow {
   classes:  string[]   // class-group keys
 }
 
-// ── Class groups ──────────────────────────────────────────────
-const CLASS_GROUPS = [
-  { key: 'pre-primary', label: 'Pre-Primary', short: 'Pre-Pri', desc: 'Nursery–UKG' },
-  { key: 'primary',     label: 'Primary',     short: 'I–V',     desc: 'Class I–V'   },
-  { key: 'middle',      label: 'Middle',       short: 'VI–X',    desc: 'Class VI–X'  },
-  { key: 'senior',      label: 'Senior',       short: 'XI–XII',  desc: 'Class XI–XII'},
+// ── Individual class-sections ─────────────────────────────────
+const CLASSES = [
+  { key: 'nur',  label: 'Nursery',    short: 'Nur',   group: 'Pre-Primary' },
+  { key: 'lkg',  label: 'LKG',        short: 'LKG',   group: 'Pre-Primary' },
+  { key: 'ukg',  label: 'UKG',        short: 'UKG',   group: 'Pre-Primary' },
+  { key: 'i',    label: 'Class I',    short: 'I',     group: 'Primary' },
+  { key: 'ii',   label: 'Class II',   short: 'II',    group: 'Primary' },
+  { key: 'iii',  label: 'Class III',  short: 'III',   group: 'Primary' },
+  { key: 'iv',   label: 'Class IV',   short: 'IV',    group: 'Primary' },
+  { key: 'v',    label: 'Class V',    short: 'V',     group: 'Primary' },
+  { key: 'vi',   label: 'Class VI',   short: 'VI',    group: 'Middle' },
+  { key: 'vii',  label: 'Class VII',  short: 'VII',   group: 'Middle' },
+  { key: 'viii', label: 'Class VIII', short: 'VIII',  group: 'Middle' },
+  { key: 'ix',   label: 'Class IX',   short: 'IX',    group: 'Middle' },
+  { key: 'x',    label: 'Class X',    short: 'X',     group: 'Middle' },
+  { key: 'xi',   label: 'Class XI',   short: 'XI',    group: 'Senior' },
+  { key: 'xii',  label: 'Class XII',  short: 'XII',   group: 'Senior' },
 ]
-const ALL_CLASS_KEYS = CLASS_GROUPS.map(g => g.key)
 
-// ── Type metadata ─────────────────────────────────────────────
+// Group metadata for headers, capacity panel, etc.
+const CLASS_GROUPS = [
+  { group: 'Pre-Primary', desc: 'Nursery–UKG',    color: '#7C3AED', bg: '#F5F3FF' },
+  { group: 'Primary',     desc: 'Class I–V',       color: '#1D4ED8', bg: '#EFF6FF' },
+  { group: 'Middle',      desc: 'Class VI–X',      color: '#059669', bg: '#F0FDF4' },
+  { group: 'Senior',      desc: 'Class XI–XII',    color: '#D97706', bg: '#FFFBEB' },
+]
+
+const ALL_CLASS_KEYS = CLASSES.map(c => c.key)
+
+// ── Type metadata — badge colours ────────────────────────────
 const TYPE_META: Record<RowType, { label: string; bg: string; fg: string; border: string; line: string }> = {
   assembly:     { label: 'Assembly',    bg: '#EDE9FF', fg: '#7C3AED', border: '#C4B5FD', line: '#7C3AED' },
   teaching:     { label: 'Teaching',    bg: '#DBEAFE', fg: '#1D4ED8', border: '#BFDBFE', line: '#3B82F6' },
   'short-break':{ label: 'Short Break', bg: '#F0FDF4', fg: '#15803D', border: '#BBF7D0', line: '#22C55E' },
   lunch:        { label: 'Lunch',       bg: '#FEF3C7', fg: '#D97706', border: '#FDE68A', line: '#F59E0B' },
   dispersal:    { label: 'Dispersal',   bg: '#FEE2E2', fg: '#DC2626', border: '#FECACA', line: '#EF4444' },
+}
+
+// ── Row background (table rows) ───────────────────────────────
+const ROW_BG: Record<RowType, string> = {
+  assembly:     '#F5F3FF',   // soft violet
+  teaching:     '#ffffff',   // plain white
+  'short-break':'#F0FDF4',   // soft green
+  lunch:        '#FFFBEB',   // soft amber
+  dispersal:    '#FFF1F2',   // soft rose
 }
 
 // ── Working days ──────────────────────────────────────────────
@@ -143,7 +172,7 @@ function buildRows(count: number, dur: number): BellRow[] {
 }
 
 // ── Persistence ───────────────────────────────────────────────
-const BELL_KEY = 'schedu-bell-v1'
+const BELL_KEY = 'schedu-bell-v2'
 
 interface SavedBell {
   shiftName:  string
@@ -163,7 +192,7 @@ function loadSaved(): SavedBell | null {
 }
 
 // ══════════════════════════════════════════════════════════════
-//  ClassPicker
+//  ClassPicker — individual class-section multi-select
 // ══════════════════════════════════════════════════════════════
 function ClassPicker({
   classes, onChange, rowId, openId, setOpenId,
@@ -188,26 +217,44 @@ function ClassPicker({
 
   const isAll  = ALL_CLASS_KEYS.every(k => classes.includes(k))
   const isNone = classes.length === 0
-  const label  = isAll ? 'All' : isNone ? '—'
-    : classes.map(k => CLASS_GROUPS.find(g => g.key === k)?.short ?? k).join(', ')
 
-  const toggle = (key: string, checked: boolean) =>
+  // Chip label: "All" | "—" | "I, II, VI" (≤3) | "5 classes" (>3)
+  const label = isAll ? 'All' : isNone ? '—'
+    : classes.length <= 3
+      ? classes.map(k => CLASSES.find(c => c.key === k)?.short ?? k).join(', ')
+      : `${classes.length} classes`
+
+  const toggleOne = (key: string, checked: boolean) =>
     onChange(checked ? [...classes, key] : classes.filter(c => c !== key))
+
+  const toggleGroup = (group: string, checked: boolean) => {
+    const groupKeys = CLASSES.filter(c => c.group === group).map(c => c.key)
+    if (checked) {
+      const merged = [...new Set([...classes, ...groupKeys])]
+      onChange(merged)
+    } else {
+      onChange(classes.filter(k => !groupKeys.includes(k)))
+    }
+  }
 
   return (
     <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
+      {/* Chip button */}
       <button
         onClick={() => setOpenId(isOpen ? null : rowId)}
         style={{
           padding: '3px 9px', borderRadius: 6,
-          border: '1px solid #E5E7EB', background: isAll ? '#F0EDFF' : '#F9FAFB',
-          fontSize: 11, fontWeight: 600, color: isAll ? '#7C3AED' : '#374151',
+          border: '1px solid #E5E7EB',
+          background: isAll ? '#F0EDFF' : isNone ? '#FFF' : '#F9FAFB',
+          fontSize: 11, fontWeight: 600,
+          color: isAll ? '#7C3AED' : '#374151',
           cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'inherit',
           display: 'flex', alignItems: 'center', gap: 4,
+          maxWidth: 110, overflow: 'hidden',
         }}
       >
-        {label}
-        <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>
+        <svg width="8" height="8" viewBox="0 0 8 8" fill="none" style={{ flexShrink: 0 }}>
           <path d="M1 2.5l3 3 3-3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
         </svg>
       </button>
@@ -216,34 +263,71 @@ function ClassPicker({
         <div style={{
           position: 'absolute', right: 0, top: 'calc(100% + 4px)',
           background: '#fff', border: '1px solid #E5E7EB',
-          borderRadius: 8, boxShadow: '0 6px 20px rgba(0,0,0,0.12)',
-          zIndex: 300, minWidth: 170, padding: '6px 0',
+          borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.13)',
+          zIndex: 400, width: 200,
+          maxHeight: 340, overflowY: 'auto',
+          padding: '6px 0',
         }}>
+          {/* All classes */}
           <label style={PICK_ROW}>
-            <input type="checkbox" checked={isAll}
+            <input type="checkbox"
+              checked={isAll}
+              ref={el => { if (el) el.indeterminate = !isAll && !isNone }}
               onChange={e => onChange(e.target.checked ? [...ALL_CLASS_KEYS] : [])}
-              style={{ accentColor: '#7C6FE0' }} />
-            <span style={{ fontSize: 12, fontWeight: 600, color: '#13111E' }}>All groups</span>
+              style={{ accentColor: '#7C6FE0', flexShrink: 0 }} />
+            <span style={{ fontSize: 12, fontWeight: 700, color: '#13111E' }}>All classes</span>
           </label>
-          <div style={{ height: 1, background: '#F3F4F6', margin: '4px 0' }} />
-          {CLASS_GROUPS.map(g => (
-            <label key={g.key} style={PICK_ROW}>
-              <input type="checkbox" checked={classes.includes(g.key)}
-                onChange={e => toggle(g.key, e.target.checked)}
-                style={{ accentColor: '#7C6FE0' }} />
-              <div>
-                <div style={{ fontSize: 12, color: '#13111E' }}>{g.label}</div>
-                <div style={{ fontSize: 10, color: '#9CA3AF' }}>{g.desc}</div>
+
+          {/* Groups + individual classes */}
+          {CLASS_GROUPS.map(gm => {
+            const groupClasses   = CLASSES.filter(c => c.group === gm.group)
+            const groupKeys      = groupClasses.map(c => c.key)
+            const allInGroup     = groupKeys.every(k => classes.includes(k))
+            const someInGroup    = groupKeys.some(k => classes.includes(k))
+            return (
+              <div key={gm.group}>
+                {/* Group header row */}
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '5px 12px 3px',
+                  marginTop: 4,
+                  borderTop: '1px solid #F3F4F6',
+                  background: gm.bg,
+                }}>
+                  <input
+                    type="checkbox"
+                    checked={allInGroup}
+                    ref={el => { if (el) el.indeterminate = !allInGroup && someInGroup }}
+                    onChange={e => toggleGroup(gm.group, e.target.checked)}
+                    style={{ accentColor: gm.color, flexShrink: 0 }}
+                  />
+                  <span style={{ fontSize: 11, fontWeight: 700, color: gm.color, letterSpacing: '0.04em' }}>
+                    {gm.group.toUpperCase()}
+                  </span>
+                  <span style={{ fontSize: 10, color: '#9CA3AF', marginLeft: 'auto' }}>{gm.desc}</span>
+                </div>
+                {/* Individual class rows */}
+                {groupClasses.map(cls => (
+                  <label key={cls.key} style={{ ...PICK_ROW, paddingLeft: 28 }}>
+                    <input
+                      type="checkbox"
+                      checked={classes.includes(cls.key)}
+                      onChange={e => toggleOne(cls.key, e.target.checked)}
+                      style={{ accentColor: gm.color, flexShrink: 0 }}
+                    />
+                    <span style={{ fontSize: 12, color: '#374151' }}>{cls.label}</span>
+                  </label>
+                ))}
               </div>
-            </label>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>
   )
 }
 
-const PICK_ROW: CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', cursor: 'pointer' }
+const PICK_ROW: CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, padding: '5px 12px', cursor: 'pointer' }
 
 // ══════════════════════════════════════════════════════════════
 //  GapRow — always-visible "Add break here" strip
@@ -457,10 +541,12 @@ export function StepBell() {
   const capacity = useMemo(() => {
     const tRows = rows.filter(r => r.type === 'teaching')
     const d = workDays.length
-    return CLASS_GROUPS.map(g => ({
-      label: g.label, desc: g.desc,
-      count: tRows.filter(r => r.classes.includes(g.key)).length * d,
-    }))
+    return CLASS_GROUPS.map(gm => {
+      const groupKeys = CLASSES.filter(c => c.group === gm.group).map(c => c.key)
+      // count periods where at least one class from this group is selected
+      const count = tRows.filter(r => groupKeys.some(k => r.classes.includes(k))).length * d
+      return { label: gm.group, desc: gm.desc, count, color: gm.color }
+    })
   }, [rows, workDays.length])
 
   // ── Save to store + navigate ──────────────────────────────────
@@ -655,8 +741,7 @@ export function StepBell() {
                         gridTemplateColumns: '88px 80px 80px 60px 100px 1fr 28px',
                         padding: '6px 14px',
                         alignItems: 'center',
-                        background: (row.type === 'assembly' || row.type === 'dispersal')
-                          ? '#FAFAFA' : '#fff',
+                        background: ROW_BG[row.type],
                       }}>
                         {/* Bell name */}
                         <input className="b-cell" value={row.name}
@@ -778,7 +863,10 @@ export function StepBell() {
               const tm    = TYPE_META[row.type]
               const start = startTimes[i] ?? '—'
               const grp   = row.classes.length === ALL_CLASS_KEYS.length ? 'All'
-                : row.classes.map(k => CLASS_GROUPS.find(g => g.key === k)?.short ?? k).join(', ')
+                : row.classes.length === 0 ? '—'
+                : row.classes.length <= 4
+                  ? row.classes.map(k => CLASSES.find(c => c.key === k)?.short ?? k).join(', ')
+                  : `${row.classes.length} classes`
               return (
                 <div key={row.id} style={{
                   display: 'flex', alignItems: 'center', gap: 10,
@@ -806,9 +894,12 @@ export function StepBell() {
             </div>
             {capacity.map(c => (
               <div key={c.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <div>
-                  <div style={{ fontSize: 12, color: '#374151' }}>{c.label}</div>
-                  <div style={{ fontSize: 10, color: '#9CA3AF' }}>{c.desc}</div>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 7 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: c.color, display: 'inline-block', flexShrink: 0, marginTop: 3 }} />
+                  <div>
+                    <div style={{ fontSize: 12, color: '#374151' }}>{c.label}</div>
+                    <div style={{ fontSize: 10, color: '#9CA3AF' }}>{c.desc}</div>
+                  </div>
                 </div>
                 <span style={{ fontSize: 13, fontWeight: 700, color: '#13111E' }}>
                   {c.count}<span style={{ fontSize: 11, fontWeight: 400, color: '#9CA3AF' }}> /wk</span>
