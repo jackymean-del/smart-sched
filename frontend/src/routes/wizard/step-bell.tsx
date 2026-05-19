@@ -835,9 +835,6 @@ export function StepBell() {
 
   // ── Derived: start-time cascades ──────────────────────────────
   const startTimes = useMemo(() => computeStarts(startTime, rows), [startTime, rows])
-  const endTime    = rows.length > 0
-    ? addMins(startTimes[rows.length - 1], rows[rows.length - 1].duration)
-    : startTime
 
   // ── Partial-break detection ───────────────────────────────────
   const hasPartialBreaks = useMemo(() =>
@@ -852,12 +849,16 @@ export function StepBell() {
    * Problem with the naive master-clock (computeStarts): when a break applies
    * to only some classes (e.g. Lunch for Nur-UKG), the master clock still
    * advances by the break duration for ALL subsequent rows — so Period 4 for
-   * I-XII would wrongly show 11:45 instead of 11:15.
+   * I-XII would wrongly show 11:45 instead of 11:15, and the end time
+   * accumulates every split row's duration even for concurrent events.
    *
    * Fix: for each row use computeStartsFiltered with that row's own first class
    * as the representative key.  The filtered clock only advances for rows that
    * include that class, so concurrent split-periods each show their own correct
    * start time independent of breaks they're not part of.
+   *
+   * endTime is derived from rowStartTimes so it too reflects the correct wall
+   * clock time rather than the inflated master-clock sum.
    */
   const rowStartTimes = useMemo((): string[] => {
     if (!hasPartialBreaks) return startTimes
@@ -872,6 +873,17 @@ export function StepBell() {
       return getFiltered(repKey)[i]
     })
   }, [hasPartialBreaks, rows, startTime, startTimes])
+
+  /**
+   * School end time = start of the last row (using filtered clock) + its duration.
+   * Using rowStartTimes instead of startTimes prevents the master-clock inflation
+   * from concurrent split rows (e.g. two Period 4s at the same clock time) from
+   * doubling up in the end-time calculation.
+   */
+  const endTime = useMemo(() => {
+    if (rows.length === 0) return startTime
+    return addMins(rowStartTimes[rows.length - 1], rows[rows.length - 1].duration)
+  }, [rows, rowStartTimes, startTime])
 
   // ── Timeline data: per-group filtered if partial breaks exist ─
   const groupTimelineData = useMemo(() => {
@@ -1332,7 +1344,18 @@ export function StepBell() {
         </div>
 
         {/* ══════════ RIGHT (sticky) ══════════ */}
-        <div style={{ position: 'sticky', top: 16 }}>
+        {/*
+          Sticky right column: constrained to viewport so it never overflows
+          past the bottom. 52px top-bar + 38px sub-bar + 86px step-bar + 20px
+          page padding-top + 16px top offset = ~212px removed from 100vh.
+          overflowY: auto lets the panel scroll independently of the left side.
+        */}
+        <div style={{
+          position: 'sticky', top: 16,
+          maxHeight: 'calc(100vh - 212px)',
+          overflowY: 'auto',
+          scrollbarWidth: 'thin',
+        }}>
           <SH>LIVE BELL TIMELINE</SH>
 
           {hasPartialBreaks ? (
