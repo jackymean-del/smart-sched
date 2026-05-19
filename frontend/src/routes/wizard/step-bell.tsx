@@ -37,7 +37,7 @@ import {
 import { useTimetableStore } from '@/store/timetableStore'
 import {
   Plus, Sparkles, ChevronLeft, ChevronRight,
-  Trash2, Coffee, X, Calendar, Clock, AlertTriangle, SlidersHorizontal,
+  Trash2, Coffee, X, Calendar, Clock, AlertTriangle, SlidersHorizontal, Layers,
 } from 'lucide-react'
 
 // ── Types ─────────────────────────────────────────────────────
@@ -1508,75 +1508,54 @@ export function StepBell() {
         {/* ══════════ LEFT ══════════ */}
         <div>
 
-          {/* ─── SCHEDULE MODE SELECTOR ─── */}
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          {/* ─── SCHEDULE MODE ─── */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 20 }}>
+            <div style={{ display: 'inline-flex', background: '#EFEFEF', borderRadius: 10, padding: 3, flexShrink: 0 }}>
               {(['standard', 'advanced'] as const).map(mode => {
                 const active = scheduleMode === mode
                 return (
                   <button key={mode} onClick={() => handleSetMode(mode)} style={{
-                    padding: '14px 16px', borderRadius: 10, textAlign: 'left',
-                    border: active ? '2px solid #7C6FE0' : '1.5px solid #E5E7EB',
-                    background: active ? '#F5F3FF' : '#FAFAFA',
-                    cursor: 'pointer', fontFamily: 'inherit',
-                    transition: 'all .15s',
+                    padding: '7px 22px', borderRadius: 8, border: 'none',
+                    background: active ? '#fff' : 'transparent',
+                    boxShadow: active ? '0 1px 4px rgba(0,0,0,.10)' : 'none',
+                    color: active ? '#13111E' : '#9CA3AF',
+                    fontSize: 13, fontWeight: active ? 700 : 500,
+                    cursor: 'pointer', fontFamily: 'inherit', transition: 'all .15s',
+                    display: 'inline-flex', alignItems: 'center', gap: 7, whiteSpace: 'nowrap',
                   }}>
-                    {/* Header row */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                      {/* Radio dot */}
-                      <div style={{
-                        width: 16, height: 16, borderRadius: '50%', flexShrink: 0,
-                        border: active ? '5px solid #7C6FE0' : '2px solid #D1D5DB',
-                        background: '#fff', transition: 'border .15s',
-                      }} />
-                      <span style={{ fontSize: 13, fontWeight: 700, color: active ? '#13111E' : '#6B7280' }}>
-                        {mode === 'standard' ? 'Standard' : 'Advanced'}
-                      </span>
-                      {mode === 'advanced' && (
-                        <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.04em', color: '#7C3AED', background: '#EDE9FF', padding: '2px 7px', borderRadius: 8, marginLeft: 'auto' }}>HYBRID</span>
-                      )}
-                    </div>
-                    {/* Feature list */}
-                    {mode === 'standard' ? (
-                      <div style={{ fontSize: 11, color: active ? '#374151' : '#9CA3AF', lineHeight: 1.7 }}>
-                        <div>📅 One shift for the whole school</div>
-                        <div>🔁 Same bell every day — weekly or fortnightly</div>
-                        <div>⚡ Quick to set up, easy to understand</div>
-                        <div>☕ Class-wise breaks &amp; day off rules</div>
-                      </div>
-                    ) : (
-                      <div style={{ fontSize: 11, color: active ? '#374151' : '#9CA3AF', lineHeight: 1.7 }}>
-                        <div>📆 Different schedule for each day of the week</div>
-                        <div>🔀 Multi-week cycles — Week 1 ≠ Week 2</div>
-                        <div>⏰ Different start time &amp; period length per day</div>
-                        <div>🔤 Named day rotations (Day A / Day B…)</div>
-                        <div>🏫 Multiple shifts with independent timetables per class group</div>
-                      </div>
+                    {mode === 'standard' ? 'Standard' : 'Advanced'}
+                    {mode === 'advanced' && (
+                      <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.04em', color: '#7C3AED', background: '#EDE9FF', padding: '2px 6px', borderRadius: 6 }}>HYBRID</span>
                     )}
                   </button>
                 )
               })}
             </div>
+            <span style={{ fontSize: 11, color: '#B0B0B0' }}>
+              {scheduleMode === 'standard'
+                ? 'One shift · same bell daily · weekly or fortnightly'
+                : 'Per-day schedules · multi-week cycles · multiple shifts · day-name rotations'}
+            </span>
           </div>
 
           {/* ─── SCHEDULE RHYTHM ─── */}
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 10 }}>
-              <Calendar size={15} color="#7C6FE0" />
-              <span style={{ fontSize: 14, fontWeight: 700, color: '#13111E', letterSpacing: '-0.2px' }}>Schedule Rhythm</span>
-              {/* Derived label badge */}
-              <span style={{
-                marginLeft: 4, fontSize: 10, fontWeight: 800, padding: '2px 9px',
-                borderRadius: 10, background: '#EDE9FF', color: '#7C3AED', letterSpacing: '0.03em',
-              }}>
-                {useDayNames ? `${rotationDays.length}-day rotation`
-                  : cycleWeeks === 1 ? 'Weekly'
-                  : cycleWeeks === 2 ? 'Fortnightly'
-                  : `${cycleWeeks}-week cycle`}
-              </span>
-            </div>
-
-            <div style={{ background: '#fff', borderRadius: 10, border: '1px solid #E5E7EB', padding: '16px 18px' }}>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ background: '#fff', borderRadius: 10, border: '1px solid #E5E7EB', overflow: 'hidden' }}>
+              {/* Card header */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '10px 16px', background: '#FAFAFA', borderBottom: '1px solid #F3F4F6' }}>
+                <Calendar size={13} color="#7C6FE0" />
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>Schedule Rhythm</span>
+                <span style={{
+                  marginLeft: 'auto', fontSize: 10, fontWeight: 800, padding: '2px 9px',
+                  borderRadius: 10, background: '#EDE9FF', color: '#7C3AED', letterSpacing: '0.03em',
+                }}>
+                  {useDayNames ? `${rotationDays.length}-day rotation`
+                    : cycleWeeks === 1 ? 'Weekly'
+                    : cycleWeeks === 2 ? 'Fortnightly'
+                    : `${cycleWeeks}-week cycle`}
+                </span>
+              </div>
+              <div style={{ padding: '14px 16px' }}>
 
               {/* ── Standard mode: simple Weekly / Fortnightly chips ── */}
               {!isAdvanced && (
@@ -1767,18 +1746,23 @@ export function StepBell() {
                 </div>
               )}
               </>)}
-            </div>
+              </div>{/* end card body */}
+            </div>{/* end rhythm card */}
           </div>
 
           {/* ─── SHIFT CONFIGURATION ─── */}
           {/* Standard mode: single shift card */}
           {!isAdvanced && (
-          <div style={{ marginBottom: 20 }}>
-            <SH>SHIFT CONFIGURATION</SH>
-            <div style={{ background: '#fff', borderRadius: 10, border: '1px solid #E5E7EB', padding: '16px 18px' }}>
-              <input className="b-input" value={shiftName} onChange={e => setShiftName(e.target.value)}
-                placeholder="e.g. Main Shift"
-                style={{ fontWeight: 700, fontSize: 14, width: '100%', marginBottom: 16 }} />
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ background: '#fff', borderRadius: 10, border: '1px solid #E5E7EB', overflow: 'hidden' }}>
+              {/* Card header */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '10px 16px', background: '#FAFAFA', borderBottom: '1px solid #F3F4F6' }}>
+                <Layers size={13} color="#7C6FE0" />
+                <input className="b-input" value={shiftName} onChange={e => setShiftName(e.target.value)}
+                  placeholder="e.g. Main Shift"
+                  style={{ fontWeight: 700, fontSize: 13, border: 'none', padding: '0', outline: 'none', background: 'transparent', flex: 1 }} />
+              </div>
+              <div style={{ padding: '14px 16px' }}>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 100px 110px 90px', gap: 12, marginBottom: 14 }}>
                 {/* Start */}
@@ -1940,64 +1924,69 @@ export function StepBell() {
                   </div>
                 )}
               </div>
-            </div>
+              </div>{/* end card body */}
+            </div>{/* end card */}
           </div>
           )}
 
           {/* ─── ADVANCED: MULTI-SHIFT CONFIGURATION ─── */}
           {isAdvanced && (
-          <div style={{ marginBottom: 20 }}>
-            <SH>SHIFTS</SH>
-
-            {/* Shift tabs + inline add button */}
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
-              {shifts.map(s => {
-                const active = s.id === activeShiftId
-                return (
-                  <button key={s.id} onClick={() => setActiveShiftId(s.id)} style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 6,
-                    padding: '5px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700,
-                    border: active ? '2px solid #7C6FE0' : '1.5px solid #E5E7EB',
-                    background: active ? '#EDE9FF' : '#FAFAFA',
-                    color: active ? '#7C3AED' : '#6B7280',
-                    cursor: 'pointer', fontFamily: 'inherit', transition: 'all .12s',
-                  }}>
-                    {s.name}
-                    {shifts.length > 1 && (
-                      <span onClick={e => { e.stopPropagation()
-                        if (Object.keys(shiftRows[s.id] ?? {}).length > 0 || (shiftRows[s.id]?.length ?? 0) > 0) {
-                          setConfirmDialog({ msg: `Delete shift "${s.name}"? Its bell rows will be removed.`, onConfirm: () => deleteShift(s.id) })
-                        } else { deleteShift(s.id) }
-                      }} style={{
-                        marginLeft: 2, width: 14, height: 14, borderRadius: '50%',
-                        background: active ? '#C4B5FD' : '#E5E7EB',
-                        color: active ? '#7C3AED' : '#9CA3AF',
-                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 10, fontWeight: 900, lineHeight: 1, cursor: 'pointer',
-                      }}>×</span>
-                    )}
-                  </button>
-                )
-              })}
-              {/* Inline + button */}
-              <button onClick={addShift} title="Add Shift" style={{
-                width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
-                border: '1.5px dashed #C4B5FD', background: '#F5F3FF',
-                color: '#7C3AED', fontSize: 18, fontWeight: 700, lineHeight: 1,
-                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                cursor: 'pointer', fontFamily: 'inherit', transition: 'all .15s',
-              }}>+</button>
-            </div>
-
-            {/* Active shift configuration card */}
+          <div style={{ marginBottom: 16 }}>
+            {/* Card: header = shift tabs, body = active shift config */}
             {activeShift && (
-            <div style={{ background: '#fff', borderRadius: 10, border: `2px solid ${activeShiftId === 'shift-main' ? '#E5E7EB' : '#DDD6FE'}`, padding: '16px 18px' }}>
+            <div style={{ background: '#fff', borderRadius: 10, border: '1px solid #E5E7EB', overflow: 'hidden' }}>
 
-              {/* Shift name */}
-              <input className="b-input" value={activeShift.name}
-                onChange={e => updateActiveShift({ name: e.target.value })}
-                placeholder="e.g. Morning Shift"
-                style={{ fontWeight: 700, fontSize: 14, width: '100%', marginBottom: 16 }} />
+              {/* Card header — shift tabs */}
+              <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center', padding: '8px 14px', background: '#FAFAFA', borderBottom: '1px solid #F3F4F6' }}>
+                {shifts.map(s => {
+                  const active = s.id === activeShiftId
+                  return (
+                    <button key={s.id} onClick={() => setActiveShiftId(s.id)} style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 5,
+                      padding: '4px 14px', borderRadius: 16, fontSize: 12, fontWeight: 700,
+                      border: active ? '1.5px solid #7C6FE0' : '1px solid #E5E7EB',
+                      background: active ? '#EDE9FF' : '#fff',
+                      color: active ? '#7C3AED' : '#9CA3AF',
+                      cursor: 'pointer', fontFamily: 'inherit', transition: 'all .12s',
+                    }}>
+                      {s.name}
+                      {shifts.length > 1 && (
+                        <span onClick={e => { e.stopPropagation()
+                          if (Object.keys(shiftRows[s.id] ?? {}).length > 0 || (shiftRows[s.id]?.length ?? 0) > 0) {
+                            setConfirmDialog({ msg: `Delete shift "${s.name}"? Its bell rows will be removed.`, onConfirm: () => deleteShift(s.id) })
+                          } else { deleteShift(s.id) }
+                        }} style={{
+                          marginLeft: 1, width: 13, height: 13, borderRadius: '50%',
+                          background: active ? '#C4B5FD' : '#E5E7EB',
+                          color: active ? '#7C3AED' : '#9CA3AF',
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: 9, fontWeight: 900, lineHeight: 1, cursor: 'pointer',
+                        }}>×</span>
+                      )}
+                    </button>
+                  )
+                })}
+                {/* Add shift */}
+                <button onClick={addShift} title="Add Shift" style={{
+                  width: 26, height: 26, borderRadius: '50%', flexShrink: 0,
+                  border: '1.5px dashed #C4B5FD', background: '#F5F3FF',
+                  color: '#7C3AED', fontSize: 16, fontWeight: 700, lineHeight: 1,
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer', fontFamily: 'inherit', transition: 'all .15s',
+                }}>+</button>
+                {/* Active shift name — inline editable in header */}
+                <input value={activeShift.name}
+                  onChange={e => updateActiveShift({ name: e.target.value })}
+                  placeholder="Shift name"
+                  style={{
+                    marginLeft: 'auto', border: 'none', outline: 'none', background: 'transparent',
+                    fontSize: 12, fontWeight: 700, color: '#374151', fontFamily: 'inherit',
+                    textAlign: 'right', minWidth: 80, maxWidth: 160,
+                  }} />
+              </div>
+
+              {/* Card body — active shift config */}
+              <div style={{ padding: '14px 16px' }}>
 
               {/* Timing grid */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 100px 110px 90px', gap: 12, marginBottom: 16 }}>
@@ -2189,7 +2178,8 @@ export function StepBell() {
                   </div>
                 )}
               </div>
-            </div>
+              </div>{/* end card body */}
+            </div>{/* end card */}
             )}
           </div>
           )}
@@ -2216,7 +2206,12 @@ export function StepBell() {
 
             {/* Section header + Vary-by-day toggle + Class-wise breaks button */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-              <SH>BELL TIMING GRID{isAdvanced && activeShift ? ` — ${activeShift.name}` : ''}</SH>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                <Clock size={13} color="#7C6FE0" />
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>
+                  Bell Timing{isAdvanced && activeShift ? ` — ${activeShift.name}` : ''}
+                </span>
+              </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
 
                 {/* Vary by day toggle — advanced only */}
