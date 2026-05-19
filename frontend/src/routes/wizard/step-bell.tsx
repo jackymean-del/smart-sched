@@ -2,7 +2,8 @@
  * Step 1 — Shift & Bell Timing  (v4)
  *
  * Fixes in v4:
- *  1. Number-input UX — select-all on focus so you can type immediately
+ *  1. Number-input UX — local-string wrapper (NumInput) commits only on blur/Enter;
+ *     never fights React controlled re-renders mid-type
  *  2. End time is now editable; changes adjust the last teaching period's duration
  *  3. "Add break" strips are always visible (no hover required)
  *  4. Assembly AND Dispersal are now deletable
@@ -85,6 +86,50 @@ function computeStarts(startTime: string, rows: BellRow[]): string[] {
 }
 
 function makeId() { return Math.random().toString(36).slice(2, 8) }
+
+// ── NumInput — smooth number input that commits only on blur/Enter ─────────
+// Uses local string state so React never overwrites mid-type. Syncs back
+// to external value only when the field is NOT focused (e.g. after a Reset).
+interface NumInputProps {
+  value:     number
+  onChange:  (n: number) => void
+  min?:      number
+  max?:      number
+  className?: string
+  style?:    CSSProperties
+}
+function NumInput({ value, onChange, min, max, className, style }: NumInputProps) {
+  const [local,   setLocal]   = useState(String(value))
+  const focused                = useRef(false)
+
+  // Sync external → local only when not focused (e.g. "Reset to default")
+  useEffect(() => {
+    if (!focused.current) setLocal(String(value))
+  }, [value])
+
+  const commit = () => {
+    focused.current = false
+    const n = parseInt(local, 10)
+    if (isNaN(n)) { setLocal(String(value)); return }
+    const clamped = Math.min(max ?? 99999, Math.max(min ?? 0, n))
+    setLocal(String(clamped))
+    onChange(clamped)
+  }
+
+  return (
+    <input
+      className={className}
+      style={style}
+      type="text"
+      inputMode="numeric"
+      value={local}
+      onChange={e => setLocal(e.target.value.replace(/[^0-9]/g, ''))}
+      onFocus={e => { focused.current = true; e.currentTarget.select() }}
+      onBlur={commit}
+      onKeyDown={e => { if (e.key === 'Enter') { e.currentTarget.blur() } }}
+    />
+  )
+}
 
 // ── Row factories ─────────────────────────────────────────────
 const mkAssembly  = (): BellRow => ({ id: 'assembly',  name: 'Assembly',  type: 'assembly',  duration: 15, classes: [...ALL_CLASS_KEYS] })
@@ -524,21 +569,25 @@ export function StepBell() {
                 {/* Period duration */}
                 <div>
                   <div style={FL}>Period (min)</div>
-                  <input className="b-input" type="number" min={10} max={120}
+                  <NumInput
+                    className="b-input"
                     value={periodDur}
-                    onFocus={e => e.currentTarget.select()}
-                    onChange={e => handlePeriodDurChange(+e.target.value)}
-                    style={{ width: '100%', textAlign: 'center', fontFamily: "'DM Mono',monospace", fontWeight: 800, fontSize: 16 }} />
+                    min={10} max={120}
+                    onChange={handlePeriodDurChange}
+                    style={{ width: '100%', textAlign: 'center', fontFamily: "'DM Mono',monospace", fontWeight: 800, fontSize: 16 }}
+                  />
                 </div>
 
                 {/* Max periods/day */}
                 <div>
                   <div style={FL}>Max periods/day</div>
-                  <input className="b-input" type="number" min={1} max={16}
+                  <NumInput
+                    className="b-input"
                     value={maxPeriods}
-                    onFocus={e => e.currentTarget.select()}
-                    onChange={e => handleMaxPeriodsChange(+e.target.value)}
-                    style={{ width: '100%', textAlign: 'center', fontFamily: "'DM Mono',monospace", fontWeight: 800, fontSize: 16 }} />
+                    min={1} max={16}
+                    onChange={handleMaxPeriodsChange}
+                    style={{ width: '100%', textAlign: 'center', fontFamily: "'DM Mono',monospace", fontWeight: 800, fontSize: 16 }}
+                  />
                 </div>
 
                 {/* Format */}
@@ -623,11 +672,13 @@ export function StepBell() {
                           {fmt12(end, use12h).replace(/ [AP]M$/, '')}
                         </div>
 
-                        {/* Duration (editable) — select-all on focus */}
-                        <input className="b-dur" type="number" min={5} max={240}
+                        {/* Duration (editable) */}
+                        <NumInput
+                          className="b-dur"
                           value={row.duration}
-                          onFocus={e => e.currentTarget.select()}
-                          onChange={e => updateRow(row.id, { duration: Math.max(5, +e.target.value) })} />
+                          min={5} max={240}
+                          onChange={d => updateRow(row.id, { duration: d })}
+                        />
 
                         {/* Type badge */}
                         <div style={{
