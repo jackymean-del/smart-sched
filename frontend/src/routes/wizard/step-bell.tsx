@@ -325,9 +325,10 @@ interface SavedBell {
   // Rhythm
   cycleWeeks?: number; useDayNames?: boolean; cycleStartDate?: string
   fixedDuration?: boolean; rotationDays?: RotDay[]
-  weekWorkDays?: Record<number, string[]>   // per-week custom working days (multi-week cycles)
-  dayStartTimes?: Record<string, string>    // per-day start time overrides (dayKey → HH:MM)
-  dayOffRules?:   DayOffRule[]              // class-specific off-day rules
+  weekWorkDays?:  Record<number, string[]>   // per-week custom working days (multi-week cycles)
+  dayStartTimes?:  Record<string, string>   // per-day start time overrides (dayKey → HH:MM)
+  dayPeriodDurs?:  Record<string, number>   // per-day period duration overrides (dayKey → mins)
+  dayOffRules?:    DayOffRule[]             // class-specific off-day rules
   // Per-day bell config
   varyByDay?: boolean; dayRows?: Record<string, BellRow[]>
 }
@@ -868,7 +869,13 @@ export function StepBell() {
   const [rotationDays,   setRotationDays]   = useState<RotDay[]>(() => _saved?.rotationDays   ?? DEFAULT_ROT_DAYS)
   const [weekWorkDays,   setWeekWorkDays]   = useState<Record<number, string[]>>(() => _saved?.weekWorkDays ?? {})
   const [dayStartTimes,  setDayStartTimes]  = useState<Record<string, string>>( () => _saved?.dayStartTimes  ?? {})
+  const [dayPeriodDurs,  setDayPeriodDurs]  = useState<Record<string, number>>( () => _saved?.dayPeriodDurs  ?? {})
   const [dayOffRules,    setDayOffRules]    = useState<DayOffRule[]>(           () => _saved?.dayOffRules    ?? [])
+
+  // ── UI-only (not persisted) ───────────────────────────────────
+  const [confirmDialog, setConfirmDialog] = useState<{ msg: string; onConfirm: () => void } | null>(null)
+  const [copyFrom,      setCopyFrom]      = useState('')
+  const [copyTo,        setCopyTo]        = useState('')
   // ── Per-day bell variation ────────────────────────────────────
   const [varyByDay,    setVaryByDay]    = useState<boolean>(                  () => _saved?.varyByDay ?? false)
   const [activeDayTab, setActiveDayTab] = useState<string>('')
@@ -884,11 +891,11 @@ export function StepBell() {
     localStorage.setItem(BELL_KEY, JSON.stringify({
       shiftName, startTime, use12h, periodDur, maxPeriods, workDays, rows,
       cycleWeeks, useDayNames, cycleStartDate, fixedDuration, rotationDays,
-      weekWorkDays, dayStartTimes, dayOffRules, varyByDay, dayRows,
+      weekWorkDays, dayStartTimes, dayPeriodDurs, dayOffRules, varyByDay, dayRows,
     } satisfies SavedBell))
   }, [shiftName, startTime, use12h, periodDur, maxPeriods, workDays, rows,
       cycleWeeks, useDayNames, cycleStartDate, fixedDuration, rotationDays,
-      weekWorkDays, dayStartTimes, dayOffRules, varyByDay, dayRows])
+      weekWorkDays, dayStartTimes, dayPeriodDurs, dayOffRules, varyByDay, dayRows])
 
   // ── Day keys ─────────────────────────────────────────────────
   // • day-names mode  → rotation day shorts (D1, D2, …)
@@ -920,6 +927,48 @@ export function StepBell() {
       : startTime,
     [varyByDay, activeDayTab, dayStartTimes, startTime],
   )
+
+  /** Effective period duration — per-day override or global fallback. */
+  const activePeriodDur = useMemo(() =>
+    varyByDay && activeDayTab && dayPeriodDurs[activeDayTab]
+      ? dayPeriodDurs[activeDayTab]
+      : periodDur,
+    [varyByDay, activeDayTab, dayPeriodDurs, periodDur],
+  )
+
+  // ── Copy days/weeks helper ────────────────────────────────────
+  const handleCopyDays = (from: string, to: string) => {
+    if (!from || !to || from === to) return
+    if (cycleWeeks > 1 && !useDayNames) {
+      // from/to are week numbers ("1", "2", …)
+      const fw = parseInt(from), tw = parseInt(to)
+      const fdays = weekWorkDays[fw] ?? workDays
+      const tdays = weekWorkDays[tw] ?? workDays
+      setDayRows(prev => {
+        const next = { ...prev }
+        fdays.forEach(d => {
+          const fk = `w${fw}-${d}`, tk = `w${tw}-${d}`
+          if (tdays.includes(d)) next[tk] = (prev[fk] ?? rows).map(r => ({ ...r, id: makeId() }))
+        })
+        return next
+      })
+      setDayStartTimes(prev => {
+        const next = { ...prev }
+        fdays.forEach(d => { const fk = `w${fw}-${d}`, tk = `w${tw}-${d}`; if (prev[fk] && tdays.includes(d)) next[tk] = prev[fk] })
+        return next
+      })
+      setDayPeriodDurs(prev => {
+        const next = { ...prev }
+        fdays.forEach(d => { const fk = `w${fw}-${d}`, tk = `w${tw}-${d}`; if (prev[fk] && tdays.includes(d)) next[tk] = prev[fk] })
+        return next
+      })
+    } else {
+      // from/to are day keys directly
+      setDayRows(prev => ({ ...prev, [to]: (prev[from] ?? rows).map(r => ({ ...r, id: makeId() })) }))
+      setDayStartTimes(prev => dayStartTimes[from] ? { ...prev, [to]: dayStartTimes[from] } : prev)
+      setDayPeriodDurs(prev => dayPeriodDurs[from]  ? { ...prev, [to]: dayPeriodDurs[from]  } : prev)
+    }
+  }
 
   /** Rows currently active in the bell grid (uniform or per-day tab). */
   const displayRows: BellRow[] = useMemo(() =>
@@ -1115,8 +1164,15 @@ export function StepBell() {
 
   const handlePeriodDurChange = (d: number) => {
     const v = Math.max(10, d)
-    setPeriodDur(v)
-    setDisplayRows(prev => prev.map(r => r.type === 'teaching' ? { ...r, duration: v } : r))
+    if (varyByDay && activeDayTab) {
+      // Per-day override: update only the active day's rows and store the override
+      setDayPeriodDurs(prev => ({ ...prev, [activeDayTab]: v }))
+      setDisplayRows(prev => prev.map(r => r.type === 'teaching' ? { ...r, duration: v } : r))
+    } else {
+      // Global: update the global setting and propagate to all uniform rows
+      setPeriodDur(v)
+      setDisplayRows(prev => prev.map(r => r.type === 'teaching' ? { ...r, duration: v } : r))
+    }
   }
 
   const handleMaxPeriodsChange = (n: number) => {
@@ -1128,21 +1184,32 @@ export function StepBell() {
       const brks = prev.filter(r => r.type === 'short-break' || r.type === 'lunch')
       const prs  = Array.from({ length: v }, (_, i) => {
         const ex = prev.find(r => r.id === `p${i + 1}`)
-        return ex ? { ...ex, duration: periodDur } : mkPeriod(i + 1, periodDur)
+        return ex ? { ...ex, duration: activePeriodDur } : mkPeriod(i + 1, activePeriodDur)
       })
       return [asm, ...prs, ...brks, dis]
     })
   }
 
   // ── Vary-by-day toggle ────────────────────────────────────────
+  const doTurnOffVaryByDay = () => {
+    setActiveDayTab(''); setDayRows({}); setDayStartTimes({}); setDayPeriodDurs({}); setVaryByDay(false)
+  }
+
   const handleToggleVaryByDay = (on: boolean) => {
+    if (!on && Object.keys(dayRows).length > 0) {
+      setConfirmDialog({
+        msg: 'Turning off "Vary by day" will discard all per-day custom schedules (timings, period durations, bell rows). This cannot be undone.',
+        onConfirm: doTurnOffVaryByDay,
+      })
+      return
+    }
     if (on) {
       const init: Record<string, BellRow[]> = {}
       dayKeys.forEach(k => { init[k] = rows.map(r => ({ ...r, id: makeId() })) })
       setDayRows(init)
       setActiveDayTab(dayKeys[0] ?? '')
     } else {
-      setActiveDayTab('')
+      doTurnOffVaryByDay()
     }
     setVaryByDay(on)
   }
@@ -1163,7 +1230,7 @@ export function StepBell() {
 
   const insertPeriodAt = (afterIndex: number) => {
     const count  = displayRows.slice(0, afterIndex + 1).filter(r => r.type === 'teaching').length
-    const newRow = mkPeriod(count + 1, periodDur)
+    const newRow = mkPeriod(count + 1, activePeriodDur)
     newRow.id    = makeId()
     setDisplayRows(prev => { const n = [...prev]; n.splice(afterIndex + 1, 0, newRow); return n })
   }
@@ -1303,8 +1370,12 @@ export function StepBell() {
                     <span style={{ fontSize: 12, color: '#6B7280' }}>Repeats every</span>
                     {/* Stepper */}
                     <div style={{ display: 'inline-flex', alignItems: 'center', border: '1.5px solid #E5E7EB', borderRadius: 8, overflow: 'hidden' }}>
-                      <button onClick={() => setCycleWeeks(w => Math.max(1, w - 1))}
-                        style={{ padding: '5px 11px', background: 'none', border: 'none', fontSize: 15, fontWeight: 700, color: cycleWeeks <= 1 ? '#D1D5DB' : '#7C6FE0', cursor: cycleWeeks <= 1 ? 'default' : 'pointer', fontFamily: 'inherit' }}>−</button>
+                      <button onClick={() => {
+                        const next = Math.max(1, cycleWeeks - 1)
+                        if (next < cycleWeeks && varyByDay && Object.keys(dayRows).some(k => k.startsWith(`w${cycleWeeks}-`))) {
+                          setConfirmDialog({ msg: `Reducing to ${next} week${next > 1 ? 's' : ''} will remove all custom schedules for Week ${cycleWeeks}. Continue?`, onConfirm: () => setCycleWeeks(next) })
+                        } else { setCycleWeeks(next) }
+                      }} style={{ padding: '5px 11px', background: 'none', border: 'none', fontSize: 15, fontWeight: 700, color: cycleWeeks <= 1 ? '#D1D5DB' : '#7C6FE0', cursor: cycleWeeks <= 1 ? 'default' : 'pointer', fontFamily: 'inherit' }}>−</button>
                       <span style={{ padding: '5px 12px', fontSize: 14, fontWeight: 800, color: '#13111E', fontFamily: "'DM Mono',monospace", borderLeft: '1px solid #E5E7EB', borderRight: '1px solid #E5E7EB', minWidth: 40, textAlign: 'center' }}>{cycleWeeks}</span>
                       <button onClick={() => setCycleWeeks(w => Math.min(12, w + 1))}
                         style={{ padding: '5px 11px', background: 'none', border: 'none', fontSize: 15, fontWeight: 700, color: '#7C6FE0', cursor: 'pointer', fontFamily: 'inherit' }}>+</button>
@@ -1318,8 +1389,11 @@ export function StepBell() {
                   <div style={{ position: 'relative', width: 34, height: 18, flexShrink: 0 }}>
                     <input type="checkbox" checked={useDayNames} onChange={e => {
                       const on = e.target.checked
-                      setUseDayNames(on)
-                      if (on && varyByDay) handleToggleVaryByDay(false)  // reset per-day if switching
+                      const hasCustom = varyByDay && Object.keys(dayRows).length > 0
+                      const apply = () => { setUseDayNames(on); if (on && varyByDay) doTurnOffVaryByDay() }
+                      if (hasCustom) {
+                        setConfirmDialog({ msg: 'Switching between "Use day names" and calendar-days mode will reset all per-day custom schedules. Continue?', onConfirm: apply })
+                      } else { apply() }
                     }} style={{ opacity: 0, width: 0, height: 0, position: 'absolute' }} />
                     <div style={{ position: 'absolute', inset: 0, borderRadius: 9, background: useDayNames ? '#7C6FE0' : '#E5E7EB', transition: 'background .2s' }} />
                     <div style={{ position: 'absolute', top: 2, left: useDayNames ? 18 : 2, width: 14, height: 14, borderRadius: '50%', background: '#fff', transition: 'left .2s', boxShadow: '0 1px 3px rgba(0,0,0,.2)' }} />
@@ -1791,59 +1865,121 @@ export function StepBell() {
               </div>
             )}
 
-            {/* ── Per-day start/end time override ── */}
+            {/* ── Copy row ── */}
+            {varyByDay && dayKeys.length > 1 && (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+                marginBottom: 6, padding: '7px 12px',
+                background: '#F9FAFB', borderRadius: 8, border: '1px solid #E5E7EB',
+              }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#9CA3AF', letterSpacing: '0.05em' }}>COPY</span>
+                <select
+                  value={copyFrom || (cycleWeeks > 1 && !useDayNames ? '1' : dayKeys[0])}
+                  onChange={e => setCopyFrom(e.target.value)}
+                  style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid #E5E7EB', fontSize: 12, fontFamily: 'inherit', outline: 'none', color: '#374151' }}>
+                  {cycleWeeks > 1 && !useDayNames
+                    ? Array.from({ length: cycleWeeks }, (_, i) => (
+                        <option key={i + 1} value={String(i + 1)}>Week {i + 1}</option>
+                      ))
+                    : dayKeys.map(k => <option key={k} value={k}>{k}</option>)
+                  }
+                </select>
+                <span style={{ fontSize: 11, color: '#C4B5FD' }}>→</span>
+                <select
+                  value={copyTo || (cycleWeeks > 1 && !useDayNames ? '2' : dayKeys[1])}
+                  onChange={e => setCopyTo(e.target.value)}
+                  style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid #E5E7EB', fontSize: 12, fontFamily: 'inherit', outline: 'none', color: '#374151' }}>
+                  {cycleWeeks > 1 && !useDayNames
+                    ? Array.from({ length: cycleWeeks }, (_, i) => (
+                        <option key={i + 1} value={String(i + 1)}>Week {i + 1}</option>
+                      ))
+                    : dayKeys.map(k => <option key={k} value={k}>{k}</option>)
+                  }
+                </select>
+                <button
+                  onClick={() => {
+                    const from = copyFrom || (cycleWeeks > 1 && !useDayNames ? '1' : dayKeys[0])
+                    const to   = copyTo   || (cycleWeeks > 1 && !useDayNames ? '2' : dayKeys[1])
+                    if (from === to) return
+                    const label = cycleWeeks > 1 && !useDayNames ? `Week ${from} → Week ${to}` : `${from} → ${to}`
+                    setConfirmDialog({
+                      msg: `Copy schedule from ${label}? This will overwrite the destination's bell rows, start time, and period duration.`,
+                      onConfirm: () => handleCopyDays(from, to),
+                    })
+                  }}
+                  style={{
+                    padding: '4px 13px', borderRadius: 6, border: '1px solid #7C6FE0',
+                    background: '#F5F3FF', color: '#7C3AED', fontSize: 11, fontWeight: 700,
+                    cursor: 'pointer', fontFamily: 'inherit',
+                  }}>
+                  Copy schedule →
+                </button>
+              </div>
+            )}
+
+            {/* ── Per-day settings bar (start time · end time · period duration) ── */}
             {varyByDay && activeDayTab && (
               <div style={{
-                display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap',
+                display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
                 background: '#F5F3FF', border: '1px solid #DDD6FE', borderRadius: 9,
                 padding: '9px 14px', marginBottom: 8,
               }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#7C3AED', flexShrink: 0 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#7C3AED', flexShrink: 0, minWidth: 60 }}>
                   {activeDayTab.replace(/^w(\d+)-(.+)$/, 'Week $1 · $2')}
                 </span>
 
-                {/* Start time override */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ width: 1, height: 20, background: '#DDD6FE', flexShrink: 0 }} />
+
+                {/* Start time */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                   <span style={{ fontSize: 11, color: '#9CA3AF' }}>Starts</span>
-                  <input
-                    type="time"
+                  <input type="time"
                     value={dayStartTimes[activeDayTab] ?? startTime}
                     onChange={e => setDayStartTimes(prev => ({ ...prev, [activeDayTab]: e.target.value }))}
                     style={{
-                      padding: '4px 9px', borderRadius: 6,
+                      padding: '4px 8px', borderRadius: 6, fontSize: 12, fontFamily: 'inherit', outline: 'none',
                       border: dayStartTimes[activeDayTab] ? '1.5px solid #7C6FE0' : '1px solid #DDD6FE',
-                      fontSize: 12, fontFamily: 'inherit', outline: 'none',
                       color: dayStartTimes[activeDayTab] ? '#7C3AED' : '#374151',
                       background: '#fff', fontWeight: dayStartTimes[activeDayTab] ? 700 : 400,
-                    }}
-                  />
+                    }} />
                   {dayStartTimes[activeDayTab] && (
-                    <button
-                      onClick={() => setDayStartTimes(prev => { const n = { ...prev }; delete n[activeDayTab]; return n })}
-                      title="Reset to default start time"
-                      style={{ fontSize: 10, color: '#9CA3AF', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', fontFamily: 'inherit' }}>
-                      reset
-                    </button>
+                    <button onClick={() => setDayStartTimes(prev => { const n = { ...prev }; delete n[activeDayTab]; return n })}
+                      style={{ fontSize: 10, color: '#9CA3AF', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>reset</button>
                   )}
                 </div>
 
                 <span style={{ fontSize: 11, color: '#C4B5FD' }}>→</span>
 
                 {/* End time (derived) */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                   <span style={{ fontSize: 11, color: '#9CA3AF' }}>Ends</span>
-                  <span style={{
-                    padding: '4px 9px', borderRadius: 6, background: '#fff',
-                    border: '1px solid #DDD6FE', fontSize: 12,
-                    fontFamily: "'DM Mono',monospace", fontWeight: 700, color: '#374151',
-                  }}>
+                  <span style={{ padding: '4px 8px', borderRadius: 6, background: '#fff', border: '1px solid #DDD6FE', fontSize: 12, fontFamily: "'DM Mono',monospace", fontWeight: 700, color: '#374151' }}>
                     {fmt12(endTime, use12h)}
                   </span>
                 </div>
 
-                {!dayStartTimes[activeDayTab] && (
+                <div style={{ width: 1, height: 20, background: '#DDD6FE', flexShrink: 0 }} />
+
+                {/* Period duration */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <span style={{ fontSize: 11, color: '#9CA3AF' }}>Period</span>
+                  <NumInput className="b-dur" value={activePeriodDur} min={10} max={120}
+                    onChange={handlePeriodDurChange}
+                    style={{
+                      border: dayPeriodDurs[activeDayTab] ? '1.5px solid #7C6FE0' : '1px solid #DDD6FE',
+                      color: dayPeriodDurs[activeDayTab] ? '#7C3AED' : '#13111E',
+                      fontWeight: dayPeriodDurs[activeDayTab] ? 700 : 400,
+                    }} />
+                  <span style={{ fontSize: 11, color: '#9CA3AF' }}>min</span>
+                  {dayPeriodDurs[activeDayTab] && (
+                    <button onClick={() => setDayPeriodDurs(prev => { const n = { ...prev }; delete n[activeDayTab]; return n })}
+                      style={{ fontSize: 10, color: '#9CA3AF', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>reset</button>
+                  )}
+                </div>
+
+                {!dayStartTimes[activeDayTab] && !dayPeriodDurs[activeDayTab] && (
                   <span style={{ marginLeft: 'auto', fontSize: 10, color: '#C4B5FD', flexShrink: 0 }}>
-                    using default · {fmt12(startTime, use12h)}
+                    using defaults · {fmt12(startTime, use12h)} · {periodDur} min
                   </span>
                 )}
               </div>
@@ -2069,6 +2205,46 @@ export function StepBell() {
           </div>
         </div>
       </div>
+
+      {/* ── Confirmation dialog ── */}
+      {confirmDialog && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(19,17,30,0.45)',
+          zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: 24,
+        }} onClick={e => { if (e.target === e.currentTarget) setConfirmDialog(null) }}>
+          <div style={{
+            background: '#fff', borderRadius: 14, padding: '26px 28px',
+            maxWidth: 420, width: '100%',
+            boxShadow: '0 24px 64px rgba(0,0,0,0.22)',
+            fontFamily: "'Inter', -apple-system, sans-serif",
+          }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 16 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: '#FEF3C7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <AlertTriangle size={18} color="#D97706" />
+              </div>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#13111E', marginBottom: 6 }}>
+                  Are you sure?
+                </div>
+                <div style={{ fontSize: 13, color: '#6B7280', lineHeight: 1.55 }}>
+                  {confirmDialog.msg}
+                </div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button onClick={() => setConfirmDialog(null)}
+                style={{ padding: '8px 18px', borderRadius: 8, border: '1px solid #E5E7EB', background: '#fff', fontSize: 13, fontWeight: 600, color: '#374151', cursor: 'pointer', fontFamily: 'inherit' }}>
+                Cancel
+              </button>
+              <button onClick={() => { confirmDialog.onConfirm(); setConfirmDialog(null) }}
+                style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: '#EF4444', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                Yes, proceed
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Footer nav */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 24, paddingTop: 16, borderTop: '1px solid #E5E7EB' }}>
