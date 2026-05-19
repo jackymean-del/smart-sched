@@ -53,12 +53,12 @@ interface BellRow {
 
 // ── Class-wise breaks types ───────────────────────────────────
 interface CwBreakRow {
-  id:        string
-  name:      string
-  type:      'short-break' | 'lunch'
-  classes:   string[]   // which class-section keys have this break
-  startTime: string     // HH:MM absolute
-  duration:  number     // minutes
+  id:          string
+  name:        string
+  type:        'short-break' | 'lunch'
+  classes:     string[]  // which class-section keys have this break
+  afterPeriod: number    // insert break after this period (0 = after Assembly, 1 = after Period 1, …)
+  duration:    number    // minutes
 }
 
 // ── Individual class-sections ─────────────────────────────────
@@ -200,22 +200,27 @@ function buildRows(count: number, dur: number): BellRow[] {
 /**
  * Build a merged BellRow[] from class-wise break configs.
  *
- * For each individual class key:
- *   1. Collect the breaks that include this class.
- *   2. Build its event sequence: Assembly → periods ↔ breaks → Dispersal.
+ * Each CwBreakRow specifies "after which period" — no absolute clock times.
+ * For every individual class key:
+ *   1. Collect its breaks sorted by afterPeriod.
+ *   2. Walk periods 1…maxPeriods in order; after each period, flush any breaks
+ *      whose afterPeriod equals the period just emitted.
  *
- * Then merge all 15 class sequences:
+ * Because time is built up sequentially, the absolute startMins of every event
+ * is computed exactly — no user input of clock times needed.
+ *
+ * Then merge all 15 per-class sequences:
  *   • Events identical across classes (same type + name + startMins + duration)
- *     become ONE row whose classes list is the union.
- *   • Events that differ become SEPARATE rows with respective class subsets.
- *
- * Result is sorted by startMins; at ties: assembly < break < teaching < dispersal.
+ *     become ONE merged row.
+ *   • Events that differ (e.g. Period 4 at 11:15 for I-XII vs Period 4 at 11:45
+ *     for Nur-UKG who had a break first) become SEPARATE rows with the correct
+ *     subset of classes.
  */
 function buildBellRowsFromCw(
   startTimeStr: string,
-  periodDur: number,
-  maxPeriods: number,
-  cwBrks: CwBreakRow[],
+  periodDur:    number,
+  maxPeriods:   number,
+  cwBrks:       CwBreakRow[],
 ): BellRow[] {
   type Ev = { type: RowType; name: string; startMins: number; duration: number }
   const classEvs: Array<{ key: string; evs: Ev[] }> = []
@@ -227,46 +232,37 @@ function buildBellRowsFromCw(
     evs.push({ type: 'assembly', name: 'Assembly', startMins: cur, duration: 15 })
     cur += 15
 
-    // Breaks assigned to this class, sorted by absolute start time
+    // This class's breaks sorted by afterPeriod
     const myBreaks = cwBrks
       .filter(b => b.classes.includes(cls.key))
-      .map(b => ({
-        type:      b.type as RowType,
-        name:      b.name,
-        startMins: toMins(b.startTime),
-        duration:  b.duration,
-      }))
-      .sort((a, b) => a.startMins - b.startMins)
+      .map(b => ({ type: b.type as RowType, name: b.name, afterPeriod: b.afterPeriod, duration: b.duration }))
+      .sort((a, b) => a.afterPeriod - b.afterPeriod)
 
-    let pNum = 1
-    let bIdx = 0
-
-    while (pNum <= maxPeriods) {
-      const nb = myBreaks[bIdx]
-      if (nb && cur + periodDur > nb.startMins) {
-        // Break starts before the next period would finish — insert it first
-        evs.push({ ...nb })
-        cur = nb.startMins + nb.duration
-        bIdx++
-      } else {
-        evs.push({ type: 'teaching', name: `Period ${pNum}`, startMins: cur, duration: periodDur })
-        cur += periodDur
-        pNum++
-      }
+    // Flush breaks that come BEFORE any teaching period (afterPeriod === 0)
+    let bi = 0
+    while (bi < myBreaks.length && myBreaks[bi].afterPeriod === 0) {
+      evs.push({ type: myBreaks[bi].type, name: myBreaks[bi].name, startMins: cur, duration: myBreaks[bi].duration })
+      cur += myBreaks[bi].duration
+      bi++
     }
 
-    // Any remaining breaks after all periods
-    while (bIdx < myBreaks.length) {
-      evs.push({ ...myBreaks[bIdx] })
-      cur = myBreaks[bIdx].startMins + myBreaks[bIdx].duration
-      bIdx++
+    for (let pNum = 1; pNum <= maxPeriods; pNum++) {
+      evs.push({ type: 'teaching', name: `Period ${pNum}`, startMins: cur, duration: periodDur })
+      cur += periodDur
+
+      // Flush any breaks whose afterPeriod === pNum
+      while (bi < myBreaks.length && myBreaks[bi].afterPeriod === pNum) {
+        evs.push({ type: myBreaks[bi].type, name: myBreaks[bi].name, startMins: cur, duration: myBreaks[bi].duration })
+        cur += myBreaks[bi].duration
+        bi++
+      }
     }
 
     evs.push({ type: 'dispersal', name: 'Dispersal', startMins: cur, duration: 5 })
     classEvs.push({ key: cls.key, evs })
   }
 
-  // Merge by key = type|name|startMins|duration
+  // Merge: events with same type|name|startMins|duration share one row
   const merged = new Map<string, { type: RowType; name: string; startMins: number; duration: number; classes: string[] }>()
   for (const { key, evs } of classEvs) {
     for (const ev of evs) {
@@ -278,9 +274,7 @@ function buildBellRowsFromCw(
 
   const typeOrd: Record<RowType, number> = { assembly: 0, 'short-break': 1, lunch: 1, teaching: 2, dispersal: 3 }
   const sorted = [...merged.values()].sort((a, b) =>
-    a.startMins !== b.startMins
-      ? a.startMins - b.startMins
-      : typeOrd[a.type] - typeOrd[b.type],
+    a.startMins !== b.startMins ? a.startMins - b.startMins : typeOrd[a.type] - typeOrd[b.type],
   )
 
   return sorted.map(r => ({
@@ -306,16 +300,30 @@ function loadSaved(): SavedBell | null {
 // ══════════════════════════════════════════════════════════════
 //  ClasswiseBreaksPanel
 // ══════════════════════════════════════════════════════════════
+/**
+ * Simplified UX: instead of typing a clock time, the user picks
+ * "After which period does this break happen?" from a dropdown.
+ * The panel derives and shows the calculated clock time as a hint.
+ * Users think in periods, not minutes — no arithmetic needed.
+ */
 function ClasswiseBreaksPanel({
-  cwRows, setCwRows, use12h, onGenerate, onClose,
+  cwRows, setCwRows, use12h, startTime, periodDur, maxPeriods,
+  onGenerate, onClose,
 }: {
-  cwRows:     CwBreakRow[]
-  setCwRows:  React.Dispatch<React.SetStateAction<CwBreakRow[]>>
-  use12h:     boolean
-  onGenerate: () => void
-  onClose:    () => void
+  cwRows:      CwBreakRow[]
+  setCwRows:   React.Dispatch<React.SetStateAction<CwBreakRow[]>>
+  use12h:      boolean
+  startTime:   string
+  periodDur:   number
+  maxPeriods:  number
+  onGenerate:  () => void
+  onClose:     () => void
 }) {
   const [openPicker, setOpenPicker] = useState<string | null>(null)
+
+  /** Calculate the clock time a break starts, given it falls after `afterPeriod` periods. */
+  const breakStartTime = (afterPeriod: number) =>
+    addMins(startTime, 15 /* assembly */ + afterPeriod * periodDur)
 
   const updateBreak = (id: string, patch: Partial<CwBreakRow>) =>
     setCwRows(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r))
@@ -328,30 +336,41 @@ function ClasswiseBreaksPanel({
   const deleteRow = (id: string) => setCwRows(prev => prev.filter(r => r.id !== id))
 
   const addRow = () => {
+    const defaultAfter = Math.max(1, Math.floor(maxPeriods / 2))
     setCwRows(prev => [...prev, {
-      id:        makeId(),
-      name:      'Break',
-      type:      'short-break',
-      classes:   [...ALL_CLASS_KEYS],
-      startTime: '10:15',
-      duration:  10,
+      id:          makeId(),
+      name:        'Break',
+      type:        'short-break',
+      classes:     [...ALL_CLASS_KEYS],
+      afterPeriod: defaultAfter,
+      duration:    10,
     }])
   }
+
+  // Period slot options for the dropdown
+  const periodOptions: Array<{ value: number; label: string }> = [
+    { value: 0, label: 'After Assembly' },
+    ...Array.from({ length: maxPeriods }, (_, i) => ({
+      value: i + 1,
+      label: `After Period ${i + 1}`,
+    })),
+  ]
 
   return (
     <div style={{
       background: '#F8F7FF', border: '1.5px solid #C4B5FD', borderRadius: 10,
       padding: '16px 18px', marginBottom: 16,
     }}>
+
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 6 }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: '#7C3AED', marginBottom: 4 }}>
             <Sparkles size={13} color="#7C3AED" /> Class-wise Breaks
           </div>
           <p style={{ fontSize: 12, color: '#6B7280', margin: 0, lineHeight: 1.5 }}>
-            Add a break, pick which class-sections it applies to, set start time and duration.
-            Click <strong>Generate bell timing</strong> — AI builds the correct split periods for each group.
+            Choose <strong>which classes</strong> have a break and <strong>after which period</strong> it falls.
+            Timing is calculated automatically — click <strong>Generate bell timing</strong> when ready.
           </p>
         </div>
         <button onClick={onClose} style={{
@@ -362,121 +381,147 @@ function ClasswiseBreaksPanel({
         </button>
       </div>
 
+      {/* Example hint */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 6,
+        background: '#EDE9FF', borderRadius: 7, padding: '6px 10px',
+        marginBottom: 14, fontSize: 11, color: '#6B7280',
+      }}>
+        <span style={{ fontSize: 13 }}>💡</span>
+        <span>
+          e.g. <em>Nursery–UKG</em> have Lunch after Period 3, while <em>Class I–XII</em> have Lunch after Period 5.
+          The system automatically creates split periods with correct start times for each group.
+        </span>
+      </div>
+
       {/* Column headers */}
       {cwRows.length > 0 && (
         <div style={{
           display: 'grid',
-          gridTemplateColumns: '1.6fr 1.4fr 100px 88px 96px 26px',
+          gridTemplateColumns: '1.4fr 1.3fr 1.6fr 84px 28px',
           gap: 10, padding: '0 12px 6px',
         }}>
-          {['Break name', 'Applies to classes', 'Start time', 'Duration', '', ''].map((h, i) => (
+          {['Break name', 'Applies to', 'After which period', 'Duration', ''].map((h, i) => (
             <div key={i} style={{ fontSize: 10, fontWeight: 600, color: '#9CA3AF', letterSpacing: '0.05em' }}>{h}</div>
           ))}
         </div>
       )}
 
       {/* Break rows */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
-        {cwRows.map(row => (
-          <div key={row.id} style={{
-            display: 'grid',
-            gridTemplateColumns: '1.6fr 1.4fr 100px 88px 96px 26px',
-            gap: 10, alignItems: 'start',
-            padding: '10px 12px',
-            background: '#fff', borderRadius: 8,
-            border: '1px solid #EDE9FF',
-          }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+        {cwRows.map(row => {
+          const bStart = breakStartTime(row.afterPeriod)
+          const bEnd   = addMins(bStart, row.duration)
+          return (
+            <div key={row.id} style={{
+              display: 'grid',
+              gridTemplateColumns: '1.4fr 1.3fr 1.6fr 84px 28px',
+              gap: 10, alignItems: 'center',
+              padding: '10px 12px',
+              background: '#fff', borderRadius: 8,
+              border: '1px solid #EDE9FF',
+            }}>
 
-            {/* Name + type badge */}
-            <div>
-              <input
-                value={row.name}
-                onChange={e => updateName(row.id, e.target.value)}
-                placeholder="Break name…"
-                style={{
-                  width: '100%', padding: '5px 8px',
-                  border: '1px solid #E5E7EB', borderRadius: 6,
-                  fontSize: 12, fontFamily: 'inherit', outline: 'none', background: '#fff',
-                  marginBottom: 5,
-                }}
-              />
-              <div style={{
-                display: 'inline-block',
-                padding: '1px 8px', borderRadius: 10,
-                background: TYPE_META[row.type].bg,
-                color: TYPE_META[row.type].fg,
-                border: `1px solid ${TYPE_META[row.type].border}`,
-                fontSize: 10, fontWeight: 600,
-              }}>
-                {TYPE_META[row.type].label}
-              </div>
-            </div>
-
-            {/* Class-section picker */}
-            <div style={{ paddingTop: 2 }}>
-              <ClassPicker
-                classes={row.classes}
-                onChange={cls => updateBreak(row.id, { classes: cls })}
-                rowId={row.id}
-                openId={openPicker}
-                setOpenId={setOpenPicker}
-              />
-              {row.classes.length > 0 && row.classes.length < ALL_CLASS_KEYS.length && (
-                <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 5 }}>
-                  {row.classes.length} of {ALL_CLASS_KEYS.length} classes
-                </div>
-              )}
-            </div>
-
-            {/* Start time */}
-            <div>
-              <input
-                type="time"
-                value={row.startTime}
-                onChange={e => updateBreak(row.id, { startTime: e.target.value })}
-                style={{
-                  width: '100%', padding: '5px 7px',
-                  border: '1px solid #E5E7EB', borderRadius: 6,
-                  fontSize: 12, fontFamily: 'inherit', outline: 'none', background: '#fff',
-                }}
-              />
-            </div>
-
-            {/* Duration */}
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <NumInput
-                  value={row.duration} min={5} max={180}
-                  onChange={d => updateBreak(row.id, { duration: d })}
+              {/* Name + type badge */}
+              <div>
+                <input
+                  value={row.name}
+                  onChange={e => updateName(row.id, e.target.value)}
+                  placeholder="Break name…"
                   style={{
-                    width: 48, padding: '5px 6px', textAlign: 'center',
+                    width: '100%', padding: '5px 8px',
                     border: '1px solid #E5E7EB', borderRadius: 6,
-                    fontSize: 13, fontFamily: "'DM Mono',monospace",
-                    fontWeight: 700, outline: 'none', background: '#fff',
+                    fontSize: 12, fontFamily: 'inherit', outline: 'none', background: '#fff',
+                    marginBottom: 5,
                   }}
                 />
-                <span style={{ fontSize: 11, color: '#9CA3AF' }}>min</span>
+                <span style={{
+                  display: 'inline-block',
+                  padding: '1px 8px', borderRadius: 10,
+                  background: TYPE_META[row.type].bg,
+                  color: TYPE_META[row.type].fg,
+                  border: `1px solid ${TYPE_META[row.type].border}`,
+                  fontSize: 10, fontWeight: 600,
+                }}>
+                  {TYPE_META[row.type].label}
+                </span>
               </div>
-            </div>
 
-            {/* Time hint */}
-            <div style={{ paddingTop: 6, fontSize: 10, color: '#7C3AED', lineHeight: 1.6, whiteSpace: 'nowrap' }}>
-              {fmt12(row.startTime, use12h)}
-              <br />
-              {'→ '}{fmt12(addMins(row.startTime, row.duration), use12h)}
-            </div>
+              {/* Class-section picker */}
+              <div>
+                <ClassPicker
+                  classes={row.classes}
+                  onChange={cls => updateBreak(row.id, { classes: cls })}
+                  rowId={row.id}
+                  openId={openPicker}
+                  setOpenId={setOpenPicker}
+                />
+                {row.classes.length > 0 && row.classes.length < ALL_CLASS_KEYS.length && (
+                  <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 4 }}>
+                    {row.classes.length} of {ALL_CLASS_KEYS.length} classes
+                  </div>
+                )}
+              </div>
 
-            {/* Delete */}
-            <div style={{ paddingTop: 4 }}>
+              {/* "After Period N" selector + time hint */}
+              <div>
+                <select
+                  value={row.afterPeriod}
+                  onChange={e => updateBreak(row.id, { afterPeriod: Number(e.target.value) })}
+                  style={{
+                    width: '100%', padding: '5px 7px',
+                    border: '1px solid #C4B5FD', borderRadius: 6,
+                    fontSize: 12, fontFamily: 'inherit', outline: 'none',
+                    background: '#F8F7FF', color: '#7C3AED', fontWeight: 600,
+                    cursor: 'pointer', marginBottom: 5,
+                  }}
+                >
+                  {periodOptions.map(o => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+                {/* Calculated time hint */}
+                <div style={{ fontSize: 10, color: '#7C3AED', fontFamily: "'DM Mono',monospace" }}>
+                  {fmt12(bStart, use12h)} → {fmt12(bEnd, use12h)}
+                </div>
+              </div>
+
+              {/* Duration */}
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                  <NumInput
+                    value={row.duration} min={5} max={180}
+                    onChange={d => updateBreak(row.id, { duration: d })}
+                    style={{
+                      width: 44, padding: '5px 5px', textAlign: 'center',
+                      border: '1px solid #E5E7EB', borderRadius: 6,
+                      fontSize: 13, fontFamily: "'DM Mono',monospace",
+                      fontWeight: 700, outline: 'none', background: '#fff',
+                    }}
+                  />
+                  <span style={{ fontSize: 10, color: '#9CA3AF', whiteSpace: 'nowrap' }}>min</span>
+                </div>
+              </div>
+
+              {/* Delete */}
               <button onClick={() => deleteRow(row.id)} style={{
                 background: 'none', border: 'none', cursor: 'pointer',
-                color: '#FCA5A5', padding: 3, display: 'flex',
+                color: '#FCA5A5', padding: 3, display: 'flex', alignSelf: 'center',
               }}>
                 <Trash2 size={13} />
               </button>
             </div>
+          )
+        })}
+
+        {/* Empty state */}
+        {cwRows.length === 0 && (
+          <div style={{
+            textAlign: 'center', padding: '20px 0', color: '#9CA3AF', fontSize: 12,
+          }}>
+            No breaks added yet. Click <strong>+ Add break</strong> to get started.
           </div>
-        ))}
+        )}
       </div>
 
       {/* Add break */}
@@ -503,12 +548,13 @@ function ClasswiseBreaksPanel({
         }}>
           Cancel
         </button>
-        <button onClick={onGenerate} style={{
+        <button onClick={onGenerate} disabled={cwRows.length === 0} style={{
           display: 'inline-flex', alignItems: 'center', gap: 6,
           padding: '7px 18px', borderRadius: 7, border: 'none',
-          background: '#7C3AED', color: '#fff',
+          background: cwRows.length > 0 ? '#7C3AED' : '#E5E7EB',
+          color: cwRows.length > 0 ? '#fff' : '#9CA3AF',
           fontSize: 12, fontWeight: 700,
-          cursor: 'pointer', fontFamily: 'inherit',
+          cursor: cwRows.length > 0 ? 'pointer' : 'default', fontFamily: 'inherit',
         }}>
           <Sparkles size={11} /> Generate bell timing
         </button>
@@ -786,23 +832,28 @@ export function StepBell() {
     if (cwRows.length === 0) {
       const existingBreaks = rows.filter(r => r.type === 'short-break' || r.type === 'lunch')
       if (existingBreaks.length > 0) {
-        setCwRows(existingBreaks.map(r => ({
-          id:        r.id,
-          name:      r.name,
-          type:      r.type as 'short-break' | 'lunch',
-          classes:   r.classes.length > 0 ? r.classes : [...ALL_CLASS_KEYS],
-          startTime: startTimes[rows.indexOf(r)] ?? '12:00',
-          duration:  r.duration,
-        })))
+        setCwRows(existingBreaks.map(r => {
+          const idx = rows.indexOf(r)
+          // afterPeriod = number of teaching rows that appear before this break
+          const afterPeriod = rows.slice(0, idx).filter(rr => rr.type === 'teaching').length
+          return {
+            id:          r.id,
+            name:        r.name,
+            type:        r.type as 'short-break' | 'lunch',
+            classes:     r.classes.length > 0 ? r.classes : [...ALL_CLASS_KEYS],
+            afterPeriod,
+            duration:    r.duration,
+          }
+        }))
       } else {
-        // Default: one lunch break at 12:05, all classes
+        // Default: lunch after the midpoint period, all classes
         setCwRows([{
-          id:        makeId(),
-          name:      'Lunch Break',
-          type:      'lunch',
-          classes:   [...ALL_CLASS_KEYS],
-          startTime: '12:05',
-          duration:  30,
+          id:          makeId(),
+          name:        'Lunch Break',
+          type:        'lunch',
+          classes:     [...ALL_CLASS_KEYS],
+          afterPeriod: Math.max(1, Math.floor(maxPeriods / 2)),
+          duration:    30,
         }])
       }
     }
@@ -1091,6 +1142,9 @@ export function StepBell() {
                 cwRows={cwRows}
                 setCwRows={setCwRows}
                 use12h={use12h}
+                startTime={startTime}
+                periodDur={periodDur}
+                maxPeriods={maxPeriods}
                 onGenerate={handleGenerateFromCw}
                 onClose={() => setShowCwPanel(false)}
               />
