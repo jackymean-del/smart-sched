@@ -115,6 +115,17 @@ interface DayOffRule {
   day:     string    // e.g. 'Sat', 'Mon'
   classes: string[]  // class keys that are off on this day
 }
+
+// ── Shift (Advanced mode — multiple shifts) ───────────────────
+interface ShiftConfig {
+  id:         string
+  name:       string
+  startTime:  string   // HH:MM
+  periodDur:  number   // minutes
+  maxPeriods: number
+  use12h:     boolean
+  classes:    string[] // class keys assigned to this shift
+}
 const DEFAULT_ROT_DAYS: RotDay[] = [
   { full: 'Day 1', short: 'D1' }, { full: 'Day 2', short: 'D2' },
   { full: 'Day 3', short: 'D3' }, { full: 'Day 4', short: 'D4' },
@@ -333,6 +344,10 @@ interface SavedBell {
   dayOffRules?:    DayOffRule[]             // class-specific off-day rules
   // Per-day bell config
   varyByDay?: boolean; dayRows?: Record<string, BellRow[]>
+  // Multi-shift (Advanced mode)
+  shifts?:        ShiftConfig[]
+  activeShiftId?: string
+  shiftRows?:     Record<string, BellRow[]>  // shiftId → rows
 }
 function loadSaved(): SavedBell | null {
   try { const s = localStorage.getItem(BELL_KEY); return s ? JSON.parse(s) as SavedBell : null }
@@ -887,6 +902,22 @@ export function StepBell() {
   const [activeDayTab, setActiveDayTab] = useState<string>('')
   const [dayRows,      setDayRows]      = useState<Record<string, BellRow[]>>(() => _saved?.dayRows   ?? {})
 
+  // ── Multi-shift (Advanced mode) ──────────────────────────────
+  const [shifts, setShifts] = useState<ShiftConfig[]>(() => {
+    if (_saved?.shifts?.length) return _saved.shifts
+    return [{
+      id:         'shift-main',
+      name:       _saved?.shiftName  ?? 'Main Shift',
+      startTime:  _saved?.startTime  ?? (config.startTime ?? '09:00'),
+      periodDur:  _saved?.periodDur  ?? (config.defaultSessionDuration ?? 40),
+      maxPeriods: _saved?.maxPeriods ?? (config.periodsPerDay ?? 8),
+      use12h:     _saved?.use12h     ?? true,
+      classes:    [...ALL_CLASS_KEYS],
+    }]
+  })
+  const [activeShiftId, setActiveShiftId] = useState<string>(() => _saved?.activeShiftId ?? 'shift-main')
+  const [shiftRows,     setShiftRows]     = useState<Record<string, BellRow[]>>(() => _saved?.shiftRows ?? {})
+
   const [openPicker,    setOpenPicker]    = useState<string | null>(null)
   const [editingEnd,    setEditingEnd]    = useState(false)
   const [showCwPanel,   setShowCwPanel]   = useState(false)
@@ -898,12 +929,12 @@ export function StepBell() {
       shiftName, startTime, use12h, periodDur, maxPeriods, workDays, rows,
       cycleWeeks, useDayNames, cycleStartDate, fixedDuration, rotationDays,
       weekWorkDays, dayStartTimes, dayPeriodDurs, dayOffRules, varyByDay, dayRows,
-      scheduleMode,
+      scheduleMode, shifts, activeShiftId, shiftRows,
     } satisfies SavedBell))
   }, [shiftName, startTime, use12h, periodDur, maxPeriods, workDays, rows,
       cycleWeeks, useDayNames, cycleStartDate, fixedDuration, rotationDays,
       weekWorkDays, dayStartTimes, dayPeriodDurs, dayOffRules, varyByDay, dayRows,
-      scheduleMode])
+      scheduleMode, shifts, activeShiftId, shiftRows])
 
   // ── Day keys ─────────────────────────────────────────────────
   // • day-names mode  → rotation day shorts (D1, D2, …)
@@ -924,24 +955,36 @@ export function StepBell() {
   // Stable string to use as effect dependency for dayKeys identity
   const dayKeysStr = useMemo(() => dayKeys.join(','), [dayKeys])
 
-  /**
-   * Effective start time for the currently displayed bell grid.
-   * Returns the per-day override when Vary-by-day is active and an override
-   * has been set, otherwise falls back to the global shift start time.
-   */
-  const activeStartTime = useMemo(() =>
-    varyByDay && activeDayTab && dayStartTimes[activeDayTab]
-      ? dayStartTimes[activeDayTab]
-      : startTime,
-    [varyByDay, activeDayTab, dayStartTimes, startTime],
+  /** The shift currently being edited/viewed in Advanced mode. */
+  const activeShift = useMemo(() =>
+    isAdvanced ? (shifts.find(s => s.id === activeShiftId) ?? shifts[0] ?? null) : null,
+    [isAdvanced, shifts, activeShiftId],
   )
 
-  /** Effective period duration — per-day override or global fallback. */
-  const activePeriodDur = useMemo(() =>
-    varyByDay && activeDayTab && dayPeriodDurs[activeDayTab]
+  /**
+   * Effective start time for the currently displayed bell grid.
+   * In Advanced mode uses the active shift's startTime; per-day override
+   * takes precedence when Vary-by-day is on.
+   */
+  const activeStartTime = useMemo(() => {
+    const base = activeShift ? activeShift.startTime : startTime
+    return varyByDay && activeDayTab && dayStartTimes[activeDayTab]
+      ? dayStartTimes[activeDayTab]
+      : base
+  }, [activeShift, startTime, varyByDay, activeDayTab, dayStartTimes])
+
+  /** Effective period duration — active shift (advanced) or global, with per-day override. */
+  const activePeriodDur = useMemo(() => {
+    const base = activeShift ? activeShift.periodDur : periodDur
+    return varyByDay && activeDayTab && dayPeriodDurs[activeDayTab]
       ? dayPeriodDurs[activeDayTab]
-      : periodDur,
-    [varyByDay, activeDayTab, dayPeriodDurs, periodDur],
+      : base
+  }, [activeShift, periodDur, varyByDay, activeDayTab, dayPeriodDurs])
+
+  /** Effective max periods — active shift (advanced) or global. */
+  const activeMaxPeriods = useMemo(() =>
+    activeShift ? activeShift.maxPeriods : maxPeriods,
+    [activeShift, maxPeriods],
   )
 
   // ── Copy days/weeks helper ────────────────────────────────────
@@ -978,19 +1021,33 @@ export function StepBell() {
     }
   }
 
-  /** Rows currently active in the bell grid (uniform or per-day tab). */
-  const displayRows: BellRow[] = useMemo(() =>
-    varyByDay && activeDayTab ? (dayRows[activeDayTab] ?? rows) : rows,
-    [varyByDay, activeDayTab, dayRows, rows],
+  /** Base rows for the active shift (multi-shift advanced) or global rows (standard). */
+  const activeShiftBaseRows = useMemo(() =>
+    isAdvanced ? (shiftRows[activeShiftId] ?? rows) : rows,
+    [isAdvanced, shiftRows, activeShiftId, rows],
   )
 
-  /** Route row edits to the right bucket: uniform or the active day tab. */
+  /** Rows currently active in the bell grid (uniform or per-day tab). */
+  const displayRows: BellRow[] = useMemo(() =>
+    varyByDay && activeDayTab
+      ? (dayRows[activeDayTab] ?? activeShiftBaseRows)
+      : activeShiftBaseRows,
+    [varyByDay, activeDayTab, dayRows, activeShiftBaseRows],
+  )
+
+  /** Route row edits to the right bucket: uniform or the active day tab or active shift. */
   const setDisplayRows = (updater: BellRow[] | ((p: BellRow[]) => BellRow[])) => {
     if (varyByDay && activeDayTab) {
       setDayRows(prev => {
-        const cur  = prev[activeDayTab] ?? rows
+        const cur  = prev[activeDayTab] ?? activeShiftBaseRows
         const next = typeof updater === 'function' ? updater(cur) : updater
         return { ...prev, [activeDayTab]: next }
+      })
+    } else if (isAdvanced) {
+      setShiftRows(prev => {
+        const cur  = prev[activeShiftId] ?? rows
+        const next = typeof updater === 'function' ? updater(cur) : updater
+        return { ...prev, [activeShiftId]: next }
       })
     } else {
       if (typeof updater === 'function') setRows(updater)
@@ -1006,7 +1063,7 @@ export function StepBell() {
       let changed = false
       for (const k of dayKeys) {
         if (prev[k]) { next[k] = prev[k] }
-        else { next[k] = rows.map(r => ({ ...r, id: makeId() })); changed = true }
+        else { next[k] = activeShiftBaseRows.map(r => ({ ...r, id: makeId() })); changed = true }
       }
       // Prune keys no longer in dayKeys
       const pruned = Object.keys(prev).some(k => !dayKeys.includes(k))
@@ -1144,7 +1201,7 @@ export function StepBell() {
   }
 
   const handleGenerateFromCw = () => {
-    const newRows = buildBellRowsFromCw(activeStartTime, periodDur, maxPeriods, cwRows)
+    const newRows = buildBellRowsFromCw(activeStartTime, activePeriodDur, activeMaxPeriods, cwRows)
     setDisplayRows(newRows)
     setShowCwPanel(false)
   }
@@ -1173,11 +1230,12 @@ export function StepBell() {
   const handlePeriodDurChange = (d: number) => {
     const v = Math.max(10, d)
     if (varyByDay && activeDayTab) {
-      // Per-day override: update only the active day's rows and store the override
       setDayPeriodDurs(prev => ({ ...prev, [activeDayTab]: v }))
       setDisplayRows(prev => prev.map(r => r.type === 'teaching' ? { ...r, duration: v } : r))
+    } else if (isAdvanced) {
+      updateActiveShift({ periodDur: v })
+      setDisplayRows(prev => prev.map(r => r.type === 'teaching' ? { ...r, duration: v } : r))
     } else {
-      // Global: update the global setting and propagate to all uniform rows
       setPeriodDur(v)
       setDisplayRows(prev => prev.map(r => r.type === 'teaching' ? { ...r, duration: v } : r))
     }
@@ -1185,7 +1243,11 @@ export function StepBell() {
 
   const handleMaxPeriodsChange = (n: number) => {
     const v = Math.max(1, Math.min(16, n))
-    setMaxPeriods(v)
+    if (isAdvanced) {
+      updateActiveShift({ maxPeriods: v })
+    } else {
+      setMaxPeriods(v)
+    }
     setDisplayRows(prev => {
       const asm  = prev.find(r => r.type === 'assembly')  ?? mkAssembly()
       const dis  = prev.find(r => r.type === 'dispersal') ?? mkDispersal()
@@ -1198,16 +1260,70 @@ export function StepBell() {
     })
   }
 
+  // ── Multi-shift helpers ───────────────────────────────────────
+  /** Patch any field of the currently active shift. */
+  const updateActiveShift = (patch: Partial<ShiftConfig>) =>
+    setShifts(prev => prev.map(s => s.id === activeShiftId ? { ...s, ...patch } : s))
+
+  const addShift = () => {
+    const id = makeId()
+    const newShift: ShiftConfig = {
+      id,
+      name:       `Shift ${shifts.length + 1}`,
+      startTime:  '07:00',
+      periodDur:  40,
+      maxPeriods: 8,
+      use12h:     use12h,
+      classes:    [],  // user will assign classes
+    }
+    setShifts(prev => [...prev, newShift])
+    setActiveShiftId(id)
+    // Bootstrap rows for the new shift from default
+    setShiftRows(prev => ({
+      ...prev,
+      [id]: buildRows(newShift.maxPeriods, newShift.periodDur),
+    }))
+  }
+
+  const deleteShift = (id: string) => {
+    if (shifts.length <= 1) return
+    setShifts(prev => prev.filter(s => s.id !== id))
+    setShiftRows(prev => { const n = { ...prev }; delete n[id]; return n })
+    if (activeShiftId === id) setActiveShiftId(shifts.find(s => s.id !== id)?.id ?? '')
+  }
+
   // ── Mode switch ───────────────────────────────────────────────
   const handleSetMode = (mode: 'standard' | 'advanced') => {
     if (mode === scheduleMode) return
     if (mode === 'standard') {
-      // Warn only if advanced features are actively in use
-      const advancedInUse = varyByDay || useDayNames || cycleWeeks > 1
+      const advancedInUse = varyByDay || useDayNames || cycleWeeks > 1 || shifts.length > 1
       if (advancedInUse) {
         setConfirmDialog({
-          msg: 'Switching to Standard mode will turn off per-day variations, day-name rotations, and multi-week cycles. Your bell rows and basic settings are kept. Continue?',
+          msg: 'Switching to Standard mode will turn off per-day variations, day-name rotations, multi-week cycles, and multi-shift setup. Your first shift\'s bell rows and settings are kept. Continue?',
           onConfirm: () => {
+            // Sync first shift back to single-shift state
+            const main = shifts[0]
+            if (main) {
+              setShiftName(main.name)
+              setStartTime(main.startTime)
+              setPeriodDur(main.periodDur)
+              setMaxPeriods(main.maxPeriods)
+              setUse12h(main.use12h)
+              const mainRows = shiftRows[main.id] ?? rows
+              setRows(mainRows)
+            }
+            // Reset multi-shift state
+            setShifts([{
+              id: 'shift-main',
+              name: shifts[0]?.name ?? shiftName,
+              startTime: shifts[0]?.startTime ?? startTime,
+              periodDur: shifts[0]?.periodDur ?? periodDur,
+              maxPeriods: shifts[0]?.maxPeriods ?? maxPeriods,
+              use12h: shifts[0]?.use12h ?? use12h,
+              classes: [...ALL_CLASS_KEYS],
+            }])
+            setActiveShiftId('shift-main')
+            setShiftRows({})
             doTurnOffVaryByDay()
             setUseDayNames(false)
             setCycleWeeks(1)
@@ -1216,6 +1332,23 @@ export function StepBell() {
           },
         })
         return
+      }
+    } else {
+      // Switching to Advanced: ensure shifts array is bootstrapped from current single-shift state
+      if (shifts.length === 0 || (shifts.length === 1 && shifts[0].id === 'shift-main')) {
+        const bootstrapped: ShiftConfig = {
+          id:         'shift-main',
+          name:       shiftName,
+          startTime,
+          periodDur,
+          maxPeriods,
+          use12h,
+          classes:    [...ALL_CLASS_KEYS],
+        }
+        setShifts([bootstrapped])
+        setActiveShiftId('shift-main')
+        // Seed shiftRows with current rows if not already set
+        setShiftRows(prev => prev['shift-main'] ? prev : { ...prev, 'shift-main': rows })
       }
     }
     setScheduleMode(mode)
@@ -1236,7 +1369,7 @@ export function StepBell() {
     }
     if (on) {
       const init: Record<string, BellRow[]> = {}
-      dayKeys.forEach(k => { init[k] = rows.map(r => ({ ...r, id: makeId() })) })
+      dayKeys.forEach(k => { init[k] = activeShiftBaseRows.map(r => ({ ...r, id: makeId() })) })
       setDayRows(init)
       setActiveDayTab(dayKeys[0] ?? '')
     } else {
@@ -1637,6 +1770,8 @@ export function StepBell() {
           </div>
 
           {/* ─── SHIFT CONFIGURATION ─── */}
+          {/* Standard mode: single shift card */}
+          {!isAdvanced && (
           <div style={{ marginBottom: 20 }}>
             <SH>SHIFT CONFIGURATION</SH>
             <div style={{ background: '#fff', borderRadius: 10, border: '1px solid #E5E7EB', padding: '16px 18px' }}>
@@ -1806,12 +1941,283 @@ export function StepBell() {
               </div>
             </div>
           </div>
+          )}
+
+          {/* ─── ADVANCED: MULTI-SHIFT CONFIGURATION ─── */}
+          {isAdvanced && (
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <SH>SHIFTS</SH>
+              <button onClick={addShift} style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+                fontSize: 11, fontWeight: 600, color: '#7C3AED',
+                background: '#F5F3FF', border: '1px solid #DDD6FE',
+                borderRadius: 6, padding: '4px 11px', cursor: 'pointer', fontFamily: 'inherit',
+              }}>
+                <Plus size={10} /> Add Shift
+              </button>
+            </div>
+
+            {/* Shift tabs */}
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+              {shifts.map(s => {
+                const active = s.id === activeShiftId
+                return (
+                  <button key={s.id} onClick={() => setActiveShiftId(s.id)} style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    padding: '5px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700,
+                    border: active ? '2px solid #7C6FE0' : '1.5px solid #E5E7EB',
+                    background: active ? '#EDE9FF' : '#FAFAFA',
+                    color: active ? '#7C3AED' : '#6B7280',
+                    cursor: 'pointer', fontFamily: 'inherit', transition: 'all .12s',
+                  }}>
+                    {s.name}
+                    {shifts.length > 1 && (
+                      <span onClick={e => { e.stopPropagation()
+                        if (Object.keys(shiftRows[s.id] ?? {}).length > 0 || (shiftRows[s.id]?.length ?? 0) > 0) {
+                          setConfirmDialog({ msg: `Delete shift "${s.name}"? Its bell rows will be removed.`, onConfirm: () => deleteShift(s.id) })
+                        } else { deleteShift(s.id) }
+                      }} style={{
+                        marginLeft: 2, width: 14, height: 14, borderRadius: '50%',
+                        background: active ? '#C4B5FD' : '#E5E7EB',
+                        color: active ? '#7C3AED' : '#9CA3AF',
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 10, fontWeight: 900, lineHeight: 1, cursor: 'pointer',
+                      }}>×</span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Active shift configuration card */}
+            {activeShift && (
+            <div style={{ background: '#fff', borderRadius: 10, border: `2px solid ${activeShiftId === 'shift-main' ? '#E5E7EB' : '#DDD6FE'}`, padding: '16px 18px' }}>
+
+              {/* Shift name */}
+              <input className="b-input" value={activeShift.name}
+                onChange={e => updateActiveShift({ name: e.target.value })}
+                placeholder="e.g. Morning Shift"
+                style={{ fontWeight: 700, fontSize: 14, width: '100%', marginBottom: 16 }} />
+
+              {/* Timing grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 100px 110px 90px', gap: 12, marginBottom: 16 }}>
+                {/* Start */}
+                <div>
+                  <div style={FL}>Start time</div>
+                  <input className="b-input" type="time" value={activeShift.startTime}
+                    onChange={e => updateActiveShift({ startTime: e.target.value })} style={{ width: '100%' }} />
+                  <div style={FH}>{fmt12(activeShift.startTime, activeShift.use12h)}</div>
+                </div>
+                {/* End (derived) */}
+                <div>
+                  <div style={FL}>End time</div>
+                  {editingEnd ? (
+                    <input className="b-input" type="time" defaultValue={endTime} autoFocus
+                      onChange={e => handleEndTimeEdit(e.target.value)}
+                      onBlur={() => setEditingEnd(false)}
+                      onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') e.currentTarget.blur() }}
+                      style={{ width: '100%' }} />
+                  ) : (
+                    <div className="b-input b-end-display" onClick={() => setEditingEnd(true)}
+                      style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', userSelect: 'none' }}>
+                      <span style={{ fontFamily: "'DM Mono',monospace", fontWeight: 700 }}>{fmt12(endTime, activeShift.use12h)}</span>
+                      <span style={{ fontSize: 10, color: '#C4B5FD', fontWeight: 400 }}>✎</span>
+                    </div>
+                  )}
+                  <div style={FH}>adjusts last period</div>
+                </div>
+                {/* Period */}
+                <div>
+                  <div style={FL}>Period (min)</div>
+                  <NumInput className="b-input" value={activeShift.periodDur} min={10} max={120}
+                    onChange={handlePeriodDurChange}
+                    style={{ width: '100%', textAlign: 'center', fontFamily: "'DM Mono',monospace", fontWeight: 800, fontSize: 16 }} />
+                </div>
+                {/* Max periods */}
+                <div>
+                  <div style={FL}>Max periods/day</div>
+                  <NumInput className="b-input" value={activeShift.maxPeriods} min={1} max={16}
+                    onChange={handleMaxPeriodsChange}
+                    style={{ width: '100%', textAlign: 'center', fontFamily: "'DM Mono',monospace", fontWeight: 800, fontSize: 16 }} />
+                </div>
+                {/* Format */}
+                <div>
+                  <div style={FL}>Format</div>
+                  <select className="b-input" value={activeShift.use12h ? '12H' : '24H'}
+                    onChange={e => updateActiveShift({ use12h: e.target.value === '12H' })} style={{ width: '100%' }}>
+                    <option value="12H">12H</option>
+                    <option value="24H">24H</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Class assignment */}
+              <div style={{ borderTop: '1px solid #F3F4F6', paddingTop: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 12, color: '#6B7280', flexShrink: 0 }}>Assigned to:</span>
+                  {/* All toggle */}
+                  {(() => {
+                    const allOn = ALL_CLASS_KEYS.every(k => activeShift.classes.includes(k))
+                    return (
+                      <button onClick={() => updateActiveShift({ classes: allOn ? [] : [...ALL_CLASS_KEYS] })} style={{
+                        padding: '3px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+                        border: allOn ? '1.5px solid #374151' : '1px solid #E5E7EB',
+                        background: allOn ? '#374151' : '#fff', color: allOn ? '#fff' : '#9CA3AF',
+                        cursor: 'pointer', fontFamily: 'inherit', transition: 'all .12s',
+                      }}>All</button>
+                    )
+                  })()}
+                  {/* Group toggles */}
+                  {CLASS_GROUPS.map(gm => {
+                    const gkeys = CLASSES.filter(c => c.group === gm.group).map(c => c.key)
+                    const on = gkeys.every(k => activeShift.classes.includes(k))
+                    const partial = !on && gkeys.some(k => activeShift.classes.includes(k))
+                    return (
+                      <button key={gm.group} onClick={() => {
+                        const newCls = on
+                          ? activeShift.classes.filter(k => !gkeys.includes(k))
+                          : [...new Set([...activeShift.classes, ...gkeys])]
+                        updateActiveShift({ classes: newCls })
+                      }} style={{
+                        padding: '3px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+                        border: on ? `1.5px solid ${gm.color}` : partial ? `1px dashed ${gm.color}` : '1px solid #E5E7EB',
+                        background: on ? gm.bg : '#fff',
+                        color: on ? gm.color : partial ? gm.color : '#9CA3AF',
+                        cursor: 'pointer', fontFamily: 'inherit', transition: 'all .12s',
+                      }}>
+                        {gm.group}
+                        {partial && <span style={{ marginLeft: 4, fontSize: 9, opacity: 0.7 }}>partial</span>}
+                      </button>
+                    )
+                  })}
+                  {activeShift.classes.length === 0 && (
+                    <span style={{ fontSize: 11, color: '#FCA5A5', fontStyle: 'italic' }}>
+                      No classes assigned — add at least one group
+                    </span>
+                  )}
+                </div>
+                {/* Fine-grained class list when partial */}
+                {CLASS_GROUPS.map(gm => {
+                  const gkeys  = CLASSES.filter(c => c.group === gm.group).map(c => c.key)
+                  const allOn  = gkeys.every(k => activeShift.classes.includes(k))
+                  const anyOn  = gkeys.some(k => activeShift.classes.includes(k))
+                  if (!anyOn || allOn) return null
+                  return (
+                    <div key={gm.group} style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 8, paddingLeft: 80 }}>
+                      {CLASSES.filter(c => c.group === gm.group).map(cls => {
+                        const on = activeShift.classes.includes(cls.key)
+                        return (
+                          <button key={cls.key} onClick={() => {
+                            const newCls = on
+                              ? activeShift.classes.filter(k => k !== cls.key)
+                              : [...activeShift.classes, cls.key]
+                            updateActiveShift({ classes: newCls })
+                          }} style={{
+                            padding: '2px 9px', borderRadius: 12, fontSize: 10, fontWeight: 700,
+                            border: on ? `1px solid ${gm.color}` : '1px solid #E5E7EB',
+                            background: on ? gm.bg : '#fff',
+                            color: on ? gm.color : '#D1D5DB',
+                            cursor: 'pointer', fontFamily: 'inherit',
+                          }}>{cls.short}</button>
+                        )
+                      })}
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Working days + Day Off Rules (same row) */}
+              <div style={{ borderTop: '1px solid #F3F4F6', paddingTop: 14, marginTop: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 12, color: '#6B7280', flexShrink: 0 }}>Working days:</span>
+                  {ALL_DAYS.map(d => {
+                    const on = workDays.includes(d)
+                    return (
+                      <button key={d} className="b-day" onClick={() => toggleDay(d)} style={{
+                        padding: '3px 11px', borderRadius: 20,
+                        border: on ? '1px solid #10B981' : '1px solid #E5E7EB',
+                        background: on ? '#10B981' : '#fff',
+                        color: on ? '#fff' : '#9CA3AF',
+                        fontSize: 12, fontWeight: 600, fontFamily: 'inherit',
+                      }}>{d}</button>
+                    )
+                  })}
+                  <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>Day off rules</span>
+                    {dayOffRules.length > 0 && (
+                      <span style={{ fontSize: 10, fontWeight: 700, background: '#FEF3C7', color: '#D97706', border: '1px solid #FDE68A', borderRadius: 10, padding: '1px 7px' }}>
+                        {dayOffRules.length}
+                      </span>
+                    )}
+                    <button onClick={() => setDayOffRules(prev => [...prev, {
+                      id: makeId(),
+                      day: ALL_DAYS.find(d => !workDays.includes(d)) ?? workDays[workDays.length - 1] ?? 'Sat',
+                      classes: [],
+                    }])} style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 5,
+                      fontSize: 11, fontWeight: 600, color: '#D97706',
+                      background: '#FFFBEB', border: '1px solid #FDE68A',
+                      borderRadius: 6, padding: '4px 11px', cursor: 'pointer', fontFamily: 'inherit',
+                    }}>
+                      <Plus size={10} /> Add rule
+                    </button>
+                  </div>
+                </div>
+                {dayOffRules.length > 0 && (
+                  <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {dayOffRules.map(rule => (
+                      <div key={rule.id} style={{
+                        display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+                        background: '#FFFBEB', border: '1px solid #FDE68A',
+                        borderRadius: 8, padding: '8px 10px',
+                      }}>
+                        <select value={rule.day}
+                          onChange={e => setDayOffRules(prev => prev.map(r => r.id === rule.id ? { ...r, day: e.target.value } : r))}
+                          style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid #FDE68A', fontSize: 12, fontFamily: 'inherit', outline: 'none', fontWeight: 700, color: '#B45309', background: '#FEF9EE', flexShrink: 0 }}>
+                          {ALL_DAYS.map(d => <option key={d} value={d}>{d}</option>)}
+                        </select>
+                        <span style={{ fontSize: 11, color: '#9CA3AF', flexShrink: 0 }}>off for</span>
+                        <ClassPicker classes={rule.classes}
+                          onChange={cls => setDayOffRules(prev => prev.map(r => r.id === rule.id ? { ...r, classes: cls } : r))}
+                          rowId={`dor2-${rule.id}`} openId={openPicker} setOpenId={setOpenPicker} />
+                        <button onClick={() => setDayOffRules(prev => prev.filter(r => r.id !== rule.id))}
+                          style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: '#FCA5A5', padding: 3, display: 'flex', flexShrink: 0 }}>
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+            )}
+          </div>
+          )}
 
           {/* ─── BELL TIMING GRID ─── */}
           <div>
+            {/* In Advanced mode: shift selector mini-tabs above the grid */}
+            {isAdvanced && shifts.length > 1 && (
+              <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 10 }}>
+                {shifts.map(s => {
+                  const active = s.id === activeShiftId
+                  return (
+                    <button key={s.id} onClick={() => setActiveShiftId(s.id)} style={{
+                      padding: '3px 14px', borderRadius: 16, fontSize: 11, fontWeight: 700,
+                      border: active ? '1.5px solid #7C6FE0' : '1px solid #E5E7EB',
+                      background: active ? '#EDE9FF' : '#fff',
+                      color: active ? '#7C3AED' : '#9CA3AF',
+                      cursor: 'pointer', fontFamily: 'inherit', transition: 'all .12s',
+                    }}>{s.name}</button>
+                  )
+                })}
+              </div>
+            )}
+
             {/* Section header + Vary-by-day toggle + Class-wise breaks button */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-              <SH>BELL TIMING GRID</SH>
+              <SH>BELL TIMING GRID{isAdvanced && activeShift ? ` — ${activeShift.name}` : ''}</SH>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
 
                 {/* Vary by day toggle — advanced only */}
