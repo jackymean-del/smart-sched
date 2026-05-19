@@ -3,16 +3,18 @@
  *
  * Layout:
  *   ┌─ Top nav ─────────────────────────────────────────────────┐
- *   │ schedU │ Dashboard  Timetables  Resources  Reports │ school │
- *   ├─ Icon sidebar ──┬─ Content area ────────────────────────────┤
- *   │  🏠              │  Greeting + "+ New timetable"            │
- *   │  📅              │  Stats row (4 cards)                     │
- *   │  👤              │  AI insight banner                       │
- *   │  📄              │  Your timetables list                    │
- *   │  📊              │  Quick actions (3 cards)                 │
- *   │                 │                                           │
- *   │  ⚙️  (bottom)    │                                           │
- *   └─────────────────┴───────────────────────────────────────────┘
+ *   │ [≡ schedU] │ Dashboard  Timetables  Resources  Reports │ … │
+ *   ├─ Sidebar (collapsible) ──┬─ Content area ─────────────────┤
+ *   │  🏠  Dashboard            │  Greeting + "+ New timetable" │
+ *   │  📅  Timetables           │  Stats row (4 cards)          │
+ *   │  👤  Teachers             │  AI insight banner            │
+ *   │  📄  Documents            │  Your timetables list         │
+ *   │  📊  Reports              │  Quick actions (3 cards)      │
+ *   │                           │                               │
+ *   │  ⚙️  Settings (bottom)    │                               │
+ *   └───────────────────────────┴───────────────────────────────┘
+ *
+ * Sidebar collapses to 56 px (icons only) and expands to 200 px (icon + label).
  */
 
 import { useState } from 'react'
@@ -21,7 +23,7 @@ import { useTimetableStore } from '@/store/timetableStore'
 import {
   Home, Calendar, Users, FileText, BarChart2, Settings,
   Bell, Plus, Sparkles, MoreHorizontal, ChevronRight,
-  ArrowRight,
+  ArrowRight, ChevronLeft, GraduationCap, BookOpen,
 } from 'lucide-react'
 
 // ── helpers ────────────────────────────────────────────────────
@@ -33,9 +35,10 @@ function greeting() {
 }
 
 // ── types ──────────────────────────────────────────────────────
-type NavTab = 'dashboard' | 'timetables' | 'resources' | 'reports'
+type NavTab      = 'dashboard' | 'timetables' | 'resources' | 'reports'
+type SideNavKey  = 'home' | 'timetables' | 'teachers' | 'subjects' | 'documents' | 'reports'
 
-// ── Demo timetable rows (supplement store data) ────────────────
+// ── Demo timetable rows ────────────────────────────────────────
 const DEMO_TT = [
   {
     id: 'tt1', name: 'AY 2025–26 · Main',
@@ -60,22 +63,42 @@ const STATUS_META = {
   archived: { label: 'Archived', bg: '#F3F4F6', fg: '#6B7280', border: '#E5E7EB' },
 }
 
+// ── Sidebar nav items ──────────────────────────────────────────
+const SIDE_ITEMS: {
+  key: SideNavKey
+  icon: React.ElementType
+  label: string
+  href: string
+}[] = [
+  { key: 'home',       icon: Home,           label: 'Dashboard',  href: '/dashboard'   },
+  { key: 'timetables', icon: Calendar,       label: 'Timetables', href: '/wizard'       },
+  { key: 'teachers',   icon: Users,          label: 'Teachers',   href: '/master-data'  },
+  { key: 'subjects',   icon: BookOpen,       label: 'Subjects',   href: '/master-data'  },
+  { key: 'documents',  icon: FileText,       label: 'Documents',  href: '#'             },
+  { key: 'reports',    icon: BarChart2,      label: 'Reports',    href: '#'             },
+]
+
+// ── Collapsed width / expanded width ──────────────────────────
+const W_COLLAPSED = 56
+const W_EXPANDED  = 200
+
 // ── Component ──────────────────────────────────────────────────
 export function DashboardPage() {
   const { user, logout } = useAuthStore()
   const store = useTimetableStore() as any
-  const { sections, staff, subjects, classTT } = store
+  const { sections, staff } = store
 
-  const [activeTab, setActiveTab] = useState<NavTab>('dashboard')
+  const [activeTab,       setActiveTab]       = useState<NavTab>('dashboard')
+  const [activeSideItem,  setActiveSideItem]  = useState<SideNavKey>('home')
+  const [sidebarOpen,     setSidebarOpen]     = useState(false)
 
   if (!user) { window.location.href = '/login'; return null }
 
   const firstName  = user.name?.split(' ')[0] ?? 'there'
   const schoolName = user.schoolName ?? 'Your School'
-  const hasTT      = Object.keys(classTT ?? {}).length > 0
+  const hasTT      = Object.keys(store.classTT ?? {}).length > 0
   const conflicts  = (store.conflicts ?? []).length
 
-  // Stats (use store counts; fall back to demo values for new accounts)
   const stats = [
     {
       label: 'Timetables',
@@ -103,6 +126,9 @@ export function DashboardPage() {
     },
   ]
 
+  const SW = sidebarOpen ? W_EXPANDED : W_COLLAPSED
+  const transition = 'width 0.22s cubic-bezier(0.4,0,0.2,1)'
+
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', minHeight: '100vh',
@@ -115,12 +141,17 @@ export function DashboardPage() {
         .db-tab:hover { background: #F5F4F0 !important; }
         .db-icon-btn { transition: background 0.13s; border-radius: 9px; }
         .db-icon-btn:hover { background: #EDE9FF !important; }
+        .db-side-item { transition: background 0.13s, color 0.13s; }
+        .db-side-item:hover { background: #F5F3FF !important; }
         .db-tt-row { transition: box-shadow 0.14s, border-color 0.14s; }
         .db-tt-row:hover { border-color: #D1D5DB !important; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
         .db-qa-card { transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s; }
         .db-qa-card:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,0.07); border-color: #D1D5DB !important; }
         .db-action-btn { transition: background 0.13s, border-color 0.13s; }
         .db-action-btn:hover { background: #F3F4F6 !important; }
+        .db-toggle-btn { transition: background 0.13s, transform 0.22s; }
+        .db-toggle-btn:hover { background: #F0EDFF !important; }
+        .sb-label { white-space: nowrap; overflow: hidden; transition: opacity 0.18s, max-width 0.22s; }
       `}</style>
 
       {/* ══════════════════════════════
@@ -134,26 +165,55 @@ export function DashboardPage() {
         flexShrink: 0, zIndex: 100,
         position: 'sticky', top: 0,
       }}>
-        {/* Logo */}
+        {/* Logo block — matches sidebar width */}
         <div style={{
-          width: 56, height: 52, flexShrink: 0,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          width: SW, height: 52, flexShrink: 0,
+          display: 'flex', alignItems: 'center',
           borderRight: '1px solid #F0EDFF',
+          overflow: 'hidden',
+          transition,
+          paddingLeft: sidebarOpen ? 16 : 0,
+          justifyContent: sidebarOpen ? 'flex-start' : 'center',
+          gap: sidebarOpen ? 8 : 0,
         }}>
-          <a href="/" style={{ textDecoration: 'none' }}>
-            <span style={{ fontSize: 14, fontWeight: 900, letterSpacing: '-0.3px', color: '#13111E' }}>
-              sched<span style={{ color: '#7C6FE0', fontFamily: "'DM Serif Display',Georgia,serif", fontStyle: 'italic' }}>U</span>
-            </span>
-          </a>
+          {/* Toggle button */}
+          <button
+            onClick={() => setSidebarOpen(o => !o)}
+            className="db-toggle-btn"
+            title={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+            style={{
+              width: 28, height: 28, borderRadius: 7, flexShrink: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: '#6B7280',
+            }}
+          >
+            {sidebarOpen
+              ? <ChevronLeft  size={15} />
+              : <ChevronRight size={15} />}
+          </button>
+
+          {/* Logo text — only when expanded */}
+          {sidebarOpen && (
+            <a href="/" style={{ textDecoration: 'none', lineHeight: 1 }}>
+              <span style={{ fontSize: 14, fontWeight: 900, letterSpacing: '-0.3px', color: '#13111E' }}>
+                sched<span style={{
+                  color: '#7C6FE0',
+                  fontFamily: "'DM Serif Display',Georgia,serif",
+                  fontStyle: 'italic',
+                }}>U</span>
+              </span>
+            </a>
+          )}
         </div>
 
         {/* Tabs */}
         <nav style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '0 16px', flex: 1 }}>
           {([
-            { key: 'dashboard',  label: 'Dashboard' },
+            { key: 'dashboard',  label: 'Dashboard'  },
             { key: 'timetables', label: 'Timetables' },
-            { key: 'resources',  label: 'Resources' },
-            { key: 'reports',    label: 'Reports' },
+            { key: 'resources',  label: 'Resources'  },
+            { key: 'reports',    label: 'Reports'    },
           ] as { key: NavTab; label: string }[]).map(t => (
             <button key={t.key}
               className="db-tab"
@@ -170,14 +230,14 @@ export function DashboardPage() {
           ))}
         </nav>
 
-        {/* Right — school + bell + avatar + menu */}
+        {/* Right: school + bell + avatar + menu */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
           <span style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>{schoolName}</span>
 
           <button className="db-icon-btn" style={{
             width: 32, height: 32, display: 'flex', alignItems: 'center',
-            justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer',
-            position: 'relative',
+            justifyContent: 'center', background: 'none', border: 'none',
+            cursor: 'pointer', position: 'relative',
           }}>
             <Bell size={17} color="#6B7280" />
             <span style={{
@@ -187,7 +247,6 @@ export function DashboardPage() {
             }} />
           </button>
 
-          {/* Avatar */}
           <div style={{
             width: 30, height: 30, borderRadius: '50%',
             background: '#7C6FE0', color: '#fff',
@@ -199,8 +258,9 @@ export function DashboardPage() {
 
           <button onClick={() => { logout(); window.location.href = '/login' }}
             style={{
-              background: 'none', border: 'none', cursor: 'pointer', padding: 4,
-              color: '#6B7280', display: 'flex', alignItems: 'center',
+              background: 'none', border: 'none', cursor: 'pointer',
+              padding: 4, color: '#6B7280',
+              display: 'flex', alignItems: 'center',
             }}>
             <MoreHorizontal size={18} />
           </button>
@@ -212,42 +272,105 @@ export function DashboardPage() {
       ══════════════════════════════ */}
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
 
-        {/* ── Icon sidebar ── */}
+        {/* ── Collapsible sidebar ── */}
         <aside style={{
-          width: 56, flexShrink: 0, background: '#fff',
+          width: SW,
+          flexShrink: 0,
+          background: '#fff',
           borderRight: '1px solid #E5E7EB',
-          display: 'flex', flexDirection: 'column',
-          alignItems: 'center', padding: '12px 0', gap: 4,
+          display: 'flex',
+          flexDirection: 'column',
+          padding: '8px 0',
+          gap: 2,
+          transition,
+          overflow: 'hidden',
         }}>
-          {[
-            { icon: <Home size={18} />,      active: true  },
-            { icon: <Calendar size={18} />,  active: false },
-            { icon: <Users size={18} />,     active: false },
-            { icon: <FileText size={18} />,  active: false },
-            { icon: <BarChart2 size={18} />, active: false },
-          ].map((item, i) => (
-            <button key={i}
-              className="db-icon-btn"
-              style={{
-                width: 38, height: 38,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: item.active ? '#EDE9FF' : 'none',
-                border: 'none', cursor: 'pointer',
-                color: item.active ? '#7C3AED' : '#9CA3AF',
-              }}>
-              {item.icon}
-            </button>
-          ))}
 
-          {/* Push settings to bottom */}
+          {/* Nav items */}
+          {SIDE_ITEMS.map(item => {
+            const isActive = activeSideItem === item.key
+            const Icon = item.icon
+            return (
+              <a
+                key={item.key}
+                href={item.href}
+                onClick={e => {
+                  if (item.href === '#') e.preventDefault()
+                  setActiveSideItem(item.key)
+                }}
+                className="db-side-item"
+                title={!sidebarOpen ? item.label : undefined}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: sidebarOpen ? 10 : 0,
+                  justifyContent: sidebarOpen ? 'flex-start' : 'center',
+                  padding: sidebarOpen ? '9px 14px' : '9px 0',
+                  margin: '0 8px',
+                  borderRadius: 9,
+                  background: isActive ? '#EDE9FF' : 'none',
+                  color: isActive ? '#7C3AED' : '#6B7280',
+                  textDecoration: 'none',
+                  cursor: 'pointer',
+                  transition: 'background 0.13s, color 0.13s',
+                  minWidth: 0,
+                  overflow: 'hidden',
+                }}
+              >
+                <Icon size={18} style={{ flexShrink: 0 }} />
+                <span
+                  className="sb-label"
+                  style={{
+                    fontSize: 13,
+                    fontWeight: isActive ? 600 : 500,
+                    opacity: sidebarOpen ? 1 : 0,
+                    maxWidth: sidebarOpen ? 140 : 0,
+                    display: 'block',
+                  }}
+                >
+                  {item.label}
+                </span>
+              </a>
+            )
+          })}
+
+          {/* Spacer pushes Settings to bottom */}
           <div style={{ flex: 1 }} />
-          <button className="db-icon-btn" style={{
-            width: 38, height: 38,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF',
-          }}>
-            <Settings size={18} />
-          </button>
+
+          {/* Settings */}
+          <a
+            href="#"
+            onClick={e => { e.preventDefault(); setActiveSideItem('home') }}
+            className="db-side-item"
+            title={!sidebarOpen ? 'Settings' : undefined}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: sidebarOpen ? 10 : 0,
+              justifyContent: sidebarOpen ? 'flex-start' : 'center',
+              padding: sidebarOpen ? '9px 14px' : '9px 0',
+              margin: '0 8px',
+              borderRadius: 9,
+              background: 'none',
+              color: '#9CA3AF',
+              textDecoration: 'none',
+              cursor: 'pointer',
+              overflow: 'hidden',
+            }}
+          >
+            <Settings size={18} style={{ flexShrink: 0 }} />
+            <span
+              className="sb-label"
+              style={{
+                fontSize: 13, fontWeight: 500,
+                opacity: sidebarOpen ? 1 : 0,
+                maxWidth: sidebarOpen ? 140 : 0,
+                display: 'block',
+              }}
+            >
+              Settings
+            </span>
+          </a>
         </aside>
 
         {/* ── Main content ── */}
@@ -257,9 +380,15 @@ export function DashboardPage() {
         }}>
 
           {/* Greeting row */}
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20 }}>
+          <div style={{
+            display: 'flex', alignItems: 'flex-start',
+            justifyContent: 'space-between', marginBottom: 20,
+          }}>
             <div>
-              <h1 style={{ fontSize: 20, fontWeight: 700, color: '#13111E', marginBottom: 4, letterSpacing: '-0.3px' }}>
+              <h1 style={{
+                fontSize: 20, fontWeight: 700, color: '#13111E',
+                marginBottom: 4, letterSpacing: '-0.3px',
+              }}>
                 {greeting()}, {firstName}
               </h1>
               <p style={{ fontSize: 13, color: '#6B7280' }}>
@@ -271,8 +400,8 @@ export function DashboardPage() {
                 display: 'inline-flex', alignItems: 'center', gap: 7,
                 padding: '8px 16px', borderRadius: 8,
                 border: '1px solid #D1D5DB', background: '#fff',
-                fontSize: 13, fontWeight: 600, color: '#13111E', cursor: 'pointer',
-                fontFamily: 'inherit',
+                fontSize: 13, fontWeight: 600, color: '#13111E',
+                cursor: 'pointer', fontFamily: 'inherit',
               }}>
                 <Plus size={14} /> New timetable
               </button>
@@ -327,9 +456,16 @@ export function DashboardPage() {
 
           {/* Your timetables */}
           <div style={{ marginBottom: 24 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-              <h2 style={{ fontSize: 15, fontWeight: 700, color: '#13111E' }}>Your timetables</h2>
-              <a href="#" style={{ fontSize: 13, color: '#7C6FE0', fontWeight: 500, textDecoration: 'none' }}>
+            <div style={{
+              display: 'flex', alignItems: 'center',
+              justifyContent: 'space-between', marginBottom: 12,
+            }}>
+              <h2 style={{ fontSize: 15, fontWeight: 700, color: '#13111E' }}>
+                Your timetables
+              </h2>
+              <a href="#" style={{
+                fontSize: 13, color: '#7C6FE0', fontWeight: 500, textDecoration: 'none',
+              }}>
                 View all
               </a>
             </div>
@@ -343,7 +479,6 @@ export function DashboardPage() {
                     border: '1px solid #E5E7EB', padding: '14px 16px',
                     display: 'flex', alignItems: 'center', gap: 14,
                   }}>
-                    {/* Icon */}
                     <div style={{
                       width: 36, height: 36, borderRadius: 8,
                       background: '#F5F4F0', flexShrink: 0,
@@ -352,35 +487,37 @@ export function DashboardPage() {
                       <Calendar size={17} color="#6B7280" />
                     </div>
 
-                    {/* Info */}
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: '#13111E', marginBottom: 2 }}>{tt.name}</div>
+                      <div style={{
+                        fontSize: 14, fontWeight: 600, color: '#13111E', marginBottom: 2,
+                      }}>
+                        {tt.name}
+                      </div>
                       <div style={{ fontSize: 12, color: '#9CA3AF' }}>{tt.meta}</div>
                     </div>
 
-                    {/* Status badge */}
                     <span style={{
                       padding: '3px 10px', borderRadius: 20,
-                      background: sm.bg, color: sm.fg, border: `1px solid ${sm.border}`,
+                      background: sm.bg, color: sm.fg,
+                      border: `1px solid ${sm.border}`,
                       fontSize: 12, fontWeight: 600, flexShrink: 0,
                     }}>
                       {sm.label}
                     </span>
 
-                    {/* Action buttons */}
                     {tt.status === 'active' && (
                       <>
-                        <TtBtn onClick={() => window.location.href = '/timetable'}>Edit</TtBtn>
+                        <TtBtn onClick={() => { window.location.href = '/timetable' }}>Edit</TtBtn>
                         <TtBtn onClick={() => {}}>Export</TtBtn>
                       </>
                     )}
                     {tt.status === 'draft' && (
-                      <TtBtn primary onClick={() => window.location.href = '/wizard'}>
+                      <TtBtn primary onClick={() => { window.location.href = '/wizard' }}>
                         Continue <ArrowRight size={12} />
                       </TtBtn>
                     )}
                     {tt.status === 'archived' && (
-                      <TtBtn onClick={() => window.location.href = '/timetable'}>View</TtBtn>
+                      <TtBtn onClick={() => { window.location.href = '/timetable' }}>View</TtBtn>
                     )}
                   </div>
                 )
@@ -421,8 +558,14 @@ export function DashboardPage() {
                     cursor: 'pointer',
                   }}>
                     <div style={{ marginBottom: 12 }}>{qa.icon}</div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: '#13111E', marginBottom: 4 }}>{qa.title}</div>
-                    <div style={{ fontSize: 12, color: '#9CA3AF', lineHeight: 1.55 }}>{qa.desc}</div>
+                    <div style={{
+                      fontSize: 14, fontWeight: 700, color: '#13111E', marginBottom: 4,
+                    }}>
+                      {qa.title}
+                    </div>
+                    <div style={{ fontSize: 12, color: '#9CA3AF', lineHeight: 1.55 }}>
+                      {qa.desc}
+                    </div>
                   </div>
                 </a>
               ))}
@@ -437,7 +580,9 @@ export function DashboardPage() {
 
 // ── Timetable action button ─────────────────────────────────────
 function TtBtn({ children, onClick, primary }: {
-  children: React.ReactNode; onClick: () => void; primary?: boolean
+  children: React.ReactNode
+  onClick: () => void
+  primary?: boolean
 }) {
   return (
     <button onClick={onClick} className="db-action-btn" style={{
