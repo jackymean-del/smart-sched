@@ -9,18 +9,36 @@
  * Includes Back / Next navigation.
  */
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useTimetableStore } from '@/store/timetableStore'
 import { AllocationGrid } from '@/components/master/AllocationGrid'
 import { TeacherAllocationSummary } from '@/components/master/TeacherAllocationSummary'
 import { TeacherAvailabilityEditor } from '@/components/master/TeacherAvailabilityEditor'
+import { buildPeriodSequence } from '@/lib/aiEngine'
 import { Grid3x3, Users, CalendarCheck, ChevronLeft, ChevronRight } from 'lucide-react'
 
 type Sub = 'periods' | 'teachers' | 'availability'
 
+const DEFAULT_WORK_DAYS = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY']
+
 export function StepAllocation() {
-  const { setStep, subjectAllocations } = useTimetableStore() as any
+  const store = useTimetableStore() as any
+  const { setStep, subjectAllocations, staff, config, breaks } = store
   const [sub, setSub] = useState<Sub>('periods')
+
+  // Derive periods from bell-schedule config so TeacherAvailabilityEditor has
+  // meaningful column headers even before the timetable is generated.
+  const derivedPeriods = useMemo(() => {
+    try {
+      return buildPeriodSequence(breaks ?? [], config?.periodsPerDay ?? 8)
+    } catch {
+      return []
+    }
+  }, [breaks, config?.periodsPerDay])
+
+  const workDays: string[] = config?.workDays?.length
+    ? config.workDays
+    : DEFAULT_WORK_DAYS
 
   // At least one allocation cell filled → can proceed
   const hasAllocations = Object.values(subjectAllocations ?? {}).some(
@@ -59,9 +77,16 @@ export function StepAllocation() {
       </div>
 
       {/* Tab content */}
-      {sub === 'periods'      && <AllocationGrid />}
-      {sub === 'teachers'     && <TeacherAllocationSummary />}
-      {sub === 'availability' && <TeacherAvailabilityEditor />}
+      {sub === 'periods'  && <AllocationGrid />}
+      {sub === 'teachers' && <TeacherAllocationSummary />}
+      {sub === 'availability' && (
+        <TeacherAvailabilityEditor
+          staff={staff ?? []}
+          periods={derivedPeriods}
+          workDays={workDays}
+          onClose={() => setSub('teachers')}
+        />
+      )}
 
       {/* Navigation footer */}
       <div style={{
