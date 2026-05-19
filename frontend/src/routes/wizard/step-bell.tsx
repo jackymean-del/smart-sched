@@ -2041,79 +2041,123 @@ export function StepBell() {
               </div>
 
               {/* Class assignment */}
-              <div style={{ borderTop: '1px solid #F3F4F6', paddingTop: 14 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 12, color: '#6B7280', flexShrink: 0 }}>Assigned to:</span>
-                  {/* All toggle */}
-                  {(() => {
-                    const allOn = ALL_CLASS_KEYS.every(k => activeShift.classes.includes(k))
-                    return (
-                      <button onClick={() => updateActiveShift({ classes: allOn ? [] : [...ALL_CLASS_KEYS] })} style={{
-                        padding: '3px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700,
-                        border: allOn ? '1.5px solid #374151' : '1px solid #E5E7EB',
-                        background: allOn ? '#374151' : '#fff', color: allOn ? '#fff' : '#9CA3AF',
-                        cursor: 'pointer', fontFamily: 'inherit', transition: 'all .12s',
-                      }}>All</button>
-                    )
-                  })()}
-                  {/* Group toggles */}
+              {(() => {
+                // Build map: classKey → name of OTHER shift that owns it
+                const takenBy: Record<string, string> = {}
+                shifts.filter(s => s.id !== activeShiftId).forEach(s =>
+                  s.classes.forEach(k => { takenBy[k] = s.name })
+                )
+                // Per-group: which other shift owns ALL / SOME keys in this group
+                const groupTaken = (gkeys: string[]) => {
+                  const owners = [...new Set(gkeys.map(k => takenBy[k]).filter(Boolean))]
+                  if (owners.length === 0) return null
+                  if (gkeys.every(k => takenBy[k])) return { full: true,  label: owners.join(' & ') }
+                  return { full: false, label: owners.join(' & ') }
+                }
+                return (
+                <div style={{ borderTop: '1px solid #F3F4F6', paddingTop: 14 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 12, color: '#6B7280', flexShrink: 0 }}>Assigned to:</span>
+                    {/* All toggle */}
+                    {(() => {
+                      const allOn = ALL_CLASS_KEYS.every(k => activeShift.classes.includes(k))
+                      return (
+                        <button onClick={() => updateActiveShift({ classes: allOn ? [] : [...ALL_CLASS_KEYS] })} style={{
+                          padding: '3px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+                          border: allOn ? '1.5px solid #374151' : '1px solid #E5E7EB',
+                          background: allOn ? '#374151' : '#fff', color: allOn ? '#fff' : '#9CA3AF',
+                          cursor: 'pointer', fontFamily: 'inherit', transition: 'all .12s',
+                        }}>All</button>
+                      )
+                    })()}
+                    {/* Group toggles */}
+                    {CLASS_GROUPS.map(gm => {
+                      const gkeys  = CLASSES.filter(c => c.group === gm.group).map(c => c.key)
+                      const on     = gkeys.every(k => activeShift.classes.includes(k))
+                      const partial = !on && gkeys.some(k => activeShift.classes.includes(k))
+                      const taken  = groupTaken(gkeys)
+                      // Taken = fully claimed by another shift → disabled
+                      if (taken?.full) {
+                        return (
+                          <button key={gm.group} disabled
+                            title={`Already following ${taken.label}`}
+                            style={{
+                              padding: '3px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+                              border: '1px dashed #D1D5DB',
+                              background: '#F9FAFB', color: '#D1D5DB',
+                              cursor: 'not-allowed', fontFamily: 'inherit',
+                              textDecoration: 'line-through', opacity: 0.65,
+                            }}>
+                            {gm.group}
+                          </button>
+                        )
+                      }
+                      // Partially taken — allow toggle but show conflict hint
+                      return (
+                        <button key={gm.group} onClick={() => {
+                          const newCls = on
+                            ? activeShift.classes.filter(k => !gkeys.includes(k))
+                            : [...new Set([...activeShift.classes, ...gkeys])]
+                          updateActiveShift({ classes: newCls })
+                        }}
+                        title={taken ? `Some classes already following ${taken.label}` : undefined}
+                        style={{
+                          padding: '3px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+                          border: on ? `1.5px solid ${gm.color}` : taken ? `1px dashed ${gm.color}` : partial ? `1px dashed ${gm.color}` : '1px solid #E5E7EB',
+                          background: on ? gm.bg : '#fff',
+                          color: on ? gm.color : partial || taken ? gm.color : '#9CA3AF',
+                          cursor: 'pointer', fontFamily: 'inherit', transition: 'all .12s',
+                        }}>
+                          {gm.group}
+                          {taken && !on && <span style={{ marginLeft: 4, fontSize: 9, opacity: 0.6 }}>partial</span>}
+                          {!taken && partial && <span style={{ marginLeft: 4, fontSize: 9, opacity: 0.7 }}>partial</span>}
+                        </button>
+                      )
+                    })}
+                    {activeShift.classes.length === 0 && (
+                      <span style={{ fontSize: 11, color: '#FCA5A5', fontStyle: 'italic' }}>
+                        No classes assigned — add at least one group
+                      </span>
+                    )}
+                  </div>
+                  {/* Fine-grained class list when partial */}
                   {CLASS_GROUPS.map(gm => {
                     const gkeys = CLASSES.filter(c => c.group === gm.group).map(c => c.key)
-                    const on = gkeys.every(k => activeShift.classes.includes(k))
-                    const partial = !on && gkeys.some(k => activeShift.classes.includes(k))
+                    const allOn = gkeys.every(k => activeShift.classes.includes(k))
+                    const anyOn = gkeys.some(k => activeShift.classes.includes(k))
+                    if (!anyOn || allOn) return null
                     return (
-                      <button key={gm.group} onClick={() => {
-                        const newCls = on
-                          ? activeShift.classes.filter(k => !gkeys.includes(k))
-                          : [...new Set([...activeShift.classes, ...gkeys])]
-                        updateActiveShift({ classes: newCls })
-                      }} style={{
-                        padding: '3px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700,
-                        border: on ? `1.5px solid ${gm.color}` : partial ? `1px dashed ${gm.color}` : '1px solid #E5E7EB',
-                        background: on ? gm.bg : '#fff',
-                        color: on ? gm.color : partial ? gm.color : '#9CA3AF',
-                        cursor: 'pointer', fontFamily: 'inherit', transition: 'all .12s',
-                      }}>
-                        {gm.group}
-                        {partial && <span style={{ marginLeft: 4, fontSize: 9, opacity: 0.7 }}>partial</span>}
-                      </button>
+                      <div key={gm.group} style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 8, paddingLeft: 80 }}>
+                        {CLASSES.filter(c => c.group === gm.group).map(cls => {
+                          const on       = activeShift.classes.includes(cls.key)
+                          const takenShift = takenBy[cls.key]
+                          return (
+                            <button key={cls.key}
+                              disabled={!!takenShift && !on}
+                              title={takenShift && !on ? `Already following ${takenShift}` : undefined}
+                              onClick={() => {
+                                if (takenShift && !on) return
+                                const newCls = on
+                                  ? activeShift.classes.filter(k => k !== cls.key)
+                                  : [...activeShift.classes, cls.key]
+                                updateActiveShift({ classes: newCls })
+                              }} style={{
+                                padding: '2px 9px', borderRadius: 12, fontSize: 10, fontWeight: 700,
+                                border: on ? `1px solid ${gm.color}` : takenShift ? '1px dashed #D1D5DB' : '1px solid #E5E7EB',
+                                background: on ? gm.bg : '#fff',
+                                color: on ? gm.color : takenShift ? '#D1D5DB' : '#9CA3AF',
+                                cursor: takenShift && !on ? 'not-allowed' : 'pointer',
+                                fontFamily: 'inherit', textDecoration: takenShift && !on ? 'line-through' : 'none',
+                                opacity: takenShift && !on ? 0.5 : 1,
+                              }}>{cls.short}</button>
+                          )
+                        })}
+                      </div>
                     )
                   })}
-                  {activeShift.classes.length === 0 && (
-                    <span style={{ fontSize: 11, color: '#FCA5A5', fontStyle: 'italic' }}>
-                      No classes assigned — add at least one group
-                    </span>
-                  )}
                 </div>
-                {/* Fine-grained class list when partial */}
-                {CLASS_GROUPS.map(gm => {
-                  const gkeys  = CLASSES.filter(c => c.group === gm.group).map(c => c.key)
-                  const allOn  = gkeys.every(k => activeShift.classes.includes(k))
-                  const anyOn  = gkeys.some(k => activeShift.classes.includes(k))
-                  if (!anyOn || allOn) return null
-                  return (
-                    <div key={gm.group} style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 8, paddingLeft: 80 }}>
-                      {CLASSES.filter(c => c.group === gm.group).map(cls => {
-                        const on = activeShift.classes.includes(cls.key)
-                        return (
-                          <button key={cls.key} onClick={() => {
-                            const newCls = on
-                              ? activeShift.classes.filter(k => k !== cls.key)
-                              : [...activeShift.classes, cls.key]
-                            updateActiveShift({ classes: newCls })
-                          }} style={{
-                            padding: '2px 9px', borderRadius: 12, fontSize: 10, fontWeight: 700,
-                            border: on ? `1px solid ${gm.color}` : '1px solid #E5E7EB',
-                            background: on ? gm.bg : '#fff',
-                            color: on ? gm.color : '#D1D5DB',
-                            cursor: 'pointer', fontFamily: 'inherit',
-                          }}>{cls.short}</button>
-                        )
-                      })}
-                    </div>
-                  )
-                })}
-              </div>
+                )
+              })()}
 
               {/* Working days + Day Off Rules (same row) */}
               <div style={{ borderTop: '1px solid #F3F4F6', paddingTop: 14, marginTop: 14 }}>
