@@ -108,27 +108,35 @@ export interface DataGridProps<T> {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Visual tokens (the design system from the spec)
+// Visual tokens
 // ─────────────────────────────────────────────────────────────
 const TOK = {
+  // Container (brand colours for toolbar chrome)
   containerBg: '#FFFFFF',
   containerBorder: '#ECEAFB',
-  radius: 16,                  // 24 in spec; 16 reads cleaner inside content panes
-  headerBg: '#F8F7FF',
-  headerHeight: 44,            // 52 in spec; 44 is denser for school spreadsheets
-  headerFont: 13,
+  radius: 16,
+  // Excel-exact grid
+  headerBg: '#F2F2F2',
+  rowNumBg: '#F2F2F2',
+  headerHeight: 28,
+  headerFont: 12,
   headerWeight: 600,
   cellFont: 13,
-  cellPad: '11px 14px',
-  divider: '#F3F1FF',
+  cellPad: '0 8px',      // vertical padding is achieved via fixed row height
+  cellRowH: 28,           // px — matches Excel default
+  divider: '#D0D0D0',    // Excel grid line colour
+  // Text
   textDim: '#8B87AD',
-  textMid: '#4B5275',
-  textOn: '#13111E',
+  textMid: '#555555',
+  textOn: '#1A1A1A',
+  // Brand accent (toolbar, selection)
   accent: '#7C6FE0',
   accentBg: '#EDE9FF',
   accentSoft: '#F5F2FF',
-  selectedBg: '#EDE9FF',
-  selectedBorder: '#7C6FE0',
+  // Cell selection — Excel blue
+  selectedBg: '#E8F0FE',
+  selectedBorder: '#1867C0',
+  rangeBg: '#E8F0FE',
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -994,19 +1002,100 @@ export function DataGrid<T>({
     return { count, mode }
   }, [fillFrom, fillTo, fillSourceRange, filteredRows, columns, getCell])
 
+  // ── Auto column widths — computed from header label + content ──
+  const ROW_NUM_W = 46  // px for the left row-number gutter
+
+  const computedColWidths = useMemo(() => {
+    const PPC = 7.8    // ~pixels per char at 13px font
+    const PAD = 24     // total horizontal cell padding
+    const FILTER_EXTRA = 20  // space for filter icon in header
+    const MIN_W = 60
+    const MAX_W = 320
+
+    return columns.map(col => {
+      // Explicit width always wins
+      if (col.width && typeof col.width === 'number') return col.width
+
+      // Derive from header label
+      const headerW = Math.ceil(col.label.length * PPC) + PAD + FILTER_EXTRA
+
+      // Sample up to 200 rows for content width
+      const contentW = rows.slice(0, 200).reduce((mx, row) => {
+        const v = col.format ? col.format(row) : col.getValue ? col.getValue(row) : (row as any)[col.key]
+        const len = v == null ? 0 : String(v).length
+        return Math.max(mx, Math.ceil(len * PPC) + PAD)
+      }, 0)
+
+      return Math.max(MIN_W, Math.min(MAX_W, Math.max(headerW, contentW)))
+    })
+  }, [columns, rows])
+
   // ── v2: cumulative left offsets for multi-column freeze ──
+  // ROW_NUM_W is always the first sticky offset baseline
   const stickyOffsets = useMemo(() => {
     const out: number[] = []
-    let off = 0
+    let off = ROW_NUM_W  // row-number gutter sits at 0, data starts after it
     columns.forEach((c, i) => {
       out[i] = off
-      if (c.sticky) {
-        const w = typeof c.width === 'number' ? c.width : (c.minWidth ?? 120)
-        off += w
-      }
+      if (c.sticky) off += computedColWidths[i] ?? 120
     })
     return out
-  }, [columns])
+  }, [columns, computedColWidths])
+
+  // ── Cell / header style constants (Excel-exact) ──────────
+  const thBase: React.CSSProperties = {
+    background: TOK.headerBg,
+    color: TOK.textMid,
+    fontSize: TOK.headerFont,
+    fontWeight: TOK.headerWeight,
+    padding: '0 8px',
+    height: TOK.headerHeight,
+    borderBottom: `1px solid ${TOK.divider}`,
+    borderRight: `1px solid ${TOK.divider}`,
+    userSelect: 'none' as const,
+    overflow: 'hidden',
+    whiteSpace: 'nowrap' as const,
+    verticalAlign: 'middle' as const,
+  }
+  const tdBase: React.CSSProperties = {
+    fontSize: TOK.cellFont,
+    color: TOK.textOn,
+    height: TOK.cellRowH,
+    borderBottom: `1px solid ${TOK.divider}`,
+    borderRight: `1px solid ${TOK.divider}`,
+    padding: 0,
+    position: 'relative' as const,
+    overflow: 'hidden',
+    verticalAlign: 'middle' as const,
+  }
+  const thRowNum: React.CSSProperties = {
+    background: TOK.rowNumBg,
+    borderBottom: `1px solid ${TOK.divider}`,
+    borderRight: `2px solid ${TOK.divider}`,
+    position: 'sticky' as const,
+    top: 0,
+    left: 0,
+    zIndex: 4,
+    width: ROW_NUM_W,
+    minWidth: ROW_NUM_W,
+    userSelect: 'none' as const,
+  }
+  const tdRowNum = (_ri: number): React.CSSProperties => ({
+    background: TOK.rowNumBg,
+    color: '#888888',
+    fontSize: 11,
+    textAlign: 'right' as const,
+    padding: '0 6px',
+    height: TOK.cellRowH,
+    borderBottom: `1px solid ${TOK.divider}`,
+    borderRight: `2px solid ${TOK.divider}`,
+    position: 'sticky' as const,
+    left: 0,
+    zIndex: 1,
+    userSelect: 'none' as const,
+    lineHeight: `${TOK.cellRowH}px`,
+    verticalAlign: 'middle' as const,
+  })
 
   // ── Main render ─────────────────────────────────────────
   const visibleColumns = transposed
@@ -1050,120 +1139,108 @@ export function DataGrid<T>({
         onChange={e => { const f = e.target.files?.[0]; if (f) importXLSX(f); e.target.value = '' }} />
 
       <div style={{ overflow: 'auto', maxHeight: maxHeight ?? '70vh' }}>
-        <table style={{ borderCollapse: 'separate', borderSpacing: 0, width: '100%', tableLayout: 'fixed' }}>
+        <table style={{ borderCollapse: 'collapse', width: '100%', tableLayout: 'fixed' }}>
+
+          {/* ── colgroup: explicit pixel widths for every column ── */}
+          {!transposed && (
+            <colgroup>
+              {/* Row-number gutter */}
+              <col style={{ width: ROW_NUM_W }} />
+              {columns.map((col, ci) => (
+                <col key={col.key} style={{ width: computedColWidths[ci] }} />
+              ))}
+              {onScope && <col style={{ width: 80 }} />}
+            </colgroup>
+          )}
+
           <thead>
-            <tr style={{ height: TOK.headerHeight }}>
-              {!transposed && columns.map((col, ci) => {
-                const colFilter = filters[col.key]
-                const isFiltered = colFilter && (colFilter.text || colFilter.min != null || colFilter.max != null || (colFilter.selected && colFilter.selected.length > 0))
-                const isLastCol = ci === columns.length - 1 && !onScope
-                return (
-                  <th key={col.key} style={{
-                    background: TOK.headerBg, color: TOK.textMid,
-                    fontSize: TOK.headerFont, fontWeight: TOK.headerWeight,
-                    padding: TOK.cellPad,
-                    textAlign: (col.align ?? 'left') as any,
-                    borderBottom: `2px solid #D8D4F0`,
-                    borderRight: isLastCol ? 'none' : `1px solid ${TOK.divider}`,
-                    /* Sticky: always stick to top; also stick left for sticky columns */
-                    position: 'sticky' as const,
-                    top: 0,
-                    left: col.sticky ? stickyOffsets[ci] : undefined,
-                    zIndex: col.sticky ? 4 : 2,
-                    width: col.width, minWidth: col.minWidth,
-                    letterSpacing: '0.01em',
-                    boxShadow: col.sticky && ci > 0 && !columns[ci - 1]?.sticky
-                      ? `2px 0 0 0 ${TOK.divider}` : undefined,
-                    userSelect: 'none' as const,
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, justifyContent: (col.align === 'right' ? 'flex-end' : col.align === 'center' ? 'center' : 'flex-start') as any }}>
-                      <span>{col.label}</span>
-                      {tb.filters && !col.readonly && col.type !== 'computed' && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setFilterPopover(filterPopover === col.key ? null : col.key) }}
-                          style={{
-                            background: isFiltered ? TOK.accentBg : 'transparent',
-                            border: 'none', padding: 2, borderRadius: 4,
-                            cursor: 'pointer', color: isFiltered ? TOK.accent : TOK.textDim,
-                            display: 'inline-flex', alignItems: 'center',
-                          }}
-                          title={isFiltered ? 'Filter active' : 'Filter column'}>
-                          <Filter size={11} fill={isFiltered ? TOK.accent : 'none'} />
-                        </button>
-                      )}
-                    </div>
-                    {/* Filter popover */}
-                    {filterPopover === col.key && (
-                      <FilterPopover
-                        column={col}
-                        spec={colFilter}
-                        rows={rows}
-                        getCell={getCell}
-                        onChange={(spec) => setFilters(prev => {
-                          const next = { ...prev }
-                          if (!spec || (!spec.text && spec.min == null && spec.max == null && (!spec.selected || spec.selected.length === 0))) {
-                            delete next[col.key]
-                          } else {
-                            next[col.key] = spec
-                          }
-                          return next
-                        })}
-                        onClose={() => setFilterPopover(null)}
-                      />
-                    )}
-                  </th>
-                )
-              })}
+            <tr>
+              {/* ── Normal (non-transposed) header ── */}
+              {!transposed && (
+                <>
+                  {/* Row-number corner cell */}
+                  <th style={thRowNum} />
+
+                  {columns.map((col, ci) => {
+                    const colFilter = filters[col.key]
+                    const isFiltered = !!(colFilter && (colFilter.text || colFilter.min != null || colFilter.max != null || (colFilter.selected && colFilter.selected.length > 0)))
+                    return (
+                      <th key={col.key} style={{
+                        ...thBase,
+                        textAlign: (col.align ?? 'left') as any,
+                        position: 'sticky' as const,
+                        top: 0,
+                        left: col.sticky ? stickyOffsets[ci] : undefined,
+                        zIndex: col.sticky ? 4 : 2,
+                        whiteSpace: 'nowrap' as const,
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4,
+                          justifyContent: (col.align === 'right' ? 'flex-end' : col.align === 'center' ? 'center' : 'flex-start') as any,
+                        }}>
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{col.label}</span>
+                          {tb.filters && !col.readonly && col.type !== 'computed' && (
+                            <button
+                              onClick={e => { e.stopPropagation(); setFilterPopover(filterPopover === col.key ? null : col.key) }}
+                              style={{ background: isFiltered ? TOK.accentBg : 'transparent', border: 'none', padding: 2, borderRadius: 4, cursor: 'pointer', color: isFiltered ? TOK.accent : '#AAAAAA', display: 'inline-flex', alignItems: 'center', flexShrink: 0 }}
+                              title={isFiltered ? 'Filter active' : 'Filter'}>
+                              <Filter size={10} fill={isFiltered ? TOK.accent : 'none'} />
+                            </button>
+                          )}
+                        </div>
+                        {filterPopover === col.key && (
+                          <FilterPopover column={col} spec={colFilter} rows={rows} getCell={getCell}
+                            onChange={spec => setFilters(prev => {
+                              const next = { ...prev }
+                              if (!spec || (!spec.text && spec.min == null && spec.max == null && (!spec.selected || spec.selected.length === 0))) delete next[col.key]
+                              else next[col.key] = spec
+                              return next
+                            })}
+                            onClose={() => setFilterPopover(null)} />
+                        )}
+                      </th>
+                    )
+                  })}
+
+                  {onScope && (
+                    <th style={{ ...thBase, textAlign: 'center' as const, position: 'sticky' as const, top: 0, zIndex: 2 }}>
+                      Scope
+                    </th>
+                  )}
+                </>
+              )}
+
+              {/* ── Transposed header: Field | Row1 | Row2 | … ── */}
               {transposed && (
                 <>
-                  <th style={{
-                    background: TOK.headerBg, color: TOK.textMid,
-                    fontSize: TOK.headerFont, fontWeight: TOK.headerWeight,
-                    padding: TOK.cellPad, textAlign: 'left' as const,
-                    borderBottom: `2px solid #D8D4F0`, borderRight: `1px solid ${TOK.divider}`,
-                    position: 'sticky' as const, top: 0, left: 0, zIndex: 4,
-                    minWidth: 140, userSelect: 'none' as const,
-                  }}>Field</th>
+                  <th style={{ ...thBase, position: 'sticky' as const, top: 0, left: 0, zIndex: 4, width: 160, minWidth: 160 }}>Field</th>
                   {filteredRows.map((r, i) => (
-                    <th key={i} style={{
-                      background: TOK.headerBg, color: TOK.textMid,
-                      fontSize: TOK.headerFont, fontWeight: TOK.headerWeight,
-                      padding: TOK.cellPad, textAlign: 'left' as const,
-                      borderBottom: `2px solid #D8D4F0`,
-                      borderRight: i < filteredRows.length - 1 ? `1px solid ${TOK.divider}` : 'none',
-                      position: 'sticky' as const, top: 0, zIndex: 2,
-                      minWidth: 140, userSelect: 'none' as const,
-                    }}>
-                      {/* Show first-column value as the column header, not the raw UUID */}
-                      {String(getCell(r, columns[0]) ?? `Row ${i + 1}`)}
+                    <th key={i} style={{ ...thBase, position: 'sticky' as const, top: 0, zIndex: 2, width: 140, minWidth: 140 }}
+                      title={String(getCell(r, columns[0]) ?? `Row ${i + 1}`)}>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', display: 'block', whiteSpace: 'nowrap' as const }}>
+                        {String(getCell(r, columns[0]) ?? `Row ${i + 1}`)}
+                      </span>
                     </th>
                   ))}
                 </>
               )}
-              {onScope && !transposed && (
-                <th style={{
-                  background: TOK.headerBg, padding: TOK.cellPad, width: 80,
-                  borderBottom: `2px solid #D8D4F0`,
-                  fontSize: TOK.headerFont, fontWeight: TOK.headerWeight,
-                  color: TOK.textMid, textAlign: 'center' as const, letterSpacing: '0.01em',
-                  position: 'sticky' as const, top: 0, zIndex: 2,
-                  userSelect: 'none' as const,
-                }}>Scope</th>
-              )}
             </tr>
           </thead>
+
           <tbody>
+            {/* ── Normal rows ── */}
             {!transposed && filteredRows.map((row, ri) => (
               <tr key={rowKey(row)}
-                style={{ height: 36, background: ri % 2 === 1 ? '#FAFAFE' : '#FFFFFF' }}
                 onContextMenu={e => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, ri }) }}>
+
+                {/* Row number */}
+                <td style={tdRowNum(ri)}>{ri + 1}</td>
+
                 {columns.map((col, ci) => {
                   const value = getCell(row, col)
                   const isSelected = selection?.r === ri && selection?.c === ci
                   const isInRange = inSelection(ri, ci)
                   const isEditing = editing?.r === ri && editing?.c === ci
                   const custom = col.cellStyle?.(value, row)
-                  // v3: cell is in the drag-fill target rectangle?
                   const isInFillRange = (() => {
                     if (!fillFrom || !fillTo) return false
                     const r0 = Math.min(fillFrom.r, fillTo.r), r1 = Math.max(fillFrom.r, fillTo.r)
@@ -1171,217 +1248,147 @@ export function DataGrid<T>({
                     return ri >= r0 && ri <= r1 && ci >= c0 && ci <= c1
                   })()
                   const isFillSource = fillFrom?.r === ri && fillFrom?.c === ci
-                  // Show fill handle on the selected cell (with no range), when not editing
-                  // v3.1: fill handle anchors on bottom-right of the selection
-                  //       range (single cell OR multi-cell range)
                   const rangeMaxR = selection ? Math.max(selection.r, selectionEnd?.r ?? selection.r) : -1
                   const rangeMaxC = selection ? Math.max(selection.c, selectionEnd?.c ?? selection.c) : -1
-                  const showFillHandle = rangeMaxR === ri && rangeMaxC === ci
-                    && !editing && !col.readonly && col.type !== 'computed'
+                  const showFillHandle = rangeMaxR === ri && rangeMaxC === ci && !editing && !col.readonly && col.type !== 'computed'
+
                   return (
                     <td key={col.key}
                       onMouseDown={e => {
                         containerRef.current?.focus({ preventScroll: true })
-                        if (e.shiftKey && selection) {
-                          setSelectionEnd({ r: ri, c: ci })
-                        } else {
-                          setSelection({ r: ri, c: ci }); setSelectionEnd(null)
-                        }
+                        if (e.shiftKey && selection) setSelectionEnd({ r: ri, c: ci })
+                        else { setSelection({ r: ri, c: ci }); setSelectionEnd(null) }
                       }}
                       onMouseEnter={e => {
                         if (fillFrom && e.buttons === 1) {
-                          // v3.3: axis-constrained fill for 1-D source ranges.
-                          // A vertical source (single column, multiple rows) should
-                          // only extend downward — constraining c to the source
-                          // column prevents accidental sideways 2-D fills.
-                          // A horizontal source (single row, multiple columns) only
-                          // extends rightward. A 2-D source or single-cell source
-                          // has no axis constraint (existing behaviour).
                           if (fillSourceRange) {
                             const sR0 = Math.min(fillSourceRange.startR, fillSourceRange.endR)
                             const sR1 = Math.max(fillSourceRange.startR, fillSourceRange.endR)
                             const sC0 = Math.min(fillSourceRange.startC, fillSourceRange.endC)
                             const sC1 = Math.max(fillSourceRange.startC, fillSourceRange.endC)
-                            const srcW = sC1 - sC0 + 1
-                            const srcH = sR1 - sR0 + 1
-                            if (srcW === 1 && srcH > 1) {
-                              // Vertical 1-D — lock column to source column
-                              setFillTo({ r: ri, c: sC0 })
-                            } else if (srcH === 1 && srcW > 1) {
-                              // Horizontal 1-D — lock row to source row
-                              setFillTo({ r: sR0, c: ci })
-                            } else {
-                              setFillTo({ r: ri, c: ci })
-                            }
-                          } else {
-                            setFillTo({ r: ri, c: ci })
-                          }
-                        } else if (e.buttons === 1 && selection) {
-                          setSelectionEnd({ r: ri, c: ci })
-                        }
+                            if (sC1 - sC0 === 0 && sR1 - sR0 > 0) setFillTo({ r: ri, c: sC0 })
+                            else if (sR1 - sR0 === 0 && sC1 - sC0 > 0) setFillTo({ r: sR0, c: ci })
+                            else setFillTo({ r: ri, c: ci })
+                          } else setFillTo({ r: ri, c: ci })
+                        } else if (e.buttons === 1 && selection) setSelectionEnd({ r: ri, c: ci })
                       }}
-                      onDoubleClick={() => {
-                        if (!col.readonly && col.type !== 'computed') setEditing({ r: ri, c: ci })
-                      }}
+                      onDoubleClick={() => { if (!col.readonly && col.type !== 'computed') setEditing({ r: ri, c: ci }) }}
                       style={{
-                        background: isInFillRange && !isFillSource
-                          ? '#DBEAFE'
+                        ...tdBase,
+                        background: isInFillRange && !isFillSource ? '#DBEAFE'
                           : isSelected ? TOK.selectedBg
-                          : isInRange ? TOK.accentSoft
-                          : col.sticky
-                            ? (ri % 2 === 1 ? '#FAFAFE' : '#FFFFFF')
-                            : 'inherit',
-                        color: TOK.textOn,
-                        fontSize: TOK.cellFont,
-                        padding: 0,
-                        height: 36,
+                          : isInRange ? '#EAF1FB'
+                          : col.sticky ? '#FFFFFF' : undefined,
                         textAlign: (col.align ?? (col.type === 'number' ? 'right' : 'left')) as any,
-                        borderBottom: `1px solid ${TOK.divider}`,
-                        borderRight: ci < columns.length - 1 || onScope
-                          ? `1px solid ${TOK.divider}` : 'none',
                         position: col.sticky ? 'sticky' : 'relative',
                         left: col.sticky ? stickyOffsets[ci] : undefined,
                         zIndex: col.sticky ? 1 : undefined,
                         cursor: col.readonly || col.type === 'computed' ? 'default' : 'cell',
-                        outline: isInFillRange && !isFillSource
-                          ? `1.5px dashed #1D4ED8`
+                        outline: isInFillRange && !isFillSource ? `1.5px dashed #1D4ED8`
                           : isSelected ? `2px solid ${TOK.selectedBorder}` : 'none',
-                        outlineOffset: -2,
+                        outlineOffset: -1,
                         ...custom,
                       }}>
-                      {isEditing ? renderEditor(value, col, (v) => {
-                        updateCellInRows(ri, ci, v)
-                        setEditing(null)
-                        setSelection({ r: ri, c: ci })
-                        setTimeout(() => containerRef.current?.focus({ preventScroll: true }), 0)
-                      }, () => {
-                        setEditing(null)
-                        setTimeout(() => containerRef.current?.focus({ preventScroll: true }), 0)
-                      }, editInputRef as any)
-                       : col.render
-                         ? <div style={{ padding: TOK.cellPad }}>{col.render(value, row, ri)}</div>
-                         : col.type === 'badge'
-                           ? renderBadge(value, row, col)
-                           : (
-                             <div style={{ padding: TOK.cellPad, fontFamily: col.type === 'number' ? "'DM Mono', monospace" : 'inherit', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
-                               {value == null || value === '' ? <span style={{ color: TOK.textDim }}>{col.placeholder ?? '—'}</span> : String(value)}
-                             </div>
-                           )}
-                      {/* v3: drag-fill handle — small square at bottom-right of selected cell */}
+                      {isEditing
+                        ? renderEditor(value, col, v => {
+                            updateCellInRows(ri, ci, v)
+                            setEditing(null)
+                            setSelection({ r: ri, c: ci })
+                            setTimeout(() => containerRef.current?.focus({ preventScroll: true }), 0)
+                          }, () => {
+                            setEditing(null)
+                            setTimeout(() => containerRef.current?.focus({ preventScroll: true }), 0)
+                          }, editInputRef as any)
+                        : col.render
+                          ? <div style={{ padding: '0 8px', lineHeight: `${TOK.cellRowH}px` }}>{col.render(value, row, ri)}</div>
+                          : col.type === 'badge'
+                            ? renderBadge(value, row, col)
+                            : (
+                              <div style={{
+                                padding: '0 8px', lineHeight: `${TOK.cellRowH}px`,
+                                fontFamily: col.type === 'number' ? "'DM Mono', monospace" : 'inherit',
+                                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const,
+                              }}>
+                                {value == null || value === ''
+                                  ? <span style={{ color: '#BBBBBB' }}>{col.placeholder ?? ''}</span>
+                                  : String(value)}
+                              </div>
+                            )
+                      }
                       {showFillHandle && (
-                        <span
-                          onMouseDown={e => {
-                            e.stopPropagation()
-                            e.preventDefault()
-                            // Capture the current selection as the source range
-                            // — drives smart-fill (arithmetic series detection)
-                            if (selection) {
-                              setFillSourceRange({
-                                startR: selection.r,
-                                startC: selection.c,
-                                endR:   selectionEnd?.r ?? selection.r,
-                                endC:   selectionEnd?.c ?? selection.c,
-                              })
-                            }
-                            setFillFrom({ r: ri, c: ci })
-                            setFillTo({ r: ri, c: ci })
-                          }}
-                          title="Drag to fill — selects pattern from current range"
-                          style={{
-                            position: 'absolute' as const,
-                            right: -3, bottom: -3,
-                            width: 8, height: 8,
-                            background: TOK.accent,
-                            border: '1.5px solid #fff',
-                            borderRadius: 2,
-                            cursor: 'crosshair',
-                            zIndex: 3,
-                          }}
-                        />
+                        <span onMouseDown={e => {
+                          e.stopPropagation(); e.preventDefault()
+                          if (selection) setFillSourceRange({ startR: selection.r, startC: selection.c, endR: selectionEnd?.r ?? selection.r, endC: selectionEnd?.c ?? selection.c })
+                          setFillFrom({ r: ri, c: ci }); setFillTo({ r: ri, c: ci })
+                        }} title="Drag to fill"
+                          style={{ position: 'absolute' as const, right: -3, bottom: -3, width: 7, height: 7, background: TOK.selectedBorder, border: '1.5px solid #fff', borderRadius: 1, cursor: 'crosshair', zIndex: 3 }} />
                       )}
                     </td>
                   )
                 })}
+
                 {onScope && (
-                  <td style={{ padding: 5, borderBottom: `1px solid ${TOK.divider}`, textAlign: 'center' as const, height: 36 }}>
+                  <td style={{ ...tdBase, textAlign: 'center' as const }}>
                     <button
                       onClick={e => onScope(row, (e.currentTarget as HTMLElement).getBoundingClientRect())}
-                      title="Edit availability scope"
-                      style={{
-                        background: TOK.accentSoft, border: `1px solid ${TOK.containerBorder}`,
-                        color: TOK.accent, borderRadius: 6, padding: '4px 10px',
-                        fontSize: 11, fontWeight: 700, cursor: 'pointer',
-                        display: 'inline-flex', alignItems: 'center', gap: 4,
-                        whiteSpace: 'nowrap' as const,
-                      }}>
+                      style={{ background: TOK.accentSoft, border: `1px solid #DDDAFF`, color: TOK.accent, borderRadius: 5, padding: '3px 9px', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' as const }}>
                       ◎ Scope
                     </button>
                   </td>
                 )}
               </tr>
             ))}
+
+            {/* ── Transposed rows: one row per original column ── */}
             {transposed && columns.map((srcCol, fieldIdx) => (
-              <tr key={srcCol.key} style={{ height: 36 }}>
+              <tr key={srcCol.key}>
                 {/* Field label — sticky left */}
                 <td style={{
-                  padding: TOK.cellPad, fontSize: TOK.cellFont,
-                  fontWeight: 700, color: TOK.textMid,
-                  background: TOK.headerBg,
-                  borderBottom: `1px solid ${TOK.divider}`,
-                  borderRight: `1px solid ${TOK.divider}`,
+                  ...tdBase, fontWeight: 600, color: TOK.textMid,
+                  background: TOK.rowNumBg,
                   position: 'sticky' as const, left: 0, zIndex: 1,
-                  userSelect: 'none' as const, whiteSpace: 'nowrap' as const,
+                  whiteSpace: 'nowrap' as const, width: 160, maxWidth: 160,
                 }}>
-                  {srcCol.label}
+                  <div style={{ padding: '0 10px', lineHeight: `${TOK.cellRowH}px`, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {srcCol.label}
+                  </div>
                 </td>
-                {/* Data cells — one per row */}
                 {filteredRows.map((r, colIdx) => {
                   const v = getCell(r, srcCol)
                   const tIsEditing = editing?.r === colIdx && editing?.c === fieldIdx
                   const tIsSelected = selection?.r === colIdx && selection?.c === fieldIdx
-                  const isLast = colIdx === filteredRows.length - 1
+                  const tIsRange = (() => {
+                    if (!selection) return false
+                    const end = selectionEnd ?? selection
+                    const r0 = Math.min(selection.c, end.c), r1 = Math.max(selection.c, end.c)
+                    const c0 = Math.min(selection.r, end.r), c1 = Math.max(selection.r, end.r)
+                    return fieldIdx >= r0 && fieldIdx <= r1 && colIdx >= c0 && colIdx <= c1
+                  })()
                   return (
                     <td key={colIdx}
                       onMouseDown={() => {
                         containerRef.current?.focus({ preventScroll: true })
                         setSelection({ r: colIdx, c: fieldIdx }); setSelectionEnd(null)
                       }}
-                      onDoubleClick={() => {
-                        if (!srcCol.readonly && srcCol.type !== 'computed')
-                          setEditing({ r: colIdx, c: fieldIdx })
-                      }}
+                      onDoubleClick={() => { if (!srcCol.readonly && srcCol.type !== 'computed') setEditing({ r: colIdx, c: fieldIdx }) }}
                       style={{
-                        padding: 0,
-                        fontSize: TOK.cellFont,
-                        height: 36,
-                        background: tIsSelected ? TOK.selectedBg : colIdx % 2 === 1 ? '#FAFAFE' : '#FFFFFF',
-                        color: TOK.textOn,
-                        borderBottom: `1px solid ${TOK.divider}`,
-                        borderRight: isLast ? 'none' : `1px solid ${TOK.divider}`,
-                        outline: tIsSelected ? `2px solid ${TOK.selectedBorder}` : 'none',
-                        outlineOffset: -2,
-                        cursor: srcCol.readonly || srcCol.type === 'computed' ? 'default' : 'cell',
-                        fontFamily: srcCol.type === 'number' ? "'DM Mono', monospace" : 'inherit',
+                        ...tdBase,
+                        background: tIsSelected ? TOK.selectedBg : tIsRange ? '#EAF1FB' : undefined,
                         textAlign: (srcCol.align ?? (srcCol.type === 'number' ? 'right' : 'left')) as any,
-                        minWidth: 140,
+                        outline: tIsSelected ? `2px solid ${TOK.selectedBorder}` : 'none',
+                        outlineOffset: -1,
+                        cursor: srcCol.readonly || srcCol.type === 'computed' ? 'default' : 'cell',
+                        width: 140, minWidth: 140,
                       }}>
                       {tIsEditing
-                        ? renderEditor(v, srcCol, (newV) => {
+                        ? renderEditor(v, srcCol, newV => {
                             const origR = originalIndex(colIdx)
-                            if (origR >= 0) {
-                              const next = rows.map((row, i) => i === origR ? setCell(row, srcCol, newV) : row)
-                              onChange(next)
-                            }
+                            if (origR >= 0) onChange(rows.map((row, i) => i === origR ? setCell(row, srcCol, newV) : row))
                             setEditing(null)
                             setTimeout(() => containerRef.current?.focus({ preventScroll: true }), 0)
-                          }, () => {
-                            setEditing(null)
-                            setTimeout(() => containerRef.current?.focus({ preventScroll: true }), 0)
-                          }, editInputRef as any)
-                        : <div style={{ padding: TOK.cellPad, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
-                            {v == null || v === ''
-                              ? <span style={{ color: TOK.textDim }}>{srcCol.placeholder ?? '—'}</span>
-                              : String(v)}
+                          }, () => { setEditing(null); setTimeout(() => containerRef.current?.focus({ preventScroll: true }), 0) }, editInputRef as any)
+                        : <div style={{ padding: '0 8px', lineHeight: `${TOK.cellRowH}px`, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
+                            {v == null || v === '' ? <span style={{ color: '#BBBBBB' }}>{srcCol.placeholder ?? ''}</span> : String(v)}
                           </div>
                       }
                     </td>
