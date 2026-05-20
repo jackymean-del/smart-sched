@@ -51,9 +51,20 @@ export function StepResources() {
     }))
   })
 
-  const [scopeTarget, setScopeTarget] = useState<{ kind: string; entity: any } | null>(null)
+  const [scopeTarget, setScopeTarget] = useState<{ kind: string; entity: any; rect?: DOMRect } | null>(null)
   const workDays: string[] = config?.workDays ?? ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY']
   const periods = store.periods ?? []
+
+  // Read cycleWeeks from the bell step's localStorage key so the scope popover
+  // knows whether to show day rows (1-week) or week rows (multi-week).
+  const cycleWeeks = (() => {
+    try {
+      const raw = localStorage.getItem('schedu-bell-v2')
+      if (!raw) return 1
+      const parsed = JSON.parse(raw)
+      return typeof parsed?.cycleWeeks === 'number' ? parsed.cycleWeeks : 1
+    } catch { return 1 }
+  })()
 
   const regenAll = () => {
     const o = config.orgType ?? 'school'
@@ -148,10 +159,10 @@ export function StepResources() {
         })}
       </div>
 
-      {tab === 'classes'  && <ClassesGrid  sections={sections} setSections={setSections} staff={staff} onScope={(s) => setScopeTarget({ kind: 'Section', entity: s })} />}
-      {tab === 'subjects' && <SubjectsGrid subjects={subjects} setSubjects={setSubjects} onScope={(s) => setScopeTarget({ kind: 'Subject', entity: s })} />}
-      {tab === 'teachers' && <TeachersGrid staff={staff} setStaff={setStaff} sections={sections} onScope={(t) => setScopeTarget({ kind: 'Teacher', entity: t })} />}
-      {tab === 'rooms'    && <RoomsGrid    rooms={rooms} setRooms={setRooms} onScope={(r) => setScopeTarget({ kind: 'Room', entity: r })} />}
+      {tab === 'classes'  && <ClassesGrid  sections={sections} setSections={setSections} staff={staff} onScope={(s, rect) => setScopeTarget({ kind: 'Section', entity: s, rect })} />}
+      {tab === 'subjects' && <SubjectsGrid subjects={subjects} setSubjects={setSubjects} onScope={(s, rect) => setScopeTarget({ kind: 'Subject', entity: s, rect })} />}
+      {tab === 'teachers' && <TeachersGrid staff={staff} setStaff={setStaff} sections={sections} onScope={(t, rect) => setScopeTarget({ kind: 'Teacher', entity: t, rect })} />}
+      {tab === 'rooms'    && <RoomsGrid    rooms={rooms} setRooms={setRooms} onScope={(r, rect) => setScopeTarget({ kind: 'Room', entity: r, rect })} />}
 
       {scopeTarget && (
         <ScopeMatrixModal
@@ -160,6 +171,8 @@ export function StepResources() {
           scope={scopeTarget.entity.scope}
           workDays={workDays}
           periods={periods}
+          cycleWeeks={cycleWeeks}
+          anchorRect={scopeTarget.rect}
           onSave={(nextScope) => {
             const k = scopeTarget.kind
             if (k === 'Section') {

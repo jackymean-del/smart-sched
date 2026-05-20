@@ -30,9 +30,9 @@ const DAY_LABEL: Record<string, string> = {
 const STATE_STYLE: Record<ScopeState, {
   bg: string; fg: string; border: string; label: string; symbol: string;
 }> = {
-  allowed:  { bg: '#EEFDF3', fg: '#16A34A', border: '#BBF7D0', label: 'Allowed',  symbol: '●' },
-  disabled: { bg: '#FAFAFB', fg: '#B0B0C0', border: '#E5E7EB', label: 'Disabled', symbol: '·' },
-  locked:   { bg: '#FEE2E2', fg: '#DC2626', border: '#FECACA', label: 'Locked',   symbol: '✕' },
+  allowed:  { bg: '#DCFCE7', fg: '#15803D', border: '#86EFAC', label: 'Allowed',  symbol: '✓' },
+  disabled: { bg: '#F1F5F9', fg: '#94A3B8', border: '#CBD5E1', label: 'Disabled', symbol: '—' },
+  locked:   { bg: '#FEE2E2', fg: '#DC2626', border: '#FCA5A5', label: 'Locked',   symbol: '✕' },
 }
 
 const NEXT_STATE: Record<ScopeState, ScopeState> = {
@@ -52,6 +52,16 @@ interface Props {
   workDays: string[]
   /** Periods (only class periods are shown; breaks omitted) */
   periods: Period[]
+  /**
+   * Number of weeks in the cycle (from bell step).
+   * When > 1, rows show Week 1 … Week N instead of Mon–Sat.
+   */
+  cycleWeeks?: number
+  /**
+   * When provided, renders as a floating popover anchored near this rect
+   * instead of a full-screen backdrop modal.
+   */
+  anchorRect?: DOMRect | null
   /** Save handler */
   onSave: (next: ScopeMatrix | undefined) => void
   /** Cancel/close */
@@ -59,10 +69,35 @@ interface Props {
 }
 
 export function ScopeMatrixModal({
-  entityName, entityKind = 'Entity', scope, workDays, periods, onSave, onClose,
+  entityName, entityKind = 'Entity', scope, workDays, periods,
+  cycleWeeks = 1, anchorRect, onSave, onClose,
 }: Props) {
   const classPeriods = periods.filter(p => p.type === 'class' || !p.type)
   const visibleDays = workDays.filter(d => DAY_LABEL[d])
+
+  // Multi-week mode: rows = Week 1..N; single-week mode: rows = Mon..Sat
+  const isMultiWeek = cycleWeeks > 1
+  const rowKeys: string[] = isMultiWeek
+    ? Array.from({ length: cycleWeeks }, (_, i) => `WEEK_${i + 1}`)
+    : visibleDays
+  const rowLabel = (key: string) =>
+    key.startsWith('WEEK_') ? `Wk ${key.replace('WEEK_', '')}` : (DAY_LABEL[key] ?? key)
+
+  // Popover positioning
+  const isPopover = !!anchorRect
+  const popoverStyle: React.CSSProperties = (() => {
+    if (!anchorRect) return {}
+    const vpW = typeof window !== 'undefined' ? window.innerWidth : 1200
+    const vpH = typeof window !== 'undefined' ? window.innerHeight : 800
+    const panelW = 580; const panelH = 500
+    let left = anchorRect.right - panelW
+    let top = anchorRect.bottom + 8
+    if (left < 8) left = 8
+    if (left + panelW > vpW - 8) left = vpW - panelW - 8
+    if (top + panelH > vpH - 8) top = anchorRect.top - panelH - 8
+    if (top < 8) top = 8
+    return { position: 'fixed' as const, left, top, width: panelW, maxHeight: panelH, zIndex: 9999 }
+  })()
 
   // Local state — drafting until user saves
   const [cells, setCells] = useState<Record<string, Record<string, ScopeState>>>(() => {
@@ -105,42 +140,42 @@ export function ScopeMatrixModal({
     classPeriods.forEach(p => setState(day, p.id, next))
   }
 
-  // Bulk col: cycle next majority state for this period across all days
+  // Bulk col: cycle next majority state for this period across all row keys
   const cycleCol = (periodId: string) => {
     const counts: Record<ScopeState, number> = { allowed: 0, disabled: 0, locked: 0 }
-    visibleDays.forEach(d => counts[getState(d, periodId)]++)
+    rowKeys.forEach(k => counts[getState(k, periodId)]++)
     const majority = (Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0]) as ScopeState
     const next = NEXT_STATE[majority]
-    visibleDays.forEach(d => setState(d, periodId, next))
+    rowKeys.forEach(k => setState(k, periodId, next))
   }
 
   const allowAll = () => { setCells({}) }
   const lockAll = () => {
     const next: Record<string, Record<string, ScopeState>> = {}
-    visibleDays.forEach(d => {
-      next[d] = {}
-      classPeriods.forEach(p => next[d][p.id] = 'locked')
+    rowKeys.forEach(k => {
+      next[k] = {}
+      classPeriods.forEach(p => { next[k][p.id] = 'locked' })
     })
     setCells(next)
   }
   const onlyWeekdays = () => {
-    // Allow Mon-Fri, lock Sat
+    if (isMultiWeek) return  // not applicable in multi-week mode
     const next: Record<string, Record<string, ScopeState>> = {}
     visibleDays.forEach(d => {
       if (d === 'SATURDAY' || d === 'SUNDAY') {
         next[d] = {}
-        classPeriods.forEach(p => next[d][p.id] = 'locked')
+        classPeriods.forEach(p => { next[d][p.id] = 'locked' })
       }
     })
     setCells(next)
   }
 
-  // Summary stats
-  const allCells = visibleDays.length * classPeriods.length
-  const allowedCount = visibleDays.reduce((s, d) =>
-    s + classPeriods.filter(p => getState(d, p.id) === 'allowed').length, 0)
-  const disabledCount = visibleDays.reduce((s, d) =>
-    s + classPeriods.filter(p => getState(d, p.id) === 'disabled').length, 0)
+  // Summary stats — use rowKeys so multi-week counts correctly
+  const allCells = rowKeys.length * classPeriods.length
+  const allowedCount = rowKeys.reduce((s, k) =>
+    s + classPeriods.filter(p => getState(k, p.id) === 'allowed').length, 0)
+  const disabledCount = rowKeys.reduce((s, k) =>
+    s + classPeriods.filter(p => getState(k, p.id) === 'disabled').length, 0)
   const lockedCount = allCells - allowedCount - disabledCount
 
   // Save: collapse to undefined if all cells are allowed and no note
@@ -154,17 +189,16 @@ export function ScopeMatrixModal({
     onClose()
   }
 
-  return (
-    <div style={{
-      position: 'fixed', inset: 0, background: 'rgba(19,17,30,0.6)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      zIndex: 9999, padding: 20, backdropFilter: 'blur(4px)',
-    }} onClick={onClose}>
-      <div onClick={e => e.stopPropagation()} style={{
-        background: '#fff', borderRadius: 16, width: '100%', maxWidth: 760,
-        maxHeight: '92vh', display: 'flex', flexDirection: 'column',
-        boxShadow: '0 24px 60px rgba(19,17,30,0.35)',
-      }}>
+  // Panel content — shared between modal and popover
+  const panel = (
+    <div onClick={e => e.stopPropagation()} style={{
+      background: '#fff', borderRadius: 16,
+      ...(isPopover
+        ? { ...popoverStyle, boxShadow: '0 12px 40px rgba(19,17,30,0.22)', border: '1px solid #ECEAFB' }
+        : { width: '100%', maxWidth: 760, maxHeight: '92vh', boxShadow: '0 24px 60px rgba(19,17,30,0.35)' }
+      ),
+      display: 'flex', flexDirection: 'column',
+    }}>
 
         {/* Header */}
         <div style={{
@@ -211,7 +245,7 @@ export function ScopeMatrixModal({
           {/* Quick actions */}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
             <BulkBtn icon={<Check size={11} />} label="Allow all" onClick={allowAll} accent="#16A34A" />
-            <BulkBtn icon={<Ban size={11} />} label="Lock weekends" onClick={onlyWeekdays} accent="#7C6FE0" />
+            {!isMultiWeek && <BulkBtn icon={<Ban size={11} />} label="Lock weekends" onClick={onlyWeekdays} accent="#7C6FE0" />}
             <BulkBtn icon={<Lock size={11} />} label="Lock all" onClick={lockAll} accent="#DC2626" />
             <div style={{ flex: 1 }} />
             <div style={{ display: 'flex', gap: 10, fontSize: 11, color: '#4B5275' }}>
@@ -235,7 +269,7 @@ export function ScopeMatrixModal({
                     borderBottom: '1px solid #ECEAFB', borderRight: '1px solid #ECEAFB',
                     width: 90, textAlign: 'left' as const,
                   }}>
-                    Day
+                    {isMultiWeek ? 'Week' : 'Day'}
                   </th>
                   {classPeriods.map((p, ci) => (
                     <th key={p.id}
@@ -256,33 +290,33 @@ export function ScopeMatrixModal({
                 </tr>
               </thead>
               <tbody>
-                {visibleDays.map((day, ri) => (
-                  <tr key={day}>
+                {rowKeys.map((key, ri) => (
+                  <tr key={key}>
                     <td
-                      onClick={() => cycleRow(day)}
-                      title={`Cycle ${day}`}
+                      onClick={() => cycleRow(key)}
+                      title={`Cycle ${rowLabel(key)}`}
                       style={{
                         background: '#FAFAFE', padding: '10px 12px',
                         fontSize: 12, fontWeight: 700, color: '#13111E',
                         borderRight: '1px solid #ECEAFB',
-                        borderBottom: ri < visibleDays.length - 1 ? '1px solid #ECEAFB' : 'none',
+                        borderBottom: ri < rowKeys.length - 1 ? '1px solid #ECEAFB' : 'none',
                         cursor: 'pointer',
                       }}>
-                      {DAY_LABEL[day]}
+                      {rowLabel(key)}
                     </td>
                     {classPeriods.map((p, ci) => {
-                      const st = getState(day, p.id)
-                      const style = STATE_STYLE[st]
+                      const st = getState(key, p.id)
+                      const stStyle = STATE_STYLE[st]
                       return (
                         <td key={p.id}
-                          onClick={() => cycleCell(day, p.id)}
-                          title={`${DAY_LABEL[day]} ${p.name} — ${style.label}`}
+                          onClick={() => cycleCell(key, p.id)}
+                          title={`${rowLabel(key)} · ${p.name} — ${stStyle.label}`}
                           style={{
                             padding: 0,
-                            background: style.bg,
-                            color: style.fg,
+                            background: stStyle.bg,
+                            color: stStyle.fg,
                             borderRight: ci < classPeriods.length - 1 ? '1px solid #ECEAFB' : 'none',
-                            borderBottom: ri < visibleDays.length - 1 ? '1px solid #ECEAFB' : 'none',
+                            borderBottom: ri < rowKeys.length - 1 ? '1px solid #ECEAFB' : 'none',
                             textAlign: 'center' as const,
                             cursor: 'pointer',
                             transition: 'background 0.1s, color 0.1s',
@@ -293,7 +327,7 @@ export function ScopeMatrixModal({
                             gap: 4, height: '100%',
                             fontSize: 14, fontWeight: 700,
                           }}>
-                            {style.symbol}
+                            {stStyle.symbol}
                           </div>
                         </td>
                       )
@@ -342,7 +376,26 @@ export function ScopeMatrixModal({
           </div>
         </div>
 
-      </div>
+    </div>
+  )
+
+  if (isPopover) {
+    return (
+      <>
+        {/* Click-outside backdrop (transparent) */}
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9998 }} onClick={onClose} />
+        {panel}
+      </>
+    )
+  }
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(19,17,30,0.6)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      zIndex: 9997, padding: 20, backdropFilter: 'blur(4px)',
+    }} onClick={onClose}>
+      {panel}
     </div>
   )
 }

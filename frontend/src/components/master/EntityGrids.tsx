@@ -42,7 +42,7 @@ export function ClassesGrid({
   sections: Section[]
   setSections: (s: Section[]) => void
   staff: Staff[]
-  onScope: (s: Section) => void
+  onScope: (s: Section, rect?: DOMRect) => void
 }) {
   const staffOptions = useMemo(() => ['', ...staff.map((s: any) => s.name)], [staff])
   const columns: DataGridColumn<Section>[] = [
@@ -83,7 +83,7 @@ export function SubjectsGrid({
 }: {
   subjects: Subject[]
   setSubjects: (s: Subject[]) => void
-  onScope: (s: Subject) => void
+  onScope: (s: Subject, rect?: DOMRect) => void
 }) {
   const columns: DataGridColumn<Subject>[] = [
     { key: 'name',     label: 'Subject',       type: 'text',   sticky: true, width: 160 },
@@ -140,7 +140,7 @@ export function TeachersGrid({
   staff: Staff[]
   setStaff: (s: Staff[]) => void
   sections: Section[]
-  onScope: (t: Staff) => void
+  onScope: (t: Staff, rect?: DOMRect) => void
 }) {
   const sectionOptions = useMemo(() => ['', ...sections.map((s: any) => s.name)], [sections])
   const columns: DataGridColumn<Staff>[] = [
@@ -191,7 +191,7 @@ export function RoomsGrid({
 }: {
   rooms: RoomRow[]
   setRooms: (r: RoomRow[]) => void
-  onScope: (r: RoomRow) => void
+  onScope: (r: RoomRow, rect?: DOMRect) => void
 }) {
   const columns: DataGridColumn<RoomRow>[] = [
     { key: 'name',     label: 'Room',     type: 'text',   sticky: true, width: 140 },

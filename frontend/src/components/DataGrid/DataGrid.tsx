@@ -77,8 +77,8 @@ export interface DataGridProps<T> {
   /** Build a fresh row for the +Add button. */
   newRow?: () => T
 
-  /** Per-row Scope button — when present, the row gets a Scope icon. */
-  onScope?: (row: T) => void
+  /** Per-row Scope button — rect is the button's bounding rect for popover anchoring. */
+  onScope?: (row: T, rect?: DOMRect) => void
 
   /** Custom AI suggestions hook — clicked from toolbar. */
   onAISuggestions?: () => void
@@ -253,6 +253,9 @@ export function DataGrid<T>({
   >(null)
   // v3.2: cursor position for drag-fill preview tooltip
   const [fillCursor, setFillCursor] = useState<{ x: number; y: number } | null>(null)
+  // context-menu (right-click row)
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; ri: number } | null>(null)
+
   const [pasteOpen, setPasteOpen] = useState(false)
   const [pasteText, setPasteText] = useState('')
   const [bulkOpen, setBulkOpen] = useState(false)
@@ -859,6 +862,26 @@ export function DataGrid<T>({
     onChange([...rows, ...dup])
   }
 
+  const insertRowAbove = useCallback((filteredRi: number) => {
+    if (!newRow) return
+    const origR = originalIndex(filteredRi)
+    if (origR < 0) return
+    const nr = newRow()
+    const next = rows.slice(); next.splice(origR, 0, nr)
+    onChange(next)
+    setSelection({ r: filteredRi, c: 0 }); setSelectionEnd(null)
+  }, [newRow, rows, originalIndex, onChange])
+
+  const insertRowBelow = useCallback((filteredRi: number) => {
+    if (!newRow) return
+    const origR = originalIndex(filteredRi)
+    if (origR < 0) return
+    const nr = newRow()
+    const next = rows.slice(); next.splice(origR + 1, 0, nr)
+    onChange(next)
+    setSelection({ r: filteredRi + 1, c: 0 }); setSelectionEnd(null)
+  }, [newRow, rows, originalIndex, onChange])
+
   // ── Empty state ─────────────────────────────────────────
   if (rows.length === 0) {
     return (
@@ -1085,13 +1108,19 @@ export function DataGrid<T>({
                 </>
               )}
               {onScope && !transposed && (
-                <th style={{ background: TOK.headerBg, padding: TOK.cellPad, width: 60, borderBottom: `1px solid ${TOK.divider}` }}></th>
+                <th style={{
+                  background: TOK.headerBg, padding: TOK.cellPad, width: 72,
+                  borderBottom: `1px solid ${TOK.divider}`,
+                  fontSize: TOK.headerFont, fontWeight: TOK.headerWeight,
+                  color: TOK.textMid, textAlign: 'center' as const, letterSpacing: '0.01em',
+                }}>Scope</th>
               )}
             </tr>
           </thead>
           <tbody>
             {!transposed && filteredRows.map((row, ri) => (
-              <tr key={rowKey(row)}>
+              <tr key={rowKey(row)}
+                onContextMenu={e => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, ri }) }}>
                 {columns.map((col, ci) => {
                   const value = getCell(row, col)
                   const isSelected = selection?.r === ri && selection?.c === ci
@@ -1228,10 +1257,18 @@ export function DataGrid<T>({
                   )
                 })}
                 {onScope && (
-                  <td style={{ padding: 6, borderBottom: `1px solid ${TOK.divider}`, textAlign: 'center' as const }}>
-                    <button onClick={() => onScope(row)}
-                      title="Scope" style={{ background: 'transparent', border: '1px solid #E8E4FF', color: TOK.accent, borderRadius: 6, padding: '4px 7px', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
-                      Scope
+                  <td style={{ padding: 5, borderBottom: `1px solid ${TOK.divider}`, textAlign: 'center' as const }}>
+                    <button
+                      onClick={e => onScope(row, (e.currentTarget as HTMLElement).getBoundingClientRect())}
+                      title="Edit availability scope"
+                      style={{
+                        background: TOK.accentSoft, border: `1px solid ${TOK.containerBorder}`,
+                        color: TOK.accent, borderRadius: 6, padding: '4px 10px',
+                        fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                        display: 'inline-flex', alignItems: 'center', gap: 4,
+                        whiteSpace: 'nowrap' as const,
+                      }}>
+                      ◎ Scope
                     </button>
                   </td>
                 )}
@@ -1302,6 +1339,33 @@ export function DataGrid<T>({
             )
           })()}
         </div>
+      )}
+
+      {/* Right-click context menu */}
+      {ctxMenu && (
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 1998 }}
+            onClick={() => setCtxMenu(null)}
+            onContextMenu={e => { e.preventDefault(); setCtxMenu(null) }} />
+          <div style={{
+            position: 'fixed',
+            left: Math.min(ctxMenu.x, window.innerWidth - 186),
+            top: Math.min(ctxMenu.y, window.innerHeight - 180),
+            zIndex: 1999,
+            background: '#fff',
+            border: '1px solid #ECEAFB',
+            borderRadius: 9,
+            boxShadow: '0 8px 28px rgba(19,17,30,0.14)',
+            minWidth: 178,
+            padding: '4px 0',
+          }}>
+            {newRow && <CtxMenuItem icon={<Plus size={12}/>} label="Insert row above" onClick={() => { insertRowAbove(ctxMenu.ri); setCtxMenu(null) }} />}
+            {newRow && <CtxMenuItem icon={<Plus size={12}/>} label="Insert row below" onClick={() => { insertRowBelow(ctxMenu.ri); setCtxMenu(null) }} />}
+            {newRow && <CtxDivider />}
+            <CtxMenuItem icon={<Copy size={12}/>} label="Duplicate row" onClick={() => { setSelection({ r: ctxMenu.ri, c: 0 }); setSelectionEnd(null); duplicateSelectedRows(); setCtxMenu(null) }} />
+            <CtxMenuItem icon={<Trash2 size={12}/>} label="Delete row" onClick={() => { setSelection({ r: ctxMenu.ri, c: 0 }); setSelectionEnd(null); deleteSelectedRows(); setCtxMenu(null) }} danger />
+          </div>
+        </>
       )}
 
       {/* Bulk fill modal */}
@@ -1624,6 +1688,31 @@ const popBtnPri: React.CSSProperties = {
 const popBtnGhost: React.CSSProperties = {
   padding: '5px 10px', fontSize: 10.5, fontWeight: 600,
   background: '#fff', color: TOK.textMid, border: `1px solid ${TOK.containerBorder}`, borderRadius: 5, cursor: 'pointer',
+}
+
+// ─── Context menu helpers ────────────────────────────────
+function CtxMenuItem({ icon, label, onClick, danger }: { icon: React.ReactNode; label: string; onClick: () => void; danger?: boolean }) {
+  return (
+    <div
+      role="menuitem"
+      onClick={onClick}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        padding: '7px 13px', cursor: 'pointer',
+        color: danger ? '#DC2626' : TOK.textOn,
+        fontSize: 12, fontWeight: 500,
+        userSelect: 'none' as const,
+      }}
+      onMouseEnter={e => (e.currentTarget.style.background = danger ? '#FEF2F2' : TOK.accentSoft)}
+      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+    >
+      <span style={{ color: danger ? '#DC2626' : TOK.textDim, display: 'flex' }}>{icon}</span>
+      {label}
+    </div>
+  )
+}
+function CtxDivider() {
+  return <div style={{ height: 1, background: TOK.divider, margin: '3px 0' }} />
 }
 
 function parseCSVLine(line: string): string[] {
