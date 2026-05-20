@@ -901,7 +901,7 @@ export function DataGrid<T>({
   // ── Empty state ─────────────────────────────────────────
   if (rows.length === 0) {
     return (
-      <div style={{ background: TOK.containerBg, border: `1px solid ${TOK.containerBorder}`, borderRadius: TOK.radius }}>
+      <div style={{ background: TOK.containerBg, border: `1px solid ${TOK.containerBorder}`, borderRadius: TOK.radius, overflow: 'clip' as any }}>
         <Toolbar
           title={title} description={description} icon={icon}
           tb={tb} search={search} setSearch={setSearch}
@@ -1057,7 +1057,10 @@ export function DataGrid<T>({
     fontWeight: TOK.headerWeight,
     padding: '0 8px',
     height: TOK.headerHeight,
-    borderBottom: `1px solid ${TOK.divider}`,
+    // Use box-shadow instead of border-bottom so the divider line stays
+    // visible when the header is sticky (border-collapse: collapse eats
+    // the real border while a box-shadow travels with the element).
+    boxShadow: `inset 0 -1px 0 ${TOK.divider}, 0 2px 4px rgba(0,0,0,0.04)`,
     borderRight: `1px solid ${TOK.divider}`,
     userSelect: 'none' as const,
     overflow: 'hidden',
@@ -1077,8 +1080,7 @@ export function DataGrid<T>({
   }
   const thRowNum: React.CSSProperties = {
     background: TOK.rowNumBg,
-    borderBottom: `1px solid ${TOK.divider}`,
-    borderRight: `2px solid ${TOK.divider}`,
+    boxShadow: `inset 0 -1px 0 ${TOK.divider}, inset -2px 0 0 ${TOK.divider}, 0 2px 4px rgba(0,0,0,0.04)`,
     position: 'sticky' as const,
     top: 0,
     left: 0,
@@ -1114,7 +1116,9 @@ export function DataGrid<T>({
     : null
 
   return (
-    <div ref={containerRef} tabIndex={0} style={{ background: TOK.containerBg, border: `1px solid ${TOK.containerBorder}`, borderRadius: TOK.radius, overflow: 'hidden', outline: 'none' }}>
+    // overflow:'clip' clips to border-radius without creating a scroll container,
+    // so position:sticky on <th> anchors to the inner overflow:auto div, not here.
+    <div ref={containerRef} tabIndex={0} style={{ background: TOK.containerBg, border: `1px solid ${TOK.containerBorder}`, borderRadius: TOK.radius, overflow: 'clip' as any, outline: 'none' }}>
       <Toolbar
         title={title} description={description} icon={icon}
         tb={tb} search={search} setSearch={setSearch}
