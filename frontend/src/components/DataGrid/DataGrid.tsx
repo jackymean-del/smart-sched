@@ -279,8 +279,8 @@ export function DataGrid<T>({
   const [insertMenuRow, setInsertMenuRow] = useState<number | null>(null)
 
   // Width of the always-present row-actions gutter column
-  // 3 buttons × 26px + 2 gaps × 3px + 2 sides × 4px padding = 96px → use 96
-  const ACTIONS_COL_W = 96
+  // 4 buttons × 28px + 3 gaps × 4px + 2 sides × 6px padding = 136px → use 136
+  const ACTIONS_COL_W = 136
 
   const [pasteOpen, setPasteOpen] = useState(false)
   const [pasteText, setPasteText] = useState('')
@@ -1282,8 +1282,10 @@ export function DataGrid<T>({
                       Scope
                     </th>
                   )}
-                  {/* Actions column header — always blank */}
-                  <th style={{ ...thBase, position: 'sticky' as const, top: stickyHeaderTop, zIndex: 2, width: ACTIONS_COL_W, borderRight: 'none' }} />
+                  {/* Actions column header */}
+                  <th style={{ ...thBase, position: 'sticky' as const, top: stickyHeaderTop, zIndex: 2, width: ACTIONS_COL_W, borderRight: 'none', textAlign: 'center' as const, color: TOK.textDim, fontSize: 11, letterSpacing: '0.05em', textTransform: 'uppercase' as const }}>
+                    Actions
+                  </th>
                 </>
               )}
 
@@ -1344,21 +1346,31 @@ export function DataGrid<T>({
                   return (
                     <td key={col.key}
                       onMouseDown={e => {
-                        // If we're already editing THIS cell, let the input handle it
-                        // (preserves cursor position on second click, avoids select-all re-trigger)
+                        // Already editing THIS cell — let the native input handle the click
+                        // (preserves cursor position; avoids re-triggering select-all)
                         const alreadyEditingThisCell =
                           editingRef.current?.r === ri && editingRef.current?.c === ci
                         if (alreadyEditingThisCell) return
 
-                        containerRef.current?.focus({ preventScroll: true })
                         if (e.shiftKey && selectionRef.current) {
+                          // Range extension — focus container for keyboard nav
+                          containerRef.current?.focus({ preventScroll: true })
                           setSelectionEnd({ r: ri, c: ci })
+                          return
+                        }
+
+                        setSelection({ r: ri, c: ci }); setSelectionEnd(null)
+
+                        const canEdit = !col.readonly && col.type !== 'computed' && col.type !== 'toggle'
+                        if (canEdit) {
+                          // Enter edit immediately — useEffect will focus the input after render.
+                          // Do NOT call containerRef.focus() here: it would blur any active editing
+                          // input, trigger its onBlur → onCommit, whose setTimeout then steals focus
+                          // back from the new input.
+                          setEditing({ r: ri, c: ci })
                         } else {
-                          setSelection({ r: ri, c: ci }); setSelectionEnd(null)
-                          // Enter edit mode immediately on first click (instant, like a normal text field)
-                          if (!col.readonly && col.type !== 'computed' && col.type !== 'toggle') {
-                            setEditing({ r: ri, c: ci })
-                          }
+                          // Non-editable cell — focus container so keyboard shortcuts keep working
+                          containerRef.current?.focus({ preventScroll: true })
                         }
                       }}
                       onMouseEnter={e => {
@@ -1396,10 +1408,17 @@ export function DataGrid<T>({
                             updateCellInRows(ri, ci, v)
                             setEditing(null)
                             setSelection({ r: ri, c: ci })
-                            setTimeout(() => containerRef.current?.focus({ preventScroll: true }), 0)
+                            // Only return focus to container if no OTHER cell becomes editing
+                            // immediately (e.g. user clicked another cell — its useEffect
+                            // will focus that input; we must not race against it).
+                            setTimeout(() => {
+                              if (!editingRef.current) containerRef.current?.focus({ preventScroll: true })
+                            }, 0)
                           }, () => {
                             setEditing(null)
-                            setTimeout(() => containerRef.current?.focus({ preventScroll: true }), 0)
+                            setTimeout(() => {
+                              if (!editingRef.current) containerRef.current?.focus({ preventScroll: true })
+                            }, 0)
                           }, editInputRef as any)
                         : col.type === 'toggle'
                           ? renderToggle(value, () => {
@@ -1445,69 +1464,66 @@ export function DataGrid<T>({
                   </td>
                 )}
 
-                {/* ── Row hover-actions: Insert · Duplicate · Delete ── */}
+                {/* ── Row actions: always visible, subtle at rest → bold on row hover ── */}
                 <td style={{
                   ...tdBase,
-                  overflow: 'visible',  // override hidden so buttons aren't clipped
+                  overflow: 'visible',
                   width: ACTIONS_COL_W, minWidth: ACTIONS_COL_W,
                   borderRight: 'none',
-                  background: hoveredRow === ri ? '#F5F2FF' : 'transparent',
-                  transition: 'background 0.12s',
+                  background: 'transparent',
                 }}>
-                  {hoveredRow === ri && (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3, height: '100%', padding: '0 4px' }}>
-                      {/* Insert above / below */}
-                      {newRow && (
-                        <div style={{ position: 'relative' as const }}>
-                          <button
-                            title="Insert row above or below"
-                            onMouseDown={e => e.stopPropagation()}
-                            onClick={e => { e.stopPropagation(); setInsertMenuRow(insertMenuRow === ri ? null : ri) }}
-                            style={rowActIconBtn}>
-                            <Plus size={12} />
-                          </button>
-                          {insertMenuRow === ri && (
-                            <>
-                              <div style={{ position: 'fixed', inset: 0, zIndex: 3000, pointerEvents: 'all' }} onClick={() => { setInsertMenuRow(null); setHoveredRow(null) }} />
-                              <div style={{
-                                position: 'absolute' as const, top: '100%', right: 0, marginTop: 3,
-                                background: '#fff', border: `1px solid ${TOK.containerBorder}`,
-                                borderRadius: 8, boxShadow: '0 8px 24px rgba(19,17,30,0.15)',
-                                zIndex: 3001, minWidth: 140, padding: '4px 0', overflow: 'hidden',
-                              }}>
-                                <div role="menuitem" style={rowMenuItemStyle}
-                                  onClick={() => { insertRowAbove(ri); setInsertMenuRow(null) }}
-                                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = TOK.accentSoft}
-                                  onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}>
-                                  ↑ Insert above
-                                </div>
-                                <div role="menuitem" style={rowMenuItemStyle}
-                                  onClick={() => { insertRowBelow(ri); setInsertMenuRow(null) }}
-                                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = TOK.accentSoft}
-                                  onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}>
-                                  ↓ Insert below
-                                </div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, height: '100%', padding: '0 6px' }}>
+                    {/* Insert above / below */}
+                    {newRow && (
+                      <div style={{ position: 'relative' as const }}>
+                        <button
+                          title="Insert row"
+                          onMouseDown={e => e.stopPropagation()}
+                          onClick={e => { e.stopPropagation(); setInsertMenuRow(insertMenuRow === ri ? null : ri) }}
+                          style={hoveredRow === ri ? rowActBtnHover : rowActBtn}>
+                          <Plus size={13} />
+                        </button>
+                        {insertMenuRow === ri && (
+                          <>
+                            <div style={{ position: 'fixed', inset: 0, zIndex: 3000, pointerEvents: 'all' }} onClick={() => { setInsertMenuRow(null); setHoveredRow(null) }} />
+                            <div style={{
+                              position: 'absolute' as const, top: '100%', right: 0, marginTop: 3,
+                              background: '#fff', border: `1px solid ${TOK.containerBorder}`,
+                              borderRadius: 8, boxShadow: '0 8px 24px rgba(19,17,30,0.15)',
+                              zIndex: 3001, minWidth: 140, padding: '4px 0', overflow: 'hidden',
+                            }}>
+                              <div role="menuitem" style={rowMenuItemStyle}
+                                onClick={() => { insertRowAbove(ri); setInsertMenuRow(null) }}
+                                onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = TOK.accentSoft}
+                                onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}>
+                                ↑ Insert above
                               </div>
-                            </>
-                          )}
-                        </div>
-                      )}
-                      {/* Duplicate — direct action, no stale-closure bug */}
-                      <button title="Duplicate row"
-                        onMouseDown={e => e.stopPropagation()}
-                        onClick={e => { e.stopPropagation(); duplicateRowByIndex(ri) }}
-                        style={rowActIconBtn}>
-                        <Copy size={12} />
-                      </button>
-                      {/* Delete — direct action */}
-                      <button title="Delete row"
-                        onMouseDown={e => e.stopPropagation()}
-                        onClick={e => { e.stopPropagation(); deleteRowByIndex(ri) }}
-                        style={{ ...rowActIconBtn, color: '#DC2626', borderColor: '#FEE2E2' }}>
-                        <Trash2 size={12} />
-                      </button>
-                    </div>
-                  )}
+                              <div role="menuitem" style={rowMenuItemStyle}
+                                onClick={() => { insertRowBelow(ri); setInsertMenuRow(null) }}
+                                onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = TOK.accentSoft}
+                                onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}>
+                                ↓ Insert below
+                              </div>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
+                    {/* Duplicate */}
+                    <button title="Duplicate row"
+                      onMouseDown={e => e.stopPropagation()}
+                      onClick={e => { e.stopPropagation(); duplicateRowByIndex(ri) }}
+                      style={hoveredRow === ri ? rowActBtnHover : rowActBtn}>
+                      <Copy size={13} />
+                    </button>
+                    {/* Delete */}
+                    <button title="Delete row"
+                      onMouseDown={e => e.stopPropagation()}
+                      onClick={e => { e.stopPropagation(); deleteRowByIndex(ri) }}
+                      style={hoveredRow === ri ? rowActBtnDangerHover : rowActBtnDanger}>
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -1713,15 +1729,27 @@ const btnGhost: React.CSSProperties = {
   padding: '6px 11px', borderRadius: 7, border: `1px solid ${TOK.containerBorder}`,
   background: '#fff', color: TOK.textMid, fontSize: 11, fontWeight: 600, cursor: 'pointer',
 }
-// Row-level hover action icon buttons
-const rowActIconBtn: React.CSSProperties = {
-  width: 26, height: 26, padding: 0,
-  border: `1px solid ${TOK.containerBorder}`,
-  borderRadius: 6, background: '#fff', color: TOK.textMid,
+// Row-level action icon buttons — 4 variants: rest / hover × normal / danger
+const rowActBtn: React.CSSProperties = {
+  width: 28, height: 28, padding: 0, border: 'none',
+  borderRadius: 6, background: 'transparent', color: '#C4C4CF',
   cursor: 'pointer', flexShrink: 0,
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-  boxShadow: '0 1px 3px rgba(0,0,0,0.07)',
+  transition: 'background 0.1s, color 0.1s',
 }
+const rowActBtnHover: React.CSSProperties = {
+  ...rowActBtn, background: '#F3F1FF', color: TOK.accent,
+  border: `1px solid #E2DEFF`,
+}
+const rowActBtnDanger: React.CSSProperties = {
+  ...rowActBtn, color: '#D1BAD0',
+}
+const rowActBtnDangerHover: React.CSSProperties = {
+  ...rowActBtn, background: '#FEF2F2', color: '#DC2626',
+  border: `1px solid #FEE2E2`,
+}
+/** @deprecated use rowActBtn */
+const rowActIconBtn: React.CSSProperties = rowActBtnHover
 const rowMenuItemStyle: React.CSSProperties = {
   padding: '6px 12px', fontSize: 12, cursor: 'pointer',
   color: TOK.textOn, userSelect: 'none' as const,
