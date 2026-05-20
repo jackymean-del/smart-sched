@@ -32,7 +32,7 @@ import * as XLSX from 'xlsx'
 import {
   Plus, Upload, Download, ClipboardPaste, Search, RefreshCw,
   Trash2, Copy, X, ArrowUpDown, Sparkles, ChevronDown,
-  Undo2, Redo2, Filter, FileSpreadsheet, ArrowDownToLine,
+  Undo2, Redo2, Filter, FileSpreadsheet, ArrowDownToLine, FileText,
 } from 'lucide-react'
 
 // ─────────────────────────────────────────────────────────────
@@ -895,6 +895,11 @@ export function DataGrid<T>({
           onImportXLSX={() => xlsxRef.current?.click()}
           onExportXLSX={exportXLSX}
           onPaste={() => setPasteOpen(true)}
+          onDirectPaste={() => {
+            navigator.clipboard?.readText()
+              .then(txt => { if (txt.trim()) applyPaste(txt, selection ?? { r: 0, c: 0 }) })
+              .catch(() => setPasteOpen(true))
+          }}
           onTranspose={() => setTransposed(v => !v)}
           onBulk={() => setBulkOpen(true)}
           onAI={onAISuggestions}
@@ -1022,6 +1027,11 @@ export function DataGrid<T>({
         onImportXLSX={() => xlsxRef.current?.click()}
         onExportXLSX={exportXLSX}
         onPaste={() => setPasteOpen(true)}
+        onDirectPaste={() => {
+          navigator.clipboard?.readText()
+            .then(txt => { if (txt.trim()) applyPaste(txt, selection ?? { r: filteredRows.length, c: 0 }) })
+            .catch(() => setPasteOpen(true))
+        }}
         onTranspose={tb.transpose ? () => setTransposed(v => !v) : undefined}
         onBulk={() => setBulkOpen(true)}
         onFillDown={selection ? applyFillDown : undefined}
@@ -1419,6 +1429,8 @@ interface ToolbarProps {
   onImportXLSX?: () => void
   onExportXLSX?: () => void
   onPaste?: () => void
+  /** Direct clipboard paste (no modal). Falls back to modal if clipboard read fails. */
+  onDirectPaste?: () => void
   onTranspose?: () => void
   onBulk?: () => void
   onFillDown?: () => void
@@ -1437,10 +1449,16 @@ interface ToolbarProps {
 
 function Toolbar({
   title, description, icon, tb, search, setSearch,
-  onAdd, onImport, onExport, onImportXLSX, onExportXLSX, onPaste, onTranspose,
+  onAdd, onImport, onExport, onImportXLSX, onExportXLSX, onPaste, onDirectPaste, onTranspose,
   onBulk, onFillDown, onAI, onDeleteRows, onDuplicateRows, selectionInfo,
   canUndo, canRedo, onUndo, onRedo, activeFilterCount, onClearFilters,
 }: ToolbarProps) {
+  const [importDrop, setImportDrop] = useState(false)
+  const [exportDrop, setExportDrop] = useState(false)
+
+  const hasImport = (tb.importCSV && onImport) || (tb.importXLSX && onImportXLSX)
+  const hasExport = (tb.exportCSV && onExport) || (tb.exportXLSX && onExportXLSX)
+
   return (
     <div style={{ padding: '12px 16px', borderBottom: `1px solid ${TOK.divider}`, background: '#FFFFFF' }}>
       {(title || description) && (
@@ -1458,7 +1476,15 @@ function Toolbar({
         </div>
       )}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
-        {onAdd && tb.add && <button onClick={onAdd} style={btnPri}><Plus size={13} /> Add Row</button>}
+
+        {/* Primary: Add Row */}
+        {onAdd && tb.add && (
+          <button onClick={onAdd} style={btnPri} title="Add a new blank row">
+            <Plus size={13} /> Add Row
+          </button>
+        )}
+
+        {/* Undo / Redo */}
         {tb.undoRedo && onUndo && (
           <button onClick={onUndo} disabled={!canUndo}
             style={{ ...btnGhost, opacity: canUndo ? 1 : 0.4, cursor: canUndo ? 'pointer' : 'not-allowed' }}
@@ -1469,11 +1495,101 @@ function Toolbar({
             style={{ ...btnGhost, opacity: canRedo ? 1 : 0.4, cursor: canRedo ? 'pointer' : 'not-allowed' }}
             title="Redo (Ctrl+Y)"><Redo2 size={12} /></button>
         )}
-        {onImport && tb.importCSV && <button onClick={onImport} style={btnGhost}><Upload size={12} /> CSV</button>}
-        {onImportXLSX && tb.importXLSX && <button onClick={onImportXLSX} style={btnGhost} title="Import XLSX"><FileSpreadsheet size={12} /> XLSX</button>}
-        {onExport && tb.exportCSV && <button onClick={onExport} style={btnGhost} title="Export CSV"><Download size={12} /> CSV</button>}
-        {onExportXLSX && tb.exportXLSX && <button onClick={onExportXLSX} style={btnGhost} title="Export XLSX"><FileSpreadsheet size={12} /> XLSX</button>}
-        {onPaste && tb.paste && <button onClick={onPaste} style={btnGhost}><ClipboardPaste size={12} /> Paste</button>}
+
+        {/* Import dropdown */}
+        {hasImport && (
+          <div style={{ position: 'relative' as const }}>
+            <button
+              onClick={() => { setImportDrop(v => !v); setExportDrop(false) }}
+              style={{ ...btnGhost, fontWeight: 700 }}
+              title="Import from CSV or Excel file">
+              <Upload size={12} /> Import <ChevronDown size={10} style={{ marginLeft: 1 }} />
+            </button>
+            {importDrop && (
+              <>
+                <div style={{ position: 'fixed', inset: 0, zIndex: 2000 }} onClick={() => setImportDrop(false)} />
+                <div style={{
+                  position: 'absolute' as const, top: '100%', left: 0, marginTop: 4,
+                  background: '#fff', border: `1px solid ${TOK.containerBorder}`,
+                  borderRadius: 9, boxShadow: '0 8px 28px rgba(19,17,30,0.13)',
+                  zIndex: 2001, minWidth: 190, padding: '4px 0', overflow: 'hidden',
+                }}>
+                  {tb.importCSV && onImport && (
+                    <DropMenuItem
+                      icon={<FileText size={13} />}
+                      label="Import CSV"
+                      sub=".csv / .tsv"
+                      onClick={() => { onImport(); setImportDrop(false) }}
+                    />
+                  )}
+                  {tb.importXLSX && onImportXLSX && (
+                    <DropMenuItem
+                      icon={<FileSpreadsheet size={13} />}
+                      label="Import Excel"
+                      sub=".xlsx / .xls"
+                      onClick={() => { onImportXLSX(); setImportDrop(false) }}
+                    />
+                  )}
+                  <div style={{ height: 1, background: TOK.divider, margin: '3px 0' }} />
+                  <div style={{ padding: '5px 13px 7px', fontSize: 10, color: TOK.textDim, lineHeight: 1.5 }}>
+                    First row = column headers.<br />Unmatched columns are skipped.
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Export dropdown */}
+        {hasExport && (
+          <div style={{ position: 'relative' as const }}>
+            <button
+              onClick={() => { setExportDrop(v => !v); setImportDrop(false) }}
+              style={btnGhost}
+              title="Export to CSV or Excel">
+              <Download size={12} /> Export <ChevronDown size={10} style={{ marginLeft: 1 }} />
+            </button>
+            {exportDrop && (
+              <>
+                <div style={{ position: 'fixed', inset: 0, zIndex: 2000 }} onClick={() => setExportDrop(false)} />
+                <div style={{
+                  position: 'absolute' as const, top: '100%', left: 0, marginTop: 4,
+                  background: '#fff', border: `1px solid ${TOK.containerBorder}`,
+                  borderRadius: 9, boxShadow: '0 8px 28px rgba(19,17,30,0.13)',
+                  zIndex: 2001, minWidth: 190, padding: '4px 0', overflow: 'hidden',
+                }}>
+                  {tb.exportCSV && onExport && (
+                    <DropMenuItem
+                      icon={<FileText size={13} />}
+                      label="Export CSV"
+                      sub="Spreadsheet-compatible"
+                      onClick={() => { onExport(); setExportDrop(false) }}
+                    />
+                  )}
+                  {tb.exportXLSX && onExportXLSX && (
+                    <DropMenuItem
+                      icon={<FileSpreadsheet size={13} />}
+                      label="Export Excel"
+                      sub=".xlsx workbook"
+                      onClick={() => { onExportXLSX(); setExportDrop(false) }}
+                    />
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Direct paste from clipboard */}
+        {onDirectPaste && tb.paste && (
+          <button
+            onClick={onDirectPaste}
+            style={btnGhost}
+            title="Paste from clipboard (Ctrl+V) — pastes at selected cell">
+            <ClipboardPaste size={12} /> Paste
+          </button>
+        )}
+
         {onTranspose && tb.transpose && <button onClick={onTranspose} style={btnGhost}><ArrowUpDown size={12} /> Transpose</button>}
         {onBulk && tb.bulkActions && selectionInfo && <button onClick={onBulk} style={btnGhost}><RefreshCw size={12} /> Bulk fill</button>}
         {onFillDown && tb.fillDown && selectionInfo && <button onClick={onFillDown} style={btnGhost} title="Fill Down (Ctrl+D)"><ArrowDownToLine size={12} /> Fill ↓</button>}
@@ -1485,7 +1601,9 @@ function Toolbar({
           </button>
         )}
         {onAI && tb.aiSuggestions && <button onClick={onAI} style={{ ...btnGhost, color: TOK.accent, borderColor: TOK.containerBorder }}><Sparkles size={12} /> AI Suggestions</button>}
+
         <div style={{ flex: 1 }} />
+
         {tb.search && (
           <div style={{ position: 'relative' as const, minWidth: 200 }}>
             <Search size={12} style={{ position: 'absolute' as const, left: 10, top: '50%', transform: 'translateY(-50%)', color: TOK.textDim }} />
@@ -1499,6 +1617,24 @@ function Toolbar({
             )}
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+function DropMenuItem({ icon, label, sub, onClick }: { icon: React.ReactNode; label: string; sub?: string; onClick: () => void }) {
+  return (
+    <div
+      role="menuitem"
+      onClick={onClick}
+      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 13px', cursor: 'pointer', userSelect: 'none' as const }}
+      onMouseEnter={e => (e.currentTarget.style.background = TOK.accentSoft)}
+      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+    >
+      <span style={{ color: TOK.accent, display: 'flex', flexShrink: 0 }}>{icon}</span>
+      <div>
+        <div style={{ fontSize: 12, fontWeight: 600, color: TOK.textOn }}>{label}</div>
+        {sub && <div style={{ fontSize: 10, color: TOK.textDim, marginTop: 1 }}>{sub}</div>}
       </div>
     </div>
   )
