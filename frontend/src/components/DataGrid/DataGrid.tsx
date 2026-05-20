@@ -1650,6 +1650,9 @@ export function DataGrid<T>({
           </div>
         </div>
       )}
+
+      {/* ── Keyboard shortcut hint bar ── */}
+      <KeyboardHintBar />
     </div>
   )
 }
@@ -2166,6 +2169,48 @@ function CtxMenuItem({ icon, label, onClick, danger }: { icon: React.ReactNode; 
 }
 function CtxDivider() {
   return <div style={{ height: 1, background: TOK.divider, margin: '3px 0' }} />
+}
+
+// ─── Keyboard shortcut hint bar ───────────────────────────
+const KB_SHORTCUTS = [
+  { key: 'Enter',  label: 'Edit / Save' },
+  { key: 'Tab',    label: 'Next field'  },
+  { key: 'Esc',    label: 'Cancel'      },
+  { key: '↑ ↓',   label: 'Navigate'    },
+  { key: 'Ctrl D', label: 'Fill ↓'     },
+  { key: 'Ctrl Z', label: 'Undo'        },
+]
+function KeyboardHintBar() {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '4px 18px',
+      padding: '7px 16px',
+      borderTop: `1px solid ${TOK.divider}`,
+      background: '#FAFAFA',
+      borderRadius: `0 0 ${TOK.radius}px ${TOK.radius}px`,
+    }}>
+      <span style={{ fontSize: 10, color: TOK.textDim, fontWeight: 700, letterSpacing: '0.04em', flexShrink: 0 }}>
+        Keyboard shortcuts:
+      </span>
+      {KB_SHORTCUTS.map(s => (
+        <span key={s.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
+          <kbd style={{
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            padding: '1px 7px', borderRadius: 4,
+            border: `1px solid ${TOK.divider}`,
+            background: '#fff', color: TOK.textMid,
+            fontSize: 10, fontWeight: 700,
+            fontFamily: 'inherit',
+            boxShadow: '0 1px 0 rgba(0,0,0,0.06)',
+            whiteSpace: 'nowrap' as const,
+          }}>
+            {s.key}
+          </kbd>
+          <span style={{ fontSize: 10, color: TOK.textDim }}>{s.label}</span>
+        </span>
+      ))}
+    </div>
+  )
 }
 
 function parseCSVLine(line: string): string[] {

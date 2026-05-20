@@ -9,7 +9,7 @@
  * Writes directly to Zustand (sectionStrengths + subjectGroupingRules + dynamicLearningGroups).
  */
 
-import { useMemo, useEffect, useState } from 'react'
+import { useMemo, useEffect, useState, useRef, useCallback } from 'react'
 import { useTimetableStore } from '@/store/timetableStore'
 import type { SectionStrength } from '@/types'
 import { Sparkles, Users2, ChevronRight, ChevronLeft, RefreshCw, BookOpen, Users, GraduationCap, CheckSquare } from 'lucide-react'
@@ -107,6 +107,27 @@ export function StepStudentGroups() {
     setSectionStrengths(updated)
   }
 
+  // Ref to the table wrapper — used to scope querySelector for ↑↓ navigation
+  const tableWrapRef = useRef<HTMLDivElement>(null)
+
+  // Arrow-key + Enter navigation between inputs in the preference matrix
+  const handleCellKey = useCallback((e: React.KeyboardEvent<HTMLInputElement>, ri: number, ci: number) => {
+    if (e.key === 'Escape') {
+      e.currentTarget.blur()
+      return
+    }
+    let nextR = ri, nextC = ci
+    if (e.key === 'ArrowDown'  || (e.key === 'Enter' && !e.shiftKey)) { nextR = ri + 1; e.preventDefault() }
+    else if (e.key === 'ArrowUp' || (e.key === 'Enter' &&  e.shiftKey)) { nextR = ri - 1; e.preventDefault() }
+    else if (e.key === 'ArrowRight') { nextC = ci + 1; e.preventDefault() }
+    else if (e.key === 'ArrowLeft')  { nextC = ci - 1; e.preventDefault() }
+    else return
+    const next = tableWrapRef.current?.querySelector<HTMLInputElement>(
+      `input[data-row="${nextR}"][data-col="${nextC}"]`
+    )
+    if (next) { next.focus(); next.select() }
+  }, [])
+
   // AI Regenerate groups
   const handleRegenerate = async () => {
     setRegenerating(true)
@@ -181,7 +202,7 @@ export function StepStudentGroups() {
         {sections.length === 0 ? (
           <EmptyState msg="Add classes and subjects in Step 1 → Resources first." />
         ) : (
-          <div style={{ overflowX: 'auto' as const }}>
+          <div ref={tableWrapRef} style={{ overflowX: 'auto' as const }}>
             <table style={{ borderCollapse: 'collapse' as const, width: '100%', minWidth: 400 }}>
               <thead>
                 <tr>
@@ -204,14 +225,17 @@ export function StepStudentGroups() {
                           {total || '—'}
                         </span>
                       </td>
-                      {subjectList.map((subName: string) => {
+                      {subjectList.map((subName: string, ci: number) => {
                         const val = row.subjectStrengths?.[subName] ?? 0
                         return (
                           <td key={subName} style={tdCenter()}>
                             <input
                               type="number" min={0} max={99} value={val || ''}
                               placeholder="0"
+                              data-row={ri} data-col={ci}
                               onChange={e => updateCell(row.sectionName, subName, parseInt(e.target.value) || 0)}
+                              onKeyDown={e => handleCellKey(e, ri, ci)}
+                              onFocus={e => e.currentTarget.select()}
                               style={{
                                 width: '100%', maxWidth: 60, textAlign: 'center' as const,
                                 padding: '4px 6px', borderRadius: 6,
@@ -235,6 +259,7 @@ export function StepStudentGroups() {
         <div style={{ fontSize: 10, color: '#B8B4D4', marginTop: 8 }}>
           ✦ Cells highlighted in purple have ≥ 5 students — AI will form a group for these.
         </div>
+        <TableKeyboardHint />
       </Section>
 
       {/* ══════════════════════════════════
@@ -536,4 +561,42 @@ function tdCenter(): React.CSSProperties {
     padding: '4px 6px', textAlign: 'center',
     borderBottom: '1px solid #F0EDFF',
   }
+}
+
+// ── Keyboard shortcut hint bar (shared with DataGrid) ─────────
+const TABLE_SHORTCUTS = [
+  { key: 'Tab',    label: 'Next field'  },
+  { key: 'Enter',  label: 'Next row'    },
+  { key: '↑ ↓',   label: 'Navigate'    },
+  { key: '← →',   label: 'Navigate'    },
+  { key: 'Esc',   label: 'Cancel'       },
+]
+function TableKeyboardHint() {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '4px 16px',
+      padding: '7px 4px', marginTop: 4,
+    }}>
+      <span style={{ fontSize: 10, color: '#B8B4D4', fontWeight: 700, flexShrink: 0 }}>
+        Keyboard shortcuts:
+      </span>
+      {TABLE_SHORTCUTS.map(s => (
+        <span key={s.key + s.label} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
+          <kbd style={{
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            padding: '1px 7px', borderRadius: 4,
+            border: '1px solid #E8E4FF',
+            background: '#fff', color: '#555',
+            fontSize: 10, fontWeight: 700,
+            fontFamily: 'inherit',
+            boxShadow: '0 1px 0 rgba(0,0,0,0.06)',
+            whiteSpace: 'nowrap' as const,
+          }}>
+            {s.key}
+          </kbd>
+          <span style={{ fontSize: 10, color: '#B8B4D4' }}>{s.label}</span>
+        </span>
+      ))}
+    </div>
+  )
 }
