@@ -12,6 +12,7 @@ import { useMemo } from 'react'
 import type { Subject, Section, Staff, ScopeMatrix } from '@/types'
 import { DataGrid, DataGridColumn } from '@/components/DataGrid/DataGrid'
 import { GraduationCap, BookOpen, Users, Building2 } from 'lucide-react'
+import { useNamingMemory } from '@/hooks/useNamingMemory'
 
 // ── Auto-fill helpers ────────────────────────────────────────────────────────
 
@@ -228,18 +229,32 @@ export function SubjectsGrid({
   onScope: (s: Subject, rect?: DOMRect) => void
   onBulkScope?: (rect?: DOMRect) => void
 }) {
+  const { rememberSubjectShort, suggestShort } = useNamingMemory()
+
   const columns: DataGridColumn<Subject>[] = [
     {
       key: 'name', label: 'Subject', type: 'text', sticky: true, width: 200, placeholder: 'e.g. Mathematics',
       setValue: (row, v) => {
-        const short = autoShortName(String(v))
+        const name = String(v)
+        // Priority: 1) user's own memory  2) built-in table  3) algorithm
+        const learnedShort = suggestShort(name)
+        const builtinShort = SUBJECT_ABBR[name.trim().toLowerCase()]
+        const algoShort = autoShortName(name)
+        const short = learnedShort || builtinShort || algoShort
         const current = (row as any).shortName ?? ''
-        // Only auto-fill Short if user hasn't already typed something custom
         return { ...row, name: v, shortName: current || short } as any
       },
     },
-    { key: 'shortName', label: 'Short', type: 'text', width: 90, placeholder: 'e.g. Math' },
-    { key: 'category',  label: 'Category', type: 'select', options: SUBJECT_CATS, width: 140 },
+    {
+      key: 'shortName', label: 'Short', type: 'text', width: 90, placeholder: 'e.g. MATH',
+      // When user manually edits the short form → train the AI
+      setValue: (row, v) => {
+        const name = (row as any).name ?? ''
+        if (name && v) rememberSubjectShort(String(name), String(v))
+        return { ...row, shortName: v } as any
+      },
+    },
+    { key: 'category',  label: 'Category', type: 'select', options: SUBJECT_CATS, width: 140, placeholder: 'Select...' },
     {
       key: 'isOptional', label: 'Optional', type: 'toggle', width: 90, align: 'center',
       getValue: (r) => (r as any).isOptional ?? false,

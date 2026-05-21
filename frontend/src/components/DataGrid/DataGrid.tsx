@@ -1514,7 +1514,12 @@ export function DataGrid<T>({
                           <>
                             <div style={{ position: 'fixed', inset: 0, zIndex: 3000, pointerEvents: 'all' }} onClick={() => { setInsertMenuRow(null); setHoveredRow(null) }} />
                             <div style={{
-                              position: 'absolute' as const, top: '100%', right: 0, marginTop: 3,
+                              position: 'absolute' as const,
+                              // Last 3 rows: open upward so menu doesn't clip below viewport
+                              ...(ri >= filteredRows.length - 3
+                                ? { bottom: '100%', marginBottom: 3 }
+                                : { top: '100%', marginTop: 3 }),
+                              right: 0,
                               background: '#fff', border: `1px solid ${TOK.containerBorder}`,
                               borderRadius: 8, boxShadow: '0 8px 24px rgba(19,17,30,0.15)',
                               zIndex: 3001, minWidth: 140, padding: '4px 0', overflow: 'hidden',
@@ -1558,6 +1563,29 @@ export function DataGrid<T>({
                 </td>
               </tr>
             ))}
+
+            {/* ── Bottom Add Row button (normal mode only) ── */}
+            {newRow && !transposed && (
+              <tr>
+                <td colSpan={columns.length + 2 + (onScope ? 1 : 0)}
+                  style={{ padding: 0, borderBottom: 'none' }}>
+                  <button
+                    onClick={addRow}
+                    style={{
+                      width: '100%', height: 34, border: 'none',
+                      background: 'transparent', color: TOK.textDim,
+                      fontSize: 12, fontWeight: 500, cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', gap: 6,
+                      padding: '0 14px', transition: 'color 0.12s, background 0.12s',
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.color = TOK.accent; e.currentTarget.style.background = TOK.accentSoft }}
+                    onMouseLeave={e => { e.currentTarget.style.color = TOK.textDim; e.currentTarget.style.background = 'transparent' }}
+                  >
+                    <Plus size={12} /> Add Row
+                  </button>
+                </td>
+              </tr>
+            )}
 
             {/* ── Transposed rows: one row per FIELD (skip col[0] — it's already the header) ── */}
             {transposed && columns.slice(1).map((srcCol, i) => {
@@ -1681,7 +1709,9 @@ export function DataGrid<T>({
           <div style={{
             position: 'fixed',
             left: Math.min(ctxMenu.x, window.innerWidth - 186),
-            top: Math.min(ctxMenu.y, window.innerHeight - 180),
+            top: ctxMenu.y + 340 > window.innerHeight
+              ? Math.max(4, ctxMenu.y - 340)
+              : ctxMenu.y,
             zIndex: 1999,
             background: '#fff',
             border: '1px solid #ECEAFB',
