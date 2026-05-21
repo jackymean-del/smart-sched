@@ -12,8 +12,10 @@
  *   ref is stale (React hasn't re-rendered yet) valueGetter sees the old
  *   value → old === new → undo entry silently discarded.
  *
- * Nothing else is custom.  No keyboard interceptors, no undo stack,
- * no clipboard hacks.  AG Grid handles Esc / Ctrl+Z / Ctrl+C/V natively.
+ * Custom additions ON TOP of AG Grid (no interference with core behavior):
+ *   - Marching ants: observed via onCellKeyDown (no preventDefault),
+ *     copyRangeRef drives cellClassRules → ::before pseudo-element CSS.
+ *   - Click-outside: document mousedown listener clears selection + copy state.
  */
 
 import 'ag-grid-community/styles/ag-grid.css'
@@ -175,87 +177,149 @@ function ExportDropdown({ onCsv, onExcel }: { onCsv: () => void; onExcel: () => 
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Grid styles — no overflow:visible, no z-index tricks
+// Grid styles
 // ─────────────────────────────────────────────────────────────────
 
 const GRID_STYLES = `
+/* ── Theme variables ── */
 .ag-alloc-wrap .ag-theme-quartz {
-  --ag-border-color: #EFEFF3;
-  --ag-header-background-color: #F8F7FC;
+  --ag-border-color: #C8C8C8;
+  --ag-header-background-color: #F2F2F7;
   --ag-background-color: #ffffff;
   --ag-odd-row-background-color: #ffffff;
   --ag-row-hover-color: #FAFAFD;
-  --ag-selected-row-background-color: #F3F0FF;
-  --ag-range-selection-border-color: #A99FF5;
+  --ag-selected-row-background-color: #EEF2FF;
+  --ag-range-selection-border-color: #8B85F0;
   --ag-range-selection-border-style: solid;
-  --ag-range-selection-background-color: rgba(124,111,224,0.05);
-  --ag-range-selection-highlight-color: rgba(124,111,224,0.12);
+  --ag-range-selection-background-color: rgba(99,92,220,0.07);
+  --ag-range-selection-highlight-color: rgba(99,92,220,0.13);
   --ag-cell-horizontal-padding: 7px;
   --ag-font-family: 'DM Sans', sans-serif;
   --ag-font-size: 12px;
   --ag-foreground-color: #13111E;
-  --ag-header-foreground-color: #6B6B8A;
-  --ag-cell-horizontal-border: solid #F0EFF5;
+  --ag-header-foreground-color: #5A5A78;
+  --ag-cell-horizontal-border: 1px solid #D0D0D0;
   --ag-header-column-separator-display: block;
-  --ag-header-column-separator-color: #EEECF8;
-  --ag-pinned-column-border-color: #E4E1F5;
-  --ag-input-focus-border-color: #9B8EF5;
-  --ag-input-focus-box-shadow: 0 0 0 2px rgba(124,111,224,0.18);
-  --ag-fill-handle-color: #7C6FE0;
+  --ag-header-column-separator-color: #C8C8C8;
+  --ag-pinned-column-border-color: #C0BCD8;
+  --ag-input-focus-border-color: #8B85F0;
+  --ag-input-focus-box-shadow: 0 0 0 2px rgba(99,92,220,0.18);
+  --ag-fill-handle-color: #5A52D5;
   --ag-fill-handle-size: 6px;
-  --ag-row-border-color: #F3F2F9;
-  --ag-row-numbers-background-color: #F8F7FC;
+  --ag-row-border-color: #D0D0D0;
+  --ag-row-numbers-background-color: #F2F2F7;
   font-family: 'DM Sans', sans-serif;
 }
+
+/* ── Visible Excel-style grid lines on every cell ── */
+.ag-alloc-wrap .ag-cell {
+  border-right: 1px solid #D0D0D0 !important;
+  line-height: 32px;
+}
+.ag-alloc-wrap .ag-row {
+  border-bottom: 1px solid #D0D0D0 !important;
+}
+.ag-alloc-wrap .ag-header-cell {
+  border-right: 1px solid #C8C8C8 !important;
+}
+.ag-alloc-wrap .ag-header {
+  border-bottom: 2px solid #B8B8C8 !important;
+}
+
+/* ── Header labels ── */
 .ag-alloc-wrap .ag-header-cell-menu-button,
 .ag-alloc-wrap .ag-header-cell-filter-button { display: none !important; }
-
 .ag-alloc-wrap .ag-header-cell-label {
-  font-size: 10.5px; font-weight: 700; color: #6B6B8A;
+  font-size: 10.5px; font-weight: 700; color: #5A5A78;
   letter-spacing: 0.03em; text-transform: uppercase; justify-content: flex-end;
 }
 .ag-alloc-wrap [col-id="sectionName"] .ag-header-cell-label {
   justify-content: flex-start; text-transform: none; letter-spacing: 0; font-size: 11px;
 }
+
+/* ── Row numbers ── */
 .ag-alloc-wrap .ag-row-number {
-  font-size: 10px; color: #A8A4C0; font-family: 'DM Mono', monospace;
-  background: #F8F7FC !important; border-right: 1px solid #E8E4FF !important;
+  font-size: 10px; color: #9894B0; font-family: 'DM Mono', monospace;
+  background: #F2F2F7 !important;
+  border-right: 1px solid #C0BCD8 !important;
 }
 .ag-alloc-wrap .ag-row-number-header {
-  background: #F8F7FC !important; border-right: 1px solid #E8E4FF !important;
+  background: #F2F2F7 !important;
+  border-right: 1px solid #C0BCD8 !important;
 }
-.ag-alloc-wrap .ag-cell { line-height: 32px; }
+
+/* ── Focus / selection states ── */
 .ag-alloc-wrap .ag-cell-focus:not(.ag-cell-range-selected):not(.ag-cell-inline-editing) {
-  border: 1px solid #A99FF5 !important; outline: none;
+  border: 1.5px solid #5A52D5 !important;
+  outline: none;
 }
 .ag-alloc-wrap .ag-cell-inline-editing {
-  border: 1.5px solid #7C6FE0 !important;
-  box-shadow: 0 0 0 2px rgba(124,111,224,0.15) !important;
+  border: 2px solid #5A52D5 !important;
+  box-shadow: 0 0 0 2px rgba(90,82,213,0.18) !important;
 }
 .ag-alloc-wrap .ag-cell-edit-wrapper input {
   font-family: 'DM Mono', monospace !important; font-size: 12px !important;
   font-weight: 600; color: #13111E !important; text-align: right;
 }
+
+/* ── Pinned columns ── */
 .ag-alloc-wrap .ag-pinned-left-header {
-  border-right: 1px solid #E4E1F5 !important;
+  border-right: 2px solid #C0BCD8 !important;
 }
 .ag-alloc-wrap .ag-pinned-left-cols-container {
-  border-right: 1px solid #E4E1F5 !important;
+  border-right: 2px solid #C0BCD8 !important;
 }
 .ag-alloc-wrap .ag-pinned-left-header .ag-header-cell,
 .ag-alloc-wrap .ag-pinned-left-cols-container .ag-cell {
   background: #FAFAFA !important;
 }
+
+/* ── Range selection ── */
 .ag-alloc-wrap .ag-cell-range-selected {
-  background-color: rgba(124,111,224,0.05) !important;
+  background-color: rgba(99,92,220,0.07) !important;
 }
+
+/* ── Fill handle ── */
 .ag-alloc-wrap .ag-fill-handle {
-  background: #7C6FE0; border: 1.5px solid #fff;
+  background: #5A52D5; border: 1.5px solid #fff;
   width: 6px !important; height: 6px !important; border-radius: 1px;
 }
+
+/* ── Scrollbar ── */
 .ag-alloc-wrap .ag-body-horizontal-scroll-viewport::-webkit-scrollbar { height: 5px; }
 .ag-alloc-wrap .ag-body-horizontal-scroll-viewport::-webkit-scrollbar-thumb {
-  background: #D1CCF0; border-radius: 3px;
+  background: #C8C4E8; border-radius: 3px;
+}
+
+/* ── Marching ants (copy mode) ─────────────────────────────────
+   Each cell in the copied range gets a ::before pseudo-element
+   that draws an animated dashed border on all 4 sides using
+   4 repeating-linear-gradients (top, right, bottom, left).
+   The center is transparent so cell content stays visible.
+   pointer-events: none ensures no interaction is blocked.
+   ──────────────────────────────────────────────────────────── */
+@keyframes ag-march {
+  0%   { background-position: 0 0,     100% 0,     100% 100%,   0 100%; }
+  100% { background-position: 10px 0,  100% 10px,  calc(100% - 10px) 100%,  0 calc(100% - 10px); }
+}
+.ag-alloc-wrap .ag-cell.ag-cell-copy-march {
+  position: relative;
+}
+.ag-alloc-wrap .ag-cell.ag-cell-copy-march::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+  background-image:
+    repeating-linear-gradient(90deg,  #1A1A2E 0, #1A1A2E 5px, transparent 5px, transparent 10px),
+    repeating-linear-gradient(180deg, #1A1A2E 0, #1A1A2E 5px, transparent 5px, transparent 10px),
+    repeating-linear-gradient(90deg,  #1A1A2E 0, #1A1A2E 5px, transparent 5px, transparent 10px),
+    repeating-linear-gradient(180deg, #1A1A2E 0, #1A1A2E 5px, transparent 5px, transparent 10px);
+  background-size:     10px 1.5px, 1.5px 10px, 10px 1.5px, 1.5px 10px;
+  background-position: 0 0, 100% 0, 100% 100%, 0 100%;
+  background-repeat:   repeat-x, repeat-y, repeat-x, repeat-y;
+  animation: ag-march 0.45s linear infinite;
 }
 `
 
@@ -293,6 +357,7 @@ export function AllocationGridAG({
   const displayModeRef  = useRef(displayMode)
   const periodMinRef    = useRef(periodMinutes)
   const gridRef         = useRef<AgGridReact<RowData>>(null)
+  const wrapperRef      = useRef<HTMLDivElement>(null)
 
   // Update refs every render — O(1), no side effects
   allocationsRef.current = subjectAllocations
@@ -301,6 +366,10 @@ export function AllocationGridAG({
   sectionsRef.current    = sections
   displayModeRef.current = displayMode
   periodMinRef.current   = periodMinutes
+
+  // ── Copy state: Set<"rowIndex:colId"> ────────────────────────
+  // Never causes re-render; drives cellClassRules::before animation.
+  const copyRangeRef = useRef<Set<string>>(new Set())
 
   // Skip sibling sync + batch refresh during paste operations
   const isPastingRef = useRef(false)
@@ -325,6 +394,21 @@ export function AllocationGridAG({
     getDisplayMode:   () => displayModeRef.current,
     getPeriodMinutes: () => periodMinRef.current,
   }), [])
+
+  // ── defaultColDef — stable, uses copyRangeRef closure ────────
+  // cellClassRules reads copyRangeRef.current at render time (ref is stable).
+  // No rebuild needed when copy state changes — refreshCells() triggers re-eval.
+  const defaultColDef = useMemo<ColDef<RowData>>(() => ({
+    sortable: true,
+    resizable: true,
+    suppressMovable: false,
+    suppressHeaderMenuButton: true,
+    cellClassRules: {
+      'ag-cell-copy-march': (p: any) =>
+        copyRangeRef.current.size > 0 &&
+        copyRangeRef.current.has(`${p.rowIndex}:${p.column.getColId()}`),
+    },
+  }), []) // empty deps — stable for grid lifetime
 
   // ── Column definitions — only rebuilt when subjects list changes ──
   const columnDefs = useMemo<ColDef<RowData>[]>(() => {
@@ -375,7 +459,6 @@ export function AllocationGridAG({
           const sn = params.data?.sectionName ?? ''
           const n  = parseInt(String(params.newValue ?? ''), 10)
           if (isNaN(n) || n < 0) return false
-          // Synchronous ref update so valueGetter returns new value immediately
           capOverrideRef.current = { ...capOverrideRef.current, [sn]: n }
           store.setSectionCapacityOverrides?.(capOverrideRef.current)
           return true
@@ -390,8 +473,8 @@ export function AllocationGridAG({
             const p = parseAllocation(raw); if (p.valid) u += p.weeklyTotal
           })
           const s = utilisationStatus(u, c)
-          if (s === 'over')  return { background: '#FEF2F2' }
-          if (s === 'tight') return { background: '#FFFBEB' }
+          if (s === 'over')  return { backgroundColor: '#FEF2F2' }
+          if (s === 'tight') return { backgroundColor: '#FFFBEB' }
           return null
         },
       },
@@ -465,9 +548,9 @@ export function AllocationGridAG({
           const rawV = allocationsRef.current[sn]?.[sub.name]
           if (!rawV || rawV === '0') return null
           const parsed = parseAllocation(rawV)
-          if (!parsed.valid) return { background: '#FEF2F2' }
+          if (!parsed.valid) return { backgroundColor: '#FEF2F2' }
           const c = effectiveCap(gridContext, sn)
-          if (!validateAllocationCapacity(parsed, c).ok) return { background: '#FFFBEB' }
+          if (!validateAllocationCapacity(parsed, c).ok) return { backgroundColor: '#FFFBEB' }
           return null
         },
       })
@@ -511,11 +594,74 @@ export function AllocationGridAG({
     })
   }, [])
 
-  // ── Paste handlers — only flag + bulk refresh ─────────────────
-  const onPasteStart = useCallback(() => { isPastingRef.current = true  }, [])
+  // ── Paste handlers ─────────────────────────────────────────────
+  const onPasteStart = useCallback(() => { isPastingRef.current = true }, [])
   const onPasteEnd   = useCallback(() => {
     isPastingRef.current = false
-    requestAnimationFrame(() => gridRef.current?.api?.refreshCells({ force: false }))
+    // Clear copy ants on paste (same as Excel)
+    copyRangeRef.current = new Set()
+    requestAnimationFrame(() => gridRef.current?.api?.refreshCells({ force: true }))
+  }, [])
+
+  // ── onCellKeyDown — OBSERVE ONLY, no preventDefault ───────────
+  // Used solely to:
+  //   Ctrl+C → record copied range into copyRangeRef → trigger marching ants
+  //   Esc    → clear copyRangeRef → stop marching ants
+  // AG Grid still owns the actual copy/cancel logic.
+  const onCellKeyDown = useCallback((e: any) => {
+    const ke = e.event as KeyboardEvent | undefined
+    if (!ke) return
+    const key  = ke.key.toLowerCase()
+    const ctrl = ke.ctrlKey || ke.metaKey
+
+    if (ctrl && key === 'c') {
+      // rAF: let AG Grid process the copy first, then read back the ranges
+      requestAnimationFrame(() => {
+        const api = gridRef.current?.api
+        if (!api) return
+        const ranges = api.getCellRanges()
+        const newSet = new Set<string>()
+        ranges?.forEach(range => {
+          if (!range.startRow || !range.endRow) return
+          const r0 = Math.min(range.startRow.rowIndex, range.endRow.rowIndex)
+          const r1 = Math.max(range.startRow.rowIndex, range.endRow.rowIndex)
+          range.columns.forEach(col => {
+            for (let i = r0; i <= r1; i++) {
+              newSet.add(`${i}:${col.getColId()}`)
+            }
+          })
+        })
+        copyRangeRef.current = newSet
+        // force: true — AG Grid can't know cellClassRules changed, must force re-eval
+        api.refreshCells({ force: true })
+      })
+      return
+    }
+
+    if (key === 'escape') {
+      if (copyRangeRef.current.size > 0) {
+        copyRangeRef.current = new Set()
+        gridRef.current?.api?.refreshCells({ force: true })
+      }
+    }
+  }, [])
+
+  // ── Click outside → clear selection & copy state ──────────────
+  useEffect(() => {
+    const onDocMouseDown = (e: MouseEvent) => {
+      if (wrapperRef.current?.contains(e.target as Node)) return
+      const api = gridRef.current?.api
+      if (!api) return
+      // Clear cell selection (blue range highlight)
+      ;(api as any).clearCellSelection?.()
+      // Clear copy state + marching ants
+      if (copyRangeRef.current.size > 0) {
+        copyRangeRef.current = new Set()
+        api.refreshCells({ force: true })
+      }
+    }
+    document.addEventListener('mousedown', onDocMouseDown)
+    return () => document.removeEventListener('mousedown', onDocMouseDown)
   }, [])
 
   // ── Selection → status bar ─────────────────────────────────────
@@ -600,14 +746,14 @@ export function AllocationGridAG({
   const gridHeight = Math.max(200, Math.min(600, rowData.length * 32 + 32 + 2))
 
   return (
-    <div className="ag-alloc-wrap" style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+    <div ref={wrapperRef} className="ag-alloc-wrap" style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
       <style>{GRID_STYLES}</style>
 
       {/* ── Toolbar ── */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
-        padding: '5px 10px', background: '#F8F7FC',
-        border: '1px solid #EFEFF3', borderBottom: 'none',
+        padding: '5px 10px', background: '#F2F2F7',
+        border: '1px solid #C8C8C8', borderBottom: 'none',
         borderRadius: '8px 8px 0 0', minHeight: 34,
       }}>
         {toolbarExtra}
@@ -626,7 +772,7 @@ export function AllocationGridAG({
             }}
             style={{
               paddingLeft: 22, paddingRight: 8, paddingTop: 3, paddingBottom: 3,
-              borderRadius: 5, border: '1px solid #ECECF2', background: '#fff',
+              borderRadius: 5, border: '1px solid #D0D0D0', background: '#fff',
               color: '#13111E', fontSize: 10.5, fontFamily: 'inherit', outline: 'none', width: 100,
             }}
           />
@@ -634,17 +780,12 @@ export function AllocationGridAG({
       </div>
 
       {/* ── AG Grid ── */}
-      <div className="ag-theme-quartz" style={{ height: gridHeight, width: '100%', border: '1px solid #EFEFF3', borderTop: 'none', overflow: 'hidden' }}>
+      <div className="ag-theme-quartz" style={{ height: gridHeight, width: '100%', border: '1px solid #C8C8C8', borderTop: 'none', overflow: 'hidden' }}>
         <AgGridReact<RowData>
           ref={gridRef}
           rowData={rowData}
           columnDefs={columnDefs}
-          defaultColDef={{
-            sortable: true,
-            resizable: true,
-            suppressMovable: false,
-            suppressHeaderMenuButton: true,
-          }}
+          defaultColDef={defaultColDef}
           getRowId={(p) => p.data.__sectionId}
           context={gridContext}
 
@@ -675,6 +816,7 @@ export function AllocationGridAG({
           onPasteStart={onPasteStart}
           onPasteEnd={onPasteEnd}
           onCellSelectionChanged={onCellSelectionChanged}
+          onCellKeyDown={onCellKeyDown}
 
           tooltipShowDelay={500}
           tooltipHideDelay={3000}
@@ -684,19 +826,19 @@ export function AllocationGridAG({
       {/* ── Status bar ── */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '3px 10px', background: '#F8F7FC',
-        border: '1px solid #EFEFF3', borderTop: 'none',
+        padding: '3px 10px', background: '#F2F2F7',
+        border: '1px solid #C8C8C8', borderTop: 'none',
         borderRadius: '0 0 8px 8px', minHeight: 22,
       }}>
         <div style={{ display: 'flex', gap: 12 }}>
           {[['F2/↵','Edit'],['Esc','Cancel'],['Del','Clear'],['⌃C/V','Copy/Paste'],['⌃Z','Undo']].map(([k, v]) => (
-            <span key={k} style={{ fontSize: 9.5, color: '#C0BDDA', fontFamily: "'DM Mono', monospace" }}>
-              <span style={{ fontWeight: 700, color: '#ADA8D0' }}>{k}</span> {v}
+            <span key={k} style={{ fontSize: 9.5, color: '#B0ADCA', fontFamily: "'DM Mono', monospace" }}>
+              <span style={{ fontWeight: 700, color: '#9894B0' }}>{k}</span> {v}
             </span>
           ))}
         </div>
         {statusBar && (
-          <div style={{ display: 'flex', gap: 10, fontSize: 10, color: '#7C6FE0', fontFamily: "'DM Mono', monospace", fontWeight: 600 }}>
+          <div style={{ display: 'flex', gap: 10, fontSize: 10, color: '#5A52D5', fontFamily: "'DM Mono', monospace", fontWeight: 600 }}>
             <span>{statusBar.cells} cells</span>
             <span style={{ color: '#C0BDDA' }}>·</span>
             <span>Sum: {statusBar.periods}p</span>
