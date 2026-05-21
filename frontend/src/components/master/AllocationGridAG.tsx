@@ -32,6 +32,7 @@ import {
   type GetContextMenuItemsParams,
   type ICellRendererParams,
   type MenuItemDef,
+  type DefaultMenuItem,
   type GridReadyEvent,
 } from 'ag-grid-community'
 import { AllEnterpriseModule } from 'ag-grid-enterprise'
@@ -448,7 +449,7 @@ export function AllocationGridAG({
   // ── Context menu ──────────────────────────────────────────────
   const getContextMenuItems = useCallback((
     params: GetContextMenuItemsParams<RowData>
-  ): (MenuItemDef | string)[] => {
+  ): (DefaultMenuItem | MenuItemDef<RowData>)[] => {
     const clearSelectedCells = () => {
       const ranges = params.api.getCellRanges()
       const merged: Record<string, Record<string, string>> = { ...allocationsRef.current }
