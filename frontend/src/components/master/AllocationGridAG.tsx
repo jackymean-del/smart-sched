@@ -498,7 +498,7 @@ export function AllocationGridAG({
           const status = utilisationStatus(u, c)
           if (status === 'over')  return { background: '#FEF2F2' }
           if (status === 'tight') return { background: '#FFFBEB' }
-          return {}
+          return null
         },
         valueGetter: (params) => {
           const sectionName = params.data?.sectionName ?? ''
