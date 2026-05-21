@@ -17,11 +17,11 @@ import { parseAllocation, validateAllocationCapacity } from '@/lib/allocationSyn
 import {
   computeCapacity, capacityForSection, inferBandFromSection, utilisationStatus,
 } from '@/lib/capacityEngine'
-import { Grid3x3 } from 'lucide-react'
 
 interface Props {
   displayMode?: 'periods' | 'hours'
   periodMinutes?: number
+  density?: 'compact' | 'normal' | 'comfortable'
   toolbarExtra?: React.ReactNode
 }
 
@@ -88,7 +88,7 @@ function parseHoursInput(val: string, periodMinutes: number): string {
   return ''
 }
 
-export function AllocationGrid({ displayMode = 'periods', periodMinutes = 40, toolbarExtra }: Props) {
+export function AllocationGrid({ displayMode = 'periods', periodMinutes = 40, density = 'compact', toolbarExtra }: Props) {
   const store = useTimetableStore() as any
   const { sections, subjects, subjectAllocations, config } = store
   const periods: Period[] = store.periods ?? []
@@ -185,45 +185,48 @@ export function AllocationGrid({ displayMode = 'periods', periodMinutes = 40, to
   const columns: DataGridColumn<Row>[] = useMemo(() => {
     const base: DataGridColumn<Row>[] = [
       {
-        key: 'sectionName', label: 'Section', type: 'text',
-        sticky: true, width: 110, readonly: true,
+        key: 'sectionName', label: 'Class', type: 'text',
+        sticky: true, width: 100, readonly: true,
       },
       {
-        // "Used / Cap" utilisation column — computed, read-only, keeps render (no editing)
-        key: '__usage', label: 'Used / Cap', type: 'computed', width: 130, readonly: true,
+        // "Used / Cap" — compact inline, no bar, just "40/48 ●"
+        key: '__usage', label: 'Used', type: 'computed', width: 72, readonly: true,
+        align: 'right' as const,
         format: (row) => {
           const band = inferBandFromSection(row.sectionName)
           const c = capacityForSection(cap, band)
           const u = rowTotals[row.sectionName] ?? 0
           return displayMode === 'hours'
-            ? `${toHourMin(u, periodMinutes)} / ${toHourMin(c, periodMinutes)}`
-            : `${u} / ${c}`
+            ? `${toHourMin(u, periodMinutes)}/${toHourMin(c, periodMinutes)}`
+            : `${u}/${c}`
         },
         render: (_, row) => {
           const band = inferBandFromSection(row.sectionName)
           const c = capacityForSection(cap, band)
           const u = rowTotals[row.sectionName] ?? 0
           const status = utilisationStatus(u, c)
-          const s = STATUS_STYLE[status]
-          const pct = c > 0 ? Math.min(100, Math.round((u / c) * 100)) : 0
-          const barColor = status === 'over' ? '#DC2626' : status === 'tight' ? '#D97706' : status === 'ok' ? '#16A34A' : '#7C6FE0'
+          // Dot color only — no labels, no bars
+          const dotColor = status === 'over' ? '#DC2626' : status === 'tight' ? '#D97706' : status === 'ok' ? '#16A34A' : u > 0 ? '#2563EB' : '#D1D5DB'
+          const textColor = status === 'over' ? '#DC2626' : status === 'tight' ? '#92400E' : '#13111E'
           const uLabel = displayMode === 'hours' ? toHourMin(u, periodMinutes) : String(u)
           const cLabel = displayMode === 'hours' ? toHourMin(c, periodMinutes) : String(c)
           return (
-            <div style={{ padding: '4px 8px', minWidth: 90, pointerEvents: 'none' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, marginBottom: 2 }}>
-                <span style={{ fontSize: 11, fontWeight: 800, color: '#13111E', fontFamily: "'DM Mono', monospace" }}>
-                  {uLabel} / {cLabel}
-                </span>
-                <span style={{ fontSize: 8, fontWeight: 800, padding: '1px 4px', borderRadius: 4, whiteSpace: 'nowrap' as const, background: s.bg, color: s.fg, border: `1px solid ${s.border}` }}>
-                  {s.label.toUpperCase()}
-                </span>
-              </div>
-              <div style={{ height: 2, background: '#F0EDFF', borderRadius: 1, overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${pct}%`, background: barColor, transition: 'width 0.2s' }} />
-              </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 5, padding: '0 8px', pointerEvents: 'none' }}>
+              <span style={{ fontSize: 11.5, fontWeight: 700, color: textColor, fontFamily: "'DM Mono', monospace", whiteSpace: 'nowrap' as const }}>
+                {uLabel}<span style={{ color: '#C4C0D8', fontWeight: 400 }}>/{cLabel}</span>
+              </span>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: dotColor, flexShrink: 0 }} />
             </div>
           )
+        },
+        cellStyle: (_, row) => {
+          const band = inferBandFromSection(row.sectionName)
+          const c = capacityForSection(cap, band)
+          const u = rowTotals[row.sectionName] ?? 0
+          const status = utilisationStatus(u, c)
+          if (status === 'over') return { background: '#FEF2F2' }
+          if (status === 'tight') return { background: '#FFFBEB' }
+          return {}
         },
       },
     ]
@@ -235,8 +238,8 @@ export function AllocationGrid({ displayMode = 'periods', periodMinutes = 40, to
         // type: 'text' — DataGrid's native path: click td → onMouseDown → setEditing → input
         // NO col.render here — eliminates all pointer-event overlap issues
         type: 'text',
-        minWidth: 68,
-        align: 'right',
+        minWidth: 56,
+        align: 'right' as const,
         placeholder: sub.periodsPerWeek ? (
           displayMode === 'hours'
             ? toHourMin(sub.periodsPerWeek, periodMinutes)
@@ -322,49 +325,18 @@ export function AllocationGrid({ displayMode = 'periods', periodMinutes = 40, to
   const handleChange = (_: Row[]) => { /* per-cell writes via setValue */ }
 
   return (
-    <div>
-      {/* Capacity info banner */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' as const,
-        padding: '6px 12px', marginBottom: 8,
-        background: 'linear-gradient(135deg, #EDE9FF 0%, #FAFAFE 100%)',
-        border: '1px solid #D8D2FF', borderRadius: 8,
-        fontSize: 10, color: '#4B5275',
-      }}>
-        <Grid3x3 size={12} color="#7C6FE0" />
-        <span style={{ fontWeight: 700, color: '#13111E', fontFamily: "'DM Mono', monospace" }}>
-          {displayMode === 'hours'
-            ? `${toHourMin(cap.weeklyCapacity, periodMinutes)}/week`
-            : `${cap.weeklyCapacity} periods/week`}
-        </span>
-        <span>{cap.workingDays} days × {cap.teachingPeriodsPerDay} periods
-          {cap.breakPeriodsPerDay > 0 && ` − ${cap.breakPeriodsPerDay} break/day`}
-        </span>
-        <span style={{ color: '#8B87AD' }}>
-          Syntax:&nbsp;
-          {[['5','theory'],['5+1','+lab'],['3(2X)','doubles'],['2L','lab']].map(([s,d]) => (
-            <span key={s} style={{ marginRight: 8 }}>
-              <strong style={{ fontFamily: "'DM Mono', monospace", color: '#4B5275' }}>{s}</strong> {d}
-            </span>
-          ))}
-        </span>
-      </div>
-
-      <DataGrid<Row>
-        title="Period Allocation"
-        description="Click any cell to edit. Editing one section auto-fills all sections of the same grade."
-        icon={<Grid3x3 size={16} />}
-        columns={columns}
-        rows={rows}
-        rowKey={(r) => r.__sectionId}
-        onChange={handleChange}
-        toolbarExtra={toolbarExtra}
-        toolbar={{
-          add: false, importCSV: true, exportCSV: true, importXLSX: false, exportXLSX: false,
-          paste: true, search: true, transpose: false, bulkActions: false,
-          undoRedo: true, filters: false, fillDown: true,
-        }}
-      />
-    </div>
+    <DataGrid<Row>
+      columns={columns}
+      rows={rows}
+      rowKey={(r) => r.__sectionId}
+      onChange={handleChange}
+      toolbarExtra={toolbarExtra}
+      density={density}
+      toolbar={{
+        add: false, importCSV: true, exportCSV: true, importXLSX: false, exportXLSX: false,
+        paste: true, search: true, transpose: false, bulkActions: false,
+        undoRedo: true, filters: false, fillDown: true,
+      }}
+    />
   )
 }

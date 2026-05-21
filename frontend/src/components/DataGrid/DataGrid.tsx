@@ -116,6 +116,9 @@ export interface DataGridProps<T> {
   /** Optional max height; grid scrolls inside. */
   maxHeight?: number | string
 
+  /** Row density. compact=28px, normal=32px (default), comfortable=38px */
+  density?: 'compact' | 'normal' | 'comfortable'
+
   /** Extra controls injected at the LEFT of the toolbar row (before undo/redo). */
   toolbarExtra?: React.ReactNode
 }
@@ -126,20 +129,20 @@ export interface DataGridProps<T> {
 const TOK = {
   // Container
   containerBg: '#FFFFFF',
-  containerBorder: '#E7E7EC',
+  containerBorder: '#E2E2E7',
   radius: 10,
-  // Grid — standard 34 px rows (compact=30, expanded=40)
-  headerBg: '#F2F2F2',
-  rowNumBg: '#F2F2F2',
-  headerHeight: 34,
-  headerFont: 13,
+  // Grid — compact 32 px rows (spreadsheet-native density)
+  headerBg: '#F5F5F6',
+  rowNumBg: '#F5F5F6',
+  headerHeight: 32,
+  headerFont: 12,
   headerWeight: 600,
   cellFont: 13,
-  cellPad: '0 8px',
-  cellRowH: 34,
-  divider: '#E2E2E7',    // slightly softer than Excel #D0D0D0
+  cellPad: '0 7px',
+  cellRowH: 32,
+  divider: '#EBEBEF',
   // Text
-  textDim: '#8B87AD',
+  textDim: '#9B97B8',
   textMid: '#555555',
   textOn: '#1A1A1A',
   // Brand accent (toolbar, selection)
@@ -250,8 +253,9 @@ export function DataGrid<T>({
   columns, rows, rowKey, onChange,
   title, description, icon,
   newRow, onScope, onBulkScope, stickyHeaderTop = 0, onAISuggestions,
-  toolbar = {}, emptyState, maxHeight, toolbarExtra,
+  toolbar = {}, emptyState, maxHeight, density = 'normal', toolbarExtra,
 }: DataGridProps<T>) {
+  const rowH = density === 'compact' ? 28 : density === 'comfortable' ? 38 : TOK.cellRowH
   const tb = {
     add: true, importCSV: true, exportCSV: true,
     importXLSX: true, exportXLSX: true,
@@ -1184,7 +1188,7 @@ export function DataGrid<T>({
   const tdBase: React.CSSProperties = {
     fontSize: TOK.cellFont,
     color: TOK.textOn,
-    height: TOK.cellRowH,
+    height: rowH,
     borderBottom: `1px solid ${TOK.divider}`,
     borderRight: `1px solid ${TOK.divider}`,
     padding: 0,
@@ -1210,14 +1214,14 @@ export function DataGrid<T>({
     fontSize: 11,
     textAlign: 'right' as const,
     padding: '0 6px',
-    height: TOK.cellRowH,
+    height: rowH,
     borderBottom: `1px solid ${TOK.divider}`,
     borderRight: `2px solid ${TOK.divider}`,
     position: 'sticky' as const,
     left: 0,
     zIndex: 1,
     userSelect: 'none' as const,
-    lineHeight: `${TOK.cellRowH}px`,
+    lineHeight: `${rowH}px`,
     verticalAlign: 'middle' as const,
   })
 
@@ -1535,12 +1539,12 @@ export function DataGrid<T>({
                               containerRef.current?.focus({ preventScroll: true })
                             })
                         : col.render
-                          ? <div style={{ padding: '0 8px', lineHeight: `${TOK.cellRowH}px` }}>{col.render(value, row, ri)}</div>
+                          ? <div style={{ padding: '0 8px', lineHeight: `${rowH}px` }}>{col.render(value, row, ri)}</div>
                           : col.type === 'badge'
                             ? renderBadge(value, row, col)
                             : (
                               <div style={{
-                                padding: '0 8px', lineHeight: `${TOK.cellRowH}px`,
+                                padding: '0 8px', lineHeight: `${rowH}px`,
                                 fontFamily: col.type === 'number' ? "'DM Mono', monospace" : 'inherit',
                                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const,
                                 // Transparent to pointer events — all clicks fall through to the <td>
@@ -1690,7 +1694,7 @@ export function DataGrid<T>({
                   position: 'sticky' as const, left: 0, zIndex: 1,
                   whiteSpace: 'nowrap' as const, width: 160, maxWidth: 160,
                 }}>
-                  <div style={{ padding: '0 10px', lineHeight: `${TOK.cellRowH}px`, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <div style={{ padding: '0 10px', lineHeight: `${rowH}px`, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {srcCol.label}
                   </div>
                 </td>
@@ -1733,7 +1737,7 @@ export function DataGrid<T>({
                             if (origR >= 0) onChange(rows.map((row, i) => i === origR ? setCell(row, srcCol, newV) : row))
                             setEditing(null)
                           }, () => { setEditing(null) }, setEditInputNode)
-                        : <div style={{ padding: '0 8px', lineHeight: `${TOK.cellRowH}px`, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
+                        : <div style={{ padding: '0 8px', lineHeight: `${rowH}px`, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
                             {v == null || v === '' ? <span style={{ color: '#BBBBBB' }}>{srcCol.placeholder ?? ''}</span> : String(v)}
                           </div>
                       }
@@ -1877,13 +1881,13 @@ export function DataGrid<T>({
 // ─────────────────────────────────────────────────────────────
 
 const btnPri: React.CSSProperties = {
-  display: 'inline-flex', alignItems: 'center', gap: 6,
-  padding: '7px 13px', borderRadius: 7, border: 'none',
-  background: TOK.accent, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+  display: 'inline-flex', alignItems: 'center', gap: 5,
+  padding: '4px 10px', borderRadius: 6, border: 'none',
+  background: TOK.accent, color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer',
 }
 const btnGhost: React.CSSProperties = {
-  display: 'inline-flex', alignItems: 'center', gap: 6,
-  padding: '6px 11px', borderRadius: 7, border: `1px solid ${TOK.containerBorder}`,
+  display: 'inline-flex', alignItems: 'center', gap: 5,
+  padding: '4px 9px', borderRadius: 6, border: `1px solid ${TOK.containerBorder}`,
   background: '#fff', color: TOK.textMid, fontSize: 11, fontWeight: 600, cursor: 'pointer',
 }
 // Row-level action icon buttons — 4 variants: rest / hover × normal / danger
@@ -1960,18 +1964,18 @@ function Toolbar({
   const hasExport = (tb.exportCSV && onExport) || (tb.exportXLSX && onExportXLSX)
 
   return (
-    <div style={{ padding: '12px 16px', borderBottom: `1px solid ${TOK.divider}`, background: '#FFFFFF' }}>
+    <div style={{ padding: '6px 10px', borderBottom: `1px solid ${TOK.divider}`, background: '#FAFAFA' }}>
       {(title || description) && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-          {icon && <div style={{ width: 32, height: 32, borderRadius: 8, background: TOK.accentBg, display: 'flex', alignItems: 'center', justifyContent: 'center', color: TOK.accent }}>{icon}</div>}
-          <div style={{ flex: 1 }}>
-            {title && <div style={{ fontSize: 14, fontWeight: 800, color: TOK.textOn, letterSpacing: '-0.2px' }}>{title}</div>}
-            {description && <div style={{ fontSize: 11.5, color: TOK.textDim, marginTop: 1 }}>{description}</div>}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+          {icon && <span style={{ color: TOK.accent, display: 'flex' }}>{icon}</span>}
+          <div style={{ flex: 1, display: 'flex', alignItems: 'baseline', gap: 8 }}>
+            {title && <span style={{ fontSize: 12, fontWeight: 700, color: TOK.textOn }}>{title}</span>}
+            {description && <span style={{ fontSize: 10.5, color: TOK.textDim }}>{description}</span>}
           </div>
         </div>
       )}
       {/* ── Main toolbar row — always a single line (no wrapping) ── */}
-      <div style={{ display: 'flex', flexWrap: 'nowrap', gap: 6, alignItems: 'center' }}>
+      <div style={{ display: 'flex', flexWrap: 'nowrap', gap: 4, alignItems: 'center' }}>
 
         {/* Injected leading controls (e.g. period/hours toggle + AI fill) */}
         {toolbarExtra && <>{toolbarExtra}</>}
@@ -2099,19 +2103,18 @@ function Toolbar({
           </button>
         )}
 
-        {/* Delete selected rows — always visible in toolbar, active when rows are selected */}
-        <button
-          onClick={onDeleteRows}
-          disabled={!onDeleteRows}
-          style={{
-            ...btnGhost,
-            color: '#DC2626', borderColor: '#FEE2E2',
-            opacity: onDeleteRows ? 1 : 0.35,
-            cursor: onDeleteRows ? 'pointer' : 'default',
-          }}
-          title="Delete selected rows">
-          <Trash2 size={12} /> Delete
-        </button>
+        {/* Delete selected rows — only show when rows are actually selected (row hover has its own delete) */}
+        {onDeleteRows && tb.bulkActions && (
+          <button
+            onClick={onDeleteRows}
+            style={{
+              ...btnGhost,
+              color: '#DC2626', borderColor: '#FEE2E2', background: '#FFF5F5',
+            }}
+            title="Delete selected rows (or use Delete key / right-click)">
+            <Trash2 size={12} /> Delete
+          </button>
+        )}
 
         {onTranspose && tb.transpose && <button onClick={onTranspose} style={btnGhost}><ArrowUpDown size={12} /> Transpose</button>}
         {(activeFilterCount ?? 0) > 0 && onClearFilters && (
@@ -2125,8 +2128,8 @@ function Toolbar({
 
         {/* Search — always rightmost, always visible */}
         {tb.search && (
-          <div style={{ position: 'relative' as const, flexShrink: 0, width: 200 }}>
-            <Search size={12} style={{ position: 'absolute' as const, left: 10, top: '50%', transform: 'translateY(-50%)', color: searchFocused ? TOK.accent : TOK.textDim, transition: 'color 0.15s' }} />
+          <div style={{ position: 'relative' as const, flexShrink: 0, width: 180 }}>
+            <Search size={11} style={{ position: 'absolute' as const, left: 8, top: '50%', transform: 'translateY(-50%)', color: searchFocused ? TOK.accent : TOK.textDim, transition: 'color 0.15s' }} />
             <input value={search} onChange={e => setSearch(e.target.value)}
               placeholder="Search..."
               onMouseEnter={() => setSearchHovered(true)}
@@ -2134,15 +2137,15 @@ function Toolbar({
               onFocus={() => setSearchFocused(true)}
               onBlur={() => setSearchFocused(false)}
               style={{
-                width: '100%', padding: '7px 11px 7px 30px', fontSize: 12, borderRadius: 7,
+                width: '100%', padding: '4px 10px 4px 26px', fontSize: 11.5, borderRadius: 6,
                 border: searchFocused
                   ? `1.5px solid ${TOK.accent}`
                   : searchHovered
                     ? `1px solid #C4B5FD`
                     : `1px solid ${TOK.containerBorder}`,
                 outline: 'none',
-                background: searchFocused ? '#fff' : TOK.accentSoft,
-                boxShadow: searchFocused ? `0 0 0 3px rgba(124,111,224,0.12)` : 'none',
+                background: searchFocused ? '#fff' : '#F8F8FB',
+                boxShadow: searchFocused ? `0 0 0 2px rgba(124,111,224,0.10)` : 'none',
                 transition: 'border 0.15s, background 0.15s, box-shadow 0.15s',
                 cursor: 'text',
               }} />
