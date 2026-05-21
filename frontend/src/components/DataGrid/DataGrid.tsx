@@ -115,6 +115,9 @@ export interface DataGridProps<T> {
 
   /** Optional max height; grid scrolls inside. */
   maxHeight?: number | string
+
+  /** Extra controls injected at the LEFT of the toolbar row (before undo/redo). */
+  toolbarExtra?: React.ReactNode
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -247,7 +250,7 @@ export function DataGrid<T>({
   columns, rows, rowKey, onChange,
   title, description, icon,
   newRow, onScope, onBulkScope, stickyHeaderTop = 0, onAISuggestions,
-  toolbar = {}, emptyState, maxHeight,
+  toolbar = {}, emptyState, maxHeight, toolbarExtra,
 }: DataGridProps<T>) {
   const tb = {
     add: true, importCSV: true, exportCSV: true,
@@ -298,6 +301,7 @@ export function DataGrid<T>({
   const xlsxRef = useRef<HTMLInputElement>(null)
   const editInputRef = useRef<HTMLInputElement | HTMLSelectElement | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
 
   // Callback ref — fires synchronously when the input/select node is
   // inserted into the DOM (before useLayoutEffect, before any setTimeout).
@@ -307,6 +311,8 @@ export function DataGrid<T>({
     if (node) {
       node.focus()
       if (node instanceof HTMLInputElement) node.select()
+      // Scroll the editing cell into view (handles Tab key advancing to hidden columns)
+      node.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' })
     }
   }, [])
 
@@ -548,6 +554,24 @@ export function DataGrid<T>({
       }
     }
   }, [editing])
+
+  // Scroll selected cell into view on keyboard navigation
+  useEffect(() => {
+    if (!selection || editing) return
+    const container = scrollRef.current
+    if (!container) return
+    requestAnimationFrame(() => {
+      const tbody = container.querySelector('tbody')
+      if (!tbody) return
+      const trows = tbody.querySelectorAll('tr')
+      const tr = trows[selection.r]
+      if (!tr) return
+      const tds = tr.querySelectorAll('td')
+      // +1 because of the row-number td at index 0
+      const td = tds[selection.c + 1] as HTMLElement | undefined
+      if (td) td.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' })
+    })
+  }, [selection, editing])
 
   // Click outside the grid → clear selection & editing (same as Escape)
   useEffect(() => {
@@ -1215,6 +1239,7 @@ export function DataGrid<T>({
         canUndo={canUndo} canRedo={canRedo} onUndo={undo} onRedo={redo}
         activeFilterCount={activeFilterCount}
         onClearFilters={activeFilterCount > 0 ? () => setFilters({}) : undefined}
+        toolbarExtra={toolbarExtra}
       />
       <input type="file" ref={fileRef} accept=".csv,.tsv,text/csv,text/tab-separated-values" style={{ display: 'none' }}
         onChange={e => { const f = e.target.files?.[0]; if (f) importCSV(f); e.target.value = '' }} />
@@ -1225,7 +1250,7 @@ export function DataGrid<T>({
           1. Position:sticky on <th> anchors to THIS div (reliable, consistent).
           2. Wide tables scroll horizontally within the card.
           3. maxHeight constrains vertical size; default fills ~viewport minus chrome. */}
-      <div style={{
+      <div ref={scrollRef} style={{
         overflow: 'auto',
         maxHeight: maxHeight ?? 'calc(100vh - 320px)',
         minHeight: 120,
@@ -1458,7 +1483,19 @@ export function DataGrid<T>({
                             setSelection({ r: ri, c: ci })
                           }, () => {
                             setEditing(null)
-                          }, setEditInputNode)
+                          }, setEditInputNode, v => {
+                            // Tab: commit + advance to next editable cell
+                            updateCellInRows(ri, ci, v)
+                            setEditing(null)
+                            const totalC = columns.length
+                            const totalR = filteredRows.length
+                            let nc = ci + 1
+                            let nr = ri
+                            while (nc < totalC && (columns[nc]?.readonly || columns[nc]?.type === 'computed')) nc++
+                            if (nc >= totalC) { nc = 0; nr = Math.min(ri + 1, totalR - 1) }
+                            setSelection({ r: nr, c: nc })
+                            setSelectionEnd(null)
+                          })
                         : col.type === 'toggle'
                           ? renderToggle(value, () => {
                               const cur = getCell(row, col)
@@ -1873,14 +1910,17 @@ interface ToolbarProps {
   onRedo?: () => void
   activeFilterCount?: number
   onClearFilters?: () => void
+  toolbarExtra?: React.ReactNode
 }
 
 function Toolbar({
   title, description, icon, tb, search, setSearch,
   onAdd, onImport, onExport, onImportXLSX, onExportXLSX, onPaste, onDirectPaste, onTranspose,
   onBulk, onFillDown, onAI, onDeleteRows, onDuplicateRows, onBulkScope, selectionInfo,
-  canUndo, canRedo, onUndo, onRedo, activeFilterCount, onClearFilters,
+  canUndo, canRedo, onUndo, onRedo, activeFilterCount, onClearFilters, toolbarExtra,
 }: ToolbarProps) {
+  const [searchHovered, setSearchHovered] = useState(false)
+  const [searchFocused, setSearchFocused] = useState(false)
   const [importDrop, setImportDrop] = useState(false)
   const [exportDrop, setExportDrop] = useState(false)
 
@@ -1900,6 +1940,9 @@ function Toolbar({
       )}
       {/* ── Main toolbar row — always a single line (no wrapping) ── */}
       <div style={{ display: 'flex', flexWrap: 'nowrap', gap: 6, alignItems: 'center' }}>
+
+        {/* Injected leading controls (e.g. period/hours toggle + AI fill) */}
+        {toolbarExtra && <>{toolbarExtra}</>}
 
         {/* Primary: Add Row */}
         {onAdd && tb.add && (
@@ -2051,10 +2094,26 @@ function Toolbar({
         {/* Search — always rightmost, always visible */}
         {tb.search && (
           <div style={{ position: 'relative' as const, flexShrink: 0, width: 200 }}>
-            <Search size={12} style={{ position: 'absolute' as const, left: 10, top: '50%', transform: 'translateY(-50%)', color: TOK.textDim }} />
+            <Search size={12} style={{ position: 'absolute' as const, left: 10, top: '50%', transform: 'translateY(-50%)', color: searchFocused ? TOK.accent : TOK.textDim, transition: 'color 0.15s' }} />
             <input value={search} onChange={e => setSearch(e.target.value)}
               placeholder="Search..."
-              style={{ width: '100%', padding: '7px 11px 7px 30px', fontSize: 12, borderRadius: 7, border: `1px solid ${TOK.containerBorder}`, outline: 'none', background: TOK.accentSoft }} />
+              onMouseEnter={() => setSearchHovered(true)}
+              onMouseLeave={() => setSearchHovered(false)}
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => setSearchFocused(false)}
+              style={{
+                width: '100%', padding: '7px 11px 7px 30px', fontSize: 12, borderRadius: 7,
+                border: searchFocused
+                  ? `1.5px solid ${TOK.accent}`
+                  : searchHovered
+                    ? `1px solid #C4B5FD`
+                    : `1px solid ${TOK.containerBorder}`,
+                outline: 'none',
+                background: searchFocused ? '#fff' : TOK.accentSoft,
+                boxShadow: searchFocused ? `0 0 0 3px rgba(124,111,224,0.12)` : 'none',
+                transition: 'border 0.15s, background 0.15s, box-shadow 0.15s',
+                cursor: 'text',
+              }} />
             {search && (
               <button onClick={() => setSearch('')} style={{ position: 'absolute' as const, right: 6, top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', cursor: 'pointer', color: TOK.textDim, padding: 2, display: 'flex' }}>
                 <X size={11} />
@@ -2131,6 +2190,7 @@ function renderEditor<T>(
   onCancel: () => void,
   // Accept both RefObject and RefCallback (useCallback callback ref)
   ref: React.Ref<HTMLInputElement | HTMLSelectElement>,
+  onTabCommit?: (v: any) => void,
 ) {
   // Fill the entire cell so there are no dead zones the user can click
   // without hitting the input.
@@ -2171,10 +2231,17 @@ function renderEditor<T>(
       }}
       onKeyDown={e => {
         if (e.key === 'Escape') { onCancel(); return }
-        if (e.key === 'Enter' || e.key === 'Tab') {
+        if (e.key === 'Enter') {
           const raw = (e.target as HTMLInputElement).value
           const v = col.type === 'number' ? (raw === '' ? 0 : parseFloat(raw) || 0) : raw
+          e.preventDefault()
           onCommit(v)
+        } else if (e.key === 'Tab') {
+          const raw = (e.target as HTMLInputElement).value
+          const v = col.type === 'number' ? (raw === '' ? 0 : parseFloat(raw) || 0) : raw
+          e.preventDefault()
+          if (onTabCommit) onTabCommit(v)
+          else onCommit(v)
         }
       }}
       style={commonStyle}

@@ -20,7 +20,7 @@ import {
 import { parseAllocation } from '@/lib/allocationSyntax'
 import type { Section, Subject, Staff } from '@/types'
 import {
-  Grid3x3, Users, CalendarCheck, ChevronLeft, ChevronRight,
+  Grid3x3, Users, ChevronLeft, ChevronRight,
   Sparkles, AlertTriangle, CheckCircle2, Info, BookOpen,
   FlaskConical, BarChart3, Clock, ShieldCheck, XCircle,
 } from 'lucide-react'
@@ -145,6 +145,65 @@ export function StepAllocation() {
     (row: any) => Object.values(row ?? {}).some((v: any) => v && String(v).trim() !== '')
   )
 
+  // Capacity-aware AI fill for periods — scales proportionally so no OVER conflicts
+  const handleAIPeriodSuggest = () => {
+    const next: Record<string, Record<string, string>> = {}
+    ;(sections as Section[]).forEach((sec: Section) => {
+      const band = inferBandFromSection(sec.name)
+      const capacity = capacityForSection(cap, band)
+      const ideal = (subjects as Subject[])
+        .filter(s => s.periodsPerWeek && s.periodsPerWeek > 0)
+        .map(s => ({ name: s.name, pw: s.periodsPerWeek!, isLab: !!(s as any).requiresLab }))
+      if (!ideal.length) return
+      const totalIdeal = ideal.reduce((a, s) => a + s.pw, 0)
+      const row: Record<string, string> = {}
+      if (capacity <= 0 || totalIdeal <= capacity) {
+        ideal.forEach(s => { row[s.name] = s.isLab ? `${Math.max(1, s.pw - 1)}+1L` : String(s.pw) })
+      } else {
+        const scale = capacity / totalIdeal
+        let allocated = 0
+        ideal.forEach((s, i) => {
+          const isLast = i === ideal.length - 1
+          const raw = isLast ? Math.max(0, capacity - allocated) : Math.max(1, Math.round(s.pw * scale))
+          if (raw > 0) row[s.name] = String(raw)
+          allocated += raw
+        })
+      }
+      if (Object.keys(row).length) next[sec.name] = row
+    })
+    store.setSubjectAllocations?.(next)
+  }
+
+  // Toolbar extra for the periods tab — injected into DataGrid toolbar row
+  const periodsToolbarExtra = (
+    <>
+      <div style={{ display: 'flex', background: '#F0EDFF', borderRadius: 7, padding: 2, gap: 1 }}>
+        <button onClick={() => setDisplayMode('periods')} style={{
+          padding: '4px 10px', borderRadius: 5, border: 'none', cursor: 'pointer',
+          background: displayMode === 'periods' ? '#7C6FE0' : 'transparent',
+          color: displayMode === 'periods' ? '#fff' : '#4B5275',
+          fontSize: 11, fontWeight: 700, fontFamily: 'inherit',
+        }}>Periods</button>
+        <button onClick={() => setDisplayMode('hours')} style={{
+          padding: '4px 10px', borderRadius: 5, border: 'none', cursor: 'pointer',
+          background: displayMode === 'hours' ? '#7C6FE0' : 'transparent',
+          color: displayMode === 'hours' ? '#fff' : '#4B5275',
+          fontSize: 11, fontWeight: 700, fontFamily: 'inherit',
+        }}>Hours</button>
+      </div>
+      <span style={{ fontSize: 10, color: '#8B87AD', whiteSpace: 'nowrap' as const }}>1p={periodMinutes}m</span>
+      <button onClick={handleAIPeriodSuggest} style={{
+        display: 'inline-flex', alignItems: 'center', gap: 5,
+        padding: '5px 11px', borderRadius: 7, border: 'none',
+        background: '#7C6FE0', color: '#fff', fontSize: 11, fontWeight: 700,
+        cursor: 'pointer', fontFamily: 'inherit',
+      }}>
+        <Sparkles size={11} /> AI suggest all
+      </button>
+      <div style={{ width: 1, height: 20, background: '#E8E4FF', margin: '0 2px' }} />
+    </>
+  )
+
   return (
     <div style={{ padding: '20px 24px 24px', maxWidth: 1400, margin: '0 auto' }}>
 
@@ -166,34 +225,6 @@ export function StepAllocation() {
           </div>
         </div>
 
-        {/* Period / Hours toggle */}
-        <div style={{
-          display: 'flex', background: '#F0EDFF', borderRadius: 8, padding: 3, gap: 2,
-        }}>
-          <button
-            onClick={() => setDisplayMode('periods')}
-            style={{
-              padding: '5px 12px', borderRadius: 6, border: 'none', cursor: 'pointer',
-              background: displayMode === 'periods' ? '#7C6FE0' : 'transparent',
-              color: displayMode === 'periods' ? '#fff' : '#4B5275',
-              fontSize: 11, fontWeight: 700, fontFamily: 'inherit',
-            }}>
-            No. of periods
-          </button>
-          <button
-            onClick={() => setDisplayMode('hours')}
-            style={{
-              padding: '5px 12px', borderRadius: 6, border: 'none', cursor: 'pointer',
-              background: displayMode === 'hours' ? '#7C6FE0' : 'transparent',
-              color: displayMode === 'hours' ? '#fff' : '#4B5275',
-              fontSize: 11, fontWeight: 700, fontFamily: 'inherit',
-            }}>
-            No. of hours
-          </button>
-        </div>
-        <span style={{ fontSize: 10, color: '#8B87AD', whiteSpace: 'nowrap' as const }}>
-          1 period = {periodMinutes} min · {cap.weeklyCapacity} periods/wk max
-        </span>
       </div>
 
       {/* ── Sub-tabs ── */}
@@ -212,31 +243,11 @@ export function StepAllocation() {
         {/* ── Left: main content ── */}
         <div style={{ minWidth: 0 }}>
 
-          {/* Action bar */}
+          {/* Action bar — only shown for teacher + validation tabs */}
+          {sub !== 'periods' && (
           <div style={{
-            display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12,
+            display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' as const,
           }}>
-            {sub === 'periods' && (
-              <>
-                <AISuggestButton onClick={() => {
-                  // trigger via AllocationGrid's internal handler — use store directly
-                  const next: Record<string, Record<string, string>> = {}
-                  ;(sections as Section[]).forEach((sec: Section) => {
-                    const row: Record<string, string> = {}
-                    ;(subjects as Subject[]).forEach((s: Subject) => {
-                      if (s.periodsPerWeek && s.periodsPerWeek > 0) {
-                        row[s.name] = (s as any).requiresLab
-                          ? `${Math.max(1, s.periodsPerWeek - 1)}+1L`
-                          : String(s.periodsPerWeek)
-                      }
-                    })
-                    if (Object.keys(row).length) next[sec.name] = row
-                  })
-                  store.setSubjectAllocations?.(next)
-                }} label="AI suggest all" />
-                <ImportButton />
-              </>
-            )}
             {sub === 'teachers' && (
               <>
                 <AISuggestButton onClick={() => {
@@ -323,9 +334,10 @@ export function StepAllocation() {
               </div>
             )}
           </div>
+          )}
 
           {/* Tab content */}
-          {sub === 'periods'    && <AllocationGrid displayMode={displayMode} periodMinutes={periodMinutes} />}
+          {sub === 'periods'    && <AllocationGrid displayMode={displayMode} periodMinutes={periodMinutes} toolbarExtra={periodsToolbarExtra} />}
           {sub === 'teachers'   && <TeacherAllocationSummary displayMode={displayMode} periodMinutes={periodMinutes} />}
           {sub === 'validation' && (
             <ValidationView
@@ -430,20 +442,6 @@ function AISuggestButton({ onClick, label }: { onClick: () => void; label: strin
       boxShadow: '0 2px 8px rgba(124,111,224,0.3)',
     }}>
       <Sparkles size={11} /> ✦ {label} ↗
-    </button>
-  )
-}
-
-function ImportButton() {
-  return (
-    <button style={{
-      display: 'inline-flex', alignItems: 'center', gap: 6,
-      padding: '7px 13px', borderRadius: 8,
-      border: '1px solid #E8E4FF', background: '#fff',
-      color: '#4B5275', fontSize: 11, fontWeight: 700,
-      cursor: 'pointer', fontFamily: 'inherit',
-    }}>
-      ↑ Import
     </button>
   )
 }
