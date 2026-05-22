@@ -403,18 +403,22 @@ export function AllocationGridAG({
     resizable: true,
     suppressMovable: false,
     suppressHeaderMenuButton: true,
-    // Suppress Esc from jumping focus to the column header when not editing.
-    // AG Grid's default: Esc on a non-editing cell focuses the column header.
-    // We want Esc to simply clear selection/copy state and stay on the cell (or blur).
+    // suppressKeyboardEvent fires BEFORE AG Grid processes the key.
+    // On Esc (non-editing): synchronously blur + clear focus here so the
+    // header never receives focus at all — eliminating the visual flicker.
     suppressKeyboardEvent: (params: any) => {
-      if (params.event.key === 'Escape' && !params.editing) return true
+      if (params.event.key === 'Escape' && !params.editing) {
+        ;(params.api as any).clearCellSelection?.()
+        ;(params.api as any).clearFocusedCell?.()
+        ;(document.activeElement as HTMLElement)?.blur?.()
+        return true
+      }
       return false
     },
-    // Suppress Esc on header cells — AG Grid's default re-focuses the header.
-    // Instead, blur the active element entirely so focus leaves the grid.
+    // Esc on a header cell: blur immediately (no setTimeout needed here).
     suppressHeaderKeyboardEvent: (params: any) => {
       if (params.event.key === 'Escape') {
-        setTimeout(() => (document.activeElement as HTMLElement)?.blur?.(), 0)
+        ;(document.activeElement as HTMLElement)?.blur?.()
         return true
       }
       return false
@@ -677,7 +681,10 @@ export function AllocationGridAG({
       if (wrapperRef.current?.contains(e.target as Node)) return
       const api = gridRef.current?.api
       if (!api) return
-      // Clear range selection AND focused-cell indicator (both needed to fully remove all highlights)
+      // Blur the active DOM element first — this removes the browser focus ring
+      // even when the click target is a non-focusable element (plain div etc.)
+      ;(document.activeElement as HTMLElement)?.blur?.()
+      // Then clear AG Grid's internal focused-cell and range-selection state
       ;(api as any).clearCellSelection?.()
       ;(api as any).clearFocusedCell?.()
       // Clear copy state + marching ants
