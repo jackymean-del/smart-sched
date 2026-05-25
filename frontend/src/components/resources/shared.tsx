@@ -391,23 +391,29 @@ export function InlineChipSelect({
   )
 }
 
-// ─── PasteModal ─────────────────────────────────────────────────────────────────
-// Reusable: paste TSV / CSV / Excel clipboard data → returns string[][] on import
-export function PasteModal({
-  title = 'Import from Clipboard',
-  hint,
+// ─── ImportModal ─────────────────────────────────────────────────────────────────
+// Unified 3-tab import flow: Download Sample | Upload File | Paste Data
+export function ImportModal({
+  title,
+  sampleHeaders,
+  sampleRows,
   onImport,
   onClose,
 }: {
-  title?: string
-  hint: string
+  title: string
+  sampleHeaders: string[]
+  sampleRows: string[][]
   onImport: (rows: string[][]) => void
   onClose: () => void
 }) {
+  const [tab, setTab] = useState<'sample' | 'upload' | 'paste'>('sample')
   const [raw, setRaw] = useState('')
-  const taRef = useRef<HTMLTextAreaElement>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+  const taRef   = useRef<HTMLTextAreaElement>(null)
 
-  useEffect(() => { setTimeout(() => taRef.current?.focus(), 50) }, [])
+  useEffect(() => {
+    if (tab === 'paste') setTimeout(() => taRef.current?.focus(), 50)
+  }, [tab])
 
   const rows = useMemo<string[][]>(() =>
     raw.trim().split('\n')
@@ -419,46 +425,178 @@ export function PasteModal({
       .filter(cells => cells.some(c => c.trim())),
     [raw])
 
+  function downloadSample() {
+    const lines = [sampleHeaders, ...sampleRows].map(row =>
+      row.map(c => (c.includes(',') || c.includes('"')) ? `"${c.replace(/"/g, '""')}"` : c).join(',')
+    )
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    a.href = url; a.download = `${title.toLowerCase().replace(/\s+/g, '_')}_template.csv`
+    document.body.appendChild(a); a.click()
+    setTimeout(() => { URL.revokeObjectURL(url); document.body.removeChild(a) }, 100)
+  }
+
+  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]; if (!file) return
+    const reader = new FileReader()
+    reader.onload = ev => {
+      const text = (ev.target?.result as string) ?? ''
+      const parsed = text.trim().split('\n')
+        .filter(l => l.trim())
+        .map(line => {
+          const cells = line.includes('\t') ? line.split('\t') : line.split(',')
+          return cells.map(c => c.trim().replace(/^"(.*)"$/, '$1'))
+        })
+        .filter(r => r.some(c => c.trim()))
+      if (parsed.length) { onImport(parsed); onClose() }
+    }
+    reader.readAsText(file); e.target.value = ''
+  }
+
+  const TABS: { id: 'sample' | 'upload' | 'paste'; label: string }[] = [
+    { id: 'sample', label: '↓ Download Sample' },
+    { id: 'upload', label: '↑ Upload File' },
+    { id: 'paste',  label: '⎘ Paste Data' },
+  ]
+
   return createPortal(
     <div
-      style={{ position: 'fixed', inset: 0, background: 'rgba(15,14,26,0.48)', zIndex: 9998, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(15,14,26,0.5)', zIndex: 9998, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
       onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div style={{ background: '#fff', borderRadius: 10, width: 520, boxShadow: '0 24px 60px rgba(0,0,0,0.24)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        {/* Header */}
-        <div style={{ padding: '12px 16px', borderBottom: '1px solid #EEE9FF', background: '#FAFAFE', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#111028' }}>{title}</div>
-            <div style={{ fontSize: 11, color: '#9896B5', marginTop: 2 }}>{hint}</div>
+      <div style={{ background: '#fff', borderRadius: 12, width: 540, maxHeight: '90vh', boxShadow: '0 24px 60px rgba(0,0,0,0.26)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+
+        {/* Header + Tabs */}
+        <div style={{ background: '#FAFAFE', borderBottom: '1px solid #EEE9FF', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px 0' }}>
+            <div style={{ fontSize: 14, fontWeight: 800, color: '#111028' }}>Import {title}</div>
+            <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#C0BBD8', fontSize: 20, lineHeight: 1, padding: '0 0 0 12px' }}>×</button>
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#C0BBD8', fontSize: 18, lineHeight: 1, paddingLeft: 10 }}>×</button>
+          <div style={{ display: 'flex', gap: 0, padding: '0 6px' }}>
+            {TABS.map(t => (
+              <button key={t.id} onClick={() => setTab(t.id)} style={{
+                padding: '8px 12px', fontSize: 11.5, fontWeight: tab === t.id ? 700 : 500,
+                color: tab === t.id ? P : '#9896B5',
+                background: 'none', border: 'none', cursor: 'pointer',
+                borderBottom: `2.5px solid ${tab === t.id ? P : 'transparent'}`,
+                fontFamily: 'inherit', marginBottom: -1, transition: 'color 0.1s',
+              }}>{t.label}</button>
+            ))}
+          </div>
         </div>
-        {/* Textarea */}
-        <textarea
-          ref={taRef}
-          value={raw}
-          onChange={e => setRaw(e.target.value)}
-          placeholder="Paste here (Ctrl+V) — supports Excel, Google Sheets, TSV, or CSV"
-          style={{ border: 'none', outline: 'none', resize: 'none', padding: '14px 16px', fontSize: 12, fontFamily: '"ui-monospace", "Cascadia Code", monospace', color: '#111028', background: '#fff', minHeight: 168, lineHeight: 1.6 }}
-        />
+
+        {/* Body */}
+        <div style={{ padding: '18px 18px 4px', overflowY: 'auto', flex: 1 }}>
+
+          {tab === 'sample' && (
+            <div>
+              <p style={{ margin: '0 0 12px', fontSize: 12, color: '#6B6891', lineHeight: 1.5 }}>
+                Download this CSV template, fill it in Excel or Google Sheets, then upload or paste it back.
+              </p>
+              <div style={{ overflowX: 'auto', borderRadius: 7, border: '1px solid #E4E0FF', marginBottom: 16 }}>
+                <table style={{ borderCollapse: 'collapse', fontSize: 11.5, width: '100%' }}>
+                  <thead>
+                    <tr>
+                      {sampleHeaders.map((h, i) => (
+                        <th key={i} style={{ padding: '6px 12px', textAlign: 'left', fontWeight: 700, fontSize: 10, color: '#9896B5', textTransform: 'uppercase', letterSpacing: '0.06em', background: '#F7F5FF', borderBottom: '1px solid #E4E0FF', whiteSpace: 'nowrap' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sampleRows.map((row, ri) => (
+                      <tr key={ri}>
+                        {sampleHeaders.map((_, ci) => (
+                          <td key={ci} style={{ padding: '6px 12px', color: '#444', fontSize: 12, borderBottom: ri < sampleRows.length - 1 ? '1px solid #F0ECFE' : 'none' }}>{row[ci] ?? ''}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <button onClick={downloadSample}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 16px', background: P, color: '#fff', border: 'none', borderRadius: 7, fontSize: 12.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', boxShadow: '0 2px 8px rgba(124,111,224,0.28)' }}
+                onMouseEnter={e => (e.currentTarget.style.background = P_D)}
+                onMouseLeave={e => (e.currentTarget.style.background = P)}
+              >↓ Download CSV Template</button>
+            </div>
+          )}
+
+          {tab === 'upload' && (
+            <div>
+              <p style={{ margin: '0 0 14px', fontSize: 12, color: '#6B6891', lineHeight: 1.5 }}>
+                Upload a <strong>.csv</strong>, <strong>.tsv</strong>, or plain text file — one row per line, columns separated by commas or tabs.
+              </p>
+              <div
+                onClick={() => fileRef.current?.click()}
+                style={{ border: '2px dashed #DDD8FF', borderRadius: 10, padding: '36px 20px', textAlign: 'center', cursor: 'pointer', background: '#FAFAFE', transition: 'all 0.12s' }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = P; e.currentTarget.style.background = P_L }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = '#DDD8FF'; e.currentTarget.style.background = '#FAFAFE' }}
+              >
+                <div style={{ fontSize: 30, marginBottom: 8, lineHeight: 1 }}>📂</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#555', marginBottom: 4 }}>Click to browse or drag & drop</div>
+                <div style={{ fontSize: 11, color: '#9896B5' }}>Supports CSV, TSV, or plain text</div>
+              </div>
+              <input ref={fileRef} type="file" accept=".csv,.tsv,.txt" style={{ display: 'none' }} onChange={handleFile} />
+            </div>
+          )}
+
+          {tab === 'paste' && (
+            <div>
+              <p style={{ margin: '0 0 10px', fontSize: 12, color: '#6B6891', lineHeight: 1.5 }}>
+                Paste directly from Excel or Google Sheets (Ctrl+V) — tab or comma separated.
+              </p>
+              <textarea
+                ref={taRef}
+                value={raw}
+                onChange={e => setRaw(e.target.value)}
+                placeholder="Paste here (Ctrl+V)…"
+                style={{ width: '100%', boxSizing: 'border-box', height: 148, border: `1.5px solid ${raw ? (rows.length > 0 ? '#86EFAC' : '#FECACA') : '#DDD8FF'}`, outline: 'none', resize: 'none', padding: '10px 12px', fontSize: 12, fontFamily: '"ui-monospace","Cascadia Code",monospace', color: '#111028', background: '#fff', borderRadius: 7, lineHeight: 1.6, transition: 'border-color 0.15s' }}
+              />
+              <div style={{ marginTop: 5, fontSize: 11, color: rows.length > 0 ? '#16A34A' : (raw ? '#DC2626' : '#9896B5'), fontWeight: rows.length > 0 ? 600 : 400 }}>
+                {rows.length > 0
+                  ? `✓ ${rows.length} row${rows.length !== 1 ? 's' : ''} ready to import`
+                  : raw ? 'No valid rows detected — check your data format' : 'Paste rows above'}
+              </div>
+            </div>
+          )}
+
+        </div>
+
         {/* Footer */}
-        <div style={{ padding: '10px 16px', borderTop: '1px solid #EEE9FF', background: '#FAFAFE', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ flex: 1, fontSize: 11, color: rows.length > 0 ? '#16A34A' : '#9896B5', fontWeight: rows.length > 0 ? 600 : 400 }}>
-            {rows.length > 0 ? `✓ ${rows.length} row${rows.length !== 1 ? 's' : ''} detected` : 'Paste rows above'}
-          </span>
-          <button onClick={onClose} style={{ padding: '5px 12px', borderRadius: 5, border: '1px solid #E4E0FF', background: '#fff', color: '#666', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
-          <button
-            onClick={() => { if (rows.length > 0) { onImport(rows); onClose() } }}
-            disabled={rows.length === 0}
-            style={{ padding: '5px 14px', borderRadius: 5, border: 'none', background: rows.length > 0 ? P : '#E8E4FF', color: rows.length > 0 ? '#fff' : '#B4ADDD', fontSize: 12, fontWeight: 700, cursor: rows.length > 0 ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}
-            onMouseEnter={e => { if (rows.length > 0) (e.currentTarget as HTMLButtonElement).style.background = P_D }}
-            onMouseLeave={e => { if (rows.length > 0) (e.currentTarget as HTMLButtonElement).style.background = P }}
-          >
-            Import {rows.length > 0 ? `${rows.length} rows` : ''}
+        <div style={{ padding: '12px 18px', borderTop: '1px solid #EEE9FF', background: '#FAFAFE', display: 'flex', justifyContent: 'flex-end', gap: 8, flexShrink: 0 }}>
+          <button onClick={onClose} style={{ padding: '6px 14px', borderRadius: 6, border: '1px solid #E4E0FF', background: '#fff', color: '#666', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
+            Cancel
           </button>
+          {tab === 'paste' && (
+            <button
+              onClick={() => { if (rows.length > 0) { onImport(rows); onClose() } }}
+              disabled={rows.length === 0}
+              style={{ padding: '6px 16px', borderRadius: 6, border: 'none', background: rows.length > 0 ? P : '#E8E4FF', color: rows.length > 0 ? '#fff' : '#B4ADDD', fontSize: 12, fontWeight: 700, cursor: rows.length > 0 ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}
+              onMouseEnter={e => { if (rows.length > 0) (e.currentTarget as HTMLButtonElement).style.background = P_D }}
+              onMouseLeave={e => { if (rows.length > 0) (e.currentTarget as HTMLButtonElement).style.background = P }}
+            >
+              Import {rows.length > 0 ? `${rows.length} rows` : ''}
+            </button>
+          )}
         </div>
       </div>
     </div>,
     document.body,
+  )
+}
+
+// ─── PasteModal (legacy alias) ────────────────────────────────────────────────
+export function PasteModal({ title, hint, onImport, onClose }: {
+  title?: string; hint: string; onImport: (rows: string[][]) => void; onClose: () => void
+}) {
+  return (
+    <ImportModal
+      title={title ?? 'Data'}
+      sampleHeaders={['Column 1', 'Column 2', 'Column 3']}
+      sampleRows={[['value1', 'value2', 'value3']]}
+      onImport={onImport}
+      onClose={onClose}
+    />
   )
 }

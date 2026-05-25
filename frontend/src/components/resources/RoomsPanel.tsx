@@ -7,7 +7,7 @@ import { useState, useRef, useMemo, useEffect } from 'react'
 import type { Subject, Section } from '@/types'
 import type { RoomRow } from '@/components/master/EntityGrids'
 import { Trash2, Plus, Building2 } from 'lucide-react'
-import { P, P_D, P_L, P_B, TH, TD, TABLE_CARD, InlineChipSelect, PasteModal } from './shared'
+import { P, P_D, P_L, P_B, TH, TD, TABLE_CARD, InlineChipSelect, ImportModal } from './shared'
 import type { ChipOption } from './shared'
 
 export type RoomExt = RoomRow & { subjectMappings?: string[]; notes?: string }
@@ -197,12 +197,12 @@ function RoomRow_({ room, classOpts, subjectOpts, assignedClasses, onUpdate, onU
         <button onClick={onDelete}
           style={{
             background: 'none', border: 'none', cursor: 'pointer',
-            color: hovered ? '#C4BCDC' : 'transparent',
+            color: '#C4BCDC',
             padding: '3px 5px', borderRadius: 4, lineHeight: 1,
             transition: 'color 0.1s, background 0.1s',
           }}
           onMouseEnter={e => { e.currentTarget.style.color = '#e74c3c'; e.currentTarget.style.background = '#FFF0F0' }}
-          onMouseLeave={e => { e.currentTarget.style.color = hovered ? '#C4BCDC' : 'transparent'; e.currentTarget.style.background = 'transparent' }}
+          onMouseLeave={e => { e.currentTarget.style.color = '#C4BCDC'; e.currentTarget.style.background = 'transparent' }}
         >
           <Trash2 size={14} />
         </button>
@@ -219,11 +219,10 @@ export function RoomsPanel({ rooms, setRooms, sections, setSections, subjects }:
   setSections: (s: Section[]) => void
   subjects: Subject[]
 }) {
-  const [search, setSearch]       = useState('')
-  const [pasteOpen, setPasteOpen] = useState(false)
-  const fileRef = useRef<HTMLInputElement>(null)
+  const [search, setSearch]         = useState('')
+  const [importOpen, setImportOpen] = useState(false)
 
-  function handlePasteImport(rows: string[][]) {
+  function handleImport(rows: string[][]) {
     const newRooms = rows
       .map(cells => ({
         id: makeId(),
@@ -235,19 +234,6 @@ export function RoomsPanel({ rooms, setRooms, sections, setSections, subjects }:
       } as RoomExt))
       .filter(r => r.name)
     if (newRooms.length) setRooms([...rooms, ...newRooms])
-  }
-  function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]; if (!file) return
-    const reader = new FileReader()
-    reader.onload = ev => {
-      const text = (ev.target?.result as string) ?? ''
-      const rows = text.trim().split('\n').filter(l => l.trim()).map(line => {
-        const cells = line.includes('\t') ? line.split('\t') : line.split(',')
-        return cells.map(c => c.trim().replace(/^"(.*)"$/, '$1'))
-      }).filter(r => r.some(c => c.trim()))
-      handlePasteImport(rows)
-    }
-    reader.readAsText(file); e.target.value = ''
   }
 
   const filtered = useMemo(() => {
@@ -329,25 +315,29 @@ export function RoomsPanel({ rooms, setRooms, sections, setSections, subjects }:
         </div>
         {/* Actions */}
         <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
-          {(['⎘ Paste', '↑ Upload'] as const).map((lbl, i) => (
-            <button key={lbl}
-              onClick={() => i === 0 ? setPasteOpen(true) : fileRef.current?.click()}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#fff', color: '#6B6891', border: '1px solid #DDD8FF', borderRadius: 5, padding: '4px 9px', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
-              onMouseEnter={e => { e.currentTarget.style.background = P_L; e.currentTarget.style.borderColor = P_B; e.currentTarget.style.color = P_D }}
-              onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#DDD8FF'; e.currentTarget.style.color = '#6B6891' }}
-            >{lbl}</button>
-          ))}
-          <input ref={fileRef} type="file" style={{ display: 'none' }} accept=".csv,.txt,.tsv" onChange={handleFileUpload} />
+          <button
+            onClick={() => setImportOpen(true)}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#fff', color: '#6B6891', border: '1px solid #DDD8FF', borderRadius: 5, padding: '4px 9px', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+            onMouseEnter={e => { e.currentTarget.style.background = P_L; e.currentTarget.style.borderColor = P_B; e.currentTarget.style.color = P_D }}
+            onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#DDD8FF'; e.currentTarget.style.color = '#6B6891' }}
+          >⬆ Import</button>
         </div>
       </div>
 
-      {/* Paste Modal */}
-      {pasteOpen && (
-        <PasteModal
-          title="Import Rooms"
-          hint="Columns: Room Name · Type (optional) · Capacity (optional)"
-          onImport={handlePasteImport}
-          onClose={() => setPasteOpen(false)}
+      {/* Import Modal */}
+      {importOpen && (
+        <ImportModal
+          title="Rooms"
+          sampleHeaders={['Room Name', 'Type', 'Capacity']}
+          sampleRows={[
+            ['Room 101',    'Classroom',    '40'],
+            ['Room 102',    'Classroom',    '40'],
+            ['Chem Lab',    'Lab',          '30'],
+            ['Computer Lab','Computer Lab', '35'],
+            ['Library',     'Library',      '60'],
+          ]}
+          onImport={handleImport}
+          onClose={() => setImportOpen(false)}
         />
       )}
 
@@ -360,14 +350,14 @@ export function RoomsPanel({ rooms, setRooms, sections, setSections, subjects }:
             <div style={{ fontSize: 12, color: '#C4C0DC' }}>Add rooms, then assign classes and special subjects to them.</div>
           </div>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
                 <th style={TH}>Room</th>
-                <th style={{ ...TH, width: 138 }}>Type</th>
-                <th style={{ ...TH, width: 52, textAlign: 'center' }}>Cap</th>
-                <th style={{ ...TH, width: 180 }}>Assigned Classes</th>
-                <th style={{ ...TH, width: 180 }}>Special Subjects</th>
+                <th style={{ ...TH, width: 140 }}>Type</th>
+                <th style={{ ...TH, width: 54, textAlign: 'center' }}>Cap</th>
+                <th style={{ ...TH, minWidth: 160 }}>Assigned Classes</th>
+                <th style={{ ...TH, minWidth: 160 }}>Special Subjects</th>
                 <th style={{ ...TH, width: 40 }} />
               </tr>
             </thead>

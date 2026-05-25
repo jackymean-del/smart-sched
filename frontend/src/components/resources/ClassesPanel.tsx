@@ -9,7 +9,7 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react'
 import type { Section } from '@/types'
 import { Layers, Trash2, Plus, X, GraduationCap } from 'lucide-react'
-import { P, P_D, P_L, P_B, TH, TD, TABLE_CARD, PasteModal } from './shared'
+import { P, P_D, P_L, P_B, TH, TD, TABLE_CARD, ImportModal } from './shared'
 
 type SectionExt = Section & { strength?: number }
 
@@ -214,12 +214,12 @@ function SectionRow({ sec, onUpdate, onDelete }: {
         <button onClick={onDelete}
           style={{
             background: 'none', border: 'none', cursor: 'pointer',
-            color: hovered ? '#C4BCDC' : 'transparent',
+            color: '#C4BCDC',
             padding: '3px 5px', borderRadius: 4, lineHeight: 1,
             transition: 'color 0.1s, background 0.1s',
           }}
           onMouseEnter={e => { e.currentTarget.style.color = '#e74c3c'; e.currentTarget.style.background = '#FFF0F0' }}
-          onMouseLeave={e => { e.currentTarget.style.color = hovered ? '#C4BCDC' : 'transparent'; e.currentTarget.style.background = 'transparent' }}
+          onMouseLeave={e => { e.currentTarget.style.color = '#C4BCDC'; e.currentTarget.style.background = 'transparent' }}
         >
           <Trash2 size={13} />
         </button>
@@ -242,10 +242,9 @@ export function ClassesPanel({ sections, setSections }: {
 }) {
   const [search, setSearch]       = useState('')
   const [showBulk, setShowBulk]   = useState(false)
-  const [pasteOpen, setPasteOpen] = useState(false)
-  const fileRef = useRef<HTMLInputElement>(null)
+  const [importOpen, setImportOpen] = useState(false)
 
-  function handlePasteImport(rows: string[][]) {
+  function handleImport(rows: string[][]) {
     const newSections = rows
       .map(cells => ({
         id: makeId(),
@@ -256,22 +255,6 @@ export function ClassesPanel({ sections, setSections }: {
       } as SectionExt))
       .filter(s => s.name)
     if (newSections.length) setSections([...sections, ...newSections as Section[]])
-  }
-
-  function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = ev => {
-      const text = (ev.target?.result as string) ?? ''
-      const rows = text.trim().split('\n').filter(l => l.trim()).map(line => {
-        const cells = line.includes('\t') ? line.split('\t') : line.split(',')
-        return cells.map(c => c.trim().replace(/^"(.*)"$/, '$1'))
-      }).filter(r => r.some(c => c.trim()))
-      handlePasteImport(rows)
-    }
-    reader.readAsText(file)
-    e.target.value = ''
   }
 
   const grouped = useMemo(() => {
@@ -325,18 +308,11 @@ export function ClassesPanel({ sections, setSections }: {
         {/* Actions */}
         <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
           <button
-            onClick={() => setPasteOpen(true)}
+            onClick={() => setImportOpen(true)}
             style={outlineBtn}
             onMouseEnter={e => { e.currentTarget.style.background = P_L; e.currentTarget.style.borderColor = P_B; e.currentTarget.style.color = P_D }}
             onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#DDD8FF'; e.currentTarget.style.color = '#6B6891' }}
-          >⎘ Paste</button>
-          <button
-            onClick={() => fileRef.current?.click()}
-            style={outlineBtn}
-            onMouseEnter={e => { e.currentTarget.style.background = P_L; e.currentTarget.style.borderColor = P_B; e.currentTarget.style.color = P_D }}
-            onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#DDD8FF'; e.currentTarget.style.color = '#6B6891' }}
-          >↑ Upload</button>
-          <input ref={fileRef} type="file" style={{ display: 'none' }} accept=".csv,.txt,.tsv" onChange={handleFileUpload} />
+          >⬆ Import</button>
           <div style={{ position: 'relative' }}>
             <button
               onClick={() => setShowBulk(o => !o)}
@@ -351,13 +327,19 @@ export function ClassesPanel({ sections, setSections }: {
         </div>
       </div>
 
-      {/* Paste Modal */}
-      {pasteOpen && (
-        <PasteModal
-          title="Import Classes"
-          hint="Columns: Class Name · Strength (optional)"
-          onImport={handlePasteImport}
-          onClose={() => setPasteOpen(false)}
+      {/* Import Modal */}
+      {importOpen && (
+        <ImportModal
+          title="Classes"
+          sampleHeaders={['Class Name', 'Strength']}
+          sampleRows={[
+            ['IX-A', '40'],
+            ['IX-B', '38'],
+            ['X-A',  '42'],
+            ['X-B',  '40'],
+          ]}
+          onImport={handleImport}
+          onClose={() => setImportOpen(false)}
         />
       )}
 
@@ -370,11 +352,11 @@ export function ClassesPanel({ sections, setSections }: {
             <div style={{ fontSize: 11.5, color: '#C4C0DC' }}>Use "Bulk Create" to generate grade sections quickly.</div>
           </div>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
                 <th style={TH}>Class</th>
-                <th style={{ ...TH, width: 76 }}>Strength</th>
+                <th style={{ ...TH, width: 80 }}>Strength</th>
                 <th style={{ ...TH, width: 40 }} />
               </tr>
             </thead>

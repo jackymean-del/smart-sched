@@ -13,7 +13,7 @@
 import { useState, useRef, useMemo, useEffect } from 'react'
 import type { Subject, Section } from '@/types'
 import { Trash2, Plus, ChevronDown, ChevronRight, BookOpen, Settings } from 'lucide-react'
-import { P, P_D, P_L, P_B, TH, TD, TABLE_CARD, InlineChipSelect, PasteModal } from './shared'
+import { P, P_D, P_L, P_B, TH, TD, TABLE_CARD, InlineChipSelect, ImportModal } from './shared'
 import type { ChipOption } from './shared'
 
 function makeId() { return Math.random().toString(36).slice(2, 9) }
@@ -402,16 +402,16 @@ function SubjectRow({ sub, classOptions, sections, onUpdate, onDelete }: {
               title="Subject settings"
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 3,
-                background: expanded ? P_L : (hovered ? '#F0ECFE' : 'transparent'),
+                background: expanded ? P_L : 'transparent',
                 border: `1px solid ${expanded ? P_B : 'transparent'}`,
                 borderRadius: 5, padding: '3px 7px', cursor: 'pointer',
-                color: expanded ? P : (hovered ? '#9896B5' : 'transparent'),
+                color: expanded ? P : '#C4C0DC',
                 fontSize: 10.5, fontWeight: 600, transition: 'all 0.1s', flexShrink: 0,
               }}
               onMouseEnter={e => { e.currentTarget.style.background = P_L; e.currentTarget.style.color = P; e.currentTarget.style.borderColor = P_B }}
               onMouseLeave={e => {
-                e.currentTarget.style.background = expanded ? P_L : (hovered ? '#F0ECFE' : 'transparent')
-                e.currentTarget.style.color = expanded ? P : (hovered ? '#9896B5' : 'transparent')
+                e.currentTarget.style.background = expanded ? P_L : 'transparent'
+                e.currentTarget.style.color = expanded ? P : '#C4C0DC'
                 e.currentTarget.style.borderColor = expanded ? P_B : 'transparent'
               }}
             >
@@ -424,13 +424,13 @@ function SubjectRow({ sub, classOptions, sections, onUpdate, onDelete }: {
               title="Delete subject"
               style={{
                 background: 'transparent',
-                border: `1px solid transparent`,
+                border: '1px solid transparent',
                 borderRadius: 5, padding: '3px 7px', cursor: 'pointer',
-                color: hovered ? '#EFA0A0' : 'transparent',
+                color: '#C4BCDC',
                 lineHeight: 1, transition: 'all 0.1s',
               }}
               onMouseEnter={e => { e.currentTarget.style.background = '#FFF0F0'; e.currentTarget.style.color = '#e74c3c'; e.currentTarget.style.borderColor = '#FFCDD2' }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = hovered ? '#EFA0A0' : 'transparent'; e.currentTarget.style.borderColor = 'transparent' }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#C4BCDC'; e.currentTarget.style.borderColor = 'transparent' }}
             >
               <Trash2 size={14} />
             </button>
@@ -455,9 +455,8 @@ export function SubjectsPanel({ subjects, setSubjects, sections }: {
   setSubjects: (s: Subject[]) => void
   sections: Section[]
 }) {
-  const [search, setSearch]     = useState('')
-  const [pasteOpen, setPasteOpen] = useState(false)
-  const fileRef = useRef<HTMLInputElement>(null)
+  const [search, setSearch]       = useState('')
+  const [importOpen, setImportOpen] = useState(false)
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
@@ -512,23 +511,6 @@ export function SubjectsPanel({ subjects, setSubjects, sections }: {
     if (newSubjects.length) setSubjects([...subjects, ...newSubjects])
   }
 
-  // File upload import
-  function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = ev => {
-      const text = (ev.target?.result as string) ?? ''
-      const rows = text.trim().split('\n').filter(l => l.trim()).map(line => {
-        const cells = line.includes('\t') ? line.split('\t') : line.split(',')
-        return cells.map(c => c.trim().replace(/^"(.*)"$/, '$1'))
-      }).filter(cells => cells.some(c => c.trim()))
-      handlePasteImport(rows)
-    }
-    reader.readAsText(file)
-    e.target.value = ''
-  }
-
   const assignedCount = useMemo(() => subjects.filter(s => (s.sections ?? []).length > 0).length, [subjects])
 
   return (
@@ -560,22 +542,13 @@ export function SubjectsPanel({ subjects, setSubjects, sections }: {
         {/* Actions */}
         <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
           <button
-            onClick={() => setPasteOpen(true)}
+            onClick={() => setImportOpen(true)}
             style={outlineBtn()}
             onMouseEnter={e => { e.currentTarget.style.background = P_L; e.currentTarget.style.borderColor = P_B; e.currentTarget.style.color = P_D }}
             onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#DDD8FF'; e.currentTarget.style.color = '#6B6891' }}
           >
-            ⎘ Paste
+            ⬆ Import
           </button>
-          <button
-            onClick={() => fileRef.current?.click()}
-            style={outlineBtn()}
-            onMouseEnter={e => { e.currentTarget.style.background = P_L; e.currentTarget.style.borderColor = P_B; e.currentTarget.style.color = P_D }}
-            onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#DDD8FF'; e.currentTarget.style.color = '#6B6891' }}
-          >
-            ↑ Upload
-          </button>
-          <input ref={fileRef} type="file" style={{ display: 'none' }} accept=".csv,.txt,.tsv" onChange={handleFileUpload} />
           {sections.length > 0 && (
             <button
               onClick={aiAssignAll}
@@ -606,14 +579,14 @@ export function SubjectsPanel({ subjects, setSubjects, sections }: {
             <div style={{ fontSize: 11.5, color: '#C4C0DC' }}>Add or paste subjects below.</div>
           </div>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
                 <th style={TH}>Subject</th>
-                <th style={{ ...TH, width: 78 }}>Short</th>
-                <th style={{ ...TH, width: 46, textAlign: 'center' }}>p/w</th>
-                <th style={{ ...TH, width: 250 }}>Applicable Classes</th>
-                <th style={{ ...TH, width: 90 }} />
+                <th style={{ ...TH, width: 80 }}>Short</th>
+                <th style={{ ...TH, width: 48, textAlign: 'center' }}>p/w</th>
+                <th style={{ ...TH, minWidth: 180 }}>Applicable Classes</th>
+                <th style={{ ...TH, width: 80 }} />
               </tr>
             </thead>
             <tbody>
@@ -636,13 +609,20 @@ export function SubjectsPanel({ subjects, setSubjects, sections }: {
         )}
       </div>
 
-      {/* Paste Modal */}
-      {pasteOpen && (
-        <PasteModal
-          title="Import Subjects"
-          hint="Columns: Subject Name · Short (optional) · Periods/Week (optional)"
+      {/* Import Modal */}
+      {importOpen && (
+        <ImportModal
+          title="Subjects"
+          sampleHeaders={['Subject Name', 'Short (optional)', 'Periods/Week']}
+          sampleRows={[
+            ['Mathematics',      'MATH', '6'],
+            ['English',          'ENG',  '5'],
+            ['Physics',          'PHY',  '5'],
+            ['Chemistry',        'CHEM', '5'],
+            ['Computer Science', 'CS',   '4'],
+          ]}
           onImport={handlePasteImport}
-          onClose={() => setPasteOpen(false)}
+          onClose={() => setImportOpen(false)}
         />
       )}
     </div>
