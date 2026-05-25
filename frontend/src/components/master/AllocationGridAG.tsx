@@ -847,6 +847,7 @@ export function AllocationGridAG({
             handle: { mode: 'fill', direction: 'xy' },
           }}
 
+          suppressColumnVirtualisation={true}
           ensureDomOrder={true}
           rowHeight={32}
           headerHeight={32}
