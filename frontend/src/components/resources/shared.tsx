@@ -159,13 +159,23 @@ export function InlineChipSelect({
   // Close on outside click
   useClickOutsideTwo(triggerRef, dropRef, () => { setOpen(false); setSearch('') }, open)
 
-  // Close when page scrolls (position would be stale)
+  // Reposition on scroll — keep dropdown anchored to trigger
   useEffect(() => {
     if (!open) return
-    const h = () => { setOpen(false); setSearch('') }
-    document.addEventListener('scroll', h, true)
-    return () => document.removeEventListener('scroll', h, true)
-  }, [open])
+    function reposition() {
+      const rect = triggerRef.current?.getBoundingClientRect()
+      if (!rect) return
+      const w = Math.max(rect.width + 50, minDropdownWidth)
+      const spaceBelow = window.innerHeight - rect.bottom
+      setPos({
+        left: Math.min(rect.left, window.innerWidth - w - 8),
+        width: w,
+        top: spaceBelow > 250 ? rect.bottom + 4 : rect.top - 280,
+      })
+    }
+    document.addEventListener('scroll', reposition, true)
+    return () => document.removeEventListener('scroll', reposition, true)
+  }, [open, minDropdownWidth]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (open) setTimeout(() => searchRef.current?.focus(), 30)
