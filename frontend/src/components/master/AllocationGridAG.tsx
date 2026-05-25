@@ -950,61 +950,59 @@ export function AllocationGridAG({
     requestAnimationFrame(() => gridRef.current?.api?.refreshCells({ force: false }))
   }, [])
 
-  // ── processDataFromClipboard — overlap validation ─────────────
-  // Reads from ssState.copied (engine state) — NOT from a separate marchRangesRef.
-  // If the paste footprint overlaps the copy source with an incompatible shape,
-  // shows a warning and cancels the paste (return null).
+  // ── processDataFromClipboard — shape compatibility validation ────
+  // Excel rule: overlap with the copy source is IRRELEVANT.
+  // The only thing that matters is whether the DESTINATION SELECTION
+  // dimensions are compatible with the CLIPBOARD DATA dimensions.
+  //
+  // Allow when:
+  //   • clipboard is 1×1 (single-cell broadcast)
+  //   • destination selection is 1×1 (paste expands to clipboard size)
+  //   • destination rows == data rows AND destination cols == data cols (exact fit)
+  //   • destination is an integer multiple of data in both dims (tiling)
+  //
+  // Block only when the destination selection is multi-cell AND its shape
+  // is incompatible with the clipboard data (not an exact fit or valid tile).
   const processDataFromClipboard = useCallback((
     params: ProcessDataFromClipboardParams
   ): string[][] | null => {
-    const api    = gridRef.current?.api
-    const copied = stateRef.current.copied
-    if (!api || !copied) return params.data
+    const api = gridRef.current?.api
+    if (!api) return params.data
 
     const dstRanges = (api as any).getCellRanges?.() as any[] | undefined
     if (!dstRanges?.length) return params.data
 
-    const allCols: any[] = (api as any).getAllDisplayedColumns?.() ?? []
-    const ci = (id: string) => allCols.findIndex(c => c.getColId() === id)
-
-    const src    = copied.sourceRange
-    const srcC0  = Math.min(ci(src.startColId), ci(src.endColId))
-    const srcC1  = Math.max(ci(src.startColId), ci(src.endColId))
-    const srcR0  = src.startRow
-    const srcR1  = src.endRow
-
-    // Paste expands from the top-left anchor of the destination selection
-    let dstR0 = Infinity, dstC0 = Infinity
-    dstRanges.forEach((range: any) => {
-      if (!range.startRow) return
-      const r = Math.min(range.startRow.rowIndex, range.endRow?.rowIndex ?? range.startRow.rowIndex)
-      dstR0 = Math.min(dstR0, r)
-      ;(range.columns as any[]).forEach((col: any) => {
-        const i = ci(col.getColId()); if (i >= 0) dstC0 = Math.min(dstC0, i)
-      })
-    })
-    if (!isFinite(dstR0)) return params.data
-
     const dataRows = params.data.length
     const dataCols = Math.max(...params.data.map(r => r.length), 0)
-    const dstR1    = dstR0 + dataRows - 1
-    const dstC1    = dstC0 + dataCols - 1
+    if (!dataRows || !dataCols) return params.data
 
-    const rowOvlp = srcR0 <= dstR1 && dstR0 <= srcR1
-    const colOvlp = srcC0 <= dstC1 && dstC0 <= srcC1
-    if (!rowOvlp || !colOvlp) return params.data   // no overlap → proceed
+    // 1×1 clipboard → broadcast to any destination, always valid
+    if (dataRows === 1 && dataCols === 1) return params.data
 
-    // Compatible: exact size match, or 1×1 broadcast
-    const exactFit   = dataRows === (srcR1 - srcR0 + 1) && dataCols === (srcC1 - srcC0 + 1)
-    const singleCell = dataRows === 1 && dataCols === 1
-    if (exactFit || singleCell) return params.data
+    // Read destination selection shape from the first range anchor
+    const sel = dstRanges[0]
+    if (!sel?.startRow || !sel?.endRow) return params.data
+
+    const r0      = Math.min(sel.startRow.rowIndex, sel.endRow.rowIndex)
+    const r1      = Math.max(sel.startRow.rowIndex, sel.endRow.rowIndex)
+    const selRows = r1 - r0 + 1
+    const selCols = (sel.columns as any[]).length
+
+    // 1×1 destination → paste always expands to clipboard dimensions
+    if (selRows === 1 && selCols === 1) return params.data
+
+    // Exact fit: destination shape == clipboard shape → allow
+    // Tiling:    destination is an N×M multiple of clipboard → allow
+    const rowsOk = selRows === dataRows || selRows % dataRows === 0
+    const colsOk = selCols === dataCols || selCols % dataCols === 0
+    if (rowsOk && colsOk) return params.data
 
     dispatchRef.current({
       type: 'SET_PASTE_WARNING',
-      message: `The copy area and paste area aren't the same size. Move the paste destination outside the copy area and try again.`,
+      message: `The copy area and paste area aren't the same size. Select just one cell in the paste area or an area that's the same size, then paste again.`,
     })
-    return null   // cancel paste
-  }, [])   // reads only stable refs (stateRef, gridRef, dispatchRef)
+    return null
+  }, []) // reads only stable refs (gridRef, dispatchRef)
 
   // ── Click outside → clear engine state ───────────────────────
   useEffect(() => {
