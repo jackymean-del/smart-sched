@@ -422,8 +422,12 @@ export function AllocationGridAG({
   const sectionsRef     = useRef<Section[]>(sections)
   const displayModeRef  = useRef(displayMode)
   const periodMinRef    = useRef(periodMinutes)
-  const gridRef         = useRef<AgGridReact<RowData>>(null)
-  const wrapperRef      = useRef<HTMLDivElement>(null)
+  const gridRef          = useRef<AgGridReact<RowData>>(null)
+  const wrapperRef       = useRef<HTMLDivElement>(null)
+  // Ref for the .ag-theme-quartz container — the position:relative element
+  // that is the overlay's containing block.  computeMarchRects must subtract
+  // THIS rect, not wrapperRef's, so overlay coords align with the grid cells.
+  const gridContainerRef = useRef<HTMLDivElement>(null)
 
   // Update refs every render — O(1), no side effects
   allocationsRef.current = subjectAllocations
@@ -496,10 +500,15 @@ export function AllocationGridAG({
   //      scrolls so ants stay aligned with the moving cells.
 
   const computeMarchRects = useCallback((ranges: any[] | null | undefined): MarchRect[] => {
-    const gridEl = wrapperRef.current
-    if (!gridEl || !ranges?.length) return []
+    const gridEl       = wrapperRef.current
+    const containerEl  = gridContainerRef.current   // position:relative overlay parent
+    if (!gridEl || !containerEl || !ranges?.length) return []
 
-    const wrapRect = gridEl.getBoundingClientRect()
+    // MUST use gridContainerRef (the .ag-theme-quartz div) as the coordinate
+    // base — it is the position:relative ancestor of the overlay div.
+    // Using wrapperRef would include the toolbar offset (~34px ≈ 1 row height)
+    // and shift every overlay rect one row below the actual selection.
+    const wrapRect = containerEl.getBoundingClientRect()
     const out: MarchRect[] = []
 
     ranges.forEach((range: any) => {
@@ -1020,8 +1029,10 @@ export function AllocationGridAG({
       </div>
 
       {/* ── AG Grid ── */}
-      {/* position:relative makes this the containing block for the march overlay */}
-      <div className="ag-theme-quartz" style={{ height: gridHeight, width: '100%', border: '1px solid #C8C8C8', borderTop: 'none', overflow: 'hidden', position: 'relative' }}>
+      {/* gridContainerRef — the position:relative containing block for the march overlay.
+          computeMarchRects subtracts THIS element's getBoundingClientRect(), ensuring
+          overlay coords are in the same coordinate space as position:absolute children. */}
+      <div ref={gridContainerRef} className="ag-theme-quartz" style={{ height: gridHeight, width: '100%', border: '1px solid #C8C8C8', borderTop: 'none', overflow: 'hidden', position: 'relative' }}>
         <AgGridReact<RowData>
           ref={gridRef}
           rowData={rowData}
