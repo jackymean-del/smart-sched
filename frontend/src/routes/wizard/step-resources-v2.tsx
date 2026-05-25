@@ -1,18 +1,18 @@
 /**
- * Step 2 — Resources  (v3, DataGrid edition)
+ * Step 2 — Resources  (v4, relationship-panel edition)
  *
  * Layout:
- *   ┌─ Left sidebar (4 tabs) ──┬─ Content area ──────────────────────────┐
- *   │  🎓 Classes      52       │  [AI Banner]                             │
- *   │  📖 Subjects     38       │  <DataGrid>  (full Excel UX)             │
- *   │  👤 Teachers     84       │                                          │
- *   │  🏫 Rooms        60       │                                          │
- *   │  [Readiness]              │                                          │
- *   └───────────────────────────┴────────────────────────────────────────── ┘
- *   [← Step 1]  Step 2 of 5 · All 4 resource types required  [Next →]
+ *   ┌─ Left sidebar ─────────┬─ Content area ─────────────────────────────┐
+ *   │  👤 Teachers      84   │  [Panel — relationship-driven UX]           │
+ *   │  🎓 Classes       52   │                                             │
+ *   │  📖 Subjects      38   │                                             │
+ *   │  🏫 Rooms         60   │                                             │
+ *   │  [Readiness]           │                                             │
+ *   └────────────────────────┴────────────────────────────────────────────┘
+ *   [← Step 1]   Step 2 of 5 · All 4 resource types required   [Next →]
  *
- * Uses shared DataGrid + EntityGrids — full Excel UX (copy/paste, import,
- * right-click insert/delete, drag-fill, undo/redo, scope popover, etc.)
+ * Tab order:  Teachers → Classes → Subjects → Rooms
+ * Each tab renders a relationship-driven panel (side-drawer UX).
  */
 
 import { useState, useEffect, useMemo } from 'react'
@@ -20,22 +20,23 @@ import { useTimetableStore } from '@/store/timetableStore'
 import { generateStaff, generateSubjects, generateBreaks } from '@/lib/orgData'
 import type { Section, Subject, Staff } from '@/types'
 import { ScopeMatrixModal } from '@/components/DataGrid/ScopeMatrixModal'
-import {
-  ClassesGrid, SubjectsGrid, TeachersGrid, RoomsGrid,
-  type RoomRow, makeId,
-} from '@/components/master/EntityGrids'
+import { makeId } from '@/components/master/EntityGrids'
+import { TeachersPanel } from '@/components/resources/TeachersPanel'
+import { ClassesPanel }  from '@/components/resources/ClassesPanel'
+import { SubjectsPanel } from '@/components/resources/SubjectsPanel'
+import { RoomsPanel, type RoomExt } from '@/components/resources/RoomsPanel'
 import {
   Sparkles, Users, BookOpen, Building2, GraduationCap,
   ChevronLeft, ChevronRight, RefreshCw, CheckCircle2,
 } from 'lucide-react'
 
 // ─── Types ────────────────────────────────────────────────────────
-type TabKey = 'classes' | 'subjects' | 'teachers' | 'rooms'
+type TabKey = 'teachers' | 'classes' | 'subjects' | 'rooms'
 
 const TAB_META: { key: TabKey; label: string; icon: React.ReactNode }[] = [
+  { key: 'teachers', label: 'Teachers', icon: <Users size={15} /> },
   { key: 'classes',  label: 'Classes',  icon: <GraduationCap size={15} /> },
   { key: 'subjects', label: 'Subjects', icon: <BookOpen size={15} /> },
-  { key: 'teachers', label: 'Teachers', icon: <Users size={15} /> },
   { key: 'rooms',    label: 'Rooms',    icon: <Building2 size={15} /> },
 ]
 
@@ -59,54 +60,54 @@ function buildDefaultSections(): Section[] {
       id: makeId(), name: `${grade}-${sec}`, grade,
       room: `Room ${100 + out.length + 1}`, classTeacher: '',
     } as Section)
-  for (const g of ['Nursery', 'LKG', 'UKG'])   for (const s of ['A','B','C'])              push(g, s)
-  for (const g of ['I','II','III','IV','V'])     for (const s of ['A','B','C'])              push(g, s)
-  for (const g of ['VI','VII','VIII'])           for (const s of ['A','B','C','D'])          push(g, s)
-  for (const g of ['IX','X'])                   for (const s of ['A','B','C','D'])          push(g, s)
+  for (const g of ['Nursery', 'LKG', 'UKG'])   for (const s of ['A','B','C'])                  push(g, s)
+  for (const g of ['I','II','III','IV','V'])     for (const s of ['A','B','C'])                  push(g, s)
+  for (const g of ['VI','VII','VIII'])           for (const s of ['A','B','C','D'])              push(g, s)
+  for (const g of ['IX','X'])                   for (const s of ['A','B','C','D'])              push(g, s)
   for (const g of ['XI','XII'])                 for (const s of ['Sci-A','Sci-B','Com-A','Arts']) push(g, s)
   return out
 }
 
 function buildDefaultSubjects(): Subject[] {
   const defs: Array<{ name: string; cat: string; ppw: number }> = [
-    { name: 'Mathematics',              cat: 'Core', ppw: 6 },
-    { name: 'English',                  cat: 'Core', ppw: 6 },
-    { name: 'Science',                  cat: 'Core', ppw: 5 },
-    { name: 'Social Studies',           cat: 'Core', ppw: 4 },
-    { name: 'Hindi',                    cat: 'Core', ppw: 5 },
-    { name: 'Sanskrit / MIL',           cat: 'Core', ppw: 3 },
-    { name: 'EVS',                      cat: 'Core', ppw: 3 },
-    { name: 'Computer Science',         cat: 'Core', ppw: 2 },
-    { name: 'Physics',                  cat: 'Core', ppw: 5 },
-    { name: 'Chemistry',                cat: 'Core', ppw: 5 },
-    { name: 'Biology',                  cat: 'Core', ppw: 4 },
-    { name: 'Accountancy',              cat: 'Core', ppw: 5 },
-    { name: 'Business Studies',         cat: 'Core', ppw: 4 },
-    { name: 'Economics',                cat: 'Core', ppw: 4 },
-    { name: 'History',                  cat: 'Core', ppw: 3 },
-    { name: 'Geography',                cat: 'Core', ppw: 3 },
-    { name: 'Political Science',        cat: 'Core', ppw: 3 },
-    { name: 'Psychology',               cat: 'Core', ppw: 3 },
-    { name: 'Informatics Practices',    cat: 'Core', ppw: 2 },
-    { name: 'English Literature',       cat: 'Core', ppw: 3 },
-    { name: 'Moral Science',            cat: 'Core', ppw: 1 },
-    { name: 'Entrepreneurship',         cat: 'Core', ppw: 2 },
-    { name: 'Environmental Studies',    cat: 'Core', ppw: 2 },
-    { name: 'Number Work',              cat: 'Core', ppw: 4 },
-    { name: 'Nursery Rhymes & Stories', cat: 'Core', ppw: 3 },
-    { name: 'G.K.',                     cat: 'Core', ppw: 1 },
-    { name: 'Drawing',                  cat: 'Core', ppw: 2 },
-    { name: 'Activity / Free Play',     cat: 'Core', ppw: 3 },
-    { name: 'Mathematics (Optional)',   cat: 'Core', ppw: 5 },
-    { name: 'Odia / Regional Language', cat: 'Core', ppw: 3 },
-    { name: 'Physical Education',       cat: 'CCA',  ppw: 2 },
-    { name: 'Art & Craft',              cat: 'CCA',  ppw: 2 },
-    { name: 'Music',                    cat: 'CCA',  ppw: 1 },
-    { name: 'Dance',                    cat: 'CCA',  ppw: 1 },
-    { name: 'Library',                  cat: 'CCA',  ppw: 1 },
-    { name: 'SUPW / Life Skills',       cat: 'CCA',  ppw: 1 },
-    { name: 'Yoga & Health',            cat: 'CCA',  ppw: 1 },
-    { name: 'Scout & Guide',            cat: 'CCA',  ppw: 1 },
+    { name: 'Mathematics',              cat: 'Compulsory', ppw: 6 },
+    { name: 'English',                  cat: 'Compulsory', ppw: 6 },
+    { name: 'Science',                  cat: 'Compulsory', ppw: 5 },
+    { name: 'Social Studies',           cat: 'Compulsory', ppw: 4 },
+    { name: 'Hindi',                    cat: 'Language',   ppw: 5 },
+    { name: 'Sanskrit / MIL',           cat: 'Language',   ppw: 3 },
+    { name: 'EVS',                      cat: 'Compulsory', ppw: 3 },
+    { name: 'Computer Science',         cat: 'Compulsory', ppw: 2 },
+    { name: 'Physics',                  cat: 'Compulsory', ppw: 5 },
+    { name: 'Chemistry',                cat: 'Compulsory', ppw: 5 },
+    { name: 'Biology',                  cat: 'Compulsory', ppw: 4 },
+    { name: 'Accountancy',              cat: 'Compulsory', ppw: 5 },
+    { name: 'Business Studies',         cat: 'Compulsory', ppw: 4 },
+    { name: 'Economics',                cat: 'Compulsory', ppw: 4 },
+    { name: 'History',                  cat: 'Compulsory', ppw: 3 },
+    { name: 'Geography',                cat: 'Compulsory', ppw: 3 },
+    { name: 'Political Science',        cat: 'Compulsory', ppw: 3 },
+    { name: 'Psychology',               cat: '5th Optional', ppw: 3 },
+    { name: 'Informatics Practices',    cat: 'Compulsory', ppw: 2 },
+    { name: 'English Literature',       cat: 'Language',   ppw: 3 },
+    { name: 'Moral Science',            cat: 'Activity',   ppw: 1 },
+    { name: 'Entrepreneurship',         cat: 'Skill',      ppw: 2 },
+    { name: 'Environmental Studies',    cat: 'Compulsory', ppw: 2 },
+    { name: 'Number Work',              cat: 'Compulsory', ppw: 4 },
+    { name: 'Nursery Rhymes & Stories', cat: 'Activity',   ppw: 3 },
+    { name: 'G.K.',                     cat: 'Activity',   ppw: 1 },
+    { name: 'Drawing',                  cat: 'CCA',        ppw: 2 },
+    { name: 'Activity / Free Play',     cat: 'Activity',   ppw: 3 },
+    { name: 'Physical Education',       cat: 'CCA',        ppw: 2 },
+    { name: 'Art & Craft',              cat: 'CCA',        ppw: 2 },
+    { name: 'Music',                    cat: 'CCA',        ppw: 1 },
+    { name: 'Dance',                    cat: 'CCA',        ppw: 1 },
+    { name: 'Library',                  cat: 'CCA',        ppw: 1 },
+    { name: 'SUPW / Life Skills',       cat: 'Activity',   ppw: 1 },
+    { name: 'Yoga & Health',            cat: 'Activity',   ppw: 1 },
+    { name: 'Scout & Guide',            cat: 'CCA',        ppw: 1 },
+    { name: 'Odia / Regional Language', cat: 'Language',   ppw: 3 },
+    { name: 'Mathematics (Optional)',   cat: '4th Optional', ppw: 5 },
   ]
   return defs.map(d => ({
     id: makeId(), name: d.name, periodsPerWeek: d.ppw,
@@ -116,21 +117,24 @@ function buildDefaultSubjects(): Subject[] {
   } as unknown as Subject))
 }
 
-function buildDefaultRooms(): RoomRow[] {
-  const out: RoomRow[] = []
+function buildDefaultRooms(): RoomExt[] {
+  const out: RoomExt[] = []
   for (let i = 0; i < 52; i++)
-    out.push({ id: makeId(), name: `Room ${101 + i}`, type: 'Classroom', capacity: 40, building: 'Main Block', floor: 'Ground' })
+    out.push({ id: makeId(), name: `Room ${101 + i}`, type: 'Classroom', capacity: 40, building: 'Main Block', floor: 'Ground', subjectMappings: [], notes: '' })
   const specials = [
-    { name: 'Science Lab 1', type: 'Lab',          cap: 35, floor: '1st' },
-    { name: 'Science Lab 2', type: 'Lab',          cap: 35, floor: '1st' },
-    { name: 'Computer Lab',  type: 'Computer Lab', cap: 40, floor: '2nd' },
-    { name: 'Library',       type: 'Library',      cap: 60, floor: 'Ground' },
-    { name: 'Art Room',      type: 'Other',        cap: 35, floor: '1st' },
-    { name: 'Music Room',    type: 'Other',        cap: 30, floor: '1st' },
-    { name: 'Dance Hall',    type: 'Hall',         cap: 50, floor: 'Ground' },
-    { name: 'Activity Hall', type: 'Hall',         cap: 80, floor: 'Ground' },
+    { name: 'Science Lab 1', type: 'Lab',          cap: 35, floor: '1st',    subjects: ['Physics', 'Chemistry', 'Biology'] },
+    { name: 'Science Lab 2', type: 'Lab',          cap: 35, floor: '1st',    subjects: ['Chemistry', 'Biology'] },
+    { name: 'Computer Lab',  type: 'Computer Lab', cap: 40, floor: '2nd',    subjects: ['Computer Science', 'Informatics Practices'] },
+    { name: 'Library',       type: 'Library',      cap: 60, floor: 'Ground', subjects: ['Library'] },
+    { name: 'Art Room',      type: 'Other',        cap: 35, floor: '1st',    subjects: ['Art & Craft', 'Drawing'] },
+    { name: 'Music Room',    type: 'Other',        cap: 30, floor: '1st',    subjects: ['Music'] },
+    { name: 'Dance Hall',    type: 'Hall',         cap: 50, floor: 'Ground', subjects: ['Dance'] },
+    { name: 'Activity Hall', type: 'Hall',         cap: 80, floor: 'Ground', subjects: ['Physical Education', 'Scout & Guide'] },
   ]
-  specials.forEach(s => out.push({ id: makeId(), name: s.name, type: s.type, capacity: s.cap, building: 'Main Block', floor: s.floor }))
+  specials.forEach(s => out.push({
+    id: makeId(), name: s.name, type: s.type, capacity: s.cap,
+    building: 'Main Block', floor: s.floor, subjectMappings: s.subjects, notes: '',
+  }))
   return out.slice(0, 60)
 }
 
@@ -144,41 +148,44 @@ export function StepResourcesV2() {
   const { config, sections, staff, subjects, setSections, setStaff, setBreaks, setStep } = store
   const setSubjects = store.setSubjects ?? store.setLegacySubjects
 
-  const [activeTab, setActiveTab] = useState<TabKey>('classes')
+  const [activeTab, setActiveTab] = useState<TabKey>('teachers')
   const [generating, setGenerating] = useState(false)
 
-  // ── Rooms — local RoomRow state, synced to store ───────────────
-  const [rooms, setRoomsLocal] = useState<RoomRow[]>(() => {
+  // ── Rooms — local RoomExt state, synced to store ───────────────
+  const [rooms, setRoomsLocal] = useState<RoomExt[]>(() => {
     const stored = store.rooms ?? []
     if (Array.isArray(stored) && stored.length > 0) {
       return stored.map((r: any) => ({
-        id:       r.id ?? makeId(),
-        name:     r.actualName ?? r.name ?? r.generatedName ?? 'Room',
-        type:     r.roomType ?? r.type ?? 'Classroom',
-        capacity: r.capacity ?? 40,
-        building: r.building ?? 'Main Block',
-        floor:    r.floor ?? 'Ground',
-        scope:    r.scope,
+        id:              r.id ?? makeId(),
+        name:            r.actualName ?? r.name ?? r.generatedName ?? 'Room',
+        type:            r.roomType ?? r.type ?? 'Classroom',
+        capacity:        r.capacity ?? 40,
+        building:        r.building ?? 'Main Block',
+        floor:           r.floor ?? 'Ground',
+        subjectMappings: r.subjectMappings ?? [],
+        notes:           r.notes ?? '',
+        scope:           r.scope,
       }))
     }
     return []
   })
 
-  const setRooms = (next: RoomRow[]) => {
+  const setRooms = (next: RoomExt[]) => {
     setRoomsLocal(next)
     store.setRooms?.(next.map(r => ({
       id: r.id, generatedName: r.name, actualName: r.name,
       roomType: r.type.toLowerCase().replace(/ /g, '-') || 'classroom',
-      capacity: r.capacity, scope: r.scope,
+      capacity: r.capacity, subjectMappings: r.subjectMappings,
+      notes: r.notes, scope: r.scope,
     })))
   }
 
-  // Sync rooms back to store whenever they change
   useEffect(() => {
     store.setRooms?.(rooms.map(r => ({
       id: r.id, generatedName: r.name, actualName: r.name,
       roomType: r.type.toLowerCase().replace(/ /g, '-') || 'classroom',
-      capacity: r.capacity, scope: r.scope,
+      capacity: r.capacity, subjectMappings: r.subjectMappings,
+      notes: r.notes, scope: r.scope,
     })))
   }, [rooms]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -208,11 +215,11 @@ export function StepResourcesV2() {
 
   // ── Counts + readiness ────────────────────────────────────────
   const counts = useMemo<Record<TabKey, number>>(() => ({
+    teachers: staff.length,
     classes:  sections.length,
     subjects: subjects.length,
-    teachers: staff.length,
     rooms:    rooms.length,
-  }), [sections, subjects, staff, rooms])
+  }), [staff, sections, subjects, rooms])
 
   const allReady = counts.classes > 0 && counts.subjects > 0 &&
                    counts.teachers > 0 && counts.rooms > 0
@@ -228,7 +235,6 @@ export function StepResourcesV2() {
     const newStaff    = buildDefaultStaff(84)
     const newSubjects = buildDefaultSubjects()
     const newRooms    = buildDefaultRooms()
-    // Assign class teachers and strength
     setSections(newSections.map((sec, i) => ({
       ...sec,
       classTeacher: newStaff[i % newStaff.length]?.name ?? '',
@@ -242,10 +248,10 @@ export function StepResourcesV2() {
   }
 
   const AI_BANNER: Record<TabKey, string> = {
-    classes:  `${counts.classes} classes · review and edit any cell directly`,
-    subjects: `${counts.subjects} subjects · edit periods per week, category, and flags`,
-    teachers: `${counts.teachers} teachers · edit subjects, load limits, and availability`,
-    rooms:    `${counts.rooms} rooms · edit names, type, capacity and availability windows`,
+    teachers: `${counts.teachers} teachers · assign subject expertise and class teacher roles`,
+    classes:  `${counts.classes} classes · set home rooms and review class teacher assignments`,
+    subjects: `${counts.subjects} subjects · map each subject to the classes that require it`,
+    rooms:    `${counts.rooms} rooms · map rooms to subjects and review home class assignments`,
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -338,8 +344,8 @@ export function StepResourcesV2() {
       </div>
 
       {/* ══ Content area ══════════════════════════════════════ */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-        <div style={{ flex: 1, padding: '20px 24px 8px', overflowY: 'auto' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+        <div style={{ flex: 1, padding: '20px 24px 8px', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
 
           {/* ── Empty state ─────────────────────────────── */}
           {!hasAnyData && (
@@ -354,8 +360,8 @@ export function StepResourcesV2() {
                 AI-generate your school resources
               </h2>
               <p style={{ fontSize: 13, color: '#6B7280', margin: '0 0 28px', lineHeight: 1.6 }}>
-                One click generates 52 classes (Nursery–XII), 84 teachers, 38 subjects and 60 rooms.
-                Every cell is fully editable — paste from Excel, bulk-fill, import CSV/XLSX.
+                One click generates 52 classes (Nursery–XII), 84 teachers, 38 subjects and 60 rooms —
+                with subject expertise, class teacher assignments, and room mappings pre-filled.
               </p>
               <button
                 onClick={handleGenerateAll}
@@ -374,26 +380,26 @@ export function StepResourcesV2() {
                 }
               </button>
               <p style={{ fontSize: 11, color: '#9CA3AF', marginTop: 12 }}>
-                Or switch to a tab and use <strong>+ Add Row</strong> / <strong>Import</strong> to enter data manually.
+                Or switch to a tab and use <strong>+ Add</strong> to enter data manually.
               </p>
               <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
             </div>
           )}
 
-          {/* ── DataGrid view ────────────────────────────── */}
+          {/* ── Panel view ───────────────────────────────── */}
           {hasAnyData && (
-            <div>
-              {/* AI Banner */}
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+              {/* Banner */}
               <div style={{
                 display: 'flex', alignItems: 'center', gap: 10,
                 padding: '9px 14px', borderRadius: 8,
                 background: '#F5F2FF', border: '1px solid #E0D9FF',
-                marginBottom: 16,
+                marginBottom: 16, flexShrink: 0,
               }}>
                 <Sparkles size={13} color="#7C6FE0" style={{ flexShrink: 0 }} />
                 <span style={{ fontSize: 12, color: '#4B5275', lineHeight: 1.4, flex: 1 }}>
                   <strong style={{ color: '#13111E' }}>{AI_BANNER[activeTab]}</strong>
-                  {' '}· Use <kbd style={kbdStyle}>Ctrl+C</kbd> / <kbd style={kbdStyle}>Ctrl+V</kbd> to copy-paste, right-click for row options.
+                  {' '}· Click any row to open its editor drawer.
                 </span>
                 <button
                   onClick={handleGenerateAll}
@@ -408,46 +414,44 @@ export function StepResourcesV2() {
                 </button>
               </div>
 
-              {/* Grids */}
-              {activeTab === 'classes' && (
-                <ClassesGrid
-                  sections={sections}
-                  setSections={setSections}
-                  staff={staff}
-                  onScope={(s, rect) => setScopeTarget({ kind: 'Section', entity: s, rect })}
-                  onBulkScope={rect => setScopeTarget({ kind: 'BulkSection', entity: { id: '__bulk__', name: 'All Classes' }, rect })}
-                />
-              )}
-              {activeTab === 'subjects' && (
-                <SubjectsGrid
-                  subjects={subjects}
-                  setSubjects={setSubjects}
-                  onScope={(s, rect) => setScopeTarget({ kind: 'Subject', entity: s, rect })}
-                  onBulkScope={rect => setScopeTarget({ kind: 'BulkSubject', entity: { id: '__bulk__', name: 'All Subjects' }, rect })}
-                />
-              )}
-              {activeTab === 'teachers' && (
-                <TeachersGrid
+              {/* Panels — all mounted, visibility toggled to preserve state */}
+              <div style={{ flex: 1, minHeight: 0, display: activeTab === 'teachers' ? 'flex' : 'none', flexDirection: 'column' }}>
+                <TeachersPanel
                   staff={staff}
                   setStaff={setStaff}
                   sections={sections}
-                  onScope={(t, rect) => setScopeTarget({ kind: 'Teacher', entity: t, rect })}
-                  onBulkScope={rect => setScopeTarget({ kind: 'BulkTeacher', entity: { id: '__bulk__', name: 'All Teachers' }, rect })}
+                  subjects={subjects}
                 />
-              )}
-              {activeTab === 'rooms' && (
-                <RoomsGrid
+              </div>
+              <div style={{ flex: 1, minHeight: 0, display: activeTab === 'classes' ? 'flex' : 'none', flexDirection: 'column' }}>
+                <ClassesPanel
+                  sections={sections}
+                  setSections={setSections}
+                  rooms={rooms}
+                  staff={staff}
+                />
+              </div>
+              <div style={{ flex: 1, minHeight: 0, display: activeTab === 'subjects' ? 'flex' : 'none', flexDirection: 'column' }}>
+                <SubjectsPanel
+                  subjects={subjects}
+                  setSubjects={setSubjects}
+                  sections={sections}
+                  staff={staff}
+                />
+              </div>
+              <div style={{ flex: 1, minHeight: 0, display: activeTab === 'rooms' ? 'flex' : 'none', flexDirection: 'column' }}>
+                <RoomsPanel
                   rooms={rooms}
                   setRooms={setRooms}
-                  onScope={(r, rect) => setScopeTarget({ kind: 'Room', entity: r, rect })}
-                  onBulkScope={rect => setScopeTarget({ kind: 'BulkRoom', entity: { id: '__bulk__', name: 'All Rooms' }, rect })}
+                  sections={sections}
+                  subjects={subjects}
                 />
-              )}
+              </div>
             </div>
           )}
         </div>
 
-        {/* ── Scope popover ─────────────────────────────── */}
+        {/* ── Scope popover — retained for programmatic/future use ── */}
         {scopeTarget && (
           <ScopeMatrixModal
             entityName={scopeTarget.entity.name ?? scopeTarget.entity.actualName ?? '—'}
@@ -457,9 +461,8 @@ export function StepResourcesV2() {
             periods={periods}
             cycleWeeks={cycleWeeks}
             anchorRect={scopeTarget.rect}
-            // Bulk mode: pass the full entity list so the picker is shown
             entities={
-              scopeTarget.kind === 'BulkSection' ? sections.map((s: Section) => ({ id: s.id, name: s.name }))
+              scopeTarget.kind === 'BulkSection'  ? sections.map((s: Section) => ({ id: s.id, name: s.name }))
               : scopeTarget.kind === 'BulkSubject' ? subjects.map((s: Subject) => ({ id: s.id, name: s.name }))
               : scopeTarget.kind === 'BulkTeacher' ? staff.map((t: Staff) => ({ id: t.id, name: t.name }))
               : scopeTarget.kind === 'BulkRoom'    ? rooms.map(r => ({ id: r.id, name: r.name }))
@@ -467,7 +470,6 @@ export function StepResourcesV2() {
             }
             onSave={(nextScope, selectedIds) => {
               const k = scopeTarget.kind
-              // Single-entity scope
               if (k === 'Section')
                 setSections(sections.map((s: Section) =>
                   s.id === scopeTarget.entity.id ? { ...s, scope: nextScope } : s))
@@ -480,7 +482,6 @@ export function StepResourcesV2() {
               else if (k === 'Room')
                 setRooms(rooms.map(r =>
                   r.id === scopeTarget.entity.id ? { ...r, scope: nextScope } : r))
-              // Bulk scope — applies to selected subset (or all if selectedIds undefined)
               else if (k === 'BulkSection')
                 setSections(sections.map((s: Section) =>
                   (!selectedIds || selectedIds.includes(s.id)) ? { ...s, scope: nextScope } : s))
@@ -553,11 +554,4 @@ export function StepResourcesV2() {
       </div>
     </div>
   )
-}
-
-const kbdStyle: React.CSSProperties = {
-  display: 'inline-block', padding: '1px 5px', borderRadius: 4,
-  background: '#fff', border: '1px solid #D8D4F0',
-  fontSize: 10, fontWeight: 700, color: '#4B5275',
-  fontFamily: "'DM Mono', monospace",
 }
