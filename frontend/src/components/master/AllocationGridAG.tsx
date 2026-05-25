@@ -907,6 +907,7 @@ export function AllocationGridAG({
           suppressLastEmptyLineOnPaste={true}
 
           cellSelection={{
+            suppressMultiRanges: true,          // always one rectangle, like Excel
             enableColumnSelection: true,
             handle: { mode: 'fill', direction: 'xy' },
           }}
