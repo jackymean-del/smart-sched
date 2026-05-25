@@ -274,10 +274,51 @@ const GRID_STYLES = `
   border-right: 1px solid #C0BCD8 !important;
 }
 
+/* ── Suppress ALL native browser focus chrome ───────────────────────────────
+   AG Grid adds tabIndex="0" dynamically to cells for keyboard navigation.
+   Without this block the browser paints its own focus ring (blue square) and
+   native selection highlight ON TOP of the custom marching-ants border, causing
+   the "stretched dashed border / horizontal corruption" artefact.
+
+   Rule order: generic reset first, then specific overrides for our custom styles.
+   The !important on outline beats AG Grid's inline style and any theme default.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/* Every focusable element inside the grid: wipe browser outline unconditionally */
+.ag-alloc-wrap *:focus,
+.ag-alloc-wrap *:focus-visible,
+.ag-alloc-wrap *:focus-within {
+  outline: none !important;
+  box-shadow: none !important;          /* also clears Firefox dotted ring */
+}
+
+/* Cells specifically — covers the tabIndex AG Grid injects at runtime */
+.ag-alloc-wrap .ag-cell:focus,
+.ag-alloc-wrap .ag-cell:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Header cells */
+.ag-alloc-wrap .ag-header-cell:focus,
+.ag-alloc-wrap .ag-header-cell:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Grid root wrapper — AG Grid renders a focusable div at the root */
+.ag-alloc-wrap .ag-root-wrapper:focus,
+.ag-alloc-wrap .ag-root-wrapper:focus-visible,
+.ag-alloc-wrap .ag-root:focus,
+.ag-alloc-wrap .ag-root:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
 /* ── Focus / selection states ── */
 .ag-alloc-wrap .ag-cell-focus:not(.ag-cell-range-selected):not(.ag-cell-inline-editing) {
   border: 1.5px solid #5A52D5 !important;
-  outline: none;
+  outline: none !important;
 }
 .ag-alloc-wrap .ag-cell-inline-editing {
   border: 2px solid #5A52D5 !important;
@@ -870,8 +911,11 @@ export function AllocationGridAG({
         sparseClipRef.current = null   // rectangular selection, no gaps needed
       }
 
-      // Clear any previous ants first so stale classes never linger
+      // Clear any previous ants first so stale classes never linger.
+      // Also wipe any native text selection the browser may have accumulated
+      // during Ctrl+Click — prevents native highlight from painting over ants.
       clearMarchingAnts()
+      window.getSelection()?.removeAllRanges()
       requestAnimationFrame(() => applyMarchingAnts(ranges))
       return
     }
@@ -901,6 +945,11 @@ export function AllocationGridAG({
 
   // ── Selection → status bar ─────────────────────────────────────
   const onCellSelectionChanged = useCallback((e: CellSelectionChangedEvent<RowData>) => {
+    // Clear native text selection on every AG Grid selection change.
+    // Drag-select and Shift+Arrow can accumulate a browser text selection
+    // that paints a native highlight rectangle over the custom ants border.
+    window.getSelection()?.removeAllRanges()
+
     const ranges = e.api.getCellRanges()
     if (!ranges?.length) { setStatusBar(null); return }
     let cells = 0, total = 0
