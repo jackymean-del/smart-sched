@@ -9,7 +9,7 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react'
 import type { Section } from '@/types'
 import { Layers, Trash2, Plus, X, GraduationCap } from 'lucide-react'
-import { P, P_D, P_L, P_B, TH, TD, TABLE_CARD } from './shared'
+import { P, P_D, P_L, P_B, TH, TD, TABLE_CARD, PasteModal } from './shared'
 
 type SectionExt = Section & { strength?: number }
 
@@ -229,12 +229,50 @@ function SectionRow({ sec, onUpdate, onDelete }: {
 }
 
 // ─── Main export ──────────────────────────────────────────────────────────────
+const outlineBtn: React.CSSProperties = {
+  display: 'inline-flex', alignItems: 'center', gap: 4,
+  background: '#fff', color: '#6B6891', border: '1px solid #DDD8FF',
+  borderRadius: 5, padding: '4px 9px', fontSize: 11, fontWeight: 600,
+  cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0, whiteSpace: 'nowrap',
+}
+
 export function ClassesPanel({ sections, setSections }: {
   sections: Section[]
   setSections: (s: Section[]) => void
 }) {
-  const [search, setSearch]     = useState('')
-  const [showBulk, setShowBulk] = useState(false)
+  const [search, setSearch]       = useState('')
+  const [showBulk, setShowBulk]   = useState(false)
+  const [pasteOpen, setPasteOpen] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  function handlePasteImport(rows: string[][]) {
+    const newSections = rows
+      .map(cells => ({
+        id: makeId(),
+        name: cells[0]?.trim() || '',
+        grade: getGrade(cells[0]?.trim() || ''),
+        room: '', classTeacher: '',
+        strength: parseInt(cells[1]) || 40,
+      } as SectionExt))
+      .filter(s => s.name)
+    if (newSections.length) setSections([...sections, ...newSections as Section[]])
+  }
+
+  function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = ev => {
+      const text = (ev.target?.result as string) ?? ''
+      const rows = text.trim().split('\n').filter(l => l.trim()).map(line => {
+        const cells = line.includes('\t') ? line.split('\t') : line.split(',')
+        return cells.map(c => c.trim().replace(/^"(.*)"$/, '$1'))
+      }).filter(r => r.some(c => c.trim()))
+      handlePasteImport(rows)
+    }
+    reader.readAsText(file)
+    e.target.value = ''
+  }
 
   const grouped = useMemo(() => {
     const q = search.toLowerCase()
@@ -285,25 +323,43 @@ export function ClassesPanel({ sections, setSections }: {
           />
         </div>
         {/* Actions */}
-        <div style={{ position: 'relative', flexShrink: 0 }}>
+        <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
           <button
-            onClick={() => setShowBulk(o => !o)}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 5,
-              background: showBulk ? P : P, color: '#fff',
-              border: 'none',
-              borderRadius: 6, padding: '5px 12px', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-              boxShadow: '0 2px 6px rgba(124,111,224,0.28)',
-              transition: 'background 0.12s',
-            }}
-            onMouseEnter={e => (e.currentTarget.style.background = P_D)}
-            onMouseLeave={e => (e.currentTarget.style.background = P)}
-          >
-            <Layers size={12} /> Bulk Create
-          </button>
-          {showBulk && <BulkCreatePopover onClose={() => setShowBulk(false)} onCreate={bulkAdd} />}
+            onClick={() => setPasteOpen(true)}
+            style={outlineBtn}
+            onMouseEnter={e => { e.currentTarget.style.background = P_L; e.currentTarget.style.borderColor = P_B; e.currentTarget.style.color = P_D }}
+            onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#DDD8FF'; e.currentTarget.style.color = '#6B6891' }}
+          >⎘ Paste</button>
+          <button
+            onClick={() => fileRef.current?.click()}
+            style={outlineBtn}
+            onMouseEnter={e => { e.currentTarget.style.background = P_L; e.currentTarget.style.borderColor = P_B; e.currentTarget.style.color = P_D }}
+            onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#DDD8FF'; e.currentTarget.style.color = '#6B6891' }}
+          >↑ Upload</button>
+          <input ref={fileRef} type="file" style={{ display: 'none' }} accept=".csv,.txt,.tsv" onChange={handleFileUpload} />
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => setShowBulk(o => !o)}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: P, color: '#fff', border: 'none', borderRadius: 6, padding: '5px 12px', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', boxShadow: '0 2px 6px rgba(124,111,224,0.28)', whiteSpace: 'nowrap' }}
+              onMouseEnter={e => (e.currentTarget.style.background = P_D)}
+              onMouseLeave={e => (e.currentTarget.style.background = P)}
+            >
+              <Layers size={12} /> Bulk Create
+            </button>
+            {showBulk && <BulkCreatePopover onClose={() => setShowBulk(false)} onCreate={bulkAdd} />}
+          </div>
         </div>
       </div>
+
+      {/* Paste Modal */}
+      {pasteOpen && (
+        <PasteModal
+          title="Import Classes"
+          hint="Columns: Class Name · Strength (optional)"
+          onImport={handlePasteImport}
+          onClose={() => setPasteOpen(false)}
+        />
+      )}
 
       {/* Table */}
       <div style={TABLE_CARD}>
@@ -314,12 +370,12 @@ export function ClassesPanel({ sections, setSections }: {
             <div style={{ fontSize: 11.5, color: '#C4C0DC' }}>Use "Bulk Create" to generate grade sections quickly.</div>
           </div>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
             <thead>
               <tr>
                 <th style={TH}>Class</th>
                 <th style={{ ...TH, width: 76 }}>Strength</th>
-                <th style={{ ...TH, width: 36 }} />
+                <th style={{ ...TH, width: 40 }} />
               </tr>
             </thead>
             <tbody>

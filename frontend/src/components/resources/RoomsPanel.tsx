@@ -7,7 +7,7 @@ import { useState, useRef, useMemo, useEffect } from 'react'
 import type { Subject, Section } from '@/types'
 import type { RoomRow } from '@/components/master/EntityGrids'
 import { Trash2, Plus, Building2 } from 'lucide-react'
-import { P, P_D, P_L, P_B, TH, TD, TABLE_CARD, InlineChipSelect } from './shared'
+import { P, P_D, P_L, P_B, TH, TD, TABLE_CARD, InlineChipSelect, PasteModal } from './shared'
 import type { ChipOption } from './shared'
 
 export type RoomExt = RoomRow & { subjectMappings?: string[]; notes?: string }
@@ -219,7 +219,36 @@ export function RoomsPanel({ rooms, setRooms, sections, setSections, subjects }:
   setSections: (s: Section[]) => void
   subjects: Subject[]
 }) {
-  const [search, setSearch] = useState('')
+  const [search, setSearch]       = useState('')
+  const [pasteOpen, setPasteOpen] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  function handlePasteImport(rows: string[][]) {
+    const newRooms = rows
+      .map(cells => ({
+        id: makeId(),
+        name: cells[0]?.trim() || '',
+        type: cells[1]?.trim() || 'Classroom',
+        capacity: parseInt(cells[2]) || 40,
+        building: 'Main Block', floor: 'Ground',
+        subjectMappings: [], notes: '',
+      } as RoomExt))
+      .filter(r => r.name)
+    if (newRooms.length) setRooms([...rooms, ...newRooms])
+  }
+  function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]; if (!file) return
+    const reader = new FileReader()
+    reader.onload = ev => {
+      const text = (ev.target?.result as string) ?? ''
+      const rows = text.trim().split('\n').filter(l => l.trim()).map(line => {
+        const cells = line.includes('\t') ? line.split('\t') : line.split(',')
+        return cells.map(c => c.trim().replace(/^"(.*)"$/, '$1'))
+      }).filter(r => r.some(c => c.trim()))
+      handlePasteImport(rows)
+    }
+    reader.readAsText(file); e.target.value = ''
+  }
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
@@ -298,7 +327,29 @@ export function RoomsPanel({ rooms, setRooms, sections, setSections, subjects }:
             style={{ width: '100%', padding: '4px 8px 4px 24px', border: '1px solid #E4E0FF', borderRadius: 5, fontSize: 12, color: '#111028', outline: 'none', boxSizing: 'border-box', background: '#FAFAFE', fontFamily: 'inherit' }}
           />
         </div>
+        {/* Actions */}
+        <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
+          {(['⎘ Paste', '↑ Upload'] as const).map((lbl, i) => (
+            <button key={lbl}
+              onClick={() => i === 0 ? setPasteOpen(true) : fileRef.current?.click()}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#fff', color: '#6B6891', border: '1px solid #DDD8FF', borderRadius: 5, padding: '4px 9px', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+              onMouseEnter={e => { e.currentTarget.style.background = P_L; e.currentTarget.style.borderColor = P_B; e.currentTarget.style.color = P_D }}
+              onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#DDD8FF'; e.currentTarget.style.color = '#6B6891' }}
+            >{lbl}</button>
+          ))}
+          <input ref={fileRef} type="file" style={{ display: 'none' }} accept=".csv,.txt,.tsv" onChange={handleFileUpload} />
+        </div>
       </div>
+
+      {/* Paste Modal */}
+      {pasteOpen && (
+        <PasteModal
+          title="Import Rooms"
+          hint="Columns: Room Name · Type (optional) · Capacity (optional)"
+          onImport={handlePasteImport}
+          onClose={() => setPasteOpen(false)}
+        />
+      )}
 
       {/* Table */}
       <div style={TABLE_CARD}>
@@ -309,15 +360,15 @@ export function RoomsPanel({ rooms, setRooms, sections, setSections, subjects }:
             <div style={{ fontSize: 12, color: '#C4C0DC' }}>Add rooms, then assign classes and special subjects to them.</div>
           </div>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
             <thead>
               <tr>
                 <th style={TH}>Room</th>
-                <th style={{ ...TH, width: 140 }}>Type</th>
-                <th style={{ ...TH, width: 56, textAlign: 'center' }}>Cap</th>
-                <th style={TH}>Assigned Classes</th>
-                <th style={TH}>Special Subjects</th>
-                <th style={{ ...TH, width: 36 }} />
+                <th style={{ ...TH, width: 138 }}>Type</th>
+                <th style={{ ...TH, width: 52, textAlign: 'center' }}>Cap</th>
+                <th style={{ ...TH, width: 180 }}>Assigned Classes</th>
+                <th style={{ ...TH, width: 180 }}>Special Subjects</th>
+                <th style={{ ...TH, width: 40 }} />
               </tr>
             </thead>
             <tbody>

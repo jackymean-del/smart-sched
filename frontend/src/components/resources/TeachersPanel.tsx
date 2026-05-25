@@ -21,7 +21,7 @@ import { useState, useRef, useMemo, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import type { Staff, Section, Subject } from '@/types'
 import { Trash2, Plus, Copy, ChevronRight, ChevronDown, X, Users } from 'lucide-react'
-import { P, P_D, P_L, P_B, TH, TD, TABLE_CARD, InlineChipSelect } from './shared'
+import { P, P_D, P_L, P_B, TH, TD, TABLE_CARD, InlineChipSelect, PasteModal } from './shared'
 import type { ChipOption } from './shared'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -538,12 +538,13 @@ function TeacherRow({ t, subjects, classOpts, classTeacherOpts, onUpdate, onDupl
         <td style={{ ...TD, padding: '6px 8px', textAlign: 'right', whiteSpace: 'nowrap', width: 88 }}>
           <button
             onClick={() => setExpanded(o => !o)}
-            title="Details"
-            style={{ background: expanded ? P_L : 'none', border: 'none', cursor: 'pointer', padding: '3px 5px', color: expanded ? P : (hovered ? '#B0ABCC' : 'transparent'), borderRadius: 4, marginRight: 1, transition: 'color 0.1s, background 0.1s' }}
-            onMouseEnter={e => { (e.currentTarget.style.background = P_L); (e.currentTarget.style.color = P) }}
-            onMouseLeave={e => { (e.currentTarget.style.background = expanded ? P_L : ''); (e.currentTarget.style.color = expanded ? P : (hovered ? '#B0ABCC' : 'transparent')) }}
+            title="Teacher details"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 3, background: expanded ? P_L : (hovered ? '#F0ECFE' : 'transparent'), border: `1px solid ${expanded ? P_B : 'transparent'}`, cursor: 'pointer', padding: '3px 7px', color: expanded ? P : (hovered ? '#9896B5' : 'transparent'), borderRadius: 5, marginRight: 1, transition: 'all 0.1s', fontSize: 10.5, fontWeight: 600 }}
+            onMouseEnter={e => { (e.currentTarget.style.background = P_L); (e.currentTarget.style.color = P); (e.currentTarget.style.borderColor = P_B) }}
+            onMouseLeave={e => { (e.currentTarget.style.background = expanded ? P_L : (hovered ? '#F0ECFE' : 'transparent')); (e.currentTarget.style.color = expanded ? P : (hovered ? '#9896B5' : 'transparent')); (e.currentTarget.style.borderColor = expanded ? P_B : 'transparent') }}
           >
-            {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+            {expanded ? 'Less' : 'More'}
           </button>
           <button
             onClick={onDuplicate}
@@ -556,10 +557,10 @@ function TeacherRow({ t, subjects, classOpts, classTeacherOpts, onUpdate, onDupl
           </button>
           <button
             onClick={onDelete}
-            title="Delete"
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '3px 5px', color: hovered ? '#C4BCDC' : 'transparent', borderRadius: 4, transition: 'color 0.1s, background 0.1s' }}
-            onMouseEnter={e => { (e.currentTarget.style.background = '#FFF0F0'); (e.currentTarget.style.color = '#e74c3c') }}
-            onMouseLeave={e => { (e.currentTarget.style.background = ''); (e.currentTarget.style.color = hovered ? '#C4BCDC' : 'transparent') }}
+            title="Delete teacher"
+            style={{ background: 'transparent', border: '1px solid transparent', cursor: 'pointer', padding: '3px 7px', color: hovered ? '#EFA0A0' : 'transparent', borderRadius: 5, transition: 'all 0.1s' }}
+            onMouseEnter={e => { (e.currentTarget.style.background = '#FFF0F0'); (e.currentTarget.style.color = '#e74c3c'); (e.currentTarget.style.borderColor = '#FFCDD2') }}
+            onMouseLeave={e => { (e.currentTarget.style.background = 'transparent'); (e.currentTarget.style.color = hovered ? '#EFA0A0' : 'transparent'); (e.currentTarget.style.borderColor = 'transparent') }}
           >
             <Trash2 size={14} />
           </button>
@@ -585,7 +586,32 @@ export function TeachersPanel({ staff, setStaff, sections, subjects }: {
   sections: Section[]
   subjects: Subject[]
 }) {
-  const [search, setSearch] = useState('')
+  const [search, setSearch]       = useState('')
+  const [pasteOpen, setPasteOpen] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  function handlePasteImport(rows: string[][]) {
+    const newStaff = rows
+      .map(cells => ({
+        id: makeId(), name: cells[0]?.trim() || '',
+        role: 'Teacher', subjects: [], classes: [], isClassTeacher: '', maxPeriodsPerWeek: 30,
+      } as unknown as Staff))
+      .filter(t => (t as any).name)
+    if (newStaff.length) setStaff([...staff, ...newStaff])
+  }
+  function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]; if (!file) return
+    const reader = new FileReader()
+    reader.onload = ev => {
+      const text = (ev.target?.result as string) ?? ''
+      const rows = text.trim().split('\n').filter(l => l.trim()).map(line => {
+        const cells = line.includes('\t') ? line.split('\t') : line.split(',')
+        return cells.map(c => c.trim().replace(/^"(.*)"$/, '$1'))
+      }).filter(r => r.some(c => c.trim()))
+      handlePasteImport(rows)
+    }
+    reader.readAsText(file); e.target.value = ''
+  }
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
@@ -655,7 +681,29 @@ export function TeachersPanel({ staff, setStaff, sections, subjects }: {
             style={{ width: '100%', padding: '4px 8px 4px 24px', border: '1px solid #E4E0FF', borderRadius: 5, fontSize: 12, color: '#111028', outline: 'none', boxSizing: 'border-box', background: '#FAFAFE', fontFamily: 'inherit' }}
           />
         </div>
+        {/* Actions */}
+        <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
+          {(['⎘ Paste', '↑ Upload'] as const).map((lbl, i) => (
+            <button key={lbl}
+              onClick={() => i === 0 ? setPasteOpen(true) : fileRef.current?.click()}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#fff', color: '#6B6891', border: '1px solid #DDD8FF', borderRadius: 5, padding: '4px 9px', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+              onMouseEnter={e => { e.currentTarget.style.background = P_L; e.currentTarget.style.borderColor = P_B; e.currentTarget.style.color = P_D }}
+              onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#DDD8FF'; e.currentTarget.style.color = '#6B6891' }}
+            >{lbl}</button>
+          ))}
+          <input ref={fileRef} type="file" style={{ display: 'none' }} accept=".csv,.txt,.tsv" onChange={handleFileUpload} />
+        </div>
       </div>
+
+      {/* Paste Modal */}
+      {pasteOpen && (
+        <PasteModal
+          title="Import Teachers"
+          hint="Columns: Teacher Name (one per row)"
+          onImport={handlePasteImport}
+          onClose={() => setPasteOpen(false)}
+        />
+      )}
 
       {/* Table */}
       <div style={TABLE_CARD}>
@@ -666,13 +714,13 @@ export function TeachersPanel({ staff, setStaff, sections, subjects }: {
             <div style={{ fontSize: 12, color: '#C4C0DC' }}>Add teachers, then assign subjects and classes to them.</div>
           </div>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
             <thead>
               <tr>
-                <th style={{ ...TH, width: 190 }}>Teacher</th>
+                <th style={{ ...TH, width: 186 }}>Teacher</th>
                 <th style={TH}>Subject Assignments</th>
-                <th style={{ ...TH, width: 145 }}>Class Teacher Of</th>
-                <th style={{ ...TH, width: 84 }} />
+                <th style={{ ...TH, width: 150 }}>Class Teacher Of</th>
+                <th style={{ ...TH, width: 104 }} />
               </tr>
             </thead>
             <tbody>

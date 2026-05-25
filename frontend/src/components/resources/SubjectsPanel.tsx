@@ -1,18 +1,19 @@
 /**
- * SubjectsPanel — Tab 2. Premium compact redesign (3rd pass).
- * Columns: Subject | Short | p/w | Applicable Classes | [expand] [delete]
+ * SubjectsPanel — Tab 2. Premium compact redesign.
  *
- * Key changes (3rd pass):
- * - generateShortName() — AI shortform engine with CBSE/ICSE academic abbreviations
- * - Row-hover-reveal action buttons
- * - Larger, more visible action icons
- * - More prominent "Assign Classes" button
+ * Features:
+ * - generateShortName()      — 50+ board-standard academic abbreviations (CBSE/ICSE/IB)
+ * - suggestClassesForSubject()— curriculum-aware AI assignment engine
+ * - AI Assign Classes         — applies grade/stream rules across all unassigned subjects
+ * - Paste / Bulk Upload       — TSV/CSV import from Excel or Google Sheets
+ * - Fixed column widths       — no more stretched empty columns
+ * - Row-hover-reveal actions  — clean professional density
  */
 
 import { useState, useRef, useMemo, useEffect } from 'react'
 import type { Subject, Section } from '@/types'
-import { Trash2, Plus, ChevronDown, ChevronRight, BookOpen } from 'lucide-react'
-import { P, P_D, P_L, P_B, TH, TD, TABLE_CARD, InlineChipSelect } from './shared'
+import { Trash2, Plus, ChevronDown, ChevronRight, BookOpen, Settings } from 'lucide-react'
+import { P, P_D, P_L, P_B, TH, TD, TABLE_CARD, InlineChipSelect, PasteModal } from './shared'
 import type { ChipOption } from './shared'
 
 function makeId() { return Math.random().toString(36).slice(2, 9) }
@@ -31,107 +32,155 @@ function gradeKey(g: string) { const i = GRADE_ORDER.indexOf(g); return i >= 0 ?
 const CATS = ['Compulsory','Language','4th Optional','5th Optional','6th Optional','Practical','Activity','EST','CCA','Skill']
 
 // ─── AI Shortform Engine ──────────────────────────────────────────────────────
-// Board-standard abbreviations: CBSE / ICSE / IB / Cambridge conventions
 const SHORT_MAP: Record<string, string> = {
-  'Mathematics':              'MATH',
-  'English':                  'ENG',
-  'Science':                  'SCI',
-  'Social Studies':           'SST',
-  'Social Science':           'SOC SCI',
-  'Physics':                  'PHY',
-  'Chemistry':                'CHEM',
-  'Biology':                  'BIO',
-  'Hindi':                    'HIN',
-  'Sanskrit':                 'SANS',
-  'Sanskrit / MIL':           'SANS',
-  'Odia':                     'ODI',
-  'Odia / Regional Language': 'ODI',
-  'Computer Science':         'CS',
-  'Informatics Practices':    'IP',
-  'EVS':                      'EVS',
-  'Environmental Studies':    'ENV SCI',
-  'Accountancy':              'ACC',
-  'Business Studies':         'BST',
-  'Economics':                'ECO',
-  'History':                  'HIST',
-  'Geography':                'GEO',
-  'Political Science':        'POL SCI',
-  'Psychology':               'PSY',
-  'Physical Education':       'PE',
-  'Artificial Intelligence':  'AI',
-  'English Literature':       'ENG LIT',
-  'English Language':         'ENG LANG',
-  'Moral Science':            'MS',
-  'Entrepreneurship':         'ENT',
-  'Number Work':              'NUM',
-  'G.K.':                     'GK',
-  'General Knowledge':        'GK',
-  'Drawing':                  'DRW',
-  'Art & Craft':              'ART',
-  'Music':                    'MUS',
-  'Dance':                    'DANCE',
-  'Library':                  'LIB',
-  'SUPW / Life Skills':       'SUPW',
-  'Yoga & Health':            'YOGA',
-  'Scout & Guide':            'SCOUT',
-  'Activity / Free Play':     'ACT',
-  'Nursery Rhymes & Stories': 'NRS',
-  'Mathematics (Optional)':   'MATH OPT',
-  'Life Science':             'LIFE SCI',
-  'Earth Science':            'EARTH SCI',
-  'Home Science':             'HOME SCI',
-  'Fine Arts':                'FINE ART',
-  'Vocational Studies':       'VOC',
-  'Applied Mathematics':      'APPL MATH',
-  'Biotechnology':            'BIOTECH',
-  'Legal Studies':            'LEGAL',
-  'Media Studies':            'MEDIA',
-  'Sociology':                'SOC',
-  'Philosophy':               'PHIL',
-  'Statistics':               'STAT',
-  'French':                   'FRN',
-  'German':                   'GER',
-  'Spanish':                  'SPA',
-  'Tamil':                    'TAM',
-  'Telugu':                   'TEL',
-  'Kannada':                  'KAN',
-  'Malayalam':                'MAL',
-  'Gujarati':                 'GUJ',
-  'Punjabi':                  'PUN',
-  'Marathi':                  'MAR',
-  'Urdu':                     'URD',
-  'Bengali':                  'BEN',
+  'Mathematics': 'MATH', 'English': 'ENG', 'Science': 'SCI',
+  'Social Studies': 'SST', 'Social Science': 'SOC SCI',
+  'Physics': 'PHY', 'Chemistry': 'CHEM', 'Biology': 'BIO',
+  'Hindi': 'HIN', 'Sanskrit': 'SANS', 'Sanskrit / MIL': 'SANS',
+  'Odia': 'ODI', 'Odia / Regional Language': 'ODI',
+  'Computer Science': 'CS', 'Informatics Practices': 'IP',
+  'EVS': 'EVS', 'Environmental Studies': 'ENV',
+  'Accountancy': 'ACC', 'Business Studies': 'BST',
+  'Economics': 'ECO', 'History': 'HIST', 'Geography': 'GEO',
+  'Political Science': 'POL SCI', 'Psychology': 'PSY',
+  'Physical Education': 'PE', 'Artificial Intelligence': 'AI',
+  'English Literature': 'ENG LIT', 'English Language': 'ENG',
+  'Moral Science': 'MS', 'Entrepreneurship': 'ENT',
+  'Number Work': 'NUM', 'G.K.': 'GK', 'General Knowledge': 'GK',
+  'Drawing': 'DRW', 'Art & Craft': 'ART', 'Music': 'MUS',
+  'Dance': 'DANCE', 'Library': 'LIB', 'SUPW / Life Skills': 'SUPW',
+  'Yoga & Health': 'YOGA', 'Scout & Guide': 'SCOUT',
+  'Activity / Free Play': 'ACT', 'Nursery Rhymes & Stories': 'NRS',
+  'Mathematics (Optional)': 'MATH OPT', 'Applied Mathematics': 'APPL MATH',
+  'Home Science': 'HOME SCI', 'Fine Arts': 'FINE ART',
+  'Vocational Studies': 'VOC', 'Biotechnology': 'BIOTECH',
+  'Legal Studies': 'LEGAL', 'Sociology': 'SOC', 'Statistics': 'STAT',
+  'French': 'FRN', 'German': 'GER', 'Spanish': 'SPA',
+  'Tamil': 'TAM', 'Telugu': 'TEL', 'Kannada': 'KAN',
+  'Malayalam': 'MAL', 'Gujarati': 'GUJ', 'Punjabi': 'PUN',
+  'Marathi': 'MAR', 'Urdu': 'URD', 'Bengali': 'BEN',
 }
 
 export function generateShortName(name: string): string {
   const n = name.trim()
-  // Exact match
   if (SHORT_MAP[n]) return SHORT_MAP[n]
-  // Case-insensitive match
   const lower = n.toLowerCase()
-  for (const [k, v] of Object.entries(SHORT_MAP)) {
+  for (const [k, v] of Object.entries(SHORT_MAP))
     if (k.toLowerCase() === lower) return v
-  }
-  // Starts-with match (e.g. "Mathematics Advanced" → MATH)
-  for (const [k, v] of Object.entries(SHORT_MAP)) {
+  for (const [k, v] of Object.entries(SHORT_MAP))
     if (lower.startsWith(k.toLowerCase() + ' ')) return v + ' ' + lower.slice(k.length + 1).slice(0, 3).toUpperCase()
-  }
-  // Generate from words
-  const words = n.split(/[\s/&()+,]+/).filter(w => w.length > 1 && !/^[0-9]+$/.test(w))
+  const stopWords = new Set(['and','the','of','in','for','a','an','&','/'])
+  const words = n.split(/[\s/&()+,]+/).filter(w => w.length > 1 && !/^\d+$/.test(w) && !stopWords.has(w.toLowerCase()))
   if (words.length === 0) return n.slice(0, 5).toUpperCase()
-  if (words.length === 1) {
-    const w = words[0].toUpperCase()
-    return w.length <= 5 ? w : w.slice(0, 4)
-  }
+  if (words.length === 1) { const w = words[0].toUpperCase(); return w.length <= 5 ? w : w.slice(0, 4) }
   if (words.length === 2) {
-    const a = words[0].toUpperCase(), b = words[1].toUpperCase()
+    const [a, b] = words.map(w => w.toUpperCase())
     if (a.length <= 2 && b.length <= 4) return `${a} ${b}`
     return `${a.slice(0, 3)} ${b.slice(0, 3)}`
   }
-  // 3+ words: use acronym if each word is meaningful
-  const stopWords = new Set(['and','the','of','in','for','a','an','&','/'])
-  const significant = words.filter(w => !stopWords.has(w.toLowerCase()))
-  return significant.slice(0, 3).map(w => w[0].toUpperCase()).join('')
+  return words.slice(0, 3).map(w => w[0].toUpperCase()).join('')
+}
+
+// ─── AI Curriculum Engine ─────────────────────────────────────────────────────
+const GRADE_GROUP_MAP = new Map<string, string>([
+  ['Nursery','preK'], ['LKG','preK'], ['UKG','preK'],
+  ['I','primary'], ['II','primary'], ['III','primary'], ['IV','primary'], ['V','primary'],
+  ['VI','middle'], ['VII','middle'], ['VIII','middle'],
+  ['IX','secondary'], ['X','secondary'],
+  ['XI','srSec'], ['XII','srSec'],
+])
+function getGradeGroup(g: string) { return GRADE_GROUP_MAP.get(g) ?? 'middle' }
+function detectStream(sec: string) {
+  const n = sec.toLowerCase()
+  if (/sci|pcm|pcb/.test(n)) return 'science'
+  if (/com(?!p)/.test(n)) return 'commerce'
+  if (/arts?|hum/.test(n)) return 'arts'
+  return 'general'
+}
+
+interface CurrRule { grades: string[]; streams?: string[] }
+const CURRICULUM: Record<string, CurrRule> = {
+  // All levels
+  'English':                  { grades: ['preK','primary','middle','secondary','srSec'] },
+  'Physical Education':       { grades: ['preK','primary','middle','secondary','srSec'] },
+  'Art & Craft':              { grades: ['preK','primary','middle','secondary'] },
+  'Drawing':                  { grades: ['primary','middle','secondary'] },
+  'Music':                    { grades: ['preK','primary','middle'] },
+  'Dance':                    { grades: ['preK','primary','middle'] },
+  'Library':                  { grades: ['preK','primary','middle','secondary'] },
+  'Moral Science':            { grades: ['preK','primary','middle','secondary'] },
+  'Yoga & Health':            { grades: ['primary','middle','secondary'] },
+  'Scout & Guide':            { grades: ['primary','middle','secondary'] },
+  'G.K.':                     { grades: ['preK','primary','middle'] },
+  // Pre-K
+  'Nursery Rhymes & Stories': { grades: ['preK'] },
+  'Activity / Free Play':     { grades: ['preK'] },
+  'Number Work':              { grades: ['preK'] },
+  'EVS':                      { grades: ['preK','primary'] },
+  // Primary+
+  'Mathematics':              { grades: ['primary','middle','secondary','srSec'] },
+  'Hindi':                    { grades: ['primary','middle','secondary'] },
+  'Computer Science':         { grades: ['primary','middle','secondary','srSec'] },
+  'SUPW / Life Skills':       { grades: ['middle','secondary'] },
+  'Odia / Regional Language': { grades: ['primary','middle','secondary'] },
+  // Middle+
+  'Science':                  { grades: ['middle','secondary'] },
+  'Social Studies':           { grades: ['middle','secondary'] },
+  'Sanskrit / MIL':           { grades: ['middle','secondary'] },
+  'Environmental Studies':    { grades: ['middle','secondary'] },
+  // Secondary+
+  'Physics':                  { grades: ['secondary','srSec'] },
+  'Chemistry':                { grades: ['secondary','srSec'] },
+  'Biology':                  { grades: ['secondary','srSec'] },
+  'History':                  { grades: ['secondary','srSec'] },
+  'Geography':                { grades: ['secondary','srSec'] },
+  'Political Science':        { grades: ['secondary','srSec'] },
+  'Economics':                { grades: ['secondary','srSec'] },
+  // Sr. Secondary stream-specific
+  'Accountancy':              { grades: ['srSec'], streams: ['commerce'] },
+  'Business Studies':         { grades: ['srSec'], streams: ['commerce'] },
+  'Informatics Practices':    { grades: ['srSec'], streams: ['science','commerce'] },
+  'Mathematics (Optional)':   { grades: ['srSec'], streams: ['science','commerce'] },
+  'Psychology':               { grades: ['srSec'], streams: ['arts'] },
+  'Sociology':                { grades: ['srSec'], streams: ['arts'] },
+  'Entrepreneurship':         { grades: ['srSec'] },
+  'English Literature':       { grades: ['srSec'] },
+  'English Language':         { grades: ['srSec'] },
+}
+
+export function suggestClassesForSubject(
+  subjectName: string,
+  sections: Array<{ name: string }>,
+): string[] {
+  const name = subjectName.trim()
+  let rule: CurrRule | undefined = CURRICULUM[name]
+  if (!rule) {
+    const lower = name.toLowerCase()
+    for (const [k, v] of Object.entries(CURRICULUM)) {
+      if (k.toLowerCase() === lower) { rule = v; break }
+    }
+  }
+  if (!rule) {
+    const lower = name.toLowerCase()
+    for (const [k, v] of Object.entries(CURRICULUM)) {
+      if (lower.startsWith(k.toLowerCase()) || k.toLowerCase().split(' ').some(w => w.length > 4 && lower.includes(w))) {
+        rule = v; break
+      }
+    }
+  }
+  if (!rule) rule = { grades: ['middle', 'secondary'] }
+
+  return sections
+    .filter(sec => {
+      const group = getGradeGroup(getGrade(sec.name))
+      if (!rule!.grades.includes(group)) return false
+      if (group === 'srSec' && rule!.streams?.length) {
+        const stream = detectStream(sec.name)
+        return rule!.streams.includes(stream) || stream === 'general'
+      }
+      return true
+    })
+    .map(s => s.name)
 }
 
 // ─── Input style ──────────────────────────────────────────────────────────────
@@ -139,6 +188,17 @@ const inp: React.CSSProperties = {
   padding: '3px 6px', border: '1px solid #E4E0FF', borderRadius: 4,
   fontSize: 12, color: '#111028', outline: 'none', fontFamily: 'inherit', background: '#FAFAFE',
 }
+
+// Toolbar button styles
+const outlineBtn = (active = false): React.CSSProperties => ({
+  display: 'inline-flex', alignItems: 'center', gap: 4,
+  background: active ? P_L : '#fff',
+  color: active ? P_D : '#6B6891',
+  border: `1px solid ${active ? P_B : '#DDD8FF'}`,
+  borderRadius: 5, padding: '4px 9px', fontSize: 11, fontWeight: 600,
+  cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0,
+  whiteSpace: 'nowrap' as const,
+})
 
 // ─── Inline edit cell ─────────────────────────────────────────────────────────
 function EditCell({ value, onSave, placeholder = '…', width = 100 }: {
@@ -167,10 +227,7 @@ function EditCell({ value, onSave, placeholder = '…', width = 100 }: {
 }
 
 // ─── Expandable settings ─────────────────────────────────────────────────────
-function OptionalSettings({ sub, onChange }: {
-  sub: Subject
-  onChange: (patch: Partial<Subject>) => void
-}) {
+function OptionalSettings({ sub, onChange }: { sub: Subject; onChange: (patch: Partial<Subject>) => void }) {
   return (
     <div style={{ display: 'flex', gap: 12, padding: '7px 12px', background: '#FAFAFE', borderTop: '1px solid #EEE9FF', flexWrap: 'wrap', alignItems: 'flex-end' }}>
       <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 10.5, color: '#6B6891', fontWeight: 600 }}>
@@ -242,17 +299,17 @@ function AddRow({ onAdd }: { onAdd: (s: Subject) => void }) {
       <td style={TD}>
         <input ref={ref} value={name} onChange={e => setName(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setActive(false) }}
-          placeholder="Subject name" style={{ ...inp, width: 148 }}
+          placeholder="Subject name" style={{ ...inp, width: '100%', boxSizing: 'border-box' }}
         />
       </td>
       <td style={TD}>
-        <span style={{ fontSize: 10.5, color: P_D, fontWeight: 700, fontStyle: 'normal', background: P_L, padding: '1px 5px', borderRadius: 3 }}>
+        <span style={{ fontSize: 10.5, color: P_D, fontWeight: 700, background: P_L, padding: '1px 5px', borderRadius: 3 }}>
           {name.trim() ? generateShortName(name.trim()) : '—'}
         </span>
       </td>
       <td style={{ ...TD, textAlign: 'center' }}>
         <input type="number" value={ppw} onChange={e => setPpw(+e.target.value)} min={0} max={30}
-          style={{ ...inp, width: 38, textAlign: 'center', fontWeight: 700, color: P }} />
+          style={{ ...inp, width: 40, textAlign: 'center', fontWeight: 700, color: P }} />
       </td>
       <td style={TD}>
         <span style={{ fontSize: 10.5, color: '#C4C0DC', fontStyle: 'italic' }}>Assign after saving</span>
@@ -266,16 +323,21 @@ function AddRow({ onAdd }: { onAdd: (s: Subject) => void }) {
 }
 
 // ─── Subject row ──────────────────────────────────────────────────────────────
-function SubjectRow({ sub, classOptions, allSectionNames, onUpdate, onDelete }: {
+function SubjectRow({ sub, classOptions, sections, onUpdate, onDelete }: {
   sub: Subject
   classOptions: ChipOption[]
-  allSectionNames: string[]
+  sections: Section[]
   onUpdate: (patch: Partial<Subject>) => void
   onDelete: () => void
 }) {
   const [expanded, setExpanded] = useState(false)
   const [hovered, setHovered]   = useState(false)
   const selected = sub.sections ?? []
+
+  const aiSuggestion = useMemo(
+    () => sections.length > 0 ? suggestClassesForSubject(sub.name, sections) : [],
+    [sub.name, sections]
+  )
 
   return (
     <>
@@ -287,39 +349,27 @@ function SubjectRow({ sub, classOptions, allSectionNames, onUpdate, onDelete }: 
         {/* Name */}
         <td style={TD}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ width: 7, height: 7, borderRadius: '50%', background: sub.color ?? P, flexShrink: 0, border: '1.5px solid rgba(0,0,0,0.08)', display: 'inline-block' }} />
-            <EditCell value={sub.name} onSave={v => onUpdate({ name: v })} placeholder="Subject name" width={148} />
+            <span style={{ width: 7, height: 7, borderRadius: '50%', background: sub.color ?? P, flexShrink: 0, border: '1.5px solid rgba(0,0,0,0.08)' }} />
+            <EditCell value={sub.name} onSave={v => onUpdate({ name: v })} placeholder="Subject name" width={150} />
           </div>
         </td>
-        {/* Short — editable, auto-gen badge */}
+
+        {/* Short — click to edit, auto-gen from name */}
         <td style={TD}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <EditCell value={sub.shortName ?? ''} onSave={v => onUpdate({ shortName: v })} placeholder="Short" width={56} />
-            {hovered && (!sub.shortName || sub.shortName === sub.name.slice(0, 6)) && (
-              <button
-                title="Auto-generate abbreviation"
-                onClick={() => onUpdate({ shortName: generateShortName(sub.name) })}
-                style={{ fontSize: 9, color: P_D, background: P_L, border: `1px solid ${P_B}`, borderRadius: 3, padding: '1px 5px', cursor: 'pointer', fontWeight: 700, flexShrink: 0 }}
-              >
-                AI ↻
-              </button>
-            )}
-          </div>
+          <EditCell value={sub.shortName ?? ''} onSave={v => onUpdate({ shortName: v })} placeholder="Short" width={58} />
         </td>
-        {/* p/w — styled badge input */}
+
+        {/* p/w — styled badge */}
         <td style={{ ...TD, textAlign: 'center' }}>
           <input
             type="number" value={sub.periodsPerWeek} min={0} max={30}
             onChange={e => onUpdate({ periodsPerWeek: +e.target.value })}
-            style={{
-              width: 38, padding: '2px 3px', border: '1.5px solid #C4BDFF', borderRadius: 5,
-              fontSize: 12, color: P_D, fontWeight: 800, outline: 'none', textAlign: 'center',
-              background: P_L, fontFamily: 'inherit',
-            }}
+            style={{ width: 40, padding: '2px 3px', border: '1.5px solid #C4BDFF', borderRadius: 5, fontSize: 12.5, color: P_D, fontWeight: 800, outline: 'none', textAlign: 'center', background: P_L, fontFamily: 'inherit' }}
           />
         </td>
+
         {/* Applicable classes */}
-        <td style={{ ...TD, minWidth: 160 }}>
+        <td style={{ ...TD }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
             <InlineChipSelect
               selected={selected}
@@ -328,50 +378,66 @@ function SubjectRow({ sub, classOptions, allSectionNames, onUpdate, onDelete }: 
               placeholder="+ Assign Classes"
               maxChips={3}
             />
-            {allSectionNames.length > 0 && selected.length > 0 && selected.length < allSectionNames.length && (
+            {/* AI suggestion — show when row hovered and no classes assigned */}
+            {hovered && selected.length === 0 && aiSuggestion.length > 0 && (
               <button
-                title="Assign to all classes"
-                onClick={() => onUpdate({ sections: allSectionNames })}
-                style={{
-                  fontSize: 9.5, color: P_D, background: P_L, border: `1px solid ${P_B}`,
-                  borderRadius: 4, padding: '2px 7px', cursor: 'pointer',
-                  whiteSpace: 'nowrap', flexShrink: 0, fontWeight: 700,
-                }}
-                onMouseEnter={e => { e.currentTarget.style.background = P; e.currentTarget.style.color = '#fff'; e.currentTarget.style.borderColor = P }}
-                onMouseLeave={e => { e.currentTarget.style.background = P_L; e.currentTarget.style.color = P_D; e.currentTarget.style.borderColor = P_B }}
-              >All</button>
+                title={`AI suggests ${aiSuggestion.length} classes based on curriculum`}
+                onClick={() => onUpdate({ sections: aiSuggestion })}
+                style={{ fontSize: 10, color: '#fff', background: P, border: 'none', borderRadius: 4, padding: '2px 8px', cursor: 'pointer', fontWeight: 700, flexShrink: 0, whiteSpace: 'nowrap' }}
+                onMouseEnter={e => (e.currentTarget.style.background = P_D)}
+                onMouseLeave={e => (e.currentTarget.style.background = P)}
+              >
+                ⚡ AI ({aiSuggestion.length})
+              </button>
             )}
           </div>
         </td>
+
         {/* Actions */}
-        <td style={{ ...TD, whiteSpace: 'nowrap', textAlign: 'right', paddingRight: 6, width: 54 }}>
-          <button onClick={() => setExpanded(o => !o)}
-            title="Settings"
-            style={{
-              background: expanded ? P_L : 'none', border: 'none', cursor: 'pointer',
-              color: expanded ? P : (hovered ? '#B0ABCC' : 'transparent'),
-              padding: '3px 5px', marginRight: 1, lineHeight: 1, borderRadius: 4,
-              transition: 'color 0.1s, background 0.1s',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.color = P; e.currentTarget.style.background = P_L }}
-            onMouseLeave={e => { e.currentTarget.style.color = expanded ? P : (hovered ? '#B0ABCC' : 'transparent'); e.currentTarget.style.background = expanded ? P_L : 'none' }}
-          >
-            {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-          </button>
-          <button onClick={onDelete}
-            style={{
-              background: 'none', border: 'none', cursor: 'pointer',
-              color: hovered ? '#C4BCDC' : 'transparent',
-              padding: '3px 5px', lineHeight: 1, borderRadius: 4,
-              transition: 'color 0.1s, background 0.1s',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.color = '#e74c3c'; e.currentTarget.style.background = '#FFF0F0' }}
-            onMouseLeave={e => { e.currentTarget.style.color = hovered ? '#C4BCDC' : 'transparent'; e.currentTarget.style.background = 'none' }}
-          >
-            <Trash2 size={14} />
-          </button>
+        <td style={{ ...TD, textAlign: 'right', paddingRight: 6 }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+            {/* Settings expand */}
+            <button
+              onClick={() => setExpanded(o => !o)}
+              title="Subject settings"
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 3,
+                background: expanded ? P_L : (hovered ? '#F0ECFE' : 'transparent'),
+                border: `1px solid ${expanded ? P_B : 'transparent'}`,
+                borderRadius: 5, padding: '3px 7px', cursor: 'pointer',
+                color: expanded ? P : (hovered ? '#9896B5' : 'transparent'),
+                fontSize: 10.5, fontWeight: 600, transition: 'all 0.1s', flexShrink: 0,
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = P_L; e.currentTarget.style.color = P; e.currentTarget.style.borderColor = P_B }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = expanded ? P_L : (hovered ? '#F0ECFE' : 'transparent')
+                e.currentTarget.style.color = expanded ? P : (hovered ? '#9896B5' : 'transparent')
+                e.currentTarget.style.borderColor = expanded ? P_B : 'transparent'
+              }}
+            >
+              <Settings size={11} />
+              {expanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+            </button>
+            {/* Delete */}
+            <button
+              onClick={onDelete}
+              title="Delete subject"
+              style={{
+                background: 'transparent',
+                border: `1px solid transparent`,
+                borderRadius: 5, padding: '3px 7px', cursor: 'pointer',
+                color: hovered ? '#EFA0A0' : 'transparent',
+                lineHeight: 1, transition: 'all 0.1s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = '#FFF0F0'; e.currentTarget.style.color = '#e74c3c'; e.currentTarget.style.borderColor = '#FFCDD2' }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = hovered ? '#EFA0A0' : 'transparent'; e.currentTarget.style.borderColor = 'transparent' }}
+            >
+              <Trash2 size={14} />
+            </button>
+          </div>
         </td>
       </tr>
+
       {expanded && (
         <tr>
           <td colSpan={5} style={{ padding: 0 }}>
@@ -389,14 +455,14 @@ export function SubjectsPanel({ subjects, setSubjects, sections }: {
   setSubjects: (s: Subject[]) => void
   sections: Section[]
 }) {
-  const [search, setSearch] = useState('')
+  const [search, setSearch]     = useState('')
+  const [pasteOpen, setPasteOpen] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
     if (!q) return subjects
-    return subjects.filter(s =>
-      s.name.toLowerCase().includes(q) || (s.category ?? '').toLowerCase().includes(q)
-    )
+    return subjects.filter(s => s.name.toLowerCase().includes(q) || (s.category ?? '').toLowerCase().includes(q))
   }, [subjects, search])
 
   const classOptions = useMemo<ChipOption[]>(() => {
@@ -412,31 +478,63 @@ export function SubjectsPanel({ subjects, setSubjects, sections }: {
     return opts
   }, [sections])
 
-  const allSectionNames = useMemo(() => sections.map(s => s.name), [sections])
-
   function update(id: string, patch: Partial<Subject>) {
     setSubjects(subjects.map(s => s.id === id ? { ...s, ...patch } : s))
   }
   function remove(id: string) { setSubjects(subjects.filter(s => s.id !== id)) }
   function add(s: Subject) { setSubjects([...subjects, s]) }
-  function assignAll() { setSubjects(subjects.map(s => ({ ...s, sections: allSectionNames }))) }
-  function autoFixShortNames() {
+
+  // AI assign — apply curriculum logic to all unassigned subjects
+  function aiAssignAll() {
+    if (!sections.length) return
     setSubjects(subjects.map(s => ({
       ...s,
-      shortName: (s.shortName && s.shortName !== s.name.slice(0, 6)) ? s.shortName : generateShortName(s.name),
+      sections: (s.sections ?? []).length > 0
+        ? s.sections  // don't override existing assignments
+        : suggestClassesForSubject(s.name, sections),
     })))
   }
 
+  // Paste import
+  function handlePasteImport(rows: string[][]) {
+    const newSubjects = rows
+      .map(cells => ({
+        id: makeId(),
+        name: cells[0]?.trim() || '',
+        shortName: cells[1]?.trim() || generateShortName(cells[0]?.trim() || ''),
+        category: 'Compulsory' as any,
+        periodsPerWeek: parseInt(cells[2]) || 5,
+        sessionDuration: 45, maxPeriodsPerDay: 2,
+        color: P, isOptional: false, requiresLab: false,
+        sections: [], classConfigs: [],
+      } as unknown as Subject))
+      .filter(s => s.name)
+    if (newSubjects.length) setSubjects([...subjects, ...newSubjects])
+  }
+
+  // File upload import
+  function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = ev => {
+      const text = (ev.target?.result as string) ?? ''
+      const rows = text.trim().split('\n').filter(l => l.trim()).map(line => {
+        const cells = line.includes('\t') ? line.split('\t') : line.split(',')
+        return cells.map(c => c.trim().replace(/^"(.*)"$/, '$1'))
+      }).filter(cells => cells.some(c => c.trim()))
+      handlePasteImport(rows)
+    }
+    reader.readAsText(file)
+    e.target.value = ''
+  }
+
   const assignedCount = useMemo(() => subjects.filter(s => (s.sections ?? []).length > 0).length, [subjects])
-  const needsShortFix = useMemo(() =>
-    subjects.some(s => !s.shortName || s.shortName === s.name.slice(0, 6)),
-    [subjects]
-  )
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* Toolbar */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingBottom: 7, flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingBottom: 7, flexShrink: 0 }}>
         {/* Left: title + stats */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexShrink: 0 }}>
           <BookOpen size={13} color={P} />
@@ -445,14 +543,12 @@ export function SubjectsPanel({ subjects, setSubjects, sections }: {
             {subjects.length}
           </span>
           {subjects.length > 0 && assignedCount < subjects.length && (
-            <span style={{ fontSize: 10, color: '#F59E0B', fontWeight: 700, background: '#FFFBEB', padding: '1px 6px 2px', borderRadius: 4, border: '1px solid #FDE68A' }}>
+            <span style={{ fontSize: 10, color: '#D97706', fontWeight: 700, background: '#FFFBEB', padding: '1px 6px 2px', borderRadius: 4, border: '1px solid #FDE68A' }}>
               {subjects.length - assignedCount} unassigned
             </span>
           )}
         </div>
-
         <div style={{ width: 1, height: 14, background: '#EAE6FF', flexShrink: 0 }} />
-
         {/* Search */}
         <div style={{ position: 'relative', flex: 1 }}>
           <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: '#C0BBD8', pointerEvents: 'none', fontSize: 12 }}>⌕</span>
@@ -461,34 +557,34 @@ export function SubjectsPanel({ subjects, setSubjects, sections }: {
             style={{ width: '100%', padding: '4px 8px 4px 24px', border: '1px solid #E4E0FF', borderRadius: 5, fontSize: 12, color: '#111028', outline: 'none', boxSizing: 'border-box', background: '#FAFAFE', fontFamily: 'inherit' }}
           />
         </div>
-
         {/* Actions */}
-        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-          {needsShortFix && subjects.length > 0 && (
-            <button onClick={autoFixShortNames}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 4,
-                background: '#fff', color: P_D, border: `1.5px solid ${P_B}`,
-                borderRadius: 6, padding: '5px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.background = P_L }}
-              onMouseLeave={e => { e.currentTarget.style.background = '#fff' }}
+        <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
+          <button
+            onClick={() => setPasteOpen(true)}
+            style={outlineBtn()}
+            onMouseEnter={e => { e.currentTarget.style.background = P_L; e.currentTarget.style.borderColor = P_B; e.currentTarget.style.color = P_D }}
+            onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#DDD8FF'; e.currentTarget.style.color = '#6B6891' }}
+          >
+            ⎘ Paste
+          </button>
+          <button
+            onClick={() => fileRef.current?.click()}
+            style={outlineBtn()}
+            onMouseEnter={e => { e.currentTarget.style.background = P_L; e.currentTarget.style.borderColor = P_B; e.currentTarget.style.color = P_D }}
+            onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#DDD8FF'; e.currentTarget.style.color = '#6B6891' }}
+          >
+            ↑ Upload
+          </button>
+          <input ref={fileRef} type="file" style={{ display: 'none' }} accept=".csv,.txt,.tsv" onChange={handleFileUpload} />
+          {sections.length > 0 && (
+            <button
+              onClick={aiAssignAll}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: P, color: '#fff', border: 'none', borderRadius: 6, padding: '5px 12px', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', boxShadow: '0 2px 6px rgba(124,111,224,0.28)', whiteSpace: 'nowrap', flexShrink: 0 }}
+              onMouseEnter={e => (e.currentTarget.style.background = P_D)}
+              onMouseLeave={e => (e.currentTarget.style.background = P)}
+              title="Automatically assign subjects to relevant grade levels based on curriculum"
             >
-              AI Fix Shortforms
-            </button>
-          )}
-          {allSectionNames.length > 0 && (
-            <button onClick={assignAll}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 5,
-                background: P, color: '#fff', border: 'none',
-                borderRadius: 6, padding: '5px 12px', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-                boxShadow: '0 2px 6px rgba(124,111,224,0.28)',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.background = P_D }}
-              onMouseLeave={e => { e.currentTarget.style.background = P }}
-            >
-              Assign All → Classes
+              ⚡ AI Assign Classes
             </button>
           )}
         </div>
@@ -497,7 +593,7 @@ export function SubjectsPanel({ subjects, setSubjects, sections }: {
       {/* Classes hint */}
       {sections.length === 0 && (
         <div style={{ margin: '0 0 6px', padding: '5px 10px', background: '#FFFBF0', border: '1px solid #FFE8A0', borderRadius: 5, fontSize: 11, color: '#7A5800' }}>
-          💡 Add classes first, then assign subjects to them.
+          💡 Add classes first — AI will automatically assign subjects to the right grade levels.
         </div>
       )}
 
@@ -507,17 +603,17 @@ export function SubjectsPanel({ subjects, setSubjects, sections }: {
           <div style={{ textAlign: 'center', padding: '40px 0' }}>
             <div style={{ fontSize: 28, marginBottom: 6 }}>📖</div>
             <div style={{ fontSize: 12.5, fontWeight: 700, color: '#9896B5', marginBottom: 3 }}>No subjects yet</div>
-            <div style={{ fontSize: 11.5, color: '#C4C0DC' }}>Add your first subject below.</div>
+            <div style={{ fontSize: 11.5, color: '#C4C0DC' }}>Add or paste subjects below.</div>
           </div>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
             <thead>
               <tr>
                 <th style={TH}>Subject</th>
-                <th style={{ ...TH, width: 72 }}>Short</th>
-                <th style={{ ...TH, width: 44, textAlign: 'center' }}>p/w</th>
-                <th style={TH}>Applicable Classes</th>
-                <th style={{ ...TH, width: 54 }} />
+                <th style={{ ...TH, width: 78 }}>Short</th>
+                <th style={{ ...TH, width: 46, textAlign: 'center' }}>p/w</th>
+                <th style={{ ...TH, width: 250 }}>Applicable Classes</th>
+                <th style={{ ...TH, width: 90 }} />
               </tr>
             </thead>
             <tbody>
@@ -526,7 +622,7 @@ export function SubjectsPanel({ subjects, setSubjects, sections }: {
                   key={sub.id}
                   sub={sub}
                   classOptions={classOptions}
-                  allSectionNames={allSectionNames}
+                  sections={sections}
                   onUpdate={patch => update(sub.id, patch)}
                   onDelete={() => remove(sub.id)}
                 />
@@ -539,6 +635,16 @@ export function SubjectsPanel({ subjects, setSubjects, sections }: {
           </table>
         )}
       </div>
+
+      {/* Paste Modal */}
+      {pasteOpen && (
+        <PasteModal
+          title="Import Subjects"
+          hint="Columns: Subject Name · Short (optional) · Periods/Week (optional)"
+          onImport={handlePasteImport}
+          onClose={() => setPasteOpen(false)}
+        />
+      )}
     </div>
   )
 }

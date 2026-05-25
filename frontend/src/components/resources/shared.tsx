@@ -390,3 +390,75 @@ export function InlineChipSelect({
     </>
   )
 }
+
+// ─── PasteModal ─────────────────────────────────────────────────────────────────
+// Reusable: paste TSV / CSV / Excel clipboard data → returns string[][] on import
+export function PasteModal({
+  title = 'Import from Clipboard',
+  hint,
+  onImport,
+  onClose,
+}: {
+  title?: string
+  hint: string
+  onImport: (rows: string[][]) => void
+  onClose: () => void
+}) {
+  const [raw, setRaw] = useState('')
+  const taRef = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => { setTimeout(() => taRef.current?.focus(), 50) }, [])
+
+  const rows = useMemo<string[][]>(() =>
+    raw.trim().split('\n')
+      .filter(l => l.trim())
+      .map(line => {
+        const cells = line.includes('\t') ? line.split('\t') : line.split(',')
+        return cells.map(c => c.trim().replace(/^"(.*)"$/, '$1'))
+      })
+      .filter(cells => cells.some(c => c.trim())),
+    [raw])
+
+  return createPortal(
+    <div
+      style={{ position: 'fixed', inset: 0, background: 'rgba(15,14,26,0.48)', zIndex: 9998, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div style={{ background: '#fff', borderRadius: 10, width: 520, boxShadow: '0 24px 60px rgba(0,0,0,0.24)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        {/* Header */}
+        <div style={{ padding: '12px 16px', borderBottom: '1px solid #EEE9FF', background: '#FAFAFE', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#111028' }}>{title}</div>
+            <div style={{ fontSize: 11, color: '#9896B5', marginTop: 2 }}>{hint}</div>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#C0BBD8', fontSize: 18, lineHeight: 1, paddingLeft: 10 }}>×</button>
+        </div>
+        {/* Textarea */}
+        <textarea
+          ref={taRef}
+          value={raw}
+          onChange={e => setRaw(e.target.value)}
+          placeholder="Paste here (Ctrl+V) — supports Excel, Google Sheets, TSV, or CSV"
+          style={{ border: 'none', outline: 'none', resize: 'none', padding: '14px 16px', fontSize: 12, fontFamily: '"ui-monospace", "Cascadia Code", monospace', color: '#111028', background: '#fff', minHeight: 168, lineHeight: 1.6 }}
+        />
+        {/* Footer */}
+        <div style={{ padding: '10px 16px', borderTop: '1px solid #EEE9FF', background: '#FAFAFE', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ flex: 1, fontSize: 11, color: rows.length > 0 ? '#16A34A' : '#9896B5', fontWeight: rows.length > 0 ? 600 : 400 }}>
+            {rows.length > 0 ? `✓ ${rows.length} row${rows.length !== 1 ? 's' : ''} detected` : 'Paste rows above'}
+          </span>
+          <button onClick={onClose} style={{ padding: '5px 12px', borderRadius: 5, border: '1px solid #E4E0FF', background: '#fff', color: '#666', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+          <button
+            onClick={() => { if (rows.length > 0) { onImport(rows); onClose() } }}
+            disabled={rows.length === 0}
+            style={{ padding: '5px 14px', borderRadius: 5, border: 'none', background: rows.length > 0 ? P : '#E8E4FF', color: rows.length > 0 ? '#fff' : '#B4ADDD', fontSize: 12, fontWeight: 700, cursor: rows.length > 0 ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}
+            onMouseEnter={e => { if (rows.length > 0) (e.currentTarget as HTMLButtonElement).style.background = P_D }}
+            onMouseLeave={e => { if (rows.length > 0) (e.currentTarget as HTMLButtonElement).style.background = P }}
+          >
+            Import {rows.length > 0 ? `${rows.length} rows` : ''}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  )
+}
