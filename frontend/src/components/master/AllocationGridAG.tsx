@@ -344,8 +344,17 @@ const GRID_STYLES = `
   background: #FAFAFA !important;
 }
 
-/* ── Range selection ── */
-.ag-alloc-wrap .ag-cell-range-selected {
+/* ── Range selection ─────────────────────────────────────────────────────────
+   AG Grid stacks darker backgrounds on ag-cell-range-selected-1/2/3/4 when
+   multiple ranges overlap a cell (e.g. multi-range Ctrl+Click, or immediately
+   after a sparse paste).  Without overriding ALL variants here, cells in two
+   ranges would compound to a dark/near-black tint.
+   ─────────────────────────────────────────────────────────────────────────── */
+.ag-alloc-wrap .ag-cell-range-selected,
+.ag-alloc-wrap .ag-cell-range-selected-1,
+.ag-alloc-wrap .ag-cell-range-selected-2,
+.ag-alloc-wrap .ag-cell-range-selected-3,
+.ag-alloc-wrap .ag-cell-range-selected-4 {
   background-color: rgba(99,92,220,0.07) !important;
 }
 
@@ -804,8 +813,18 @@ export function AllocationGridAG({
   const onPasteEnd   = useCallback(() => {
     isPastingRef.current   = false
     sparseClipRef.current  = null   // sparse state consumed after paste
+
+    // First clear: synchronous — removes overlay before AG Grid's DOM updates run.
     clearMarchingAnts()
-    requestAnimationFrame(() => gridRef.current?.api?.refreshCells({ force: false }))
+
+    // Second clear inside rAF: AG Grid's post-paste refresh may trigger onBodyScroll
+    // while marchRangesRef is still briefly populated, which would recompute and
+    // re-show the overlay on the newly-scrolled-to cells.  Re-clearing inside the
+    // rAF guarantees the overlay is gone after AG Grid finishes its own DOM work.
+    requestAnimationFrame(() => {
+      clearMarchingAnts()
+      gridRef.current?.api?.refreshCells({ force: false })
+    })
   }, [clearMarchingAnts])
 
   // ── Sparse paste — re-insert column gaps ─────────────────────────
