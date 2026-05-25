@@ -176,6 +176,12 @@ function ExportDropdown({ onCsv, onExcel }: { onCsv: () => void; onExcel: () => 
   )
 }
 
+// Sentinel value used to fill gap positions in a sparse paste matrix.
+// processDataFromClipboard places this in non-selected columns so AG Grid
+// still receives a rectangular matrix of the correct size, but valueSetter
+// returns false immediately on seeing it — leaving gap cells untouched.
+const SPARSE_SKIP = '\x00SPARSE_SKIP\x00'
+
 // ─────────────────────────────────────────────────────────────────
 // Grid styles
 // ─────────────────────────────────────────────────────────────────
@@ -649,6 +655,7 @@ export function AllocationGridAG({
         },
 
         valueSetter: (params) => {
+          if (params.newValue === SPARSE_SKIP) return false  // gap cell — leave untouched
           const sn = params.data?.sectionName ?? ''
           const n  = parseInt(String(params.newValue ?? ''), 10)
           if (isNaN(n) || n < 0) return false
@@ -703,6 +710,11 @@ export function AllocationGridAG({
         // AG Grid calls valueGetter() immediately after valueSetter() to
         // record newValue in its undo entry.  Stale ref → entry discarded.
         valueSetter: (params: ValueSetterParams<RowData>) => {
+          // SPARSE_SKIP marks a gap column in a sparse paste — leave the cell untouched.
+          // Returning false tells AG Grid "no change", so nothing is written and
+          // no undo entry is created for this position.
+          if (params.newValue === SPARSE_SKIP) return false
+
           let val = String(params.newValue ?? '').trim()
           if (displayModeRef.current === 'hours') val = parseHoursInput(val, periodMinRef.current)
 
@@ -811,7 +823,9 @@ export function AllocationGridAG({
     if (srcCols !== sparse.colOffsets.length) return params.data // mismatch: safe pass-through
 
     return params.data.map(row => {
-      const expanded = Array<string>(sparse.colCount).fill('')
+      // Fill gap positions with SPARSE_SKIP, not ''.
+      // valueSetter returns false on SPARSE_SKIP → gap cells are never written.
+      const expanded = Array<string>(sparse.colCount).fill(SPARSE_SKIP)
       sparse.colOffsets.forEach((offset, i) => { expanded[offset] = row[i] ?? '' })
       return expanded
     })
