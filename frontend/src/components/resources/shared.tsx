@@ -125,9 +125,24 @@ export const outlineBtn: React.CSSProperties = {
 
 // ─── Table card container ──────────────────────────────────────────────────────
 export const TABLE_CARD: React.CSSProperties = {
-  flex: 1, overflowY: 'auto', marginTop: 6,
+  flex: 1, overflowY: 'auto', overflowX: 'hidden', marginTop: 6,
   border: '1px solid #E0DCFA', borderRadius: 7, background: '#fff',
   boxShadow: '0 1px 4px rgba(124,111,224,0.07)',
+}
+
+// ─── Global resource panel styles injected once per panel ─────────────────────
+export function ResourceGlobalStyles() {
+  return (
+    <style>{`
+      .rp-inp { transition: border-color 0.15s, box-shadow 0.15s; }
+      .rp-inp:hover  { border-color: #A89FEC !important; }
+      .rp-inp:focus  { border-color: #7C6FE0 !important; box-shadow: 0 0 0 3px rgba(124,111,224,0.2) !important; outline: none !important; }
+      .rp-sel:hover  { border-color: #A89FEC !important; }
+      .rp-sel:focus  { border-color: #7C6FE0 !important; outline: 1px solid #7C6FE0 !important; }
+      .rp-num::-webkit-inner-spin-button,
+      .rp-num::-webkit-outer-spin-button { opacity: 0.4; }
+    `}</style>
+  )
 }
 
 // ─── Allocation unit system ───────────────────────────────────────────────────

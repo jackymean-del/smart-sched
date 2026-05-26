@@ -29,6 +29,7 @@ import {
   DeleteActionButton, actionBtn, outlineBtn,
   type AllocationUnit, ALLOCATION_LABELS, ALLOCATION_SHORT,
   toDisplayValue, fromDisplayValue,
+  ResourceGlobalStyles,
 } from './shared'
 import type { ChipOption } from './shared'
 import {
@@ -127,12 +128,13 @@ function EditCell({ value, onSave, placeholder = '…', style: extra }: {
  * Editing a grade's slots updates ALL its sections.
  * Arrow keys on number inputs are stopped from bubbling to prevent chip side-effects.
  */
-function ClassSlotsExpanded({ sub, unit, sessionMins, onUpdateConfig, onRemoveClass }: {
+function ClassSlotsExpanded({ sub, unit, sessionMins, onUpdateGradeSlots, onRemoveGrade }: {
   sub: Subject
   unit: AllocationUnit
   sessionMins: number
-  onUpdateConfig: (className: string, periodsPerWeek: number) => void
-  onRemoveClass: (className: string) => void
+  /** Single call updating ALL sections of a grade atomically — avoids stale closure batch bugs */
+  onUpdateGradeSlots: (classNames: string[], periodsPerWeek: number) => void
+  onRemoveGrade: (classNames: string[]) => void
 }) {
   const classes = getAssignedClasses(sub)
 
@@ -201,20 +203,22 @@ function ClassSlotsExpanded({ sub, unit, sessionMins, onUpdateConfig, onRemoveCl
                     )}
                   </span>
                 </td>
-                {/* Slots input — stopPropagation prevents arrow keys affecting parent chips */}
+                {/* Slots input — single batch update; preventDefault stops native arrow-key increment */}
                 <td style={{ padding: '3px 8px' }}>
                   <input
                     type="number"
                     value={displayVal}
                     min={1} max={200} step={unit.includes('hour') ? 0.5 : 1}
+                    className="rp-inp rp-num"
                     onChange={e => {
                       const newSlots = fromDisplayValue(+e.target.value, unit, sessionMins)
-                      // Update ALL sections of this grade simultaneously
-                      sections.forEach(cls => onUpdateConfig(cls, newSlots))
+                      // Single atomic call — avoids stale-closure batch issues
+                      onUpdateGradeSlots(sections, newSlots)
                     }}
                     onKeyDown={e => {
-                      // Critical: stop arrow-key events from bubbling and
-                      // accidentally triggering chip removal in parent components
+                      // Prevent native number-input increment/decrement on arrow keys
+                      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') e.preventDefault()
+                      // Also stop bubbling so parent chip selectors don't react
                       e.stopPropagation()
                     }}
                     style={{
@@ -224,14 +228,14 @@ function ClassSlotsExpanded({ sub, unit, sessionMins, onUpdateConfig, onRemoveCl
                       outline: 'none', textAlign: 'center', background: P_L,
                       fontFamily: 'inherit', boxSizing: 'border-box' as const,
                     }}
-                    onFocus={e => (e.currentTarget.style.borderColor = P)}
-                    onBlur={e => (e.currentTarget.style.borderColor = '#C4BDFF')}
+                    onFocus={e => { e.currentTarget.style.borderColor = P; e.currentTarget.style.boxShadow = `0 0 0 3px ${P_B}` }}
+                    onBlur={e => { e.currentTarget.style.borderColor = '#C4BDFF'; e.currentTarget.style.boxShadow = 'none' }}
                   />
                 </td>
-                {/* Remove grade — removes ALL sections of this grade */}
+                {/* Remove grade — single atomic call removes ALL sections */}
                 <td style={{ padding: '3px 4px', textAlign: 'center' }}>
                   <button
-                    onClick={() => sections.forEach(cls => onRemoveClass(cls))}
+                    onClick={() => onRemoveGrade(sections)}
                     title={`Remove Grade ${grade}`}
                     style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#D4CFEC', padding: '1px 2px', lineHeight: 1, fontSize: 14 }}
                     onMouseEnter={e => (e.currentTarget.style.color = '#E11D48')}
@@ -371,22 +375,27 @@ function SubjectRow({ sub, classOptions, sections, board, isAiAssigned, unit, se
     })
   }
 
-  // When user updates per-class slots in expanded view
-  function handleUpdateConfig(className: string, periodsPerWeek: number) {
-    const newConfigs = (sub.classConfigs ?? []).map(c =>
-      c.sectionName === className ? { ...c, periodsPerWeek } : c
+  // Atomically update slots for ALL sections of a grade in one state write
+  function handleUpdateGradeSlots(classNames: string[], periodsPerWeek: number) {
+    const classSet = new Set(classNames)
+    const base = sub.classConfigs ?? []
+    const updated = base.map(c =>
+      classSet.has(c.sectionName!) ? { ...c, periodsPerWeek } : c
     )
-    // If no existing config found, add one
-    if (!newConfigs.some(c => c.sectionName === className)) {
-      newConfigs.push({ sectionName: className, periodsPerWeek, maxPeriodsPerDay: sub.maxPeriodsPerDay ?? 2, sessionDuration: sub.sessionDuration ?? 45 })
+    // Add configs for any section not yet in classConfigs
+    for (const name of classNames) {
+      if (!updated.some(c => c.sectionName === name)) {
+        updated.push({ sectionName: name, periodsPerWeek, maxPeriodsPerDay: sub.maxPeriodsPerDay ?? 2, sessionDuration: sub.sessionDuration ?? 45 })
+      }
     }
-    onUpdate({ classConfigs: newConfigs })
+    onUpdate({ classConfigs: updated })
   }
 
-  // When user removes a class from expanded view
-  function handleRemoveClass(className: string) {
-    const newClasses = assignedClasses.filter(c => c !== className)
-    const newConfigs = (sub.classConfigs ?? []).filter(c => c.sectionName !== className)
+  // Atomically remove all sections of a grade in one state write
+  function handleRemoveGrade(classNames: string[]) {
+    const classSet = new Set(classNames)
+    const newClasses = assignedClasses.filter(c => !classSet.has(c))
+    const newConfigs = (sub.classConfigs ?? []).filter(c => !classSet.has(c.sectionName!))
     onUpdate({ sections: newClasses, classConfigs: newConfigs })
   }
 
@@ -427,6 +436,7 @@ function SubjectRow({ sub, classOptions, sections, board, isAiAssigned, unit, se
               options={classOptions}
               onChange={handleClassChange}
               placeholder="+ Assign Classes"
+              maxChips={4}
             />
             {aiSuggestion.length > 0 && (
               <button
@@ -484,8 +494,8 @@ function SubjectRow({ sub, classOptions, sections, board, isAiAssigned, unit, se
               sub={sub}
               unit={unit}
               sessionMins={sessionMins}
-              onUpdateConfig={handleUpdateConfig}
-              onRemoveClass={handleRemoveClass}
+              onUpdateGradeSlots={handleUpdateGradeSlots}
+              onRemoveGrade={handleRemoveGrade}
             />
             <OptionalSettings sub={sub} onChange={onUpdate} />
           </td>
@@ -571,13 +581,16 @@ export function SubjectsPanel({
     if ('sections' in patch && localAiAssignedIds.has(id)) {
       setLocalAiAssignedIds(prev => { const next = new Set(prev); next.delete(id); return next })
     }
-    setSubjects(subjects.map(s => s.id === id ? { ...s, ...patch } : s))
+    // Functional form avoids stale-closure issues when multiple rapid updates fire
+    setSubjects(prev => prev.map(s => s.id === id ? { ...s, ...patch } : s))
   }
 
   function remove(id: string) { setSubjects(subjects.filter(s => s.id !== id)) }
   function add(s: Subject)    { setSubjects([...subjects, s]) }
 
   // ── Local AI assign (subject-only fallback) ───────────────────────────────
+  // Re-evaluates ALL subjects every run — no "already assigned" guard.
+  // buildClassConfigs() preserves any existing per-class slot overrides.
   function localAiAssignAll() {
     if (!sections.length) return
     const snapshot: SubjectSnapshot[] = subjects.map(s => ({
@@ -589,11 +602,11 @@ export function SubjectsPanel({
     setLocalSnapshot(snapshot)
     const newlyAssignedIds = new Set<string>()
     const updated = subjects.map(s => {
-      if (getAssignedClasses(s).length > 0) return s
       const suggestedSections = suggestClassesForSubject(s.name, sections, board)
-      if (suggestedSections.length === 0) return s
+      if (suggestedSections.length === 0) return s  // Curriculum has no suggestion
       const grp   = dominantGradeGroup(suggestedSections)
       const slots = suggestSlotsPerWeek(s.name, grp, board) ?? s.periodsPerWeek
+      // buildClassConfigs preserves any per-class overrides the user set manually
       const newConfigs = buildClassConfigs(s, suggestedSections, slots)
       newlyAssignedIds.add(s.id)
       return {
@@ -656,7 +669,8 @@ export function SubjectsPanel({
 
   // ─────────────────────────────────────────────────────────────────────────────
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <ResourceGlobalStyles />
 
       {/* ── Toolbar ─────────────────────────────────────────────────────────── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingBottom: 7, flexShrink: 0, flexWrap: 'wrap' }}>

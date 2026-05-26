@@ -13,6 +13,7 @@ import {
   TH, TD, TABLE_CARD,
   InlineChipSelect, ImportModal,
   DeleteActionButton, outlineBtn,
+  ResourceGlobalStyles,
 } from './shared'
 import type { ChipOption } from './shared'
 
@@ -178,27 +179,30 @@ function RoomRow_({ room, classOpts, subjectOpts, assignedClasses, onUpdate, onU
       <td style={{ ...TD }}>
         <input type="number" value={room.capacity} min={1} max={999}
           onChange={e => onUpdate({ capacity: +e.target.value })}
+          className="rp-inp rp-num"
           style={{ width: '100%', padding: '3px 5px', border: '1px solid #E4E0FF', borderRadius: 5, fontSize: 12.5, fontWeight: 600, color: '#444', outline: 'none', textAlign: 'center', background: '#FAFAFE', boxSizing: 'border-box' as const, fontFamily: 'inherit' }}
         />
       </td>
 
-      {/* Assigned Classes — show all */}
+      {/* Assigned Classes — 3 chips visible, +N more on overflow */}
       <td style={{ ...TD, paddingTop: 5, paddingBottom: 5 }}>
         <InlineChipSelect
           selected={assignedClasses}
           options={classOpts}
           onChange={handleClassChange}
           placeholder="+ Assign class"
+          maxChips={3}
         />
       </td>
 
-      {/* Special Subjects — show all */}
+      {/* Special Subjects — 3 chips visible, +N more on overflow */}
       <td style={{ ...TD, paddingTop: 5, paddingBottom: 5 }}>
         <InlineChipSelect
           selected={room.subjectMappings ?? []}
           options={subjectOpts}
           onChange={v => onUpdate({ subjectMappings: v })}
           placeholder="+ Special subjects"
+          maxChips={3}
         />
       </td>
 
@@ -290,7 +294,8 @@ export function RoomsPanel({ rooms, setRooms, sections, setSections, subjects }:
   function addRoom(r: RoomExt) { setRooms([...rooms, r]) }
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <ResourceGlobalStyles />
       {/* Toolbar */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingBottom: 7, flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexShrink: 0 }}>
@@ -359,12 +364,12 @@ export function RoomsPanel({ rooms, setRooms, sections, setSections, subjects }:
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
             <colgroup>
-              <col style={{ width: 150 }} />
-              <col style={{ width: 140 }} />
-              <col style={{ width: 70 }} />
-              <col />
-              <col style={{ width: 190 }} />
-              <col style={{ width: 60 }} />
+              <col style={{ width: '15%' }} />
+              <col style={{ width: '17%' }} />
+              <col style={{ width: '7%' }} />
+              <col style={{ width: '30%' }} />
+              <col style={{ width: '23%' }} />
+              <col style={{ width: '8%' }} />
             </colgroup>
             <thead>
               <tr>
@@ -373,7 +378,7 @@ export function RoomsPanel({ rooms, setRooms, sections, setSections, subjects }:
                 <th style={{ ...TH, textAlign: 'center' }}>Cap</th>
                 <th style={TH}>Assigned Classes</th>
                 <th style={TH}>Special Subjects</th>
-                <th style={{ ...TH, textAlign: 'center' }}>Del</th>
+                <th style={{ ...TH, textAlign: 'center' }}>Actions</th>
               </tr>
             </thead>
             <tbody>

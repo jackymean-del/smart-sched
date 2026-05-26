@@ -25,6 +25,7 @@ import {
   TH, TD, TABLE_CARD,
   InlineChipSelect, ImportModal,
   actionBtn, DeleteActionButton, outlineBtn,
+  ResourceGlobalStyles,
 } from './shared'
 import type { ChipOption } from './shared'
 import { calcTeacherSlots, slotLoadLevel } from './aiEngine'
@@ -251,15 +252,16 @@ function SubjectLine({ mapping, subjectColor, classOpts, onUpdate, onRemove }: {
   classOpts: ChipOption[]; onUpdate: (classes: string[]) => void; onRemove: () => void
 }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'nowrap', gap: 3, borderLeft: `2.5px solid ${subjectColor}bb`, paddingLeft: 6, marginBottom: 2, overflow: 'hidden', minHeight: 22 }}>
-      <span style={{ fontSize: 11, fontWeight: 700, color: '#111028', width: 96, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+    <div style={{ display: 'flex', alignItems: 'flex-start', flexWrap: 'wrap', gap: 3, borderLeft: `2.5px solid ${subjectColor}bb`, paddingLeft: 6, marginBottom: 2, minHeight: 22, maxWidth: '100%', overflow: 'hidden' }}>
+      <span style={{ fontSize: 11, fontWeight: 700, color: '#111028', width: 90, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', alignSelf: 'center' }}>
         {mapping.subject}
       </span>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <InlineChipSelect selected={mapping.classes} options={classOpts} onChange={onUpdate} placeholder="+ classes" minDropdownWidth={260} />
+      <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+        {/* maxChips=3: prevents cell overflow; "+N more" badge reveals the rest on click */}
+        <InlineChipSelect selected={mapping.classes} options={classOpts} onChange={onUpdate} placeholder="+ classes" minDropdownWidth={260} maxChips={3} />
       </div>
       <button onClick={onRemove}
-        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '1px 2px', color: '#D4CFEC', lineHeight: 1, flexShrink: 0 }}
+        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '1px 2px', color: '#D4CFEC', lineHeight: 1, flexShrink: 0, alignSelf: 'center' }}
         onMouseEnter={e => (e.currentTarget.style.color = '#e74c3c')}
         onMouseLeave={e => (e.currentTarget.style.color = '#D4CFEC')}
       ><X size={10} /></button>
@@ -524,15 +526,19 @@ function TeacherRow({ t, subjects, classOpts, classTeacherOpts, onUpdate, onDele
           />
         </td>
 
-        {/* Actions */}
-        <td style={{ ...TD, padding: '6px 10px', whiteSpace: 'nowrap' }}>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+        {/* Actions — compact: chevron-only Show toggle + delete icon */}
+        <td style={{ ...TD, padding: '6px 8px', whiteSpace: 'nowrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'nowrap' }}>
             <button
               onClick={() => setExpanded(o => !o)}
+              title={expanded ? 'Show Less' : 'Show More'}
               style={{
-                ...actionBtn,
-                gap: 5,
-                ...(expanded ? { background: P_L, color: P_D, borderColor: P_B } : {}),
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                padding: '5px 9px', borderRadius: 7, border: `1.5px solid ${expanded ? P_B : '#DDD8FF'}`,
+                background: expanded ? P_L : 'transparent', color: expanded ? P_D : '#8886A8',
+                fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                fontFamily: 'inherit', whiteSpace: 'nowrap',
+                height: 32, transition: 'all 0.12s', flexShrink: 0,
               }}
               onMouseEnter={e => { e.currentTarget.style.background = P_L; e.currentTarget.style.color = P_D; e.currentTarget.style.borderColor = P_B }}
               onMouseLeave={e => {
@@ -541,8 +547,8 @@ function TeacherRow({ t, subjects, classOpts, classTeacherOpts, onUpdate, onDele
                 e.currentTarget.style.borderColor = expanded ? P_B : '#DDD8FF'
               }}
             >
-              {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-              {expanded ? 'Show Less' : 'Show More'}
+              {expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              {expanded ? 'Less' : 'More'}
             </button>
             <DeleteActionButton onDelete={onDelete} tooltip="Delete teacher" />
           </div>
@@ -615,7 +621,8 @@ export function TeachersPanel({ staff, setStaff, sections, subjects }: {
   function add(t: StaffExt) { setStaff([...staff, t as Staff]) }
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <ResourceGlobalStyles />
       {/* Toolbar */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingBottom: 7, flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexShrink: 0 }}>
@@ -683,11 +690,11 @@ export function TeachersPanel({ staff, setStaff, sections, subjects }: {
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
             <colgroup>
-              <col style={{ width: '15%' }} />
-              <col style={{ width: '50%' }} />
-              <col style={{ width: '12%' }} />
+              <col style={{ width: '17%' }} />
+              <col style={{ width: '47%' }} />
+              <col style={{ width: '9%' }} />
               <col style={{ width: '13%' }} />
-              <col style={{ width: '10%' }} />
+              <col style={{ width: '14%' }} />
             </colgroup>
             <thead>
               <tr>

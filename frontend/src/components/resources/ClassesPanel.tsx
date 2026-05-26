@@ -13,6 +13,7 @@ import {
   ImportModal,
   DeleteActionButton,
   outlineBtn, primaryBtn,
+  ResourceGlobalStyles,
 } from './shared'
 
 type SectionExt = Section & { strength?: number }
@@ -217,6 +218,7 @@ function SectionRow({ sec, onUpdate, onDelete }: {
           type="number" value={sec.strength ?? 40}
           onChange={e => onUpdate({ strength: +e.target.value })}
           min={1} max={999}
+          className="rp-inp rp-num"
           style={{ width: '100%', padding: '4px 7px', border: '1px solid #E4E0FF', borderRadius: 5, fontSize: 12.5, fontWeight: 600, color: '#333', outline: 'none', textAlign: 'center', background: '#FAFAFE', boxSizing: 'border-box' as const, fontFamily: 'inherit' }}
         />
       </td>
@@ -277,7 +279,8 @@ export function ClassesPanel({ sections, setSections }: {
   function bulkAdd(news: SectionExt[]) { setSections([...sections, ...news.map(s => s as Section)]) }
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <ResourceGlobalStyles />
       {/* Toolbar */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingBottom: 7, flexShrink: 0 }}>
         {/* Title */}
@@ -365,9 +368,9 @@ export function ClassesPanel({ sections, setSections }: {
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
             <colgroup>
-              <col style={{ width: '68%' }} />
-              <col style={{ width: '20%' }} />
-              <col style={{ width: '12%' }} />
+              <col style={{ width: '48%' }} />
+              <col style={{ width: '30%' }} />
+              <col style={{ width: '22%' }} />
             </colgroup>
             <thead>
               <tr>
