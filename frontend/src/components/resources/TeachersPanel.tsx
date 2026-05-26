@@ -423,7 +423,7 @@ function AddRow({ onAdd }: { onAdd: (t: StaffExt) => void }) {
       <td colSpan={5} style={{ ...TD, padding: '9px 12px' }}>
         <button onClick={() => setActive(true)}
           style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'none', border: '1px dashed #C8C2F0', borderRadius: 6, color: P, fontSize: 12, fontWeight: 600, padding: '4px 11px', cursor: 'pointer', fontFamily: 'inherit' }}>
-          <Plus size={13} /> Add Teacher
+          <Plus size={13} /> Add Educator
         </button>
       </td>
     </tr>
@@ -433,7 +433,7 @@ function AddRow({ onAdd }: { onAdd: (t: StaffExt) => void }) {
       <td colSpan={3} style={TD}>
         <input ref={ref} value={name} onChange={e => setName(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setActive(false) }}
-          placeholder="Teacher full name"
+          placeholder="Educator full name"
           style={{ ...fld, width: '100%', fontSize: 12.5, boxSizing: 'border-box' as const }}
         />
       </td>
@@ -495,22 +495,39 @@ function TeacherRow({ t, subjects, classOpts, classTeacherOpts, onUpdate, onDele
           <SubjectAssignmentCell teacher={t} subjects={subjects} classOpts={classOpts} onUpdateMappings={updateMappings} />
         </td>
 
-        {/* Slots / Week — color-coded workload badge */}
+        {/* Slots / Week — color-coded badge + editable max */}
         <td style={{ ...TD, padding: '7px 8px', textAlign: 'center', whiteSpace: 'nowrap' }}>
           <span style={{
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
             background: loadBg, color: loadFg,
             border: `1px solid ${loadBorder}`,
             borderRadius: 5, fontSize: 12, fontWeight: 700,
-            padding: '2px 8px', minWidth: 34, letterSpacing: '0.01em',
+            padding: '2px 10px', minWidth: 40, letterSpacing: '0.01em',
           }}>
             {slots}
           </span>
           {level !== 'none' && (
             <div style={{ fontSize: 9, color: loadFg, opacity: 0.75, marginTop: 1, fontWeight: 600, letterSpacing: '0.03em', textTransform: 'uppercase' }}>
-              {level === 'low' ? 'low' : level === 'good' ? 'good' : level === 'high' ? 'high' : 'over'}
+              {level}
             </div>
           )}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3, marginTop: 4 }}>
+            <span style={{ fontSize: 9, color: '#9896B5', fontWeight: 600 }}>Max:</span>
+            <input
+              type="number" min={1} max={60}
+              value={t.maxPeriodsPerWeek ?? 30}
+              onChange={e => onUpdate({ maxPeriodsPerWeek: +e.target.value } as any)}
+              className="rp-inp rp-num"
+              style={{
+                width: 44, padding: '2px 5px',
+                border: '1px solid #E4E0FF', borderRadius: 4,
+                fontSize: 11, fontWeight: 600, color: '#555',
+                textAlign: 'center', outline: 'none',
+                background: '#FAFAFE', fontFamily: 'inherit',
+                boxSizing: 'border-box' as const,
+              }}
+            />
+          </div>
         </td>
 
         {/* Class teacher (single select) */}
@@ -546,7 +563,7 @@ function TeacherRow({ t, subjects, classOpts, classTeacherOpts, onUpdate, onDele
               {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
               {expanded ? 'Show Less' : 'Show More'}
             </button>
-            <DeleteActionButton onDelete={onDelete} tooltip="Delete teacher" />
+            <DeleteActionButton onDelete={onDelete} tooltip="Delete educator" />
           </div>
         </td>
       </tr>
@@ -636,7 +653,7 @@ export function TeachersPanel({ staff, setStaff, sections, subjects }: {
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingBottom: 7, flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexShrink: 0 }}>
           <Users size={13} color={P} />
-          <span style={{ fontSize: 12.5, fontWeight: 700, color: '#111028' }}>Teachers</span>
+          <span style={{ fontSize: 12.5, fontWeight: 700, color: '#111028' }}>Educators</span>
           <span style={{ fontSize: 10, color: P, background: P_L, borderRadius: 4, padding: '1px 6px 2px', fontWeight: 700, border: `1px solid ${P_B}` }}>
             {staff.length}
           </span>
@@ -652,8 +669,7 @@ export function TeachersPanel({ staff, setStaff, sections, subjects }: {
             value={search} onChange={e => setSearch(e.target.value)}
             onFocus={() => setSearchFocused(true)}
             onBlur={() => setSearchFocused(false)}
-            onMouseEnter={() => searchRef.current?.focus()}
-            placeholder="Search teachers, subjects…"
+            placeholder="Search educators, subjects…"
             className="rp-inp"
             style={{
               width: '100%', padding: '6px 10px 6px 28px',
@@ -679,8 +695,8 @@ export function TeachersPanel({ staff, setStaff, sections, subjects }: {
 
       {importOpen && (
         <ImportModal
-          title="Teachers"
-          sampleHeaders={['Teacher Name', 'Role (optional)']}
+          title="Educators"
+          sampleHeaders={['Educator Name', 'Role (optional)']}
           sampleRows={[
             ['Mrs. Anita Sharma', 'Teacher'],
             ['Mr. Rajesh Kumar',  'HoD'],
@@ -697,21 +713,21 @@ export function TeachersPanel({ staff, setStaff, sections, subjects }: {
         {staff.length === 0 && !search ? (
           <div style={{ textAlign: 'center', padding: '48px 0' }}>
             <div style={{ fontSize: 32, marginBottom: 8 }}>👤</div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#9896B5', marginBottom: 4 }}>No teachers yet</div>
-            <div style={{ fontSize: 12, color: '#C4C0DC' }}>Add teachers, then assign subjects and classes to them.</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#9896B5', marginBottom: 4 }}>No educators yet</div>
+            <div style={{ fontSize: 12, color: '#C4C0DC' }}>Add educators, then assign subjects and classes to them.</div>
           </div>
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
             <colgroup>
+              <col style={{ width: '15%' }} />
+              <col style={{ width: '36%' }} />
               <col style={{ width: '16%' }} />
-              <col style={{ width: '40%' }} />
-              <col style={{ width: '12%' }} />
-              <col style={{ width: '18%' }} />
-              <col style={{ width: '14%' }} />
+              <col style={{ width: '23%' }} />
+              <col style={{ width: '10%' }} />
             </colgroup>
             <thead>
               <tr>
-                <th style={TH}>Teacher</th>
+                <th style={TH}>Educator</th>
                 <th style={TH}>Subject Assignments</th>
                 <th style={{ ...TH, textAlign: 'center' }}>Slots/Wk</th>
                 <th style={TH}>Class Teacher Of</th>

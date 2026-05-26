@@ -72,30 +72,43 @@ export function StepStudentGroups() {
     Object.fromEntries(AI_LOGIC_ITEMS.map((_, i) => [i, true]))
   )
 
-  // Subject list (optional subjects drive grouping)
-  const subjectList = useMemo(() => subjects.map((s: any) => s.name) as string[], [subjects])
+  // ── Only optional subjects drive the grouping matrix ──────────────────────
+  const optionalSubjects = useMemo(() => subjects.filter((s: any) => s.isOptional), [subjects])
+  const subjectList = useMemo(() => optionalSubjects.map((s: any) => s.name) as string[], [optionalSubjects])
+
+  // ── Only sections that have at least one optional subject assigned ─────────
+  const optionalSections = useMemo(() => {
+    const sectionSet = new Set<string>()
+    for (const sub of optionalSubjects) {
+      // Mirror getAssignedClasses: classConfigs first, then sections fallback
+      const fromConfigs = (sub.classConfigs ?? []).map((c: any) => c.sectionName).filter(Boolean) as string[]
+      const assigned = fromConfigs.length > 0 ? fromConfigs : (sub.sections ?? [])
+      for (const cls of assigned) sectionSet.add(cls)
+    }
+    return sections.filter((s: any) => sectionSet.has(s.name))
+  }, [sections, optionalSubjects])
 
   // Initialize section strengths if empty
   useEffect(() => {
-    if (sectionStrengths.length === 0 && sections.length > 0 && subjectList.length > 0) {
-      const init: SectionStrength[] = sections.map((sec: any) => ({
+    if (sectionStrengths.length === 0 && optionalSections.length > 0 && subjectList.length > 0) {
+      const init: SectionStrength[] = optionalSections.map((sec: any) => ({
         sectionName: sec.name,
         stream: guessStream(sec.name),
         subjectStrengths: Object.fromEntries(subjectList.map((s: string) => [s, 0])),
       }))
       setSectionStrengths(init)
     }
-  }, [sections.length, subjectList.length])
+  }, [optionalSections.length, subjectList.length])
 
-  // Materialized rows
+  // Materialized rows — only optional sections × optional subjects
   const rows: SectionStrength[] = useMemo(() =>
-    sections.map((sec: any) =>
+    optionalSections.map((sec: any) =>
       sectionStrengths.find((r: SectionStrength) => r.sectionName === sec.name) ?? {
         sectionName: sec.name,
         stream: guessStream(sec.name),
         subjectStrengths: Object.fromEntries(subjectList.map((s: string) => [s, 0])),
       }
-    ), [sections, sectionStrengths, subjectList])
+    ), [optionalSections, sectionStrengths, subjectList])
 
   // Update a single cell
   const updateCell = (sectionName: string, subjectName: string, value: number) => {
@@ -199,8 +212,14 @@ export function StepStudentGroups() {
       ══════════════════════════════════ */}
       <Section title="Student Preference Matrix" icon={<GraduationCap size={15} color="#7C6FE0" />}
         hint="Enter number of students selecting each subject per class. AI uses these counts to form optimised groups.">
-        {sections.length === 0 ? (
-          <EmptyState msg="Add classes and subjects in Step 1 → Resources first." />
+        {subjectList.length === 0 ? (
+          <EmptyState msg={
+            subjects.length === 0
+              ? 'Add subjects in Step 1 → Resources, then mark them as Optional to appear here.'
+              : 'Mark at least one subject as Optional (in the Subjects panel) to see the preference matrix.'
+          } />
+        ) : optionalSections.length === 0 ? (
+          <EmptyState msg="Assign optional subjects to classes (in the Subjects panel) to see which sections appear here." />
         ) : (
           <div ref={tableWrapRef} style={{ overflowX: 'auto' as const }}>
             <table style={{ borderCollapse: 'collapse' as const, width: '100%', minWidth: 400 }}>
@@ -268,7 +287,7 @@ export function StepStudentGroups() {
       <Section title="Subject Grouping Rules" icon={<BookOpen size={15} color="#7C6FE0" />}
         hint="Set how AI groups students for each subject. Flexible lets AI decide the best approach.">
         {subjectList.length === 0 ? (
-          <EmptyState msg="Add subjects in Step 1 → Resources first." />
+          <EmptyState msg="Mark subjects as Optional in the Subjects panel to configure their grouping rules here." />
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 8 }}>
             {subjectList.map((subName: string) => {

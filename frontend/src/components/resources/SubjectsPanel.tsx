@@ -204,13 +204,35 @@ function GradeSlotRow({
           min={isHours ? undefined : 1}
           max={isHours ? undefined : 200}
           step={isHours ? undefined : 1}
+          data-grade-input
           className="rp-inp rp-num"
           onChange={handleChange}
           onFocus={handleFocus}
           onBlur={handleBlur}
           onKeyDown={e => {
-            if (e.key === 'ArrowUp' || e.key === 'ArrowDown') e.preventDefault()
             e.stopPropagation()
+            // ArrowUp / ArrowDown / Tab: navigate between grade slot inputs
+            const isUp   = e.key === 'ArrowUp'
+            const isDown = e.key === 'ArrowDown'
+            const isTabF = e.key === 'Tab' && !e.shiftKey
+            const isTabB = e.key === 'Tab' && e.shiftKey
+            if (isUp || isDown || isTabF || isTabB) {
+              const table = e.currentTarget.closest('table')
+              if (table) {
+                const inputs = Array.from(table.querySelectorAll<HTMLInputElement>('input[data-grade-input]'))
+                const idx = inputs.indexOf(e.currentTarget)
+                if (idx !== -1) {
+                  const next = (isDown || isTabF) ? inputs[idx + 1] : inputs[idx - 1]
+                  if (next) {
+                    e.preventDefault()
+                    next.focus()
+                    if (typeof next.select === 'function') next.select()
+                    return
+                  }
+                }
+              }
+              if (isUp || isDown) e.preventDefault()
+            }
             if (isHours && e.key === 'Enter') e.currentTarget.blur()
           }}
           style={{
@@ -237,13 +259,16 @@ function GradeSlotRow({
   )
 }
 
+const SUBJECT_CATS = ['Compulsory','Language','4th Optional','5th Optional','6th Optional','Practical','Activity','EST','CCA','Skill']
+
 // ─── Expanded grade-level slots view ─────────────────────────────────────────
-function ClassSlotsExpanded({ sub, unit, sessionMins, onUpdateGradeSlots, onRemoveGrade }: {
+function ClassSlotsExpanded({ sub, unit, sessionMins, onUpdateGradeSlots, onRemoveGrade, onChange }: {
   sub: Subject
   unit: AllocationUnit
   sessionMins: number
   onUpdateGradeSlots: (classNames: string[], periodsPerWeek: number) => void
   onRemoveGrade: (classNames: string[]) => void
+  onChange: (patch: Partial<Subject>) => void
 }) {
   const classes = getAssignedClasses(sub)
 
@@ -263,14 +288,49 @@ function ClassSlotsExpanded({ sub, unit, sessionMins, onUpdateGradeSlots, onRemo
   }
   const sortedGrades = [...gradeMap.keys()].sort((a, b) => gradeKey(a) - gradeKey(b))
 
+  const smallInp: React.CSSProperties = {
+    padding: '2px 5px', border: '1px solid #E4E0FF', borderRadius: 4,
+    fontSize: 10.5, color: '#111028', outline: 'none', fontFamily: 'inherit',
+    background: '#FAFAFE', boxSizing: 'border-box' as const,
+  }
+
   return (
     <div style={{ background: '#FAFAFE', borderTop: '1px solid #EEE9FF', padding: '7px 16px 10px' }}>
-      <div style={{ fontSize: 9.5, fontWeight: 800, color: '#9896B5', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>
-        Slots per Grade
-        <span style={{ fontWeight: 500, textTransform: 'none', marginLeft: 6, fontSize: 9.5, color: '#C4C0DC' }}>
-          · {ALLOCATION_LABELS[unit]}
-        </span>
+      {/* Header row: "Slots per Grade" label + settings right-aligned */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, gap: 12, flexWrap: 'wrap' }}>
+        {/* Left: label */}
+        <div style={{ fontSize: 9.5, fontWeight: 800, color: '#9896B5', textTransform: 'uppercase', letterSpacing: '0.07em', whiteSpace: 'nowrap', flexShrink: 0 }}>
+          Slots per Grade
+          <span style={{ fontWeight: 500, textTransform: 'none', marginLeft: 6, fontSize: 9.5, color: '#C4C0DC' }}>
+            · {ALLOCATION_LABELS[unit]}
+          </span>
+        </div>
+        {/* Right: settings */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 9.5, color: '#6B6891', fontWeight: 600, lineHeight: 1.2 }}>
+            Category
+            <select value={sub.category ?? 'Compulsory'} onChange={e => onChange({ category: e.target.value })} style={smallInp}>
+              {SUBJECT_CATS.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </label>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 9.5, color: '#6B6891', fontWeight: 600, lineHeight: 1.2 }}>
+            Max/day
+            <input type="number" value={sub.maxPeriodsPerDay} min={1} max={8}
+              onChange={e => onChange({ maxPeriodsPerDay: +e.target.value })}
+              style={{ ...smallInp, width: 44, textAlign: 'center' }}
+            />
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10.5, color: '#555', fontWeight: 600, cursor: 'pointer', userSelect: 'none' }}>
+            <input type="checkbox" checked={!!sub.requiresLab} onChange={e => onChange({ requiresLab: e.target.checked })} style={{ accentColor: P }} />
+            Lab required
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10.5, color: '#555', fontWeight: 600, cursor: 'pointer', userSelect: 'none' }}>
+            <input type="checkbox" checked={!!sub.isOptional} onChange={e => onChange({ isOptional: e.target.checked })} style={{ accentColor: P }} />
+            Optional
+          </label>
+        </div>
       </div>
+
       <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', maxWidth: 360 }}>
         <colgroup>
           <col style={{ width: 120 }} />
@@ -303,35 +363,6 @@ function ClassSlotsExpanded({ sub, unit, sessionMins, onUpdateGradeSlots, onRemo
   )
 }
 
-// ─── Expandable extra settings ─────────────────────────────────────────────────
-function OptionalSettings({ sub, onChange }: { sub: Subject; onChange: (patch: Partial<Subject>) => void }) {
-  const CATS = ['Compulsory','Language','4th Optional','5th Optional','6th Optional','Practical','Activity','EST','CCA','Skill']
-  return (
-    <div style={{ display: 'flex', gap: 14, padding: '8px 16px 10px', background: '#F7F5FF', borderTop: '1px solid #EEE9FF', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-      <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 10.5, color: '#6B6891', fontWeight: 600 }}>
-        Category
-        <select value={sub.category ?? 'Compulsory'} onChange={e => onChange({ category: e.target.value })} style={inp}>
-          {CATS.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
-      </label>
-      <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 10.5, color: '#6B6891', fontWeight: 600 }}>
-        Max / day
-        <input type="number" value={sub.maxPeriodsPerDay} min={1} max={8}
-          onChange={e => onChange({ maxPeriodsPerDay: +e.target.value })}
-          style={{ ...inp, width: 48 }}
-        />
-      </label>
-      <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#555', fontWeight: 600, cursor: 'pointer', paddingBottom: 2 }}>
-        <input type="checkbox" checked={!!sub.requiresLab} onChange={e => onChange({ requiresLab: e.target.checked })} style={{ accentColor: P }} />
-        Lab required
-      </label>
-      <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#555', fontWeight: 600, cursor: 'pointer', paddingBottom: 2 }}>
-        <input type="checkbox" checked={!!sub.isOptional} onChange={e => onChange({ isOptional: e.target.checked })} style={{ accentColor: P }} />
-        Optional
-      </label>
-    </div>
-  )
-}
 
 // ─── Add row ──────────────────────────────────────────────────────────────────
 function AddRow({ onAdd }: { onAdd: (s: Subject) => void }) {
@@ -563,7 +594,7 @@ function SubjectRow({ sub, classOptions, sections, board, isAiAssigned, unit, se
         </td>
       </tr>
 
-      {/* Expanded: per-class slots */}
+      {/* Expanded: per-class slots + inline settings header */}
       {expandSlots && (
         <tr>
           <td colSpan={4} style={{ padding: 0 }}>
@@ -573,8 +604,8 @@ function SubjectRow({ sub, classOptions, sections, board, isAiAssigned, unit, se
               sessionMins={sessionMins}
               onUpdateGradeSlots={handleUpdateGradeSlots}
               onRemoveGrade={handleRemoveGrade}
+              onChange={onUpdate}
             />
-            <OptionalSettings sub={sub} onChange={onUpdate} />
           </td>
         </tr>
       )}
@@ -791,7 +822,6 @@ export function SubjectsPanel({
             value={search} onChange={e => setSearch(e.target.value)}
             onFocus={() => setSearchFocused(true)}
             onBlur={() => setSearchFocused(false)}
-            onMouseEnter={() => searchRef.current?.focus()}
             placeholder="Search subjects…"
             className="rp-inp"
             style={{

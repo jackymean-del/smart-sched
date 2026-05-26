@@ -330,7 +330,6 @@ export function RoomsPanel({ rooms, setRooms, sections, setSections, subjects }:
             value={search} onChange={e => setSearch(e.target.value)}
             onFocus={() => setSearchFocused(true)}
             onBlur={() => setSearchFocused(false)}
-            onMouseEnter={() => searchRef.current?.focus()}
             placeholder="Search rooms…"
             className="rp-inp"
             style={{

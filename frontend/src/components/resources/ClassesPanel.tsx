@@ -219,7 +219,7 @@ function SectionRow({ sec, onUpdate, onDelete }: {
           onChange={e => onUpdate({ strength: +e.target.value })}
           min={1} max={999}
           className="rp-inp rp-num"
-          style={{ width: 80, padding: '4px 7px', border: '1px solid #E4E0FF', borderRadius: 5, fontSize: 12.5, fontWeight: 600, color: '#333', outline: 'none', textAlign: 'center', background: '#FAFAFE', boxSizing: 'border-box' as const, fontFamily: 'inherit' }}
+          style={{ width: '100%', padding: '4px 7px', border: '1px solid #E4E0FF', borderRadius: 5, fontSize: 12.5, fontWeight: 600, color: '#333', outline: 'none', textAlign: 'center', background: '#FAFAFE', boxSizing: 'border-box' as const, fontFamily: 'inherit' }}
         />
       </td>
 
@@ -318,7 +318,6 @@ export function ClassesPanel({ sections, setSections }: {
             value={search} onChange={e => setSearch(e.target.value)}
             onFocus={() => setSearchFocused(true)}
             onBlur={() => setSearchFocused(false)}
-            onMouseEnter={() => searchRef.current?.focus()}
             placeholder="Search classes…"
             className="rp-inp"
             style={{
@@ -382,8 +381,12 @@ export function ClassesPanel({ sections, setSections }: {
             <div style={{ fontSize: 11.5, color: '#C4C0DC' }}>Use "Bulk Create" to generate grade sections quickly.</div>
           </div>
         ) : (
-          <table style={{ borderCollapse: 'collapse', minWidth: '100%' }}>
-            {/* tableLayout: auto — columns size to content; no fixed col eats all remaining space */}
+          <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+            <colgroup>
+              <col />                             {/* Class: gets remaining ~58% */}
+              <col style={{ width: '28%' }} />    {/* Strength */}
+              <col style={{ width: '14%' }} />    {/* Actions */}
+            </colgroup>
             <thead>
               <tr>
                 <th style={TH}>Class</th>
