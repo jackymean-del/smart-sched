@@ -5,6 +5,7 @@
 
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
+import { Trash2 } from 'lucide-react'
 
 // ─── Design tokens ─────────────────────────────────────────────────────────────
 export const P   = '#7C6FE0'
@@ -34,7 +35,7 @@ export const TH: React.CSSProperties = {
 }
 
 export const TD: React.CSSProperties = {
-  padding: '5px 10px',
+  padding: '6px 10px',
   fontSize: 12.5,
   color: '#111028',
   borderBottom: '1px solid #EDE9F8',
@@ -49,17 +50,17 @@ export const chipStyle: React.CSSProperties = {
   borderRadius: 4, padding: '2px 7px 2px',
   fontSize: 11, fontWeight: 700, lineHeight: '15px',
   border: '1px solid rgba(100,85,210,0.35)', whiteSpace: 'nowrap',
-  maxWidth: 120, overflow: 'hidden',
 }
 
 // ─── Button styles ─────────────────────────────────────────────────────────────
 export const actionBtn: React.CSSProperties = {
-  display: 'inline-flex', alignItems: 'center', gap: 4,
-  padding: '4px 10px', borderRadius: 5, border: '1px solid #DDD8FF',
+  display: 'inline-flex', alignItems: 'center', gap: 5,
+  padding: '6px 14px', borderRadius: 7, border: '1.5px solid #DDD8FF',
   background: 'transparent', color: '#8886A8',
-  fontSize: 11, fontWeight: 600, cursor: 'pointer',
+  fontSize: 11.5, fontWeight: 700, cursor: 'pointer',
   fontFamily: 'inherit', whiteSpace: 'nowrap',
-  transition: 'all 0.1s',
+  minWidth: 100, height: 34, justifyContent: 'center',
+  transition: 'all 0.12s',
 }
 
 export const deleteBtn: React.CSSProperties = {
@@ -71,19 +72,55 @@ export const deleteBtn: React.CSSProperties = {
   transition: 'all 0.1s',
 }
 
+/** Reusable icon-only delete button — use everywhere instead of text Delete */
+export function DeleteActionButton({ onDelete, tooltip = 'Delete' }: {
+  onDelete: () => void
+  tooltip?: string
+}) {
+  return (
+    <button
+      onClick={onDelete}
+      title={tooltip}
+      style={{
+        width: 36, height: 36, borderRadius: 8,
+        background: '#FFF1F2', border: '1.5px solid #FECDD3',
+        color: '#E11D48', cursor: 'pointer',
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        flexShrink: 0, transition: 'all 0.12s', padding: 0,
+      }}
+      onMouseEnter={e => {
+        e.currentTarget.style.background = '#FFE4E8'
+        e.currentTarget.style.borderColor = '#FDA4AF'
+        e.currentTarget.style.boxShadow = '0 2px 8px rgba(225,29,72,0.18)'
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.background = '#FFF1F2'
+        e.currentTarget.style.borderColor = '#FECDD3'
+        e.currentTarget.style.boxShadow = 'none'
+      }}
+    >
+      <Trash2 size={15} />
+    </button>
+  )
+}
+
 export const primaryBtn: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', gap: 5,
   background: P, color: '#fff', border: 'none',
-  borderRadius: 6, padding: '5px 13px', fontSize: 11.5,
+  borderRadius: 7, padding: '6px 16px', fontSize: 12,
   fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+  minWidth: 110, height: 34, justifyContent: 'center',
   boxShadow: '0 2px 6px rgba(124,111,224,0.28)',
+  transition: 'background 0.12s',
 }
 
 export const outlineBtn: React.CSSProperties = {
-  display: 'inline-flex', alignItems: 'center', gap: 4,
-  background: '#fff', color: '#6B6891', border: '1px solid #DDD8FF',
-  borderRadius: 5, padding: '5px 11px', fontSize: 11, fontWeight: 600,
+  display: 'inline-flex', alignItems: 'center', gap: 5,
+  background: '#fff', color: '#6B6891', border: '1.5px solid #DDD8FF',
+  borderRadius: 7, padding: '6px 14px', fontSize: 11.5, fontWeight: 700,
   cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0, whiteSpace: 'nowrap',
+  minWidth: 100, height: 34, justifyContent: 'center',
+  transition: 'all 0.12s',
 }
 
 // ─── Table card container ──────────────────────────────────────────────────────
@@ -211,7 +248,7 @@ interface InlineChipSelectProps {
 export function InlineChipSelect({
   selected, options, onChange,
   singleSelect = false, placeholder = '+ Add',
-  maxChips = 3, disabled = false, minDropdownWidth = 240,
+  maxChips = 999, disabled = false, minDropdownWidth = 240,
 }: InlineChipSelectProps) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')

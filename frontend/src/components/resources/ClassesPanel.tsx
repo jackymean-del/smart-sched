@@ -1,7 +1,7 @@
 /**
  * ClassesPanel — Tab 1.
- * Columns: Class | Strength | Class Teacher | [ Duplicate ] [ Delete ]
- * Fixed-width grid layout, text action buttons, always-visible controls.
+ * Columns: Class | Strength | Actions
+ * Class Teacher is handled in the Shift & Timing step — not here.
  */
 
 import React, { useState, useRef, useMemo, useEffect } from 'react'
@@ -10,8 +10,9 @@ import { Layers, X } from 'lucide-react'
 import {
   P, P_D, P_L, P_B,
   TH, TD, TABLE_CARD,
-  ImportModal, InlineEdit,
-  deleteBtn, outlineBtn, primaryBtn,
+  ImportModal,
+  DeleteActionButton,
+  outlineBtn, primaryBtn,
 } from './shared'
 
 type SectionExt = Section & { strength?: number }
@@ -19,7 +20,7 @@ type SectionExt = Section & { strength?: number }
 function makeId() { return Math.random().toString(36).slice(2, 9) }
 
 const inp: React.CSSProperties = {
-  padding: '3px 8px', border: '1px solid #E4E0FF', borderRadius: 4,
+  padding: '4px 8px', border: '1px solid #E4E0FF', borderRadius: 6,
   fontSize: 12.5, color: '#111028', outline: 'none',
   fontFamily: 'inherit', background: '#FAFAFE',
   boxSizing: 'border-box' as const, width: '100%',
@@ -143,7 +144,7 @@ function AddRow({ onAdd }: { onAdd: (s: SectionExt) => void }) {
 
   if (!active) return (
     <tr>
-      <td colSpan={4} style={{ ...TD, padding: '8px 10px' }}>
+      <td colSpan={3} style={{ ...TD, padding: '8px 10px' }}>
         <button
           onClick={() => setActive(true)}
           style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'none', border: '1px dashed #C8C2F0', borderRadius: 5, color: P, fontSize: 11.5, fontWeight: 600, padding: '4px 12px', cursor: 'pointer', fontFamily: 'inherit' }}
@@ -164,10 +165,7 @@ function AddRow({ onAdd }: { onAdd: (s: SectionExt) => void }) {
       </td>
       <td style={TD}>
         <input type="number" value={str} onChange={e => setStr(+e.target.value)} min={1} max={999}
-          style={{ ...inp, textAlign: 'center' }} />
-      </td>
-      <td style={TD}>
-        <span style={{ fontSize: 11, color: '#C4C0DC', fontStyle: 'italic' }}>—</span>
+          style={{ ...inp, textAlign: 'center', width: '100%' }} />
       </td>
       <td style={{ ...TD, whiteSpace: 'nowrap' }}>
         <button onClick={commit} style={{ background: P, color: '#fff', border: 'none', borderRadius: 5, padding: '5px 13px', fontSize: 12, fontWeight: 700, cursor: 'pointer', marginRight: 6, fontFamily: 'inherit' }}>✓ Add</button>
@@ -219,28 +217,13 @@ function SectionRow({ sec, onUpdate, onDelete }: {
           type="number" value={sec.strength ?? 40}
           onChange={e => onUpdate({ strength: +e.target.value })}
           min={1} max={999}
-          style={{ width: '100%', padding: '3px 7px', border: '1px solid #E4E0FF', borderRadius: 4, fontSize: 12.5, fontWeight: 600, color: '#333', outline: 'none', textAlign: 'center', background: '#FAFAFE', boxSizing: 'border-box' as const, fontFamily: 'inherit' }}
+          style={{ width: '100%', padding: '4px 7px', border: '1px solid #E4E0FF', borderRadius: 5, fontSize: 12.5, fontWeight: 600, color: '#333', outline: 'none', textAlign: 'center', background: '#FAFAFE', boxSizing: 'border-box' as const, fontFamily: 'inherit' }}
         />
       </td>
 
-      {/* Class Teacher */}
-      <td style={TD}>
-        <InlineEdit
-          value={sec.classTeacher ?? ''}
-          onSave={v => onUpdate({ classTeacher: v })}
-          placeholder="+ Assign teacher"
-          style={{ fontSize: 12.5, display: 'block', width: '100%' }}
-        />
-      </td>
-
-      {/* Actions — always visible */}
-      <td style={{ ...TD, whiteSpace: 'nowrap' }}>
-        <button
-          onClick={onDelete}
-          style={deleteBtn}
-          onMouseEnter={e => { e.currentTarget.style.background = '#FFE4E4' }}
-          onMouseLeave={e => { e.currentTarget.style.background = '#FFF0F0' }}
-        >Delete</button>
+      {/* Actions — trash icon only */}
+      <td style={{ ...TD, textAlign: 'center' }}>
+        <DeleteActionButton onDelete={onDelete} tooltip="Delete class" />
       </td>
     </tr>
   )
@@ -254,6 +237,7 @@ export function ClassesPanel({ sections, setSections }: {
   const [search, setSearch]         = useState('')
   const [showBulk, setShowBulk]     = useState(false)
   const [importOpen, setImportOpen] = useState(false)
+  const [searchFocused, setSearchFocused] = useState(false)
 
   function handleImport(rows: string[][]) {
     const newSections = rows
@@ -261,7 +245,7 @@ export function ClassesPanel({ sections, setSections }: {
         id: makeId(),
         name: cells[0]?.trim() || '',
         grade: getGrade(cells[0]?.trim() || ''),
-        room: '', classTeacher: cells[2]?.trim() || '',
+        room: '', classTeacher: '',
         strength: parseInt(cells[1]) || 40,
       } as SectionExt))
       .filter(s => s.name)
@@ -291,10 +275,12 @@ export function ClassesPanel({ sections, setSections }: {
   function remove(id: string) { setSections(sections.filter(s => s.id !== id)) }
   function add(s: SectionExt) { setSections([...sections, s as Section]) }
   function bulkAdd(news: SectionExt[]) { setSections([...sections, ...news.map(s => s as Section)]) }
+
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* Toolbar */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingBottom: 7, flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingBottom: 7, flexShrink: 0 }}>
+        {/* Title */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexShrink: 0 }}>
           <span style={{ fontSize: 13, lineHeight: 1 }}>🎓</span>
           <span style={{ fontSize: 12.5, fontWeight: 700, color: '#111028' }}>Classes</span>
@@ -305,14 +291,33 @@ export function ClassesPanel({ sections, setSections }: {
             <span style={{ fontSize: 10, color: '#9896B5', fontWeight: 500 }}>{filteredCount} shown</span>
           )}
         </div>
+
         <div style={{ width: 1, height: 14, background: '#EAE6FF', flexShrink: 0 }} />
-        <div style={{ position: 'relative', flex: 1 }}>
-          <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: '#C0BBD8', pointerEvents: 'none', fontSize: 12 }}>⌕</span>
-          <input value={search} onChange={e => setSearch(e.target.value)}
+
+        {/* Search */}
+        <div style={{ position: 'relative', width: 260, flexShrink: 0 }}>
+          <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#C0BBD8', pointerEvents: 'none', fontSize: 13 }}>⌕</span>
+          <input
+            value={search} onChange={e => setSearch(e.target.value)}
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setSearchFocused(false)}
             placeholder="Search classes…"
-            style={{ width: '100%', padding: '4px 8px 4px 24px', border: '1px solid #E4E0FF', borderRadius: 5, fontSize: 12, color: '#111028', outline: 'none', boxSizing: 'border-box' as const, background: '#FAFAFE', fontFamily: 'inherit' }}
+            style={{
+              width: '100%', padding: '6px 10px 6px 28px',
+              border: `1.5px solid ${searchFocused ? P : '#E4E0FF'}`,
+              borderRadius: 8, fontSize: 12, color: '#111028',
+              outline: 'none', boxSizing: 'border-box' as const,
+              background: '#FAFAFE', fontFamily: 'inherit',
+              height: 34, transition: 'border-color 0.2s',
+              boxShadow: searchFocused ? `0 0 0 3px ${P_B}` : 'none',
+            }}
           />
         </div>
+
+        {/* Spacer */}
+        <div style={{ flex: 1 }} />
+
+        {/* Action buttons */}
         <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
           <button
             onClick={() => setImportOpen(true)}
@@ -323,11 +328,11 @@ export function ClassesPanel({ sections, setSections }: {
           <div style={{ position: 'relative' }}>
             <button
               onClick={() => setShowBulk(o => !o)}
-              style={{ ...primaryBtn, padding: '5px 14px', fontSize: 11.5 }}
+              style={{ ...primaryBtn }}
               onMouseEnter={e => (e.currentTarget.style.background = P_D)}
               onMouseLeave={e => (e.currentTarget.style.background = P)}
             >
-              <Layers size={12} /> Bulk Create
+              <Layers size={13} /> Bulk Create
             </button>
             {showBulk && <BulkCreatePopover onClose={() => setShowBulk(false)} onCreate={bulkAdd} />}
           </div>
@@ -337,12 +342,12 @@ export function ClassesPanel({ sections, setSections }: {
       {importOpen && (
         <ImportModal
           title="Classes"
-          sampleHeaders={['Class Name', 'Strength', 'Class Teacher (optional)']}
+          sampleHeaders={['Class Name', 'Strength']}
           sampleRows={[
-            ['IX-A', '40', 'Mrs. Anita Sharma'],
-            ['IX-B', '38', ''],
-            ['X-A',  '42', 'Mr. Rajesh Kumar'],
-            ['X-B',  '40', ''],
+            ['IX-A', '40'],
+            ['IX-B', '38'],
+            ['X-A',  '42'],
+            ['X-B',  '40'],
           ]}
           onImport={handleImport}
           onClose={() => setImportOpen(false)}
@@ -360,24 +365,22 @@ export function ClassesPanel({ sections, setSections }: {
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
             <colgroup>
-              <col style={{ width: 180 }} />
-              <col style={{ width: 100 }} />
               <col />
-              <col style={{ width: 88 }} />
+              <col style={{ width: 110 }} />
+              <col style={{ width: 60 }} />
             </colgroup>
             <thead>
               <tr>
                 <th style={TH}>Class</th>
-                <th style={TH}>Strength</th>
-                <th style={TH}>Class Teacher</th>
-                <th style={{ ...TH, textAlign: 'right', paddingRight: 10 }}>Actions</th>
+                <th style={{ ...TH, textAlign: 'center' }}>Strength</th>
+                <th style={{ ...TH, textAlign: 'center' }}>Del</th>
               </tr>
             </thead>
             <tbody>
               {Array.from(grouped.entries()).map(([grade, secs]) => (
                 <React.Fragment key={grade}>
                   <tr>
-                    <td colSpan={4} style={{
+                    <td colSpan={3} style={{
                       padding: '3px 10px',
                       fontSize: 9.5, fontWeight: 800, letterSpacing: '0.07em', textTransform: 'uppercase',
                       color: P_D, background: 'linear-gradient(90deg, #EDE9FF 0%, #F7F5FF 60%, #FAFAFE 100%)',
@@ -401,7 +404,7 @@ export function ClassesPanel({ sections, setSections }: {
               ))}
               {grouped.size === 0 && search && (
                 <tr>
-                  <td colSpan={4} style={{ ...TD, textAlign: 'center', color: '#C4C0DC', padding: '18px 10px' }}>
+                  <td colSpan={3} style={{ ...TD, textAlign: 'center', color: '#C4C0DC', padding: '18px 10px' }}>
                     No classes match "{search}"
                   </td>
                 </tr>

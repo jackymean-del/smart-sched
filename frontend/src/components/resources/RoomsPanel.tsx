@@ -12,7 +12,7 @@ import {
   P, P_D, P_L, P_B,
   TH, TD, TABLE_CARD,
   InlineChipSelect, ImportModal,
-  deleteBtn, outlineBtn,
+  DeleteActionButton, outlineBtn,
 } from './shared'
 import type { ChipOption } from './shared'
 
@@ -182,36 +182,29 @@ function RoomRow_({ room, classOpts, subjectOpts, assignedClasses, onUpdate, onU
         />
       </td>
 
-      {/* Assigned Classes */}
-      <td style={{ ...TD }}>
+      {/* Assigned Classes — show all */}
+      <td style={{ ...TD, paddingTop: 5, paddingBottom: 5 }}>
         <InlineChipSelect
           selected={assignedClasses}
           options={classOpts}
           onChange={handleClassChange}
           placeholder="+ Assign class"
-          maxChips={2}
         />
       </td>
 
-      {/* Special Subjects */}
-      <td style={{ ...TD }}>
+      {/* Special Subjects — show all */}
+      <td style={{ ...TD, paddingTop: 5, paddingBottom: 5 }}>
         <InlineChipSelect
           selected={room.subjectMappings ?? []}
           options={subjectOpts}
           onChange={v => onUpdate({ subjectMappings: v })}
           placeholder="+ Special subjects"
-          maxChips={2}
         />
       </td>
 
       {/* Delete */}
-      <td style={{ ...TD, whiteSpace: 'nowrap' }}>
-        <button
-          onClick={onDelete}
-          style={deleteBtn}
-          onMouseEnter={e => { e.currentTarget.style.background = '#FFE4E4' }}
-          onMouseLeave={e => { e.currentTarget.style.background = '#FFF0F0' }}
-        >Delete</button>
+      <td style={{ ...TD, textAlign: 'center' }}>
+        <DeleteActionButton onDelete={onDelete} tooltip="Delete room" />
       </td>
     </tr>
   )
@@ -227,6 +220,7 @@ export function RoomsPanel({ rooms, setRooms, sections, setSections, subjects }:
 }) {
   const [search, setSearch]         = useState('')
   const [importOpen, setImportOpen] = useState(false)
+  const [searchFocused, setSearchFocused] = useState(false)
 
   function handleImport(rows: string[][]) {
     const newRooms = rows
@@ -310,13 +304,24 @@ export function RoomsPanel({ rooms, setRooms, sections, setSections, subjects }:
           )}
         </div>
         <div style={{ width: 1, height: 14, background: '#EAE6FF', flexShrink: 0 }} />
-        <div style={{ position: 'relative', flex: 1 }}>
-          <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: '#C0BBD8', pointerEvents: 'none', fontSize: 12 }}>⌕</span>
+        <div style={{ position: 'relative', width: 260, flexShrink: 0 }}>
+          <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#C0BBD8', pointerEvents: 'none', fontSize: 13 }}>⌕</span>
           <input value={search} onChange={e => setSearch(e.target.value)}
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setSearchFocused(false)}
             placeholder="Search rooms…"
-            style={{ width: '100%', padding: '4px 8px 4px 24px', border: '1px solid #E4E0FF', borderRadius: 5, fontSize: 12, color: '#111028', outline: 'none', boxSizing: 'border-box' as const, background: '#FAFAFE', fontFamily: 'inherit' }}
+            style={{
+              width: '100%', padding: '6px 10px 6px 28px',
+              border: `1.5px solid ${searchFocused ? P : '#E4E0FF'}`,
+              borderRadius: 8, fontSize: 12, color: '#111028',
+              outline: 'none', boxSizing: 'border-box' as const,
+              background: '#FAFAFE', fontFamily: 'inherit',
+              height: 34, transition: 'border-color 0.2s',
+              boxShadow: searchFocused ? `0 0 0 3px ${P_B}` : 'none',
+            }}
           />
         </div>
+        <div style={{ flex: 1 }} />
         <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
           <button
             onClick={() => setImportOpen(true)}
@@ -356,10 +361,10 @@ export function RoomsPanel({ rooms, setRooms, sections, setSections, subjects }:
             <colgroup>
               <col style={{ width: 150 }} />
               <col style={{ width: 140 }} />
-              <col style={{ width: 72 }} />
+              <col style={{ width: 70 }} />
               <col />
-              <col style={{ width: 180 }} />
-              <col style={{ width: 88 }} />
+              <col style={{ width: 190 }} />
+              <col style={{ width: 60 }} />
             </colgroup>
             <thead>
               <tr>
@@ -368,7 +373,7 @@ export function RoomsPanel({ rooms, setRooms, sections, setSections, subjects }:
                 <th style={{ ...TH, textAlign: 'center' }}>Cap</th>
                 <th style={TH}>Assigned Classes</th>
                 <th style={TH}>Special Subjects</th>
-                <th style={{ ...TH, textAlign: 'right', paddingRight: 10 }}>Action</th>
+                <th style={{ ...TH, textAlign: 'center' }}>Del</th>
               </tr>
             </thead>
             <tbody>

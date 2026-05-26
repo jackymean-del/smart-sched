@@ -24,7 +24,7 @@ import {
   P, P_D, P_L, P_B,
   TH, TD, TABLE_CARD,
   InlineChipSelect, ImportModal,
-  actionBtn, deleteBtn, outlineBtn,
+  actionBtn, DeleteActionButton, outlineBtn,
 } from './shared'
 import type { ChipOption } from './shared'
 import { calcTeacherSlots, slotLoadLevel } from './aiEngine'
@@ -255,8 +255,8 @@ function SubjectLine({ mapping, subjectColor, classOpts, onUpdate, onRemove }: {
       <span style={{ fontSize: 11, fontWeight: 700, color: '#111028', width: 96, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {mapping.subject}
       </span>
-      <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
-        <InlineChipSelect selected={mapping.classes} options={classOpts} onChange={onUpdate} placeholder="+ classes" maxChips={2} minDropdownWidth={260} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <InlineChipSelect selected={mapping.classes} options={classOpts} onChange={onUpdate} placeholder="+ classes" minDropdownWidth={260} />
       </div>
       <button onClick={onRemove}
         style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '1px 2px', color: '#D4CFEC', lineHeight: 1, flexShrink: 0 }}
@@ -331,7 +331,7 @@ const fld: React.CSSProperties = {
 
 function ExpandedDetails({ t, onChange }: { t: Staff; onChange: (p: Partial<Staff>) => void }) {
   return (
-    <div style={{ display: 'flex', gap: 14, padding: '8px 52px', background: '#FAFAFE', borderTop: '1px solid #EEE9FF', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+    <div style={{ display: 'flex', gap: 14, padding: '8px 52px 10px', background: '#FAFAFE', borderTop: '1px solid #EEE9FF', flexWrap: 'wrap', alignItems: 'flex-end' }}>
       <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 11, color: '#6B6891', fontWeight: 600 }}>
         Role
         <select value={t.role ?? 'Teacher'} onChange={e => onChange({ role: e.target.value })} style={fld}>
@@ -348,7 +348,7 @@ function ExpandedDetails({ t, onChange }: { t: Staff; onChange: (p: Partial<Staf
         Max periods / week
         <input type="number" value={t.maxPeriodsPerWeek ?? 30} min={1} max={50}
           onChange={e => onChange({ maxPeriodsPerWeek: +e.target.value })}
-          style={{ ...fld, width: 60 }}
+          style={{ ...fld, width: 64 }}
         />
       </label>
     </div>
@@ -514,12 +514,7 @@ function TeacherRow({ t, subjects, classOpts, classTeacherOpts, onUpdate, onDele
                 e.currentTarget.style.borderColor = expanded ? P_B : '#DDD8FF'
               }}
             >{expanded ? 'Show Less' : 'Show More'}</button>
-            <button
-              onClick={onDelete}
-              style={deleteBtn}
-              onMouseEnter={e => { e.currentTarget.style.background = '#FFE4E4' }}
-              onMouseLeave={e => { e.currentTarget.style.background = '#FFF0F0' }}
-            >Delete</button>
+            <DeleteActionButton onDelete={onDelete} tooltip="Delete teacher" />
           </div>
         </td>
       </tr>
@@ -544,6 +539,7 @@ export function TeachersPanel({ staff, setStaff, sections, subjects }: {
 }) {
   const [search, setSearch]         = useState('')
   const [importOpen, setImportOpen] = useState(false)
+  const [searchFocused, setSearchFocused] = useState(false)
 
   function handleImport(rows: string[][]) {
     const newStaff = rows
@@ -603,13 +599,24 @@ export function TeachersPanel({ staff, setStaff, sections, subjects }: {
           )}
         </div>
         <div style={{ width: 1, height: 14, background: '#EAE6FF', flexShrink: 0 }} />
-        <div style={{ position: 'relative', flex: 1 }}>
-          <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: '#C0BBD8', pointerEvents: 'none', fontSize: 12 }}>⌕</span>
+        <div style={{ position: 'relative', width: 280, flexShrink: 0 }}>
+          <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#C0BBD8', pointerEvents: 'none', fontSize: 13 }}>⌕</span>
           <input value={search} onChange={e => setSearch(e.target.value)}
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setSearchFocused(false)}
             placeholder="Search teachers, subjects…"
-            style={{ width: '100%', padding: '4px 8px 4px 24px', border: '1px solid #E4E0FF', borderRadius: 5, fontSize: 12, color: '#111028', outline: 'none', boxSizing: 'border-box' as const, background: '#FAFAFE', fontFamily: 'inherit' }}
+            style={{
+              width: '100%', padding: '6px 10px 6px 28px',
+              border: `1.5px solid ${searchFocused ? P : '#E4E0FF'}`,
+              borderRadius: 8, fontSize: 12, color: '#111028',
+              outline: 'none', boxSizing: 'border-box' as const,
+              background: '#FAFAFE', fontFamily: 'inherit',
+              height: 34, transition: 'border-color 0.2s',
+              boxShadow: searchFocused ? `0 0 0 3px ${P_B}` : 'none',
+            }}
           />
         </div>
+        <div style={{ flex: 1 }} />
         <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
           <button
             onClick={() => setImportOpen(true)}
