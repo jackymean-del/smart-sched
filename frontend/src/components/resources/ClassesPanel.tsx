@@ -278,6 +278,8 @@ export function ClassesPanel({ sections, setSections, onScopeClick }: {
     if (newSections.length) setSections([...sections, ...newSections as Section[]])
   }
 
+  const [sortAZ, setSortAZ] = useState(false)
+
   const grouped = useMemo(() => {
     const q = search.toLowerCase()
     const filtered = sections.filter(s => !q || s.name.toLowerCase().includes(q))
@@ -287,8 +289,12 @@ export function ClassesPanel({ sections, setSections, onScopeClick }: {
       if (!map.has(g)) map.set(g, [])
       map.get(g)!.push(s as SectionExt)
     })
-    return new Map([...map.entries()].sort((a, b) => gradeKey(a[0]) - gradeKey(b[0])))
-  }, [sections, search])
+    const sorted = new Map([...map.entries()].sort((a, b) => gradeKey(a[0]) - gradeKey(b[0])))
+    if (sortAZ) {
+      sorted.forEach((vals, key) => sorted.set(key, [...vals].sort((a, b) => a.name.localeCompare(b.name))))
+    }
+    return sorted
+  }, [sections, search, sortAZ])
 
   const filteredCount = useMemo(() =>
     Array.from(grouped.values()).reduce((a, b) => a + b.length, 0),
@@ -346,6 +352,19 @@ export function ClassesPanel({ sections, setSections, onScopeClick }: {
             }}
           />
         </div>
+
+        {/* Sort A→Z */}
+        <button
+          onClick={() => setSortAZ(p => !p)}
+          title={sortAZ ? 'Sorted A→Z (click to reset)' : 'Sort classes A→Z within each grade'}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 7,
+            border: `1.5px solid ${sortAZ ? P : '#E4E0FF'}`,
+            background: sortAZ ? '#EDE9FF' : '#FAFAFE',
+            color: sortAZ ? '#7C3AED' : '#8B87AD',
+            fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0,
+          }}
+        >↑Z Sort</button>
 
         {/* Spacer */}
         <div style={{ flex: 1 }} />

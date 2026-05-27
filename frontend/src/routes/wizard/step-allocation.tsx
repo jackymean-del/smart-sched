@@ -52,6 +52,8 @@ export function StepAllocation() {
   const [showReport, setShowReport] = useState<'periods' | 'teachers' | null>(null)
   const [syncing, setSyncing]   = useState(false)
   const [syncDone, setSyncDone] = useState(false)
+  const [sortRowsAZ, setSortRowsAZ] = useState(false)
+  const [sortColsAZ, setSortColsAZ] = useState(false)
 
   // Derive bell-schedule periods for TeacherAvailabilityEditor
   const derivedPeriods = useMemo(() => {
@@ -439,6 +441,16 @@ export function StepAllocation() {
   // ── Toolbar extra for the periods tab — thin spreadsheet ribbon ──────────
   const periodsToolbarExtra = (
     <>
+      {/* Sort toggles */}
+      <button onClick={() => setSortRowsAZ(p => !p)} title={sortRowsAZ ? 'Rows sorted A→Z (click to reset)' : 'Sort rows (sections) A→Z'}
+        style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 4, border: `1px solid ${sortRowsAZ ? '#7C6FE0' : '#EEECF8'}`, background: sortRowsAZ ? '#EDE9FF' : 'transparent', color: sortRowsAZ ? '#7C3AED' : '#A8A4C0', fontSize: 10, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+        ↕ Rows
+      </button>
+      <button onClick={() => setSortColsAZ(p => !p)} title={sortColsAZ ? 'Columns sorted A→Z (click to reset)' : 'Sort columns (subjects) A→Z'}
+        style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 4, border: `1px solid ${sortColsAZ ? '#7C6FE0' : '#EEECF8'}`, background: sortColsAZ ? '#EDE9FF' : 'transparent', color: sortColsAZ ? '#7C3AED' : '#A8A4C0', fontSize: 10, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+        ↔ Cols
+      </button>
+
       {/* Mode toggle: Periods | Hours — flat underline tabs */}
       <div style={{ display: 'flex', gap: 0, borderBottom: '1.5px solid #EEECF8' }}>
         {(['periods', 'hours'] as const).map(m => (
@@ -635,7 +647,7 @@ export function StepAllocation() {
           )}
 
           {/* Tab content */}
-          {sub === 'periods'    && <AllocationGridAG displayMode={displayMode} periodMinutes={periodMinutes} toolbarExtra={periodsToolbarExtra} />}
+          {sub === 'periods'    && <AllocationGridAG displayMode={displayMode} periodMinutes={periodMinutes} toolbarExtra={periodsToolbarExtra} sortRowsAZ={sortRowsAZ} sortColsAZ={sortColsAZ} />}
           {sub === 'teachers'   && <TeacherAllocationSummary displayMode={displayMode} periodMinutes={periodMinutes}
             toolbarExtra={
               <div style={{ display: 'inline-flex', borderRadius: 7, overflow: 'hidden', border: '1px solid #D8D2FF' }}>

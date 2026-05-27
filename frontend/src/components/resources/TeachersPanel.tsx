@@ -625,15 +625,17 @@ export function TeachersPanel({ staff, setStaff, sections, subjects, onScopeClic
     if (newStaff.length) setStaff([...staff, ...newStaff])
   }
 
+  const [sortAZ, setSortAZ] = useState(false)
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
-    if (!q) return staff as StaffExt[]
-    return (staff as StaffExt[]).filter(t =>
+    const base = !q ? (staff as StaffExt[]) : (staff as StaffExt[]).filter(t =>
       t.name.toLowerCase().includes(q) ||
       (t.role ?? '').toLowerCase().includes(q) ||
       getMappings(t).some(m => m.subject.toLowerCase().includes(q))
     )
-  }, [staff, search])
+    return sortAZ ? [...base].sort((a, b) => a.name.localeCompare(b.name)) : base
+  }, [staff, search, sortAZ])
 
   const classOpts = useMemo<ChipOption[]>(() => {
     const map = new Map<string, string[]>()
@@ -697,6 +699,17 @@ export function TeachersPanel({ staff, setStaff, sections, subjects, onScopeClic
             }}
           />
         </div>
+        <button
+          onClick={() => setSortAZ(p => !p)}
+          title={sortAZ ? 'Sorted A→Z (click to reset)' : 'Sort teachers A→Z'}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 7,
+            border: `1.5px solid ${sortAZ ? P : '#E4E0FF'}`,
+            background: sortAZ ? '#EDE9FF' : '#FAFAFE',
+            color: sortAZ ? '#7C3AED' : '#8B87AD',
+            fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0,
+          }}
+        >↑Z Sort</button>
         <div style={{ flex: 1 }} />
         <div style={{ display: 'flex', gap: 5, flexShrink: 0, alignItems: 'center' }}>
           {onScopeClick && (

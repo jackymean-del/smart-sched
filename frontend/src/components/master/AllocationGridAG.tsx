@@ -458,6 +458,8 @@ interface Props {
   displayMode?: 'periods' | 'hours'
   periodMinutes?: number
   toolbarExtra?: React.ReactNode
+  sortRowsAZ?: boolean
+  sortColsAZ?: boolean
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -468,6 +470,8 @@ export function AllocationGridAG({
   displayMode = 'periods',
   periodMinutes = 40,
   toolbarExtra,
+  sortRowsAZ = false,
+  sortColsAZ = false,
 }: Props) {
   const store = useTimetableStore() as any
   const { sections, subjects, subjectAllocations, sectionCapacityOverrides = {}, config } = store
@@ -879,16 +883,22 @@ export function AllocationGridAG({
       })
     })
 
+    if (sortColsAZ) {
+      const pinned = cols.filter(c => c.colId === 'sectionName' || c.colId === '__usage')
+      const subjectCols = cols.filter(c => c.colId?.startsWith('subj:'))
+      subjectCols.sort((a, b) => (a.headerName ?? '').localeCompare(b.headerName ?? ''))
+      return [...pinned, ...subjectCols]
+    }
     return cols
-  }, [subjects, gridContext])
+  }, [subjects, gridContext, sortColsAZ])
 
   // ── Row data ──────────────────────────────────────────────────
-  const rowData = useMemo<RowData[]>(() =>
-    (sections as Section[]).map((sec: any) => ({
-      __sectionId: sec.id,
-      sectionName: sec.name,
-    }))
-  , [sections])
+  const rowData = useMemo<RowData[]>(() => {
+    const secs = sortRowsAZ
+      ? [...(sections as Section[])].sort((a, b) => a.name.localeCompare(b.name))
+      : (sections as Section[])
+    return secs.map((sec: any) => ({ __sectionId: sec.id, sectionName: sec.name }))
+  }, [sections, sortRowsAZ])
 
   // ── onCellSelectionChanged ────────────────────────────────────
   // Projects AG Grid selection into engine state.

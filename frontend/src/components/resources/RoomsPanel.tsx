@@ -265,11 +265,13 @@ export function RoomsPanel({ rooms, setRooms, sections, setSections, subjects, o
     if (newRooms.length) setRooms([...rooms, ...newRooms])
   }
 
+  const [sortAZ, setSortAZ] = useState(false)
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
-    if (!q) return rooms
-    return rooms.filter(r => r.name.toLowerCase().includes(q) || r.type.toLowerCase().includes(q))
-  }, [rooms, search])
+    const base = !q ? rooms : rooms.filter(r => r.name.toLowerCase().includes(q) || r.type.toLowerCase().includes(q))
+    return sortAZ ? [...base].sort((a, b) => a.name.localeCompare(b.name)) : base
+  }, [rooms, search, sortAZ])
 
   const classOpts = useMemo<ChipOption[]>(() => {
     const map = new Map<string, string[]>()
@@ -359,6 +361,17 @@ export function RoomsPanel({ rooms, setRooms, sections, setSections, subjects, o
             }}
           />
         </div>
+        <button
+          onClick={() => setSortAZ(p => !p)}
+          title={sortAZ ? 'Sorted A→Z (click to reset)' : 'Sort rooms A→Z'}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 7,
+            border: `1.5px solid ${sortAZ ? P : '#E4E0FF'}`,
+            background: sortAZ ? '#EDE9FF' : '#FAFAFE',
+            color: sortAZ ? '#7C3AED' : '#8B87AD',
+            fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0,
+          }}
+        >↑Z Sort</button>
         <div style={{ flex: 1 }} />
         <div style={{ display: 'flex', gap: 5, flexShrink: 0, alignItems: 'center' }}>
           {onScopeClick && (

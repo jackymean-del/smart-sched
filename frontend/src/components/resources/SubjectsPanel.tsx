@@ -1059,11 +1059,13 @@ export function SubjectsPanel({
   const [localSnapshot,       setLocalSnapshot]       = useState<SubjectSnapshot[] | null>(null)
   const [localAiAssignedIds,  setLocalAiAssignedIds]  = useState<Set<string>>(new Set())
 
+  const [sortAZ, setSortAZ] = useState(false)
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
-    if (!q) return subjects
-    return subjects.filter(s => s.name.toLowerCase().includes(q) || (s.category ?? '').toLowerCase().includes(q))
-  }, [subjects, search])
+    const base = !q ? subjects : subjects.filter(s => s.name.toLowerCase().includes(q) || (s.category ?? '').toLowerCase().includes(q))
+    return sortAZ ? [...base].sort((a, b) => a.name.localeCompare(b.name)) : base
+  }, [subjects, search, sortAZ])
 
   const classOptions = useMemo<ChipOption[]>(() => {
     const map = new Map<string, string[]>()
@@ -1226,6 +1228,21 @@ export function SubjectsPanel({
             }}
           />
         </div>
+
+        {/* Sort A→Z */}
+        <button
+          onClick={() => setSortAZ(p => !p)}
+          title={sortAZ ? 'Sorted A→Z (click to reset)' : 'Sort subjects A→Z'}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 7,
+            border: `1.5px solid ${sortAZ ? P : '#E4E0FF'}`,
+            background: sortAZ ? '#EDE9FF' : '#FAFAFE',
+            color: sortAZ ? '#7C3AED' : '#8B87AD',
+            fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0,
+          }}
+        >
+          ↑Z Sort
+        </button>
 
         {/* Load Unit selector */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0, background: '#F5F3FF', border: '1.5px solid #DDD8FF', borderRadius: 7, padding: '2px 8px', height: 34, boxSizing: 'border-box' as const }}>
