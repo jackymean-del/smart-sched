@@ -229,13 +229,14 @@ function RoomRow_({ room, classOpts, subjectOpts, assignedClasses, onUpdate, onU
 }
 
 // ─── Main export ──────────────────────────────────────────────────────────────
-export function RoomsPanel({ rooms, setRooms, sections, setSections, subjects, onScopeClick }: {
+export function RoomsPanel({ rooms, setRooms, sections, setSections, subjects, onScopeClick, onAIFix }: {
   rooms: RoomExt[]
   setRooms: (r: RoomExt[]) => void
   sections: Section[]
   setSections: (s: Section[]) => void
   subjects: Subject[]
   onScopeClick?: (room: RoomExt, rect: DOMRect) => void
+  onAIFix?: () => void
 }) {
   const [search, setSearch]         = useState('')
   const [importOpen, setImportOpen] = useState(false)
@@ -359,7 +360,7 @@ export function RoomsPanel({ rooms, setRooms, sections, setSections, subjects, o
           />
         </div>
         <div style={{ flex: 1 }} />
-        <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
+        <div style={{ display: 'flex', gap: 5, flexShrink: 0, alignItems: 'center' }}>
           {onScopeClick && (
             <button
               title="Set availability scope for all rooms"
@@ -375,6 +376,22 @@ export function RoomsPanel({ rooms, setRooms, sections, setSections, subjects, o
             onMouseEnter={e => { e.currentTarget.style.background = P_L; e.currentTarget.style.borderColor = P_B; e.currentTarget.style.color = P_D }}
             onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#DDD8FF'; e.currentTarget.style.color = '#6B6891' }}
           >⬆ Import</button>
+          {onAIFix && (
+            <button
+              onClick={onAIFix}
+              title="AI-assign classes and subjects to all rooms"
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+                background: P, color: '#fff', border: 'none', borderRadius: 7,
+                padding: '6px 14px', fontSize: 11.5, fontWeight: 700,
+                cursor: 'pointer', fontFamily: 'inherit',
+                boxShadow: '0 2px 6px rgba(124,111,224,0.28)',
+                whiteSpace: 'nowrap', height: 34, boxSizing: 'border-box' as const,
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = P_D)}
+              onMouseLeave={e => (e.currentTarget.style.background = P)}
+            >⚡ AI Fix</button>
+          )}
         </div>
       </div>
 

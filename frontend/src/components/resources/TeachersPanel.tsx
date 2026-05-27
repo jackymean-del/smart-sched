@@ -580,12 +580,13 @@ function TeacherRow({ t, subjects, classOpts, classTeacherOpts, onUpdate, onDele
 }
 
 // ─── Main export ──────────────────────────────────────────────────────────────
-export function TeachersPanel({ staff, setStaff, sections, subjects, onScopeClick }: {
+export function TeachersPanel({ staff, setStaff, sections, subjects, onScopeClick, onAIFix }: {
   staff: Staff[]
   setStaff: (s: Staff[]) => void
   sections: Section[]
   subjects: Subject[]
   onScopeClick?: (t: Staff, rect: DOMRect) => void
+  onAIFix?: () => void
 }) {
   const [search, setSearch]         = useState('')
   const [importOpen, setImportOpen] = useState(false)
@@ -684,7 +685,7 @@ export function TeachersPanel({ staff, setStaff, sections, subjects, onScopeClic
           />
         </div>
         <div style={{ flex: 1 }} />
-        <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
+        <div style={{ display: 'flex', gap: 5, flexShrink: 0, alignItems: 'center' }}>
           {onScopeClick && (
             <button
               title="Set availability scope for all educators"
@@ -700,6 +701,22 @@ export function TeachersPanel({ staff, setStaff, sections, subjects, onScopeClic
             onMouseEnter={e => { e.currentTarget.style.background = P_L; e.currentTarget.style.borderColor = P_B; e.currentTarget.style.color = P_D }}
             onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#DDD8FF'; e.currentTarget.style.color = '#6B6891' }}
           >⬆ Import</button>
+          {onAIFix && (
+            <button
+              onClick={onAIFix}
+              title="AI-assign subjects, classes and workloads to all educators"
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+                background: P, color: '#fff', border: 'none', borderRadius: 7,
+                padding: '6px 14px', fontSize: 11.5, fontWeight: 700,
+                cursor: 'pointer', fontFamily: 'inherit',
+                boxShadow: '0 2px 6px rgba(124,111,224,0.28)',
+                whiteSpace: 'nowrap', height: 34, boxSizing: 'border-box' as const,
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = P_D)}
+              onMouseLeave={e => (e.currentTarget.style.background = P)}
+            >⚡ AI Fix</button>
+          )}
         </div>
       </div>
 
@@ -729,10 +746,10 @@ export function TeachersPanel({ staff, setStaff, sections, subjects, onScopeClic
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
             <colgroup>
-              <col style={{ width: '15%' }} />  {/* Educator */}
-              <col style={{ width: '33%' }} />  {/* Subject Assignments */}
-              <col style={{ width: '13%' }} />  {/* Slots/Wk */}
-              <col style={{ width: '24%' }} />  {/* Class Teacher Of */}
+              <col style={{ width: '14%' }} />  {/* Educator */}
+              <col style={{ width: '30%' }} />  {/* Subject Assignments */}
+              <col style={{ width: '12%' }} />  {/* Slots/Wk */}
+              <col style={{ width: '29%' }} />  {/* Class Teacher Of — widened */}
               <col style={{ width: '15%' }} />  {/* Actions */}
             </colgroup>
             <thead>

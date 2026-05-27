@@ -76,12 +76,12 @@ function buildDefaultSections(): Section[] {
 
 // Subject definitions: curriculum-aware with AI-recommended slots (middle-school baseline)
 // ppw = fallback; the actual value gets set when the user runs "AI Assign" from SubjectsPanel
-const DEFAULT_SUBJECTS: Array<{ name: string; cat: string; ppw: number }> = [
+const DEFAULT_SUBJECTS: Array<{ name: string; cat: string; ppw: number; short?: string }> = [
   // Core academics
   { name: 'Mathematics',              cat: 'Compulsory',   ppw: 6 },
   { name: 'English',                  cat: 'Compulsory',   ppw: 6 },
   { name: 'Science',                  cat: 'Compulsory',   ppw: 5 },
-  { name: 'Social Studies',           cat: 'Compulsory',   ppw: 5 },
+  { name: 'Social Studies',           cat: 'Compulsory',   ppw: 5, short: 'SSC' },
   // Languages
   { name: 'Hindi',                    cat: 'Language',     ppw: 4 },
   { name: 'Sanskrit / MIL',           cat: 'Language',     ppw: 3 },
@@ -101,11 +101,10 @@ const DEFAULT_SUBJECTS: Array<{ name: string; cat: string; ppw: number }> = [
   { name: 'Geography',                cat: 'Compulsory',   ppw: 5 },
   { name: 'Political Science',        cat: 'Compulsory',   ppw: 5 },
   // Electives
-  { name: 'Psychology',               cat: '5th Optional', ppw: 5 },
+  { name: 'Psychology',               cat: 'Optional',     ppw: 5 },
   { name: 'Informatics Practices',    cat: 'Compulsory',   ppw: 4 },
   { name: 'English Literature',       cat: 'Language',     ppw: 4 },
   { name: 'Entrepreneurship',         cat: 'Skill',        ppw: 4 },
-  { name: 'Mathematics (Optional)',   cat: '4th Optional', ppw: 6 },
   // Activities & CCA
   { name: 'Physical Education',       cat: 'CCA',          ppw: 2 },
   { name: 'Art & Craft',              cat: 'CCA',          ppw: 2 },
@@ -124,7 +123,7 @@ const DEFAULT_SUBJECTS: Array<{ name: string; cat: string; ppw: number }> = [
   { name: 'Activity / Free Play',     cat: 'Activity',     ppw: 4 },
   // Regional
   { name: 'Odia / Regional Language', cat: 'Language',     ppw: 3 },
-  { name: 'Environmental Studies',    cat: 'Compulsory',   ppw: 4 },
+  { name: 'Environmental Studies',    cat: 'Compulsory',   ppw: 4, short: 'EVS' },
 ]
 
 function buildDefaultSubjects(board: CurriculumBoard = 'CBSE'): Subject[] {
@@ -135,7 +134,7 @@ function buildDefaultSubjects(board: CurriculumBoard = 'CBSE'): Subject[] {
       id: makeId(), name: d.name,
       periodsPerWeek: aiPpw,
       category: d.cat as any, isOptional: false,
-      shortName: generateShortName(d.name),
+      shortName: d.short ?? generateShortName(d.name),
       sessionDuration: 45, maxPeriodsPerDay: 2,
       requiresLab: false, color: P, sections: [], classConfigs: [],
     } as unknown as Subject
@@ -528,6 +527,7 @@ export function StepResourcesV2() {
                       ? { kind: 'BulkTeacher', entity: t, rect }
                       : { kind: 'Teacher', entity: t, rect })
                   }
+                  onAIFix={() => handleGlobalAIAssign(normalizeBoardType(config.board ?? 'CBSE'))}
                 />
               </div>
               <div style={{ flex: 1, minHeight: 0, display: activeTab === 'rooms' ? 'flex' : 'none', flexDirection: 'column' }}>
@@ -539,6 +539,7 @@ export function StepResourcesV2() {
                       ? { kind: 'BulkRoom', entity: r, rect }
                       : { kind: 'Room', entity: r, rect })
                   }
+                  onAIFix={() => handleGlobalAIAssign(normalizeBoardType(config.board ?? 'CBSE'))}
                 />
               </div>
             </div>

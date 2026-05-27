@@ -125,18 +125,49 @@ function EditCell({ value, onSave, placeholder = '…', style: extra }: {
 /** Built-in category options — user can append custom ones */
 const BUILTIN_CATS = ['Compulsory','Language','R1','R2','R3','Optional','Practical','Activity','CCA','Skill','Others']
 
+// ─── Category dropdown (native select, always shows full list) ────────────────
+function CategorySelect({
+  value, extraCats, onChange, style: extraStyle,
+}: {
+  value: string
+  extraCats: string[]
+  onChange: (v: string) => void
+  style?: React.CSSProperties
+}) {
+  const allCats = [...BUILTIN_CATS, ...extraCats.filter(c => !BUILTIN_CATS.includes(c))]
+  if (value && !allCats.includes(value)) allCats.push(value)   // keep legacy / custom values
+  return (
+    <select
+      value={value || 'Compulsory'}
+      onChange={e => onChange(e.target.value)}
+      style={{
+        width: '100%', padding: '2px 5px',
+        border: '1px solid #E4E0FF', borderRadius: 4,
+        fontSize: 11, color: '#111028', outline: 'none',
+        background: '#FAFAFE', fontFamily: 'inherit',
+        boxSizing: 'border-box' as const, cursor: 'pointer',
+        ...extraStyle,
+      }}
+    >
+      {allCats.map(c => <option key={c} value={c}>{c}</option>)}
+    </select>
+  )
+}
+
 // ─── Per-section sub-row (within an expanded grade) ───────────────────────────
 function SectionSubRow({
-  secName, sub, unit, sessionMins, onUpdateSlots, onUpdateMaxDay, onUpdateSectionConfig, onAddCategory,
+  secName, sub, unit, sessionMins, index, extraCats,
+  onUpdateSlots, onUpdateMaxDay, onUpdateSectionConfig,
 }: {
   secName: string
   sub: Subject
   unit: AllocationUnit
   sessionMins: number
+  index: number
+  extraCats: string[]
   onUpdateSlots: (slots: number) => void
   onUpdateMaxDay: (max: number) => void
   onUpdateSectionConfig: (patch: Partial<SubjectClassConfig>) => void
-  onAddCategory: (cat: string) => void
 }) {
   const cfg     = (sub.classConfigs ?? []).find(c => c.sectionName === secName)
   const slots   = cfg?.periodsPerWeek ?? sub.periodsPerWeek
@@ -150,20 +181,26 @@ function SectionSubRow({
   const editableHr  = toEditableHours(slots, unit, sessionMins)
   const inputValue  = isHours ? (editFocused ? editText : String(displayVal)) : (displayVal as number)
 
+  // Alternate colors for visual differentiation
+  const rowBg = index % 2 === 0 ? '#EAE5FF' : '#F2EEFF'
+
   const secInp: React.CSSProperties = {
-    width: '100%', padding: '2px 5px', border: '1px solid #E0DCFF', borderRadius: 4,
-    fontSize: 11, color: '#555', fontWeight: 600, textAlign: 'center' as const,
+    width: '100%', padding: '2px 5px', border: '1px solid #D8D2F4', borderRadius: 4,
+    fontSize: 11, color: '#333', fontWeight: 600, textAlign: 'center' as const,
     outline: 'none', background: '#FAFAFE', fontFamily: 'inherit', boxSizing: 'border-box' as const,
   }
 
   return (
     <tr
-      style={{ background: 'linear-gradient(90deg,#F8F6FF,#FAFAFE)' }}
-      onMouseEnter={e => (e.currentTarget.style.background = '#EDE9FF')}
-      onMouseLeave={e => (e.currentTarget.style.background = 'linear-gradient(90deg,#F8F6FF,#FAFAFE)')}
+      style={{ background: rowBg }}
+      onMouseEnter={e => (e.currentTarget.style.background = '#E2DBFF')}
+      onMouseLeave={e => (e.currentTarget.style.background = rowBg)}
     >
-      <td style={{ padding: '2px 6px 2px 18px' }}>
-        <span style={{ fontSize: 10.5, color: '#6B5FC8', fontWeight: 700 }}>↳ {secName}</span>
+      {/* Section name — indented, no arrow prefix */}
+      <td style={{ padding: '2px 6px 2px 20px' }}>
+        <span style={{ fontSize: 10.5, color: '#5B50B8', fontWeight: 700, letterSpacing: '0.01em' }}>
+          {secName}
+        </span>
       </td>
       <td style={{ padding: '2px 8px' }}>
         <input
@@ -183,11 +220,12 @@ function SectionSubRow({
           className="rp-inp rp-num" style={secInp}
         />
       </td>
-      <td style={{ padding: '2px 8px' }}>
-        <input type="text" list="schedu-subject-cats" value={cat}
-          onChange={e => onUpdateSectionConfig({ category: e.target.value })}
-          onBlur={e => { const v = e.target.value.trim(); if (v) { onUpdateSectionConfig({ category: v }); onAddCategory(v) } }}
-          style={{ ...secInp, textAlign: 'left' as const }}
+      <td style={{ padding: '2px 5px' }}>
+        <CategorySelect
+          value={cat}
+          extraCats={extraCats}
+          onChange={v => onUpdateSectionConfig({ category: v })}
+          style={{ fontSize: 10.5 }}
         />
       </td>
       <td style={{ padding: '2px 6px', textAlign: 'center' as const }}>
@@ -203,7 +241,7 @@ function SectionSubRow({
 
 // ─── Grade-level row in the expanded slots table ──────────────────────────────
 function GradeSlotRow({
-  grade, sections, sub, unit, sessionMins,
+  grade, sections, sub, unit, sessionMins, extraCats,
   onUpdateGradeSlots, onRemoveGrade, onUpdateSectionMaxDay, onUpdateSectionConfig, onChange, onAddCategory,
 }: {
   grade:              string
@@ -211,6 +249,7 @@ function GradeSlotRow({
   sub:                Subject
   unit:               AllocationUnit
   sessionMins:        number
+  extraCats:          string[]
   onUpdateGradeSlots:    (classNames: string[], periodsPerWeek: number) => void
   onRemoveGrade:         (classNames: string[]) => void
   onUpdateSectionMaxDay: (sectionName: string, max: number) => void
@@ -319,11 +358,10 @@ function GradeSlotRow({
 
         {/* Category — subject-level */}
         <td style={{ padding: '3px 8px' }}>
-          <input type="text" list="schedu-subject-cats"
+          <CategorySelect
             value={sub.category ?? 'Compulsory'}
-            onChange={e => onChange({ category: e.target.value })}
-            onBlur={e => { const v = e.target.value.trim(); if (v) { onChange({ category: v }); onAddCategory(v) } }}
-            style={{ ...fldS, fontSize: 11 }}
+            extraCats={extraCats}
+            onChange={v => { onChange({ category: v }); onAddCategory(v) }}
           />
         </td>
 
@@ -346,17 +384,18 @@ function GradeSlotRow({
       </tr>
 
       {/* Per-section sub-rows (when grade chip is expanded) */}
-      {expandedSections && sections.map(secName => (
+      {expandedSections && sections.map((secName, idx) => (
         <SectionSubRow
           key={secName}
           secName={secName}
           sub={sub}
           unit={unit}
           sessionMins={sessionMins}
+          index={idx}
+          extraCats={extraCats}
           onUpdateSlots={sl => onUpdateGradeSlots([secName], sl)}
           onUpdateMaxDay={mx => onUpdateSectionMaxDay(secName, mx)}
           onUpdateSectionConfig={patch => onUpdateSectionConfig(secName, patch)}
-          onAddCategory={onAddCategory}
         />
       ))}
     </>
@@ -404,32 +443,23 @@ function ClassSlotsExpanded({
 
   return (
     <div style={{ background: '#FAFAFE', borderTop: '1px solid #EEE9FF', padding: '7px 16px 10px' }}>
-      {/* datalist for category autocomplete */}
-      <datalist id="schedu-subject-cats">
-        {[...BUILTIN_CATS, ...extraCats.filter(c => !BUILTIN_CATS.includes(c))].map(c => <option key={c} value={c} />)}
-      </datalist>
-
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-        <div style={{ fontSize: 9.5, fontWeight: 800, color: '#9896B5', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+      <div style={{ marginBottom: 6 }}>
+        <span style={{ fontSize: 9.5, fontWeight: 800, color: '#9896B5', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
           Slots per Grade
-          <span style={{ fontWeight: 500, textTransform: 'none', marginLeft: 6, fontSize: 9.5, color: '#C4C0DC' }}>
-            · {ALLOCATION_LABELS[unit]}
-          </span>
-        </div>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10.5, color: '#555', fontWeight: 600, cursor: 'pointer', userSelect: 'none' }}>
-          <input type="checkbox" checked={!!sub.isOptional} onChange={e => onChange({ isOptional: e.target.checked })} style={{ accentColor: P }} />
-          Optional
-        </label>
+        </span>
+        <span style={{ fontWeight: 500, textTransform: 'none', marginLeft: 6, fontSize: 9.5, color: '#C4C0DC' }}>
+          · {ALLOCATION_LABELS[unit]}
+        </span>
       </div>
 
-      <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: '100%', maxWidth: 560 }}>
+      <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: '100%', maxWidth: 600 }}>
         <colgroup>
           <col style={{ width: 110 }} />   {/* Grade */}
           <col style={{ width: 96 }} />    {/* Slots/Wk */}
           <col style={{ width: 64 }} />    {/* Max/day */}
-          <col style={{ width: 130 }} />   {/* Category */}
-          <col style={{ width: 38 }} />    {/* Lab */}
+          <col />                          {/* Category — flex */}
+          <col style={{ width: 46 }} />    {/* Lab Req */}
           <col style={{ width: 26 }} />    {/* Remove */}
         </colgroup>
         <thead>
@@ -438,7 +468,7 @@ function ClassSlotsExpanded({
             <th style={{ ...thS, textAlign: 'center' }}>{ALLOCATION_SHORT[unit]}</th>
             <th style={{ ...thS, textAlign: 'center' }}>Max/day</th>
             <th style={{ ...thS, textAlign: 'left' }}>Category</th>
-            <th style={{ ...thS, textAlign: 'center' }} title="Lab required">🧪</th>
+            <th style={{ ...thS, textAlign: 'center', fontSize: 9 }}>Lab<br/>Req.</th>
             <th style={{ borderBottom: '1px solid #E4E0FF' }} />
           </tr>
         </thead>
@@ -451,6 +481,7 @@ function ClassSlotsExpanded({
               sub={sub}
               unit={unit}
               sessionMins={sessionMins}
+              extraCats={extraCats}
               onUpdateGradeSlots={onUpdateGradeSlots}
               onRemoveGrade={onRemoveGrade}
               onUpdateSectionMaxDay={onUpdateSectionMaxDay}
@@ -1123,10 +1154,10 @@ export function SubjectsPanel({
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
             <colgroup>
-              <col style={{ width: 210 }} />
-              <col style={{ width: 80 }} />
-              <col />
-              <col style={{ width: 170 }} />
+              <col style={{ width: 200 }} />   {/* Subject */}
+              <col style={{ width: 72 }} />    {/* Short */}
+              <col />                          {/* Applicable Classes */}
+              <col style={{ width: 218 }} />   {/* Actions — fits ShowMore+Scope+Delete */}
             </colgroup>
             <thead>
               <tr>
