@@ -50,6 +50,8 @@ export function StepAllocation() {
   const [sub, setSub] = useState<Sub>('periods')
   const [displayMode, setDisplayMode] = useState<'periods' | 'hours'>('periods')
   const [showReport, setShowReport] = useState<'periods' | 'teachers' | null>(null)
+  const [syncing, setSyncing]   = useState(false)
+  const [syncDone, setSyncDone] = useState(false)
 
   // Derive bell-schedule periods for TeacherAvailabilityEditor
   const derivedPeriods = useMemo(() => {
@@ -343,11 +345,20 @@ export function StepAllocation() {
   }, [staff, sections, subjects, subjectAllocations, store])
 
   // ── One-click sync: periods + teachers from Resources in one pass ─────────────
-  const handleSyncFromResources = useCallback(() => {
+  // Async so the browser can render the spinner before the synchronous work.
+  const handleSyncFromResources = useCallback(async () => {
+    if (syncing) return
+    setSyncing(true)
+    setSyncDone(false)
+    // Yield to paint thread so the spinner renders before heavy computation
+    await new Promise<void>(r => setTimeout(r, 60))
     const nextPeriods = derivePeriodsFromResources()
     store.setSubjectAllocations?.(nextPeriods)
     handleAITeacherAllocate(nextPeriods)   // passes fresh periods — avoids stale-state race
-  }, [derivePeriodsFromResources, handleAITeacherAllocate, store])
+    setSyncing(false)
+    setSyncDone(true)
+    setTimeout(() => setSyncDone(false), 2500)
+  }, [derivePeriodsFromResources, handleAITeacherAllocate, store, syncing])
 
   // ── Auto-derive on first entry: run if allocations empty OR hard conflicts exist ──
   const autoRanRef = useRef(false)
@@ -513,17 +524,27 @@ export function StepAllocation() {
             <div style={{ marginLeft: 'auto', paddingBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
               <button
                 onClick={handleSyncFromResources}
+                disabled={syncing}
                 title="Re-derive period slots + teacher assignments from Resources data"
                 style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 5,
-                  padding: '5px 13px', borderRadius: 6, border: '1px solid #BBF7D0',
-                  background: '#F0FDF4', color: '#15803D', fontSize: 11.5, fontWeight: 700,
-                  cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' as const,
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                  padding: '5px 13px', borderRadius: 6,
+                  border: syncDone ? '1px solid #BBF7D0' : syncing ? '1px solid #DDD8FF' : '1px solid #BBF7D0',
+                  background: syncDone ? '#DCFCE7' : syncing ? '#F5F3FF' : '#F0FDF4',
+                  color: syncDone ? '#15803D' : syncing ? '#7C6FE0' : '#15803D',
+                  fontSize: 11.5, fontWeight: 700,
+                  cursor: syncing ? 'default' : 'pointer',
+                  fontFamily: 'inherit', whiteSpace: 'nowrap' as const,
+                  minWidth: 175, transition: 'background 0.15s, color 0.15s',
                 }}
-                onMouseEnter={e => { e.currentTarget.style.background = '#DCFCE7' }}
-                onMouseLeave={e => { e.currentTarget.style.background = '#F0FDF4' }}
               >
-                <Sparkles size={11} /> Sync from Resources
+                {syncing ? (
+                  <><span style={{ display: 'inline-block', animation: 'spin 0.8s linear infinite', fontSize: 13 }}>⟳</span> Syncing…</>
+                ) : syncDone ? (
+                  <><CheckCircle2 size={11} /> Synced!</>
+                ) : (
+                  <><Sparkles size={11} /> Sync from Resources</>
+                )}
               </button>
             </div>
           </div>

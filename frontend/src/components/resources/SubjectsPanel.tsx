@@ -1187,7 +1187,7 @@ export function SubjectsPanel({
       <ResourceGlobalStyles />
 
       {/* ── Toolbar ─────────────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingBottom: 7, flexShrink: 0, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingBottom: 7, flexShrink: 0, flexWrap: 'nowrap', overflowX: 'auto' }}>
 
         {/* Title + counts */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexShrink: 0 }}>
@@ -1320,13 +1320,14 @@ export function SubjectsPanel({
               whiteSpace: 'nowrap', flexShrink: 0, height: 34,
               boxSizing: 'border-box' as const,
               transition: 'background 0.15s',
-              minWidth: 130,
+              minWidth: 180,
+              justifyContent: 'center',
             }}
             onMouseEnter={e => { if (!isAiLoading) e.currentTarget.style.background = P_D }}
             onMouseLeave={e => { if (!isAiLoading) e.currentTarget.style.background = P }}
           >
             {isAiLoading
-              ? <><span style={{ display: 'inline-block', animation: 'spin 0.8s linear infinite' }}>⟳</span> {currentStatus || 'AI Assigning...'}</>
+              ? <><span style={{ display: 'inline-block', animation: 'spin 0.8s linear infinite' }}>⟳</span> AI Assigning…</>
               : <>⚡ AI Assign ({board}){hasGlobalAI ? ' — All' : ''}</>
             }
           </button>

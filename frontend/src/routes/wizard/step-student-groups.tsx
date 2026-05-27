@@ -3,6 +3,11 @@
  *
  * Three panels:
  *   1. Student Preference Matrix — editable class × optional-subject count grid
+ *      • Column headers are editable (click to rename)
+ *      • "+ Add subject" adds a custom column
+ *      • "×" removes a column
+ *      • "+ Add class" adds a custom row
+ *      • "×" removes a row
  *   2. Subject Grouping Rules    — per-subject cross-class behavior chips
  *   3. AI-Generated Groups       — cards showing AI's proposed learning groups
  *
@@ -12,7 +17,10 @@
 import { useMemo, useEffect, useState, useRef, useCallback } from 'react'
 import { useTimetableStore } from '@/store/timetableStore'
 import type { SectionStrength } from '@/types'
-import { Sparkles, Users2, ChevronRight, ChevronLeft, RefreshCw, BookOpen, Users, GraduationCap, CheckSquare } from 'lucide-react'
+import {
+  Sparkles, Users2, ChevronRight, ChevronLeft, RefreshCw,
+  BookOpen, Users, GraduationCap, CheckSquare, Plus, Trash2, Pencil,
+} from 'lucide-react'
 
 // ── types ─────────────────────────────────────────────────────
 
@@ -27,11 +35,9 @@ const BEHAVIOR_META: Record<GroupingBehavior, { label: string; short: string; bg
 
 const BEHAVIORS: GroupingBehavior[] = ['NO_GROUPING', 'SAME_GRADE_ONLY', 'CROSS_GRADE_ALLOWED', 'FLEXIBLE_GROUPING']
 
-// Group dot colors
 const GROUP_COLORS = ['#7C6FE0', '#10B981', '#F59E0B', '#EF4444', '#3B82F6', '#EC4899', '#8B5CF6', '#06B6D4']
 function groupColor(i: number) { return GROUP_COLORS[i % GROUP_COLORS.length] }
 
-// AI Logic items
 const AI_LOGIC_ITEMS = [
   'Sections with ≥ 5 students in an optional subject form a group',
   'Groups of < 5 students from the same grade merge into combined sections',
@@ -56,6 +62,53 @@ function generateGroupId(subject: string, idx: number): string {
   return `${prefix}_G${idx + 1}`
 }
 
+// ── Inline editable column header ───────────────────────────
+
+function EditableColHeader({
+  value, onChange,
+}: { value: string; onChange: (v: string) => void }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(value)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => { if (!editing) setDraft(value) }, [value, editing])
+  useEffect(() => { if (editing) inputRef.current?.select() }, [editing])
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        value={draft}
+        onChange={e => setDraft(e.target.value)}
+        onBlur={() => { const v = draft.trim() || value; onChange(v); setEditing(false) }}
+        onKeyDown={e => {
+          if (e.key === 'Enter') { const v = draft.trim() || value; onChange(v); setEditing(false) }
+          if (e.key === 'Escape') { setDraft(value); setEditing(false) }
+          e.stopPropagation()
+        }}
+        onClick={e => e.stopPropagation()}
+        style={{
+          width: 72, fontSize: 9, fontWeight: 800, color: '#13111E',
+          background: '#fff', border: '1.5px solid #7C6FE0',
+          borderRadius: 4, padding: '2px 5px', outline: 'none',
+          fontFamily: 'inherit', textAlign: 'center',
+          textTransform: 'uppercase' as const, letterSpacing: '0.04em',
+        }}
+      />
+    )
+  }
+  return (
+    <span
+      onClick={() => setEditing(true)}
+      title="Click to rename column"
+      style={{ cursor: 'text', display: 'inline-flex', alignItems: 'center', gap: 3 }}
+    >
+      {value}
+      <Pencil size={8} style={{ opacity: 0.4, flexShrink: 0 }} />
+    </span>
+  )
+}
+
 // ── component ─────────────────────────────────────────────────
 
 export function StepStudentGroups() {
@@ -72,15 +125,24 @@ export function StepStudentGroups() {
     Object.fromEntries(AI_LOGIC_ITEMS.map((_, i) => [i, true]))
   )
 
-  // ── Only optional subjects drive the grouping matrix ──────────────────────
+  // ── Column/row customization state ────────────────────────────────────────────
+  // "Store" columns come from subjectList (optional subjects).
+  // Users can hide store cols, add custom cols, rename any col, and add/remove rows.
+  const [customCols,  setCustomCols]  = useState<{ key: string; label: string }[]>([])
+  const [hiddenCols,  setHiddenCols]  = useState<Set<string>>(new Set())
+  const [colLabels,   setColLabels]   = useState<Record<string, string>>({})
+  const [customRows,  setCustomRows]  = useState<string[]>([])
+  const [hiddenRows,  setHiddenRows]  = useState<Set<string>>(new Set())
+  const [initialized, setInitialized] = useState(false)
+
+  // ── Only optional subjects drive the grouping matrix ──────────────────────────
   const optionalSubjects = useMemo(() => subjects.filter((s: any) => s.isOptional), [subjects])
   const subjectList = useMemo(() => optionalSubjects.map((s: any) => s.name) as string[], [optionalSubjects])
 
-  // ── Only sections that have at least one optional subject assigned ─────────
+  // ── Only sections that have at least one optional subject assigned ─────────────
   const optionalSections = useMemo(() => {
     const sectionSet = new Set<string>()
     for (const sub of optionalSubjects) {
-      // Mirror getAssignedClasses: classConfigs first, then sections fallback
       const fromConfigs = (sub.classConfigs ?? []).map((c: any) => c.sectionName).filter(Boolean) as string[]
       const assigned = fromConfigs.length > 0 ? fromConfigs : (sub.sections ?? [])
       for (const cls of assigned) sectionSet.add(cls)
@@ -88,7 +150,14 @@ export function StepStudentGroups() {
     return sections.filter((s: any) => sectionSet.has(s.name))
   }, [sections, optionalSubjects])
 
-  // Initialize section strengths if empty
+  // Initialize column/row state once from store data
+  useEffect(() => {
+    if (!initialized && (subjectList.length > 0 || optionalSections.length > 0)) {
+      setInitialized(true)
+    }
+  }, [initialized, subjectList, optionalSections])
+
+  // Initialize sectionStrengths if empty
   useEffect(() => {
     if (sectionStrengths.length === 0 && optionalSections.length > 0 && subjectList.length > 0) {
       const init: SectionStrength[] = optionalSections.map((sec: any) => ({
@@ -98,79 +167,138 @@ export function StepStudentGroups() {
       }))
       setSectionStrengths(init)
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [optionalSections.length, subjectList.length])
 
-  // Materialized rows — only optional sections × optional subjects
-  const rows: SectionStrength[] = useMemo(() =>
-    optionalSections.map((sec: any) =>
-      sectionStrengths.find((r: SectionStrength) => r.sectionName === sec.name) ?? {
-        sectionName: sec.name,
-        stream: guessStream(sec.name),
-        subjectStrengths: Object.fromEntries(subjectList.map((s: string) => [s, 0])),
-      }
-    ), [optionalSections, sectionStrengths, subjectList])
+  // ── Effective columns = store optionals (not hidden) + custom ─────────────────
+  const allCols = useMemo(() => [
+    ...subjectList
+      .filter((s: string) => !hiddenCols.has(s))
+      .map((s: string) => ({ key: s, label: colLabels[s] ?? s })),
+    ...customCols,
+  ], [subjectList, hiddenCols, colLabels, customCols])
 
-  // Update a single cell
-  const updateCell = (sectionName: string, subjectName: string, value: number) => {
-    const updated = rows.map(r =>
-      r.sectionName === sectionName
-        ? { ...r, subjectStrengths: { ...r.subjectStrengths, [subjectName]: Math.max(0, value) } }
-        : r
-    )
-    setSectionStrengths(updated)
+  // ── Effective rows = store sections (not hidden) + custom ─────────────────────
+  const allRowNames = useMemo(() => [
+    ...optionalSections
+      .filter((s: any) => !hiddenRows.has(s.name))
+      .map((s: any) => s.name as string),
+    ...customRows,
+  ], [optionalSections, hiddenRows, customRows])
+
+  // ── Materialized rows from allRowNames ────────────────────────────────────────
+  const rows: SectionStrength[] = useMemo(() =>
+    allRowNames.map(name =>
+      (sectionStrengths as SectionStrength[]).find(r => r.sectionName === name) ?? {
+        sectionName: name,
+        stream: guessStream(name),
+        subjectStrengths: Object.fromEntries(allCols.map(c => [c.key, 0])),
+      }
+    ), [allRowNames, sectionStrengths, allCols])
+
+  // ── Cell update (works for both store rows and custom rows) ───────────────────
+  const updateCell = (sectionName: string, colKey: string, value: number) => {
+    const current = sectionStrengths as SectionStrength[]
+    const idx = current.findIndex(r => r.sectionName === sectionName)
+    if (idx >= 0) {
+      const updated = [...current]
+      updated[idx] = { ...updated[idx], subjectStrengths: { ...updated[idx].subjectStrengths, [colKey]: Math.max(0, value) } }
+      setSectionStrengths(updated)
+    } else {
+      setSectionStrengths([
+        ...current,
+        { sectionName, stream: guessStream(sectionName), subjectStrengths: { [colKey]: Math.max(0, value) } },
+      ])
+    }
   }
 
-  // Ref to the table wrapper — used to scope querySelector for ↑↓ navigation
-  const tableWrapRef = useRef<HTMLDivElement>(null)
+  // ── Column actions ────────────────────────────────────────────────────────────
+  const addCol = () => {
+    const label = `Subject ${allCols.length + 1}`
+    const key = `__custom_${Date.now()}`
+    setCustomCols(prev => [...prev, { key, label }])
+    setColLabels(prev => ({ ...prev, [key]: label }))
+  }
 
-  // Arrow-key + Enter navigation between inputs in the preference matrix
-  const handleCellKey = useCallback((e: React.KeyboardEvent<HTMLInputElement>, ri: number, ci: number) => {
-    if (e.key === 'Escape') {
-      e.currentTarget.blur()
-      return
+  const removeCol = (key: string) => {
+    if (subjectList.includes(key)) {
+      setHiddenCols(prev => new Set([...prev, key]))
+    } else {
+      setCustomCols(prev => prev.filter(c => c.key !== key))
     }
+  }
+
+  const renameCol = (key: string, newLabel: string) => {
+    setColLabels(prev => ({ ...prev, [key]: newLabel }))
+    if (customCols.some(c => c.key === key)) {
+      setCustomCols(prev => prev.map(c => c.key === key ? { ...c, label: newLabel } : c))
+    }
+  }
+
+  // ── Row actions ───────────────────────────────────────────────────────────────
+  const addRow = () => {
+    const newName = `New Class ${allRowNames.length + 1}`
+    setCustomRows(prev => [...prev, newName])
+    setSectionStrengths([
+      ...(sectionStrengths as SectionStrength[]),
+      {
+        sectionName: newName,
+        stream: '',
+        subjectStrengths: Object.fromEntries(allCols.map(c => [c.key, 0])),
+      },
+    ])
+  }
+
+  const removeRow = (name: string) => {
+    if (optionalSections.some((s: any) => s.name === name)) {
+      setHiddenRows(prev => new Set([...prev, name]))
+    } else {
+      setCustomRows(prev => prev.filter(r => r !== name))
+      setSectionStrengths((sectionStrengths as SectionStrength[]).filter(r => r.sectionName !== name))
+    }
+  }
+
+  // ── Arrow-key + Enter navigation ──────────────────────────────────────────────
+  const tableWrapRef = useRef<HTMLDivElement>(null)
+  const handleCellKey = useCallback((e: React.KeyboardEvent<HTMLInputElement>, ri: number, ci: number) => {
+    if (e.key === 'Escape') { e.currentTarget.blur(); return }
     let nextR = ri, nextC = ci
     if (e.key === 'ArrowDown'  || (e.key === 'Enter' && !e.shiftKey)) { nextR = ri + 1; e.preventDefault() }
-    else if (e.key === 'ArrowUp' || (e.key === 'Enter' &&  e.shiftKey)) { nextR = ri - 1; e.preventDefault() }
+    else if (e.key === 'ArrowUp' || (e.key === 'Enter' && e.shiftKey)) { nextR = ri - 1; e.preventDefault() }
     else if (e.key === 'ArrowRight') { nextC = ci + 1; e.preventDefault() }
     else if (e.key === 'ArrowLeft')  { nextC = ci - 1; e.preventDefault() }
     else return
-    const next = tableWrapRef.current?.querySelector<HTMLInputElement>(
+    tableWrapRef.current?.querySelector<HTMLInputElement>(
       `input[data-row="${nextR}"][data-col="${nextC}"]`
-    )
-    if (next) { next.focus(); next.select() }
+    )?.focus()
   }, [])
 
-  // AI Regenerate groups
+  // ── AI Regenerate groups ──────────────────────────────────────────────────────
   const handleRegenerate = async () => {
     setRegenerating(true)
-    await new Promise(r => setTimeout(r, 900)) // simulate AI
+    await new Promise(r => setTimeout(r, 900))
 
     const generated: typeof dynamicLearningGroups = []
     const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
     const periods = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6']
 
-    subjectList.forEach((subName: string, si: number) => {
-      const behavior = subjectGroupingRules[subName] ?? 'SAME_GRADE_ONLY'
+    allCols.forEach((col, si: number) => {
+      const behavior = subjectGroupingRules[col.key] ?? 'SAME_GRADE_ONLY'
       if (behavior === 'NO_GROUPING') return
-
-      // Collect sections with strength > 0 for this subject
       const activeSections = rows
-        .filter(r => (r.subjectStrengths?.[subName] ?? 0) >= 5)
+        .filter(r => (r.subjectStrengths?.[col.key] ?? 0) >= 5)
         .map(r => r.sectionName)
       if (activeSections.length < 2) return
-
-      // Group into batches of 2-3 sections
       const batchSize = behavior === 'CROSS_GRADE_ALLOWED' ? 3 : 2
       for (let gi = 0; gi < activeSections.length; gi += batchSize) {
         const batch = activeSections.slice(gi, gi + batchSize)
         const totalStr = batch.reduce((a, sn) => {
           const row = rows.find(r => r.sectionName === sn)
-          return a + (row?.subjectStrengths?.[subName] ?? 0)
+          return a + (row?.subjectStrengths?.[col.key] ?? 0)
         }, 0)
         generated.push({
-          id: `${generateGroupId(subName, Math.floor(gi / batchSize))}_${Date.now()}`,
-          subject: subName,
+          id: `${generateGroupId(col.label, Math.floor(gi / batchSize))}_${Date.now()}`,
+          subject: col.label,
           sectionNames: batch,
           totalStrength: totalStr,
           teacher: '',
@@ -186,8 +314,8 @@ export function StepStudentGroups() {
     setRegenerating(false)
   }
 
-  // Column widths
-  const colW = Math.max(70, Math.min(100, Math.floor((1100 - 140 - 100) / Math.max(1, subjectList.length))))
+  const colW = Math.max(70, Math.min(100, Math.floor((1100 - 140 - 100 - 36) / Math.max(1, allCols.length))))
+  const hasAnyData = subjectList.length > 0 || allCols.length > 0
 
   return (
     <div style={{ padding: '20px 24px 40px', maxWidth: 1280, margin: '0 auto' }}>
@@ -211,52 +339,111 @@ export function StepStudentGroups() {
           PANEL 1: Student Preference Matrix
       ══════════════════════════════════ */}
       <Section title="Student Preference Matrix" icon={<GraduationCap size={15} color="#7C6FE0" />}
-        hint="Enter number of students selecting each subject per class. AI uses these counts to form optimised groups.">
-        {subjectList.length === 0 ? (
-          <EmptyState msg={
-            subjects.length === 0
-              ? 'Add subjects in Step 1 → Resources, then mark them as Optional to appear here.'
-              : 'Mark at least one subject as Optional (in the Subjects panel) to see the preference matrix.'
-          } />
-        ) : optionalSections.length === 0 ? (
-          <EmptyState msg="Assign optional subjects to classes (in the Subjects panel) to see which sections appear here." />
+        hint="Enter number of students selecting each subject per class. Click column headers to rename. Use + to add columns/rows.">
+        {!hasAnyData && subjects.length === 0 ? (
+          <EmptyState msg="Add subjects in Step 1 → Resources, then mark them as Optional to appear here." />
+        ) : !hasAnyData && optionalSections.length === 0 && allCols.length === 0 ? (
+          <EmptyState msg="Mark at least one subject as Optional (in the Subjects panel) to see the preference matrix." />
         ) : (
           <div ref={tableWrapRef} style={{ overflowX: 'auto' as const }}>
             <table style={{ borderCollapse: 'collapse' as const, width: '100%', minWidth: 400 }}>
               <thead>
                 <tr>
-                  <th style={thStyle(140, true)}>Class / Section</th>
+                  {/* Sticky class column header */}
+                  <th style={thStyle(140, true)}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+                      <span>Class / Section</span>
+                    </div>
+                  </th>
                   <th style={thStyle(100)}>Total Students</th>
-                  {subjectList.map((s: string) => (
-                    <th key={s} style={thStyle(colW)}>{s}</th>
+
+                  {/* Subject column headers — editable */}
+                  {allCols.map((col, ci) => (
+                    <th key={col.key} style={{ ...thStyle(colW), position: 'relative' as const }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                        <EditableColHeader
+                          value={col.label}
+                          onChange={newLabel => renameCol(col.key, newLabel)}
+                        />
+                        <button
+                          onClick={() => removeCol(col.key)}
+                          title={`Remove "${col.label}" column`}
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                            width: 14, height: 14, borderRadius: 3,
+                            border: 'none', background: 'transparent',
+                            color: '#C4B5FD', cursor: 'pointer', padding: 0,
+                            fontSize: 10, fontWeight: 800, lineHeight: 1,
+                            flexShrink: 0,
+                          }}
+                          onMouseEnter={e => { e.currentTarget.style.background = '#FEE2E2'; e.currentTarget.style.color = '#DC2626' }}
+                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#C4B5FD' }}
+                        >×</button>
+                      </div>
+                    </th>
                   ))}
+
+                  {/* Add column button */}
+                  <th style={{ ...thStyle(36), textAlign: 'center' as const, padding: '4px' }}>
+                    <button
+                      onClick={addCol}
+                      title="Add subject column"
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                        width: 24, height: 24, borderRadius: 6,
+                        border: '1.5px dashed #C4B5FD', background: '#F5F2FF',
+                        color: '#7C6FE0', cursor: 'pointer', padding: 0,
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.background = '#EDE9FF'; e.currentTarget.style.borderColor = '#7C6FE0' }}
+                      onMouseLeave={e => { e.currentTarget.style.background = '#F5F2FF'; e.currentTarget.style.borderColor = '#C4B5FD' }}
+                    >
+                      <Plus size={12} />
+                    </button>
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((row, ri) => {
-                  const total = Object.values(row.subjectStrengths ?? {}).reduce((a, v) => a + (v as number), 0)
+                  const total = allCols.reduce((a, c) => a + (row.subjectStrengths?.[c.key] ?? 0), 0)
                   return (
-                    <tr key={row.sectionName}
-                      style={{ background: ri % 2 === 0 ? '#fff' : '#FAFAFE' }}>
-                      <td style={tdSticky()}>{row.sectionName}</td>
+                    <tr key={row.sectionName} style={{ background: ri % 2 === 0 ? '#fff' : '#FAFAFE' }}>
+                      <td style={tdSticky()}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ flex: 1 }}>{row.sectionName}</span>
+                          <button
+                            onClick={() => removeRow(row.sectionName)}
+                            title={`Remove "${row.sectionName}" row`}
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                              width: 16, height: 16, borderRadius: 4,
+                              border: 'none', background: 'transparent',
+                              color: '#D1D5DB', cursor: 'pointer', padding: 0, flexShrink: 0,
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.background = '#FEE2E2'; e.currentTarget.style.color = '#DC2626' }}
+                            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#D1D5DB' }}
+                          >
+                            <Trash2 size={10} />
+                          </button>
+                        </div>
+                      </td>
                       <td style={tdCenter()}>
                         <span style={{ fontSize: 12, fontWeight: 700, color: '#4B5275', fontFamily: "'DM Mono', monospace" }}>
                           {total || '—'}
                         </span>
                       </td>
-                      {subjectList.map((subName: string, ci: number) => {
-                        const val = row.subjectStrengths?.[subName] ?? 0
+                      {allCols.map((col, ci) => {
+                        const val = row.subjectStrengths?.[col.key] ?? 0
                         return (
-                          <td key={subName} style={tdCenter()}>
+                          <td key={col.key} style={tdCenter()}>
                             <input
-                              type="number" min={0} max={99} value={val || ''}
+                              type="number" min={0} max={999} value={val || ''}
                               placeholder="0"
                               data-row={ri} data-col={ci}
-                              onChange={e => updateCell(row.sectionName, subName, parseInt(e.target.value) || 0)}
+                              onChange={e => updateCell(row.sectionName, col.key, parseInt(e.target.value) || 0)}
                               onKeyDown={e => handleCellKey(e, ri, ci)}
                               onFocus={e => e.currentTarget.select()}
                               style={{
-                                width: '100%', maxWidth: 60, textAlign: 'center' as const,
+                                width: '100%', maxWidth: 62, textAlign: 'center' as const,
                                 padding: '4px 6px', borderRadius: 6,
                                 border: `1px solid ${val >= 5 ? '#7C6FE0' : '#E8E4FF'}`,
                                 background: val >= 5 ? '#F5F2FF' : '#fff',
@@ -268,15 +455,53 @@ export function StepStudentGroups() {
                           </td>
                         )
                       })}
+                      {/* empty cell under Add-column header */}
+                      <td style={{ borderBottom: '1px solid #F0EDFF' }} />
                     </tr>
                   )
                 })}
+
+                {/* Add-row button row */}
+                <tr>
+                  <td colSpan={allCols.length + 3} style={{ padding: '6px 10px', borderBottom: '1px solid #F0EDFF' }}>
+                    <button
+                      onClick={addRow}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 5,
+                        padding: '4px 12px', borderRadius: 6,
+                        border: '1.5px dashed #C4B5FD', background: '#F5F2FF',
+                        color: '#7C6FE0', fontSize: 11, fontWeight: 700,
+                        cursor: 'pointer', fontFamily: 'inherit',
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.background = '#EDE9FF' }}
+                      onMouseLeave={e => { e.currentTarget.style.background = '#F5F2FF' }}
+                    >
+                      <Plus size={11} /> Add class
+                    </button>
+                    {(hiddenCols.size > 0 || hiddenRows.size > 0) && (
+                      <button
+                        onClick={() => { setHiddenCols(new Set()); setHiddenRows(new Set()) }}
+                        style={{
+                          marginLeft: 10, display: 'inline-flex', alignItems: 'center', gap: 4,
+                          padding: '4px 10px', borderRadius: 6,
+                          border: '1px solid #E8E4FF', background: '#fff',
+                          color: '#8B87AD', fontSize: 10, fontWeight: 600,
+                          cursor: 'pointer', fontFamily: 'inherit',
+                        }}
+                      >
+                        <RefreshCw size={9} /> Restore hidden ({hiddenCols.size + hiddenRows.size})
+                      </button>
+                    )}
+                  </td>
+                </tr>
               </tbody>
             </table>
           </div>
         )}
         <div style={{ fontSize: 10, color: '#B8B4D4', marginTop: 8 }}>
-          ✦ Cells highlighted in purple have ≥ 5 students — AI will form a group for these.
+          ✦ Purple cells have ≥ 5 students — AI will form a group.
+          &nbsp;·&nbsp; Click any subject header to rename it.
+          &nbsp;·&nbsp; Use <Plus size={9} style={{ display: 'inline', verticalAlign: 'middle' }} /> to add subjects or classes.
         </div>
         <TableKeyboardHint />
       </Section>
@@ -286,22 +511,22 @@ export function StepStudentGroups() {
       ══════════════════════════════════ */}
       <Section title="Subject Grouping Rules" icon={<BookOpen size={15} color="#7C6FE0" />}
         hint="Set how AI groups students for each subject. Flexible lets AI decide the best approach.">
-        {subjectList.length === 0 ? (
+        {allCols.length === 0 ? (
           <EmptyState msg="Mark subjects as Optional in the Subjects panel to configure their grouping rules here." />
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 8 }}>
-            {subjectList.map((subName: string) => {
-              const current = (subjectGroupingRules[subName] ?? 'SAME_GRADE_ONLY') as GroupingBehavior
+            {allCols.map((col) => {
+              const current = (subjectGroupingRules[col.key] ?? 'SAME_GRADE_ONLY') as GroupingBehavior
               const meta = BEHAVIOR_META[current]
               return (
-                <div key={subName} style={{
+                <div key={col.key} style={{
                   display: 'flex', alignItems: 'center', gap: 12,
                   padding: '10px 14px', borderRadius: 10,
                   background: '#fff', border: '1px solid #E8E4FF',
                   flexWrap: 'wrap' as const,
                 }}>
                   <div style={{ minWidth: 140, fontSize: 13, fontWeight: 600, color: '#13111E' }}>
-                    {subName}
+                    {col.label}
                   </div>
                   <div style={{ flex: 1, display: 'flex', gap: 6, flexWrap: 'wrap' as const }}>
                     {BEHAVIORS.map(beh => {
@@ -309,7 +534,7 @@ export function StepStudentGroups() {
                       const active = beh === current
                       return (
                         <button key={beh}
-                          onClick={() => setSubjectGroupingRule(subName, beh)}
+                          onClick={() => setSubjectGroupingRule(col.key, beh)}
                           title={bMeta.desc}
                           style={{
                             padding: '4px 10px', borderRadius: 20,
@@ -433,7 +658,6 @@ export function StepStudentGroups() {
         </button>
       </div>
 
-      {/* spin keyframe */}
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </div>
   )
@@ -475,17 +699,14 @@ function EmptyState({ msg }: { msg: string }) {
 
 function GroupCard({ grp, colorDot }: { grp: any; colorDot: string }) {
   const behMeta = BEHAVIOR_META[grp.behavior as GroupingBehavior] ?? BEHAVIOR_META.SAME_GRADE_ONLY
-
   return (
     <div style={{
       borderRadius: 10, border: '1px solid #E8E4FF',
       background: '#fff', overflow: 'hidden',
       boxShadow: '0 1px 4px rgba(124,111,224,0.07)',
     }}>
-      {/* Card header */}
       <div style={{
-        display: 'flex', alignItems: 'center', gap: 8,
-        padding: '10px 12px',
+        display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px',
         background: 'linear-gradient(135deg, #F5F2FF, #FAFAFE)',
         borderBottom: '1px solid #F0EDFF',
       }}>
@@ -500,14 +721,10 @@ function GroupCard({ grp, colorDot }: { grp: any; colorDot: string }) {
           {behMeta.short}
         </span>
       </div>
-
-      {/* Card body */}
       <div style={{ padding: '10px 12px' }}>
         <div style={{ fontSize: 11, color: '#4B5275', marginBottom: 6 }}>
           <strong style={{ color: '#13111E' }}>Subject:</strong> {grp.subject}
         </div>
-
-        {/* Members */}
         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' as const, marginBottom: 6 }}>
           {grp.sectionNames.map((sn: string) => (
             <span key={sn} style={{
@@ -519,8 +736,6 @@ function GroupCard({ grp, colorDot }: { grp: any; colorDot: string }) {
             </span>
           ))}
         </div>
-
-        {/* Stats row */}
         <div style={{ display: 'flex', gap: 12, fontSize: 10, color: '#8B87AD' }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
             <Users size={9} /> {grp.totalStrength} students
@@ -531,8 +746,6 @@ function GroupCard({ grp, colorDot }: { grp: any; colorDot: string }) {
             </span>
           )}
         </div>
-
-        {/* Timetable preview slot */}
         {(grp.day || grp.periodId) && (
           <div style={{
             marginTop: 8, padding: '5px 8px', borderRadius: 6,
@@ -582,7 +795,7 @@ function tdCenter(): React.CSSProperties {
   }
 }
 
-// ── Keyboard shortcut hint bar (shared with DataGrid) ─────────
+// ── Keyboard shortcut hint bar ────────────────────────────────
 const TABLE_SHORTCUTS = [
   { key: 'Tab',    label: 'Next field'  },
   { key: 'Enter',  label: 'Next row'    },
