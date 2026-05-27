@@ -7,12 +7,12 @@
 import { useState, useRef, useMemo, useEffect, useCallback } from 'react'
 import type { Subject, Section } from '@/types'
 import type { RoomRow } from '@/components/master/EntityGrids'
-import { Plus, Building2 } from 'lucide-react'
+import { Plus, Building2, CalendarRange } from 'lucide-react'
 import {
   P, P_D, P_L, P_B,
   TH, TD, TABLE_CARD,
   InlineChipSelect, ImportModal,
-  DeleteActionButton, outlineBtn,
+  DeleteActionButton, outlineBtn, actionBtn,
   ResourceGlobalStyles, useUndoHistory,
 } from './shared'
 import type { ChipOption } from './shared'
@@ -125,7 +125,7 @@ function AddRow({ onAdd }: { onAdd: (r: RoomExt) => void }) {
 }
 
 // ─── Room row ─────────────────────────────────────────────────────────────────
-function RoomRow_({ room, classOpts, subjectOpts, assignedClasses, onUpdate, onUpdateSections, onDelete }: {
+function RoomRow_({ room, classOpts, subjectOpts, assignedClasses, onUpdate, onUpdateSections, onDelete, onScopeClick }: {
   room: RoomExt
   classOpts: ChipOption[]
   subjectOpts: ChipOption[]
@@ -133,6 +133,7 @@ function RoomRow_({ room, classOpts, subjectOpts, assignedClasses, onUpdate, onU
   onUpdate: (p: Partial<RoomExt>) => void
   onUpdateSections: (add: string[], remove: string[]) => void
   onDelete: () => void
+  onScopeClick?: (room: RoomExt, rect: DOMRect) => void
 }) {
   const meta = TYPE_META[room.type] ?? TYPE_META.Other
 
@@ -206,21 +207,35 @@ function RoomRow_({ room, classOpts, subjectOpts, assignedClasses, onUpdate, onU
         />
       </td>
 
-      {/* Delete */}
-      <td style={{ ...TD, textAlign: 'center' }}>
-        <DeleteActionButton onDelete={onDelete} tooltip="Delete room" />
+      {/* Actions */}
+      <td style={{ ...TD, textAlign: 'center', whiteSpace: 'nowrap' }}>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          {onScopeClick && (
+            <button
+              title="Set availability scope for this room"
+              onClick={e => onScopeClick(room, e.currentTarget.getBoundingClientRect())}
+              style={{ ...actionBtn, gap: 4 }}
+              onMouseEnter={e => { e.currentTarget.style.background = P_L; e.currentTarget.style.color = P_D; e.currentTarget.style.borderColor = P_B }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#8886A8'; e.currentTarget.style.borderColor = '#DDD8FF' }}
+            >
+              <CalendarRange size={12} /> Scope
+            </button>
+          )}
+          <DeleteActionButton onDelete={onDelete} tooltip="Delete room" />
+        </div>
       </td>
     </tr>
   )
 }
 
 // ─── Main export ──────────────────────────────────────────────────────────────
-export function RoomsPanel({ rooms, setRooms, sections, setSections, subjects }: {
+export function RoomsPanel({ rooms, setRooms, sections, setSections, subjects, onScopeClick }: {
   rooms: RoomExt[]
   setRooms: (r: RoomExt[]) => void
   sections: Section[]
   setSections: (s: Section[]) => void
   subjects: Subject[]
+  onScopeClick?: (room: RoomExt, rect: DOMRect) => void
 }) {
   const [search, setSearch]         = useState('')
   const [importOpen, setImportOpen] = useState(false)
@@ -345,6 +360,15 @@ export function RoomsPanel({ rooms, setRooms, sections, setSections, subjects }:
         </div>
         <div style={{ flex: 1 }} />
         <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
+          {onScopeClick && (
+            <button
+              title="Set availability scope for all rooms"
+              onClick={e => onScopeClick({ id: '__bulk__' } as unknown as RoomExt, e.currentTarget.getBoundingClientRect())}
+              style={outlineBtn}
+              onMouseEnter={e => { e.currentTarget.style.background = P_L; e.currentTarget.style.borderColor = P_B; e.currentTarget.style.color = P_D }}
+              onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#DDD8FF'; e.currentTarget.style.color = '#6B6891' }}
+            ><CalendarRange size={12} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />Set Scope</button>
+          )}
           <button
             onClick={() => setImportOpen(true)}
             style={outlineBtn}
@@ -381,12 +405,12 @@ export function RoomsPanel({ rooms, setRooms, sections, setSections, subjects }:
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
             <colgroup>
-              <col style={{ width: '15%' }} />
-              <col style={{ width: '17%' }} />
-              <col style={{ width: '7%' }} />
-              <col style={{ width: '30%' }} />
-              <col style={{ width: '23%' }} />
-              <col style={{ width: '8%' }} />
+              <col style={{ width: '14%' }} />   {/* Room */}
+              <col style={{ width: '15%' }} />   {/* Type */}
+              <col style={{ width: '6%' }} />    {/* Cap */}
+              <col style={{ width: '27%' }} />   {/* Assigned Classes */}
+              <col style={{ width: '22%' }} />   {/* Special Subjects */}
+              <col style={{ width: '16%' }} />   {/* Actions */}
             </colgroup>
             <thead>
               <tr>
@@ -409,6 +433,9 @@ export function RoomsPanel({ rooms, setRooms, sections, setSections, subjects }:
                   onUpdate={p => updateRoom(room.id, p)}
                   onUpdateSections={(add, rem) => updateSections(room.name, add, rem)}
                   onDelete={() => removeRoom(room.id)}
+                  onScopeClick={onScopeClick
+                    ? (r, rect) => onScopeClick(r, rect)
+                    : undefined}
                 />
               ))}
               {filtered.length === 0 && search && (

@@ -6,12 +6,12 @@
 
 import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react'
 import type { Section } from '@/types'
-import { Layers, X } from 'lucide-react'
+import { Layers, X, CalendarRange } from 'lucide-react'
 import {
   P, P_D, P_L, P_B,
   TH, TD, TABLE_CARD,
   ImportModal,
-  DeleteActionButton,
+  DeleteActionButton, actionBtn,
   outlineBtn, primaryBtn,
   ResourceGlobalStyles, useUndoHistory,
 } from './shared'
@@ -177,10 +177,11 @@ function AddRow({ onAdd }: { onAdd: (s: SectionExt) => void }) {
 }
 
 // ─── Section row ──────────────────────────────────────────────────────────────
-function SectionRow({ sec, onUpdate, onDelete }: {
+function SectionRow({ sec, onUpdate, onDelete, onScopeClick }: {
   sec: SectionExt
   onUpdate: (p: Partial<SectionExt>) => void
   onDelete: () => void
+  onScopeClick?: (sec: SectionExt, rect: DOMRect) => void
 }) {
   const [editing, setEditing] = useState(false)
   const [tmp, setTmp] = useState(sec.name)
@@ -223,18 +224,32 @@ function SectionRow({ sec, onUpdate, onDelete }: {
         />
       </td>
 
-      {/* Actions — trash icon only */}
-      <td style={{ ...TD, textAlign: 'center' }}>
-        <DeleteActionButton onDelete={onDelete} tooltip="Delete class" />
+      {/* Actions */}
+      <td style={{ ...TD, textAlign: 'center', whiteSpace: 'nowrap' }}>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          {onScopeClick && (
+            <button
+              title="Set availability scope for this class"
+              onClick={e => onScopeClick(sec, e.currentTarget.getBoundingClientRect())}
+              style={{ ...actionBtn, gap: 4 }}
+              onMouseEnter={e => { e.currentTarget.style.background = P_L; e.currentTarget.style.color = P_D; e.currentTarget.style.borderColor = P_B }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#8886A8'; e.currentTarget.style.borderColor = '#DDD8FF' }}
+            >
+              <CalendarRange size={12} /> Scope
+            </button>
+          )}
+          <DeleteActionButton onDelete={onDelete} tooltip="Delete class" />
+        </div>
       </td>
     </tr>
   )
 }
 
 // ─── Main export ──────────────────────────────────────────────────────────────
-export function ClassesPanel({ sections, setSections }: {
+export function ClassesPanel({ sections, setSections, onScopeClick }: {
   sections: Section[]
   setSections: (s: Section[]) => void
+  onScopeClick?: (sec: Section, rect: DOMRect) => void
 }) {
   const [search, setSearch]         = useState('')
   const [showBulk, setShowBulk]     = useState(false)
@@ -337,6 +352,15 @@ export function ClassesPanel({ sections, setSections }: {
 
         {/* Action buttons */}
         <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+          {onScopeClick && (
+            <button
+              title="Set availability scope for all classes"
+              onClick={e => onScopeClick({ id: '__bulk__' } as unknown as Section, e.currentTarget.getBoundingClientRect())}
+              style={outlineBtn}
+              onMouseEnter={e => { e.currentTarget.style.background = P_L; e.currentTarget.style.borderColor = P_B; e.currentTarget.style.color = P_D }}
+              onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#DDD8FF'; e.currentTarget.style.color = '#6B6891' }}
+            ><CalendarRange size={12} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />Set Scope</button>
+          )}
           <button
             onClick={() => setImportOpen(true)}
             style={outlineBtn}
@@ -383,9 +407,9 @@ export function ClassesPanel({ sections, setSections }: {
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
             <colgroup>
-              <col />                             {/* Class: gets remaining ~58% */}
-              <col style={{ width: '28%' }} />    {/* Strength */}
-              <col style={{ width: '14%' }} />    {/* Actions */}
+              <col />                             {/* Class: gets remaining ~50% */}
+              <col style={{ width: '25%' }} />    {/* Strength */}
+              <col style={{ width: '22%' }} />    {/* Actions */}
             </colgroup>
             <thead>
               <tr>
@@ -416,6 +440,9 @@ export function ClassesPanel({ sections, setSections }: {
                       sec={sec}
                       onUpdate={p => update(sec.id, p)}
                       onDelete={() => remove(sec.id)}
+                      onScopeClick={onScopeClick
+                        ? (s, rect) => onScopeClick(s as Section, rect)
+                        : undefined}
                     />
                   ))}
                 </React.Fragment>

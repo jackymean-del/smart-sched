@@ -218,6 +218,10 @@ export interface SubjectClassConfig {
   periodsPerWeek: number
   maxPeriodsPerDay: number
   sessionDuration: number
+  /** Per-section category override (falls back to Subject.category when absent) */
+  category?: string
+  /** Per-section lab requirement override */
+  requiresLab?: boolean
 }
 
 export const SubjectSchema = z.object({

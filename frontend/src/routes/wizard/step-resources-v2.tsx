@@ -42,7 +42,7 @@ const P_L = '#EDE9FF'
 const TAB_META: { key: TabKey; label: string; icon: React.ReactNode }[] = [
   { key: 'classes',  label: 'Classes',  icon: <GraduationCap size={14} /> },
   { key: 'subjects', label: 'Subjects', icon: <BookOpen size={14} /> },
-  { key: 'teachers', label: 'Teachers', icon: <Users size={14} /> },
+  { key: 'teachers', label: 'Faculty', icon: <Users size={14} /> },
   { key: 'rooms',    label: 'Rooms',    icon: <Building2 size={14} /> },
 ]
 
@@ -314,7 +314,7 @@ export function StepResourcesV2() {
   const BANNER_TEXT: Record<TabKey, string> = {
     classes:  `${counts.classes} classes · edit inline, bulk-create full grades`,
     subjects: `${counts.subjects} subjects · set p/w and assign to classes`,
-    teachers: `${counts.teachers} teachers · assign subjects with class mappings inline`,
+    teachers: `${counts.teachers} faculty/educators · assign subjects with class mappings inline`,
     rooms:    `${counts.rooms} rooms · assign home classes and special subjects`,
   }
 
@@ -494,7 +494,14 @@ export function StepResourcesV2() {
 
               {/* Panels — all mounted, toggled via display */}
               <div style={{ flex: 1, minHeight: 0, display: activeTab === 'classes' ? 'flex' : 'none', flexDirection: 'column' }}>
-                <ClassesPanel sections={sections} setSections={setSections} />
+                <ClassesPanel
+                  sections={sections} setSections={setSections}
+                  onScopeClick={(sec, rect) =>
+                    setScopeTarget((sec as any).id === '__bulk__'
+                      ? { kind: 'BulkSection', entity: sec, rect }
+                      : { kind: 'Section', entity: sec, rect })
+                  }
+                />
               </div>
               <div style={{ flex: 1, minHeight: 0, display: activeTab === 'subjects' ? 'flex' : 'none', flexDirection: 'column' }}>
                 <SubjectsPanel
@@ -505,13 +512,34 @@ export function StepResourcesV2() {
                   globalAIStatus={aiStatus}
                   globalAIHasSnapshot={!!aiSnapshot}
                   onGlobalAIUndo={handleGlobalAIUndo}
+                  onScopeClick={(sub, rect) =>
+                    setScopeTarget((sub as any).id === '__bulk__'
+                      ? { kind: 'BulkSubject', entity: sub, rect }
+                      : { kind: 'Subject', entity: sub, rect })
+                  }
                 />
               </div>
               <div style={{ flex: 1, minHeight: 0, display: activeTab === 'teachers' ? 'flex' : 'none', flexDirection: 'column' }}>
-                <TeachersPanel staff={staff} setStaff={setStaff} sections={sections} subjects={subjects} />
+                <TeachersPanel
+                  staff={staff} setStaff={setStaff}
+                  sections={sections} subjects={subjects}
+                  onScopeClick={(t, rect) =>
+                    setScopeTarget((t as any).id === '__bulk__'
+                      ? { kind: 'BulkTeacher', entity: t, rect }
+                      : { kind: 'Teacher', entity: t, rect })
+                  }
+                />
               </div>
               <div style={{ flex: 1, minHeight: 0, display: activeTab === 'rooms' ? 'flex' : 'none', flexDirection: 'column' }}>
-                <RoomsPanel rooms={rooms} setRooms={setRooms} sections={sections} setSections={setSections} subjects={subjects} />
+                <RoomsPanel
+                  rooms={rooms} setRooms={setRooms}
+                  sections={sections} setSections={setSections} subjects={subjects}
+                  onScopeClick={(r, rect) =>
+                    setScopeTarget((r as any).id === '__bulk__'
+                      ? { kind: 'BulkRoom', entity: r, rect }
+                      : { kind: 'Room', entity: r, rect })
+                  }
+                />
               </div>
             </div>
           )}

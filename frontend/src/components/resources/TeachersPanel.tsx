@@ -19,7 +19,7 @@
 import { useState, useRef, useMemo, useEffect, useCallback, type KeyboardEvent as RKeyboardEvent } from 'react'
 import { createPortal } from 'react-dom'
 import type { Staff, Section, Subject } from '@/types'
-import { Plus, X, Users, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plus, X, Users, ChevronDown, ChevronUp, CalendarRange } from 'lucide-react'
 import {
   P, P_D, P_L, P_B,
   TH, TD, TABLE_CARD,
@@ -446,13 +446,14 @@ function AddRow({ onAdd }: { onAdd: (t: StaffExt) => void }) {
 }
 
 // ─── Teacher row ──────────────────────────────────────────────────────────────
-function TeacherRow({ t, subjects, classOpts, classTeacherOpts, onUpdate, onDelete }: {
+function TeacherRow({ t, subjects, classOpts, classTeacherOpts, onUpdate, onDelete, onScopeClick }: {
   t: StaffExt
   subjects: Subject[]
   classOpts: ChipOption[]
   classTeacherOpts: ChipOption[]
   onUpdate: (p: Partial<StaffExt>) => void
   onDelete: () => void
+  onScopeClick?: (t: StaffExt, rect: DOMRect) => void
 }) {
   const [expanded, setExpanded] = useState(false)
   const mappings = getMappings(t)
@@ -495,38 +496,26 @@ function TeacherRow({ t, subjects, classOpts, classTeacherOpts, onUpdate, onDele
           <SubjectAssignmentCell teacher={t} subjects={subjects} classOpts={classOpts} onUpdateMappings={updateMappings} />
         </td>
 
-        {/* Slots / Week — color-coded badge + editable max */}
+        {/* Slots / Week — single editable input, load-level colored */}
         <td style={{ ...TD, padding: '7px 8px', textAlign: 'center', whiteSpace: 'nowrap' }}>
-          <span style={{
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-            background: loadBg, color: loadFg,
-            border: `1px solid ${loadBorder}`,
-            borderRadius: 5, fontSize: 12, fontWeight: 700,
-            padding: '2px 10px', minWidth: 40, letterSpacing: '0.01em',
-          }}>
-            {slots}
-          </span>
-          {level !== 'none' && (
-            <div style={{ fontSize: 9, color: loadFg, opacity: 0.75, marginTop: 1, fontWeight: 600, letterSpacing: '0.03em', textTransform: 'uppercase' }}>
-              {level}
-            </div>
-          )}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3, marginTop: 4 }}>
-            <span style={{ fontSize: 9, color: '#9896B5', fontWeight: 600 }}>Max:</span>
-            <input
-              type="number" min={1} max={60}
-              value={t.maxPeriodsPerWeek ?? 30}
-              onChange={e => onUpdate({ maxPeriodsPerWeek: +e.target.value } as any)}
-              className="rp-inp rp-num"
-              style={{
-                width: 44, padding: '2px 5px',
-                border: '1px solid #E4E0FF', borderRadius: 4,
-                fontSize: 11, fontWeight: 600, color: '#555',
-                textAlign: 'center', outline: 'none',
-                background: '#FAFAFE', fontFamily: 'inherit',
-                boxSizing: 'border-box' as const,
-              }}
-            />
+          <input
+            type="number" min={1} max={60}
+            value={t.maxPeriodsPerWeek ?? 30}
+            onChange={e => onUpdate({ maxPeriodsPerWeek: +e.target.value } as any)}
+            className="rp-inp rp-num"
+            title="Max periods per week"
+            style={{
+              width: 72, padding: '4px 8px',
+              border: `1.5px solid ${loadBorder}`,
+              borderRadius: 5,
+              fontSize: 13, fontWeight: 700, color: loadFg,
+              textAlign: 'center', outline: 'none',
+              background: loadBg, fontFamily: 'inherit',
+              boxSizing: 'border-box' as const,
+            }}
+          />
+          <div style={{ fontSize: 9, color: '#9896B5', marginTop: 2, fontWeight: 600 }}>
+            {slots} assigned{level !== 'none' ? ` · ${level}` : ''}
           </div>
         </td>
 
@@ -543,7 +532,7 @@ function TeacherRow({ t, subjects, classOpts, classTeacherOpts, onUpdate, onDele
           />
         </td>
 
-        {/* Actions — compact: chevron-only Show toggle + delete icon */}
+        {/* Actions — Show More / Scope / Delete */}
         <td style={{ ...TD, padding: '6px 8px', whiteSpace: 'nowrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'nowrap' }}>
             <button
@@ -561,8 +550,19 @@ function TeacherRow({ t, subjects, classOpts, classTeacherOpts, onUpdate, onDele
               }}
             >
               {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-              {expanded ? 'Show Less' : 'Show More'}
+              {expanded ? 'Less' : 'More'}
             </button>
+            {onScopeClick && (
+              <button
+                title="Set availability scope for this educator"
+                onClick={e => onScopeClick(t, e.currentTarget.getBoundingClientRect())}
+                style={{ ...actionBtn, gap: 4 }}
+                onMouseEnter={e => { e.currentTarget.style.background = P_L; e.currentTarget.style.color = P_D; e.currentTarget.style.borderColor = P_B }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#8886A8'; e.currentTarget.style.borderColor = '#DDD8FF' }}
+              >
+                <CalendarRange size={12} /> Scope
+              </button>
+            )}
             <DeleteActionButton onDelete={onDelete} tooltip="Delete educator" />
           </div>
         </td>
@@ -580,11 +580,12 @@ function TeacherRow({ t, subjects, classOpts, classTeacherOpts, onUpdate, onDele
 }
 
 // ─── Main export ──────────────────────────────────────────────────────────────
-export function TeachersPanel({ staff, setStaff, sections, subjects }: {
+export function TeachersPanel({ staff, setStaff, sections, subjects, onScopeClick }: {
   staff: Staff[]
   setStaff: (s: Staff[]) => void
   sections: Section[]
   subjects: Subject[]
+  onScopeClick?: (t: Staff, rect: DOMRect) => void
 }) {
   const [search, setSearch]         = useState('')
   const [importOpen, setImportOpen] = useState(false)
@@ -684,6 +685,15 @@ export function TeachersPanel({ staff, setStaff, sections, subjects }: {
         </div>
         <div style={{ flex: 1 }} />
         <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
+          {onScopeClick && (
+            <button
+              title="Set availability scope for all educators"
+              onClick={e => onScopeClick({ id: '__bulk__' } as unknown as Staff, e.currentTarget.getBoundingClientRect())}
+              style={outlineBtn}
+              onMouseEnter={e => { e.currentTarget.style.background = P_L; e.currentTarget.style.borderColor = P_B; e.currentTarget.style.color = P_D }}
+              onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#DDD8FF'; e.currentTarget.style.color = '#6B6891' }}
+            ><CalendarRange size={12} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />Set Scope</button>
+          )}
           <button
             onClick={() => setImportOpen(true)}
             style={outlineBtn}
@@ -719,11 +729,11 @@ export function TeachersPanel({ staff, setStaff, sections, subjects }: {
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
             <colgroup>
-              <col style={{ width: '15%' }} />
-              <col style={{ width: '36%' }} />
-              <col style={{ width: '16%' }} />
-              <col style={{ width: '23%' }} />
-              <col style={{ width: '10%' }} />
+              <col style={{ width: '15%' }} />  {/* Educator */}
+              <col style={{ width: '33%' }} />  {/* Subject Assignments */}
+              <col style={{ width: '13%' }} />  {/* Slots/Wk */}
+              <col style={{ width: '24%' }} />  {/* Class Teacher Of */}
+              <col style={{ width: '15%' }} />  {/* Actions */}
             </colgroup>
             <thead>
               <tr>
@@ -744,6 +754,9 @@ export function TeachersPanel({ staff, setStaff, sections, subjects }: {
                   classTeacherOpts={classTeacherOpts}
                   onUpdate={p => update(t.id, p)}
                   onDelete={() => remove(t.id)}
+                  onScopeClick={onScopeClick
+                    ? (st, rect) => onScopeClick(st as Staff, rect)
+                    : undefined}
                 />
               ))}
               {filtered.length === 0 && search && (

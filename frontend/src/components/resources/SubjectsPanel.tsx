@@ -21,7 +21,7 @@
 
 import { useState, useRef, useMemo, useEffect, useCallback } from 'react'
 import type { Subject, Section, SubjectClassConfig } from '@/types'
-import { Plus, BookOpen, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plus, BookOpen, ChevronDown, ChevronUp, CalendarRange } from 'lucide-react'
 import {
   P, P_D, P_L, P_B,
   TH, TD, TABLE_CARD,
@@ -121,154 +121,263 @@ function EditCell({ value, onSave, placeholder = '…', style: extra }: {
   )
 }
 
-// ─── Single grade row in the expanded slots table ────────────────────────────
-/**
- * Extracted to a real component so it can hold local state (focus/edit mode for hours units).
- * Hours units: display shows "45 min" / "1hr 30min"; on focus, switches to editable decimal hours.
- * Non-hours units: plain number input.
- */
+
+/** Built-in category options — user can append custom ones */
+const BUILTIN_CATS = ['Compulsory','Language','R1','R2','R3','Optional','Practical','Activity','CCA','Skill','Others']
+
+// ─── Per-section sub-row (within an expanded grade) ───────────────────────────
+function SectionSubRow({
+  secName, sub, unit, sessionMins, onUpdateSlots, onUpdateMaxDay, onUpdateSectionConfig, onAddCategory,
+}: {
+  secName: string
+  sub: Subject
+  unit: AllocationUnit
+  sessionMins: number
+  onUpdateSlots: (slots: number) => void
+  onUpdateMaxDay: (max: number) => void
+  onUpdateSectionConfig: (patch: Partial<SubjectClassConfig>) => void
+  onAddCategory: (cat: string) => void
+}) {
+  const cfg     = (sub.classConfigs ?? []).find(c => c.sectionName === secName)
+  const slots   = cfg?.periodsPerWeek ?? sub.periodsPerWeek
+  const maxDay  = cfg?.maxPeriodsPerDay ?? sub.maxPeriodsPerDay ?? 2
+  const cat     = cfg?.category ?? sub.category ?? 'Compulsory'
+  const hasLab  = cfg?.requiresLab !== undefined ? cfg.requiresLab : (sub.requiresLab ?? false)
+  const isHours = unit === 'hours_week' || unit === 'hours_month'
+  const [editFocused, setEditFocused] = useState(false)
+  const [editText,    setEditText]    = useState('')
+  const displayVal  = toDisplayValue(slots, unit, sessionMins)
+  const editableHr  = toEditableHours(slots, unit, sessionMins)
+  const inputValue  = isHours ? (editFocused ? editText : String(displayVal)) : (displayVal as number)
+
+  const secInp: React.CSSProperties = {
+    width: '100%', padding: '2px 5px', border: '1px solid #E0DCFF', borderRadius: 4,
+    fontSize: 11, color: '#555', fontWeight: 600, textAlign: 'center' as const,
+    outline: 'none', background: '#FAFAFE', fontFamily: 'inherit', boxSizing: 'border-box' as const,
+  }
+
+  return (
+    <tr
+      style={{ background: 'linear-gradient(90deg,#F8F6FF,#FAFAFE)' }}
+      onMouseEnter={e => (e.currentTarget.style.background = '#EDE9FF')}
+      onMouseLeave={e => (e.currentTarget.style.background = 'linear-gradient(90deg,#F8F6FF,#FAFAFE)')}
+    >
+      <td style={{ padding: '2px 6px 2px 18px' }}>
+        <span style={{ fontSize: 10.5, color: '#6B5FC8', fontWeight: 700 }}>↳ {secName}</span>
+      </td>
+      <td style={{ padding: '2px 8px' }}>
+        <input
+          type={isHours ? 'text' : 'number'} inputMode={isHours ? 'decimal' : 'numeric'}
+          value={inputValue} min={isHours ? undefined : 1} max={isHours ? undefined : 200}
+          data-grade-input className="rp-inp rp-num"
+          onChange={e => { if (isHours) setEditText(e.target.value); else { const ns = fromDisplayValue(+e.target.value, unit, sessionMins); if (ns >= 1) onUpdateSlots(ns) } }}
+          onFocus={() => { if (isHours) { setEditFocused(true); setEditText(String(editableHr)) } }}
+          onBlur={() => { if (!isHours) return; const p = parseFloat(editText); if (!isNaN(p) && p > 0) { const ns = fromDisplayValue(p, unit, sessionMins); if (ns >= 1) onUpdateSlots(ns) } setEditFocused(false) }}
+          onKeyDown={e => { e.stopPropagation(); if (isHours && e.key === 'Enter') e.currentTarget.blur() }}
+          style={{ ...secInp, border: '1px solid #C4BDFF', background: '#F5F2FF', color: P_D, fontWeight: 800, fontSize: 12 }}
+        />
+      </td>
+      <td style={{ padding: '2px 8px' }}>
+        <input type="number" min={1} max={8} value={maxDay}
+          onChange={e => { const v = +e.target.value; if (v >= 1) onUpdateMaxDay(v) }}
+          className="rp-inp rp-num" style={secInp}
+        />
+      </td>
+      <td style={{ padding: '2px 8px' }}>
+        <input type="text" list="schedu-subject-cats" value={cat}
+          onChange={e => onUpdateSectionConfig({ category: e.target.value })}
+          onBlur={e => { const v = e.target.value.trim(); if (v) { onUpdateSectionConfig({ category: v }); onAddCategory(v) } }}
+          style={{ ...secInp, textAlign: 'left' as const }}
+        />
+      </td>
+      <td style={{ padding: '2px 6px', textAlign: 'center' as const }}>
+        <input type="checkbox" checked={hasLab}
+          onChange={e => onUpdateSectionConfig({ requiresLab: e.target.checked })}
+          style={{ accentColor: P, width: 13, height: 13 }}
+        />
+      </td>
+      <td />
+    </tr>
+  )
+}
+
+// ─── Grade-level row in the expanded slots table ──────────────────────────────
 function GradeSlotRow({
-  grade, sections, sub, unit, sessionMins, onUpdateGradeSlots, onRemoveGrade,
+  grade, sections, sub, unit, sessionMins,
+  onUpdateGradeSlots, onRemoveGrade, onUpdateSectionMaxDay, onUpdateSectionConfig, onChange, onAddCategory,
 }: {
   grade:              string
   sections:           string[]
   sub:                Subject
   unit:               AllocationUnit
   sessionMins:        number
-  onUpdateGradeSlots: (classNames: string[], periodsPerWeek: number) => void
-  onRemoveGrade:      (classNames: string[]) => void
+  onUpdateGradeSlots:    (classNames: string[], periodsPerWeek: number) => void
+  onRemoveGrade:         (classNames: string[]) => void
+  onUpdateSectionMaxDay: (sectionName: string, max: number) => void
+  onUpdateSectionConfig: (sectionName: string, patch: Partial<SubjectClassConfig>) => void
+  onChange:              (patch: Partial<Subject>) => void
+  onAddCategory:         (cat: string) => void
 }) {
+  const [expandedSections, setExpandedSections] = useState(false)
   const [editFocused, setEditFocused] = useState(false)
   const [editText,    setEditText]    = useState('')
   const isHours = unit === 'hours_week' || unit === 'hours_month'
 
   const slots      = getClassSlots(sub, sections[0])
-  const displayVal = toDisplayValue(slots, unit, sessionMins)           // "45 min" | number
-  const editableHr = toEditableHours(slots, unit, sessionMins)          // 0.75 for hours edit
+  const maxDay     = (sub.classConfigs ?? []).find(c => c.sectionName === sections[0])?.maxPeriodsPerDay ?? sub.maxPeriodsPerDay ?? 2
+  const displayVal = toDisplayValue(slots, unit, sessionMins)
+  const editableHr = toEditableHours(slots, unit, sessionMins)
+  const inputValue = isHours ? (editFocused ? editText : String(displayVal)) : (displayVal as number)
 
-  // Value shown in the input element
-  const inputValue = isHours
-    ? (editFocused ? editText : String(displayVal))
-    : (displayVal as number)
-
-  function handleFocus() {
-    if (!isHours) return
-    setEditFocused(true)
-    setEditText(String(editableHr))
-  }
-
+  function handleFocus() { if (!isHours) return; setEditFocused(true); setEditText(String(editableHr)) }
   function handleBlur() {
     if (!isHours) return
-    const parsed = parseFloat(editText)
-    if (!isNaN(parsed) && parsed > 0) {
-      const newSlots = fromDisplayValue(parsed, unit, sessionMins)
-      if (newSlots >= 1) onUpdateGradeSlots(sections, newSlots)
-    }
+    const p = parseFloat(editText)
+    if (!isNaN(p) && p > 0) { const ns = fromDisplayValue(p, unit, sessionMins); if (ns >= 1) onUpdateGradeSlots(sections, ns) }
     setEditFocused(false)
   }
-
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
-    if (isHours) {
-      setEditText(e.target.value)
-    } else {
-      const newSlots = fromDisplayValue(+e.target.value, unit, sessionMins)
-      if (newSlots >= 1) onUpdateGradeSlots(sections, newSlots)
-    }
+    if (isHours) setEditText(e.target.value)
+    else { const ns = fromDisplayValue(+e.target.value, unit, sessionMins); if (ns >= 1) onUpdateGradeSlots(sections, ns) }
+  }
+
+  const fldS: React.CSSProperties = {
+    width: '100%', padding: '2px 5px', border: '1px solid #E4E0FF', borderRadius: 4,
+    fontSize: 11.5, color: '#111028', outline: 'none', background: '#FAFAFE',
+    fontFamily: 'inherit', boxSizing: 'border-box' as const,
   }
 
   return (
-    <tr
-      style={{ transition: 'background 0.06s' }}
-      onMouseEnter={e => (e.currentTarget.style.background = '#F0EDFF')}
-      onMouseLeave={e => (e.currentTarget.style.background = '')}
-    >
-      {/* Grade label */}
-      <td style={{ padding: '3px 8px' }}>
-        <span
-          style={{ background: '#E8E3FF', color: '#3D35A8', borderRadius: 4, padding: '1px 7px', fontSize: 11, fontWeight: 700, border: '1px solid rgba(100,85,210,0.3)', cursor: 'default' }}
-          title={sections.length > 1 ? `Applies to: ${sections.join(', ')}` : sections[0]}
-        >
-          {grade}
-          {sections.length > 1 && (
-            <span style={{ fontSize: 9, fontWeight: 600, color: '#6B5FC8', marginLeft: 3, opacity: 0.8 }}>×{sections.length}</span>
-          )}
-        </span>
-      </td>
+    <>
+      <tr
+        style={{ transition: 'background 0.06s' }}
+        onMouseEnter={e => (e.currentTarget.style.background = '#F0EDFF')}
+        onMouseLeave={e => (e.currentTarget.style.background = '')}
+      >
+        {/* Grade chip — click to expand/collapse per-section rows */}
+        <td style={{ padding: '3px 8px' }}>
+          <button
+            onClick={() => setExpandedSections(o => !o)}
+            title={expandedSections ? 'Collapse sections' : `Expand ${sections.length} section${sections.length !== 1 ? 's' : ''}`}
+            style={{
+              background: expandedSections ? P_L : '#E8E3FF',
+              color: expandedSections ? P_D : '#3D35A8',
+              borderRadius: 4, padding: '1px 5px 1px 6px', fontSize: 11, fontWeight: 700,
+              border: `1.5px solid ${expandedSections ? P_B : 'rgba(100,85,210,0.3)'}`,
+              cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 3,
+              fontFamily: 'inherit',
+            }}
+          >
+            {grade}
+            {sections.length > 1 && <span style={{ fontSize: 9, fontWeight: 600, opacity: 0.8 }}>×{sections.length}</span>}
+            {expandedSections ? <ChevronUp size={9} style={{ flexShrink: 0 }} /> : <ChevronDown size={9} style={{ flexShrink: 0 }} />}
+          </button>
+        </td>
 
-      {/* Slots / time input */}
-      <td style={{ padding: '3px 8px' }}>
-        <input
-          type={isHours ? 'text' : 'number'}
-          inputMode={isHours ? 'decimal' : 'numeric'}
-          value={inputValue}
-          min={isHours ? undefined : 1}
-          max={isHours ? undefined : 200}
-          step={isHours ? undefined : 1}
-          data-grade-input
-          className="rp-inp rp-num"
-          onChange={handleChange}
-          onFocus={handleFocus}
-          onBlur={handleBlur}
-          onKeyDown={e => {
-            e.stopPropagation()
-            // ArrowUp / ArrowDown / Tab: navigate between grade slot inputs
-            const isUp   = e.key === 'ArrowUp'
-            const isDown = e.key === 'ArrowDown'
-            const isTabF = e.key === 'Tab' && !e.shiftKey
-            const isTabB = e.key === 'Tab' && e.shiftKey
-            if (isUp || isDown || isTabF || isTabB) {
-              const table = e.currentTarget.closest('table')
-              if (table) {
-                const inputs = Array.from(table.querySelectorAll<HTMLInputElement>('input[data-grade-input]'))
-                const idx = inputs.indexOf(e.currentTarget)
-                if (idx !== -1) {
-                  const next = (isDown || isTabF) ? inputs[idx + 1] : inputs[idx - 1]
-                  if (next) {
-                    e.preventDefault()
-                    next.focus()
-                    if (typeof next.select === 'function') next.select()
-                    return
+        {/* Slots/Wk */}
+        <td style={{ padding: '3px 8px' }}>
+          <input
+            type={isHours ? 'text' : 'number'} inputMode={isHours ? 'decimal' : 'numeric'}
+            value={inputValue} min={isHours ? undefined : 1} max={isHours ? undefined : 200} step={isHours ? undefined : 1}
+            data-grade-input className="rp-inp rp-num"
+            onChange={handleChange} onFocus={handleFocus} onBlur={handleBlur}
+            onKeyDown={e => {
+              e.stopPropagation()
+              const isUp = e.key === 'ArrowUp', isDown = e.key === 'ArrowDown'
+              const isTabF = e.key === 'Tab' && !e.shiftKey, isTabB = e.key === 'Tab' && e.shiftKey
+              if (isUp || isDown || isTabF || isTabB) {
+                const table = e.currentTarget.closest('table')
+                if (table) {
+                  const inputs = Array.from(table.querySelectorAll<HTMLInputElement>('input[data-grade-input]'))
+                  const idx = inputs.indexOf(e.currentTarget)
+                  if (idx !== -1) {
+                    const next = (isDown || isTabF) ? inputs[idx + 1] : inputs[idx - 1]
+                    if (next) { e.preventDefault(); next.focus(); next.select?.(); return }
                   }
                 }
+                if (isUp || isDown) e.preventDefault()
               }
-              if (isUp || isDown) e.preventDefault()
-            }
-            if (isHours && e.key === 'Enter') e.currentTarget.blur()
-          }}
-          style={{
-            width: '100%', padding: '3px 6px',
-            border: '1.5px solid #C4BDFF', borderRadius: 5,
-            fontSize: 12.5, color: P_D, fontWeight: 800,
-            outline: 'none', textAlign: 'center', background: P_L,
-            fontFamily: 'inherit', boxSizing: 'border-box' as const,
-          }}
-        />
-      </td>
+              if (isHours && e.key === 'Enter') e.currentTarget.blur()
+            }}
+            style={{
+              width: '100%', padding: '3px 6px', border: '1.5px solid #C4BDFF', borderRadius: 5,
+              fontSize: 12.5, color: P_D, fontWeight: 800,
+              outline: 'none', textAlign: 'center', background: P_L,
+              fontFamily: 'inherit', boxSizing: 'border-box' as const,
+            }}
+          />
+        </td>
 
-      {/* Remove grade */}
-      <td style={{ padding: '3px 4px', textAlign: 'center' }}>
-        <button
-          onClick={() => onRemoveGrade(sections)}
-          title={`Remove Grade ${grade}`}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#D4CFEC', padding: '1px 2px', lineHeight: 1, fontSize: 14 }}
-          onMouseEnter={e => (e.currentTarget.style.color = '#E11D48')}
-          onMouseLeave={e => (e.currentTarget.style.color = '#D4CFEC')}
-        >×</button>
-      </td>
-    </tr>
+        {/* Max/day — applies to all sections of this grade */}
+        <td style={{ padding: '3px 8px' }}>
+          <input type="number" min={1} max={8} value={maxDay}
+            onChange={e => { const v = +e.target.value; if (v >= 1) sections.forEach(sn => onUpdateSectionMaxDay(sn, v)) }}
+            className="rp-inp rp-num"
+            style={{ ...fldS, textAlign: 'center' as const, fontSize: 12 }}
+          />
+        </td>
+
+        {/* Category — subject-level */}
+        <td style={{ padding: '3px 8px' }}>
+          <input type="text" list="schedu-subject-cats"
+            value={sub.category ?? 'Compulsory'}
+            onChange={e => onChange({ category: e.target.value })}
+            onBlur={e => { const v = e.target.value.trim(); if (v) { onChange({ category: v }); onAddCategory(v) } }}
+            style={{ ...fldS, fontSize: 11 }}
+          />
+        </td>
+
+        {/* Lab Required — subject-level */}
+        <td style={{ padding: '3px 6px', textAlign: 'center' as const }}>
+          <input type="checkbox" checked={!!sub.requiresLab}
+            onChange={e => onChange({ requiresLab: e.target.checked })}
+            style={{ accentColor: P, width: 14, height: 14 }}
+          />
+        </td>
+
+        {/* Remove grade */}
+        <td style={{ padding: '3px 4px', textAlign: 'center' as const }}>
+          <button onClick={() => onRemoveGrade(sections)} title={`Remove Grade ${grade}`}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#D4CFEC', padding: '1px 2px', lineHeight: 1, fontSize: 14 }}
+            onMouseEnter={e => (e.currentTarget.style.color = '#E11D48')}
+            onMouseLeave={e => (e.currentTarget.style.color = '#D4CFEC')}
+          >×</button>
+        </td>
+      </tr>
+
+      {/* Per-section sub-rows (when grade chip is expanded) */}
+      {expandedSections && sections.map(secName => (
+        <SectionSubRow
+          key={secName}
+          secName={secName}
+          sub={sub}
+          unit={unit}
+          sessionMins={sessionMins}
+          onUpdateSlots={sl => onUpdateGradeSlots([secName], sl)}
+          onUpdateMaxDay={mx => onUpdateSectionMaxDay(secName, mx)}
+          onUpdateSectionConfig={patch => onUpdateSectionConfig(secName, patch)}
+          onAddCategory={onAddCategory}
+        />
+      ))}
+    </>
   )
 }
 
-const SUBJECT_CATS = ['Compulsory','Language','4th Optional','5th Optional','6th Optional','Practical','Activity','EST','CCA','Skill']
-
 // ─── Expanded grade-level slots view ─────────────────────────────────────────
-function ClassSlotsExpanded({ sub, unit, sessionMins, onUpdateGradeSlots, onRemoveGrade, onChange }: {
+function ClassSlotsExpanded({
+  sub, unit, sessionMins, onUpdateGradeSlots, onRemoveGrade, onChange,
+  onUpdateSectionMaxDay, onUpdateSectionConfig, onAddCategory, extraCats = [],
+}: {
   sub: Subject
   unit: AllocationUnit
   sessionMins: number
-  onUpdateGradeSlots: (classNames: string[], periodsPerWeek: number) => void
-  onRemoveGrade: (classNames: string[]) => void
-  onChange: (patch: Partial<Subject>) => void
+  onUpdateGradeSlots:    (classNames: string[], periodsPerWeek: number) => void
+  onRemoveGrade:         (classNames: string[]) => void
+  onChange:              (patch: Partial<Subject>) => void
+  onUpdateSectionMaxDay: (sectionName: string, max: number) => void
+  onUpdateSectionConfig: (sectionName: string, patch: Partial<SubjectClassConfig>) => void
+  onAddCategory:         (cat: string) => void
+  extraCats?:            string[]
 }) {
   const classes = getAssignedClasses(sub)
 
@@ -287,60 +396,49 @@ function ClassSlotsExpanded({ sub, unit, sessionMins, onUpdateGradeSlots, onRemo
     gradeMap.get(grade)!.push(cls)
   }
   const sortedGrades = [...gradeMap.keys()].sort((a, b) => gradeKey(a) - gradeKey(b))
-
-  const smallInp: React.CSSProperties = {
-    padding: '2px 5px', border: '1px solid #E4E0FF', borderRadius: 4,
-    fontSize: 10.5, color: '#111028', outline: 'none', fontFamily: 'inherit',
-    background: '#FAFAFE', boxSizing: 'border-box' as const,
+  const thS: React.CSSProperties = {
+    padding: '2px 8px', fontSize: 9.5, fontWeight: 700, color: '#9896B5',
+    textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '1px solid #E4E0FF',
+    background: '#F8F6FF',
   }
 
   return (
     <div style={{ background: '#FAFAFE', borderTop: '1px solid #EEE9FF', padding: '7px 16px 10px' }}>
-      {/* Header row: "Slots per Grade" label + settings right-aligned */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, gap: 12, flexWrap: 'wrap' }}>
-        {/* Left: label */}
-        <div style={{ fontSize: 9.5, fontWeight: 800, color: '#9896B5', textTransform: 'uppercase', letterSpacing: '0.07em', whiteSpace: 'nowrap', flexShrink: 0 }}>
+      {/* datalist for category autocomplete */}
+      <datalist id="schedu-subject-cats">
+        {[...BUILTIN_CATS, ...extraCats.filter(c => !BUILTIN_CATS.includes(c))].map(c => <option key={c} value={c} />)}
+      </datalist>
+
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+        <div style={{ fontSize: 9.5, fontWeight: 800, color: '#9896B5', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
           Slots per Grade
           <span style={{ fontWeight: 500, textTransform: 'none', marginLeft: 6, fontSize: 9.5, color: '#C4C0DC' }}>
             · {ALLOCATION_LABELS[unit]}
           </span>
         </div>
-        {/* Right: settings */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 9.5, color: '#6B6891', fontWeight: 600, lineHeight: 1.2 }}>
-            Category
-            <select value={sub.category ?? 'Compulsory'} onChange={e => onChange({ category: e.target.value })} style={smallInp}>
-              {SUBJECT_CATS.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </label>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 9.5, color: '#6B6891', fontWeight: 600, lineHeight: 1.2 }}>
-            Max/day
-            <input type="number" value={sub.maxPeriodsPerDay} min={1} max={8}
-              onChange={e => onChange({ maxPeriodsPerDay: +e.target.value })}
-              style={{ ...smallInp, width: 44, textAlign: 'center' }}
-            />
-          </label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10.5, color: '#555', fontWeight: 600, cursor: 'pointer', userSelect: 'none' }}>
-            <input type="checkbox" checked={!!sub.requiresLab} onChange={e => onChange({ requiresLab: e.target.checked })} style={{ accentColor: P }} />
-            Lab required
-          </label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10.5, color: '#555', fontWeight: 600, cursor: 'pointer', userSelect: 'none' }}>
-            <input type="checkbox" checked={!!sub.isOptional} onChange={e => onChange({ isOptional: e.target.checked })} style={{ accentColor: P }} />
-            Optional
-          </label>
-        </div>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10.5, color: '#555', fontWeight: 600, cursor: 'pointer', userSelect: 'none' }}>
+          <input type="checkbox" checked={!!sub.isOptional} onChange={e => onChange({ isOptional: e.target.checked })} style={{ accentColor: P }} />
+          Optional
+        </label>
       </div>
 
-      <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', maxWidth: 360 }}>
+      <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: '100%', maxWidth: 560 }}>
         <colgroup>
-          <col style={{ width: 120 }} />
-          <col style={{ width: 148 }} />
-          <col style={{ width: 28 }} />
+          <col style={{ width: 110 }} />   {/* Grade */}
+          <col style={{ width: 96 }} />    {/* Slots/Wk */}
+          <col style={{ width: 64 }} />    {/* Max/day */}
+          <col style={{ width: 130 }} />   {/* Category */}
+          <col style={{ width: 38 }} />    {/* Lab */}
+          <col style={{ width: 26 }} />    {/* Remove */}
         </colgroup>
         <thead>
           <tr>
-            <th style={{ padding: '2px 8px', fontSize: 9.5, fontWeight: 700, color: '#9896B5', textAlign: 'left', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '1px solid #E4E0FF' }}>Grade</th>
-            <th style={{ padding: '2px 8px', fontSize: 9.5, fontWeight: 700, color: '#9896B5', textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '1px solid #E4E0FF' }}>{ALLOCATION_SHORT[unit]}</th>
+            <th style={{ ...thS, textAlign: 'left' }}>Grade</th>
+            <th style={{ ...thS, textAlign: 'center' }}>{ALLOCATION_SHORT[unit]}</th>
+            <th style={{ ...thS, textAlign: 'center' }}>Max/day</th>
+            <th style={{ ...thS, textAlign: 'left' }}>Category</th>
+            <th style={{ ...thS, textAlign: 'center' }} title="Lab required">🧪</th>
             <th style={{ borderBottom: '1px solid #E4E0FF' }} />
           </tr>
         </thead>
@@ -355,6 +453,10 @@ function ClassSlotsExpanded({ sub, unit, sessionMins, onUpdateGradeSlots, onRemo
               sessionMins={sessionMins}
               onUpdateGradeSlots={onUpdateGradeSlots}
               onRemoveGrade={onRemoveGrade}
+              onUpdateSectionMaxDay={onUpdateSectionMaxDay}
+              onUpdateSectionConfig={onUpdateSectionConfig}
+              onChange={onChange}
+              onAddCategory={onAddCategory}
             />
           ))}
         </tbody>
@@ -420,7 +522,7 @@ function AddRow({ onAdd }: { onAdd: (s: Subject) => void }) {
 }
 
 // ─── Subject row ──────────────────────────────────────────────────────────────
-function SubjectRow({ sub, classOptions, sections, board, isAiAssigned, unit, sessionMins, onUpdate, onDelete }: {
+function SubjectRow({ sub, classOptions, sections, board, isAiAssigned, unit, sessionMins, onUpdate, onDelete, extraCats = [], onAddCategory, onScopeClick }: {
   sub:          Subject
   classOptions: ChipOption[]
   sections:     Section[]
@@ -430,6 +532,9 @@ function SubjectRow({ sub, classOptions, sections, board, isAiAssigned, unit, se
   sessionMins:  number
   onUpdate:     (patch: Partial<Subject>) => void
   onDelete:     () => void
+  extraCats?:       string[]
+  onAddCategory?:   (cat: string) => void
+  onScopeClick?:    (sub: Subject, rect: DOMRect) => void
 }) {
   const [expandSlots,    setExpandSlots]    = useState(false)
   const [expandSettings, setExpandSettings] = useState(false)
@@ -505,6 +610,43 @@ function SubjectRow({ sub, classOptions, sections, board, isAiAssigned, unit, se
       })
     const newSections = newConfigs.map(c => c.sectionName!).filter(Boolean)
     onUpdate({ sections: newSections, classConfigs: newConfigs })
+  }
+
+  // Update maxPeriodsPerDay for a single section
+  function handleUpdateSectionMaxDay(sectionName: string, max: number) {
+    const allAssigned = getAssignedClasses(sub)
+    const existingMap = new Map((sub.classConfigs ?? []).map(c => [c.sectionName!, c]))
+    const updated: SubjectClassConfig[] = allAssigned.map(name => {
+      const ex = existingMap.get(name)
+      return {
+        sectionName:      name,
+        periodsPerWeek:   ex?.periodsPerWeek   ?? sub.periodsPerWeek,
+        maxPeriodsPerDay: name === sectionName ? max : (ex?.maxPeriodsPerDay ?? sub.maxPeriodsPerDay ?? 2),
+        sessionDuration:  ex?.sessionDuration  ?? sub.sessionDuration  ?? 45,
+        category:         ex?.category,
+        requiresLab:      ex?.requiresLab,
+      }
+    })
+    onUpdate({ classConfigs: updated })
+  }
+
+  // Patch category / requiresLab for a single section
+  function handleUpdateSectionConfig(sectionName: string, patch: Partial<SubjectClassConfig>) {
+    const allAssigned = getAssignedClasses(sub)
+    const existingMap = new Map((sub.classConfigs ?? []).map(c => [c.sectionName!, c]))
+    const updated: SubjectClassConfig[] = allAssigned.map(name => {
+      const ex = existingMap.get(name)
+      const base: SubjectClassConfig = {
+        sectionName:      name,
+        periodsPerWeek:   ex?.periodsPerWeek   ?? sub.periodsPerWeek,
+        maxPeriodsPerDay: ex?.maxPeriodsPerDay ?? sub.maxPeriodsPerDay ?? 2,
+        sessionDuration:  ex?.sessionDuration  ?? sub.sessionDuration  ?? 45,
+        category:         ex?.category,
+        requiresLab:      ex?.requiresLab,
+      }
+      return name === sectionName ? { ...base, ...patch } : base
+    })
+    onUpdate({ classConfigs: updated })
   }
 
   const isExpanded = expandSlots || expandSettings
@@ -589,6 +731,17 @@ function SubjectRow({ sub, classOptions, sections, board, isAiAssigned, unit, se
               {expandSlots ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
               {expandSlots ? 'Show Less' : 'Show More'}
             </button>
+            {onScopeClick && (
+              <button
+                title="Set availability scope for this subject"
+                onClick={e => onScopeClick(sub, e.currentTarget.getBoundingClientRect())}
+                style={{ ...actionBtn, gap: 4 }}
+                onMouseEnter={e => { e.currentTarget.style.background = P_L; e.currentTarget.style.color = P_D; e.currentTarget.style.borderColor = P_B }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#8886A8'; e.currentTarget.style.borderColor = '#DDD8FF' }}
+              >
+                <CalendarRange size={12} /> Scope
+              </button>
+            )}
             <DeleteActionButton onDelete={onDelete} tooltip="Delete subject" />
           </div>
         </td>
@@ -605,6 +758,10 @@ function SubjectRow({ sub, classOptions, sections, board, isAiAssigned, unit, se
               onUpdateGradeSlots={handleUpdateGradeSlots}
               onRemoveGrade={handleRemoveGrade}
               onChange={onUpdate}
+              onUpdateSectionMaxDay={handleUpdateSectionMaxDay}
+              onUpdateSectionConfig={handleUpdateSectionConfig}
+              onAddCategory={onAddCategory ?? (() => {})}
+              extraCats={extraCats}
             />
           </td>
         </tr>
@@ -629,6 +786,7 @@ export function SubjectsPanel({
   globalAIStatus  = '',
   globalAIHasSnapshot = false,
   onGlobalAIUndo,
+  onScopeClick,
 }: {
   subjects:    Subject[]
   setSubjects: (s: Subject[]) => void
@@ -639,12 +797,27 @@ export function SubjectsPanel({
   globalAIStatus?:      string
   globalAIHasSnapshot?: boolean
   onGlobalAIUndo?:      () => void
+  onScopeClick?:        (sub: Subject, rect: DOMRect) => void
 }) {
   const [search,     setSearch]     = useState('')
   const [importOpen, setImportOpen] = useState(false)
   const [searchFocused, setSearchFocused] = useState(false)
   const searchRef   = useRef<HTMLInputElement>(null)
   const undoHistory = useUndoHistory<Subject[]>()
+
+  // Extra (custom) category options — persist to localStorage
+  const [extraCats, setExtraCats] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('schedu-subject-extra-cats') ?? '[]') } catch { return [] }
+  })
+  function addCategory(cat: string) {
+    if (!cat || BUILTIN_CATS.includes(cat)) return
+    setExtraCats(prev => {
+      if (prev.includes(cat)) return prev
+      const next = [...prev, cat]
+      localStorage.setItem('schedu-subject-extra-cats', JSON.stringify(next))
+      return next
+    })
+  }
 
   // Academic Load Unit — applies to per-class slots in expanded view
   const [unit, setUnit] = useState<AllocationUnit>(() => {
@@ -868,6 +1041,18 @@ export function SubjectsPanel({
 
         {/* Action buttons */}
         <div style={{ display: 'flex', gap: 6, flexShrink: 0, alignItems: 'center' }}>
+          {onScopeClick && (
+            <button
+              title="Set availability scope for all subjects"
+              onClick={e => {
+                // Use bulk kind so the modal shows a multi-select list
+                onScopeClick({ id: '__bulk__' } as unknown as Subject, e.currentTarget.getBoundingClientRect())
+              }}
+              style={outlineBtn}
+              onMouseEnter={e => { e.currentTarget.style.background = P_L; e.currentTarget.style.borderColor = P_B; e.currentTarget.style.color = P_D }}
+              onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#DDD8FF'; e.currentTarget.style.color = '#6B6891' }}
+            ><CalendarRange size={12} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />Set Scope</button>
+          )}
           <button onClick={() => setImportOpen(true)} style={outlineBtn}
             onMouseEnter={e => { e.currentTarget.style.background = P_L; e.currentTarget.style.borderColor = P_B; e.currentTarget.style.color = P_D }}
             onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#DDD8FF'; e.currentTarget.style.color = '#6B6891' }}
@@ -964,6 +1149,11 @@ export function SubjectsPanel({
                   sessionMins={sessionMins}
                   onUpdate={patch => update(sub.id, patch)}
                   onDelete={() => remove(sub.id)}
+                  extraCats={extraCats}
+                  onAddCategory={addCategory}
+                  onScopeClick={onScopeClick
+                    ? (s, rect) => onScopeClick(s, rect)
+                    : undefined}
                 />
               ))}
               {filtered.length === 0 && search && (
