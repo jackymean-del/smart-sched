@@ -446,11 +446,12 @@ function AddRow({ onAdd }: { onAdd: (t: StaffExt) => void }) {
 }
 
 // ─── Teacher row ──────────────────────────────────────────────────────────────
-function TeacherRow({ t, subjects, classOpts, classTeacherOpts, onUpdate, onDelete, onScopeClick }: {
+function TeacherRow({ t, subjects, classOpts, classTeacherOpts, coClassTeacherOpts, onUpdate, onDelete, onScopeClick }: {
   t: StaffExt
   subjects: Subject[]
   classOpts: ChipOption[]
   classTeacherOpts: ChipOption[]
+  coClassTeacherOpts: ChipOption[]
   onUpdate: (p: Partial<StaffExt>) => void
   onDelete: () => void
   onScopeClick?: (t: StaffExt, rect: DOMRect) => void
@@ -525,6 +526,19 @@ function TeacherRow({ t, subjects, classOpts, classTeacherOpts, onUpdate, onDele
             selected={isClassTeacherOf ? [isClassTeacherOf] : []}
             options={classTeacherOpts}
             onChange={v => onUpdate({ isClassTeacher: v[0] ?? '' })}
+            singleSelect
+            placeholder="— none —"
+            maxChips={1}
+            minDropdownWidth={220}
+          />
+        </td>
+
+        {/* Co-Class teacher (single select) */}
+        <td style={{ ...TD, padding: '7px 10px' }}>
+          <InlineChipSelect
+            selected={t.isCoClassTeacher ? [t.isCoClassTeacher] : []}
+            options={coClassTeacherOpts}
+            onChange={v => onUpdate({ isCoClassTeacher: v[0] ?? '' } as Partial<StaffExt>)}
             singleSelect
             placeholder="— none —"
             maxChips={1}
@@ -745,11 +759,12 @@ export function TeachersPanel({ staff, setStaff, sections, subjects, onScopeClic
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
             <colgroup>
-              <col style={{ width: '14%' }} />  {/* Educator */}
-              <col style={{ width: '28%' }} />  {/* Subject Assignments */}
-              <col style={{ width: '10%' }} />  {/* Slots/Wk */}
-              <col style={{ width: '24%' }} />  {/* Class Teacher Of */}
-              <col style={{ width: '24%' }} />  {/* Actions */}
+              <col style={{ width: '12%' }} />  {/* Educator */}
+              <col style={{ width: '25%' }} />  {/* Subject Assignments */}
+              <col style={{ width: '9%' }} />   {/* Slots/Wk */}
+              <col style={{ width: '17%' }} />  {/* Class Teacher Of */}
+              <col style={{ width: '17%' }} />  {/* Co-Class Teacher */}
+              <col style={{ width: '20%' }} />  {/* Actions */}
             </colgroup>
             <thead>
               <tr>
@@ -757,6 +772,7 @@ export function TeachersPanel({ staff, setStaff, sections, subjects, onScopeClic
                 <th style={TH}>Subject Assignments</th>
                 <th style={{ ...TH, textAlign: 'center' }}>Slots/Wk</th>
                 <th style={TH}>Class Teacher Of</th>
+                <th style={TH}>Co-Class Teacher</th>
                 <th style={{ ...TH, textAlign: 'right', paddingRight: 10, whiteSpace: 'nowrap' }}>Actions</th>
               </tr>
             </thead>
@@ -768,6 +784,7 @@ export function TeachersPanel({ staff, setStaff, sections, subjects, onScopeClic
                   subjects={subjects}
                   classOpts={classOpts}
                   classTeacherOpts={classTeacherOpts}
+                  coClassTeacherOpts={classTeacherOpts}
                   onUpdate={p => update(t.id, p)}
                   onDelete={() => remove(t.id)}
                   onScopeClick={onScopeClick

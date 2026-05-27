@@ -1100,6 +1100,7 @@ export const StaffSchema = z.object({
   subjects: z.array(z.string()),
   classes: z.array(z.string()),
   isClassTeacher: z.string().default(''),
+  isCoClassTeacher: z.string().default(''),
   maxPeriodsPerWeek: z.number().int().positive(),
   gender: z.enum(['male', 'female', 'other']).optional(),
   scope: ScopeMatrixSchema.optional(),   // schedU Scope System
