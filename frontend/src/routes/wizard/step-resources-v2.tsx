@@ -228,6 +228,64 @@ export function StepResourcesV2() {
     setAiStatus('')
   }
 
+  // ── Faculty AI Fix — set maxPeriodsPerWeek per board/country standard ────────
+  function handleTeacherAIFix() {
+    const board = normalizeBoardType(config.board ?? 'CBSE')
+    // Standard max teaching periods/week per board:
+    //   CBSE / ICSE (India) : 32  (35-period day, teachers cover ~32)
+    //   IB / Cambridge       : 24  (lighter contact hours, more prep time)
+    //   Custom / default     : 28
+    const boardPeriods: Record<string, number> = {
+      CBSE: 32, ICSE: 32, IB: 24, Cambridge: 24, Custom: 28,
+    }
+    const maxPeriods = boardPeriods[board] ?? 28
+    setStaff(staff.map((t: Staff) => ({ ...t, maxPeriodsPerWeek: maxPeriods })))
+  }
+
+  // ── Rooms AI Fix — infer room type and subject mappings from room names ───────
+  function handleRoomAIFix() {
+    const subjectNames = subjects.map((s: Subject) => s.name)
+
+    const updatedRooms = rooms.map((room: RoomExt) => {
+      const n = room.name
+      let type = room.type
+      let subs: string[] = room.subjectMappings ?? []
+
+      if (/computer|comp\.?\s*lab|informatics|i\.t\.?\s*lab/i.test(n)) {
+        type = 'Computer Lab'
+        subs = subjectNames.filter(s => /computer|informatics/i.test(s))
+      } else if (/science\s*lab|sci\s*lab|chem(istry)?\s*lab|bio(logy)?\s*lab|physics\s*lab|lab\s*\d/i.test(n)) {
+        type = 'Lab'
+        subs = subjectNames.filter(s => /physics|chemistry|biology|science/i.test(s))
+      } else if (/library|lib\b/i.test(n)) {
+        type = 'Library'
+        subs = subjectNames.filter(s => /library/i.test(s))
+      } else if (/gym|gymnasium|sports\s*hall/i.test(n)) {
+        type = 'Gym'
+        subs = subjectNames.filter(s => /physical\s*education|p\.e\.|sports/i.test(s))
+      } else if (/art\s*room|craft\s*room|drawing\s*room/i.test(n)) {
+        type = 'Other'
+        subs = subjectNames.filter(s => /art|craft|draw/i.test(s))
+      } else if (/music\s*room/i.test(n)) {
+        type = 'Other'
+        subs = subjectNames.filter(s => /music/i.test(s))
+      } else if (/dance|activity\s*hall/i.test(n)) {
+        type = 'Hall'
+        subs = subjectNames.filter(s => /dance|physical/i.test(s))
+      } else if (/\bhall\b|auditorium|assembly/i.test(n)) {
+        type = 'Hall'
+        subs = []
+      } else if (/staff\s*room|teacher.*room|faculty/i.test(n)) {
+        type = 'Staff Room'
+        subs = []
+      }
+
+      return { ...room, type, subjectMappings: subs }
+    })
+
+    setRooms(updatedRooms)
+  }
+
   // ── Rooms ─────────────────────────────────────────────────────────────────
   const [rooms, setRoomsLocal] = useState<RoomExt[]>(() => {
     const stored = store.rooms ?? []
@@ -527,7 +585,7 @@ export function StepResourcesV2() {
                       ? { kind: 'BulkTeacher', entity: t, rect }
                       : { kind: 'Teacher', entity: t, rect })
                   }
-                  onAIFix={() => handleGlobalAIAssign(normalizeBoardType(config.board ?? 'CBSE'))}
+                  onAIFix={handleTeacherAIFix}
                 />
               </div>
               <div style={{ flex: 1, minHeight: 0, display: activeTab === 'rooms' ? 'flex' : 'none', flexDirection: 'column' }}>
@@ -539,7 +597,7 @@ export function StepResourcesV2() {
                       ? { kind: 'BulkRoom', entity: r, rect }
                       : { kind: 'Room', entity: r, rect })
                   }
-                  onAIFix={() => handleGlobalAIAssign(normalizeBoardType(config.board ?? 'CBSE'))}
+                  onAIFix={handleRoomAIFix}
                 />
               </div>
             </div>

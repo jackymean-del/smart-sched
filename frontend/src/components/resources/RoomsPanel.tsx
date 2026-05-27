@@ -209,12 +209,12 @@ function RoomRow_({ room, classOpts, subjectOpts, assignedClasses, onUpdate, onU
 
       {/* Actions */}
       <td style={{ ...TD, textAlign: 'center', whiteSpace: 'nowrap' }}>
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flexWrap: 'nowrap' }}>
           {onScopeClick && (
             <button
               title="Set availability scope for this room"
               onClick={e => onScopeClick(room, e.currentTarget.getBoundingClientRect())}
-              style={{ ...actionBtn, gap: 4 }}
+              style={{ ...actionBtn, minWidth: 0, gap: 4, padding: '5px 10px' }}
               onMouseEnter={e => { e.currentTarget.style.background = P_L; e.currentTarget.style.color = P_D; e.currentTarget.style.borderColor = P_B }}
               onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#8886A8'; e.currentTarget.style.borderColor = '#DDD8FF' }}
             >
@@ -420,14 +420,14 @@ export function RoomsPanel({ rooms, setRooms, sections, setSections, subjects, o
             <div style={{ fontSize: 12, color: '#C4C0DC' }}>Add rooms, then assign classes and special subjects to them.</div>
           </div>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'auto' }}>
             <colgroup>
-              <col style={{ width: '14%' }} />   {/* Room */}
-              <col style={{ width: '15%' }} />   {/* Type */}
-              <col style={{ width: '6%' }} />    {/* Cap */}
-              <col style={{ width: '27%' }} />   {/* Assigned Classes */}
-              <col style={{ width: '22%' }} />   {/* Special Subjects */}
-              <col style={{ width: '16%' }} />   {/* Actions */}
+              <col style={{ minWidth: 110 }} />  {/* Room */}
+              <col style={{ minWidth: 120 }} />  {/* Type */}
+              <col style={{ width: 52 }} />      {/* Cap — compact */}
+              <col />                            {/* Assigned Classes — flexible */}
+              <col />                            {/* Special Subjects — flexible */}
+              <col />                            {/* Actions — auto-sizes to buttons */}
             </colgroup>
             <thead>
               <tr>
@@ -436,7 +436,7 @@ export function RoomsPanel({ rooms, setRooms, sections, setSections, subjects, o
                 <th style={{ ...TH, textAlign: 'center' }}>Cap</th>
                 <th style={TH}>Assigned Classes</th>
                 <th style={TH}>Special Subjects</th>
-                <th style={{ ...TH, textAlign: 'center' }}>Actions</th>
+                <th style={{ ...TH, textAlign: 'center', whiteSpace: 'nowrap' }}>Actions</th>
               </tr>
             </thead>
             <tbody>

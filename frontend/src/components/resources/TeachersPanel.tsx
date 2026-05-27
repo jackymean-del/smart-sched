@@ -534,12 +534,11 @@ function TeacherRow({ t, subjects, classOpts, classTeacherOpts, onUpdate, onDele
 
         {/* Actions — Show More / Scope / Delete */}
         <td style={{ ...TD, padding: '6px 8px', whiteSpace: 'nowrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'nowrap' }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flexWrap: 'nowrap' }}>
             <button
               onClick={() => setExpanded(o => !o)}
               style={{
-                ...actionBtn,
-                gap: 5,
+                ...actionBtn, minWidth: 0, gap: 4, padding: '5px 10px',
                 ...(expanded ? { background: P_L, color: P_D, borderColor: P_B } : {}),
               }}
               onMouseEnter={e => { e.currentTarget.style.background = P_L; e.currentTarget.style.color = P_D; e.currentTarget.style.borderColor = P_B }}
@@ -549,14 +548,14 @@ function TeacherRow({ t, subjects, classOpts, classTeacherOpts, onUpdate, onDele
                 e.currentTarget.style.borderColor = expanded ? P_B : '#DDD8FF'
               }}
             >
-              {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+              {expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
               {expanded ? 'Less' : 'More'}
             </button>
             {onScopeClick && (
               <button
                 title="Set availability scope for this educator"
                 onClick={e => onScopeClick(t, e.currentTarget.getBoundingClientRect())}
-                style={{ ...actionBtn, gap: 4 }}
+                style={{ ...actionBtn, minWidth: 0, gap: 4, padding: '5px 10px' }}
                 onMouseEnter={e => { e.currentTarget.style.background = P_L; e.currentTarget.style.color = P_D; e.currentTarget.style.borderColor = P_B }}
                 onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#8886A8'; e.currentTarget.style.borderColor = '#DDD8FF' }}
               >
@@ -744,13 +743,13 @@ export function TeachersPanel({ staff, setStaff, sections, subjects, onScopeClic
             <div style={{ fontSize: 12, color: '#C4C0DC' }}>Add educators, then assign subjects and classes to them.</div>
           </div>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'auto' }}>
             <colgroup>
-              <col style={{ width: '14%' }} />  {/* Educator */}
-              <col style={{ width: '30%' }} />  {/* Subject Assignments */}
-              <col style={{ width: '12%' }} />  {/* Slots/Wk */}
-              <col style={{ width: '29%' }} />  {/* Class Teacher Of — widened */}
-              <col style={{ width: '15%' }} />  {/* Actions */}
+              <col style={{ minWidth: 120 }} />  {/* Educator */}
+              <col />                             {/* Subject Assignments — flexible */}
+              <col style={{ width: 90 }} />       {/* Slots/Wk — compact */}
+              <col />                             {/* Class Teacher Of — flexible */}
+              <col />                             {/* Actions — auto-sizes to buttons */}
             </colgroup>
             <thead>
               <tr>
@@ -758,7 +757,7 @@ export function TeachersPanel({ staff, setStaff, sections, subjects, onScopeClic
                 <th style={TH}>Subject Assignments</th>
                 <th style={{ ...TH, textAlign: 'center' }}>Slots/Wk</th>
                 <th style={TH}>Class Teacher Of</th>
-                <th style={{ ...TH, textAlign: 'right', paddingRight: 10 }}>Actions</th>
+                <th style={{ ...TH, textAlign: 'right', paddingRight: 10, whiteSpace: 'nowrap' }}>Actions</th>
               </tr>
             </thead>
             <tbody>

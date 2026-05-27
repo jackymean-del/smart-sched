@@ -20,8 +20,9 @@
  */
 
 import { useState, useRef, useMemo, useEffect, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import type { Subject, Section, SubjectClassConfig } from '@/types'
-import { Plus, BookOpen, ChevronDown, ChevronUp, CalendarRange } from 'lucide-react'
+import { Plus, BookOpen, ChevronDown, ChevronUp, CalendarRange, X } from 'lucide-react'
 import {
   P, P_D, P_L, P_B,
   TH, TD, TABLE_CARD,
@@ -151,6 +152,121 @@ function CategorySelect({
     >
       {allCats.map(c => <option key={c} value={c}>{c}</option>)}
     </select>
+  )
+}
+
+// ─── Category manager popover ─────────────────────────────────────────────────
+function CategoryManager({
+  extraCats, onAdd, onDelete, anchorEl, onClose,
+}: {
+  extraCats: string[]
+  onAdd: (cat: string) => void
+  onDelete: (cat: string) => void
+  anchorEl: HTMLElement
+  onClose: () => void
+}) {
+  const [newCat, setNewCat] = useState('')
+  const popRef   = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [pos, setPos] = useState({ top: 0, left: 0 })
+
+  useEffect(() => {
+    const rect = anchorEl.getBoundingClientRect()
+    const w = 238
+    setPos({
+      top:  rect.bottom + 4,
+      left: Math.max(8, Math.min(rect.left - 60, window.innerWidth - w - 8)),
+    })
+  }, [anchorEl])
+
+  useEffect(() => { setTimeout(() => inputRef.current?.focus(), 30) }, [])
+
+  useEffect(() => {
+    const h = (e: MouseEvent) => {
+      if (popRef.current && !popRef.current.contains(e.target as Node) &&
+          !anchorEl.contains(e.target as Node)) onClose()
+    }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [anchorEl, onClose])
+
+  function handleAdd() {
+    const cat = newCat.trim()
+    if (!cat || BUILTIN_CATS.includes(cat) || extraCats.includes(cat)) return
+    onAdd(cat); setNewCat('')
+  }
+
+  return createPortal(
+    <div ref={popRef} style={{
+      position: 'fixed', top: pos.top, left: pos.left,
+      width: 238, background: '#fff',
+      border: '1px solid #DDD8FF', borderRadius: 10,
+      boxShadow: '0 8px 28px rgba(124,111,224,0.2)',
+      zIndex: 9999, overflow: 'hidden',
+    }}>
+      {/* Header */}
+      <div style={{ padding: '7px 12px', background: '#FAFAFE', borderBottom: '1px solid #EEE9FF', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={{ fontSize: 10, fontWeight: 800, color: P, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Manage Categories</span>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#C0BBD8', padding: 0, lineHeight: 1, display: 'flex' }}><X size={12} /></button>
+      </div>
+
+      {/* Built-in (read-only) */}
+      <div style={{ padding: '7px 12px 6px', borderBottom: '1px solid #F5F3FF' }}>
+        <div style={{ fontSize: 9, fontWeight: 700, color: '#C4C0DC', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 5 }}>Built-in</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+          {BUILTIN_CATS.map(cat => (
+            <span key={cat} style={{ fontSize: 10, padding: '1px 6px', background: '#F0EDFF', color: '#8B87AD', borderRadius: 3, border: '1px solid #E8E4FF' }}>{cat}</span>
+          ))}
+        </div>
+      </div>
+
+      {/* User-added */}
+      {extraCats.length > 0 && (
+        <div style={{ padding: '7px 12px 6px', borderBottom: '1px solid #F5F3FF' }}>
+          <div style={{ fontSize: 9, fontWeight: 700, color: '#C4C0DC', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 5 }}>Custom</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+            {extraCats.map(cat => (
+              <div key={cat} style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: 10, padding: '1px 4px 1px 6px', background: P_L, color: P_D, borderRadius: 3, border: `1px solid ${P_B}` }}>
+                {cat}
+                <button onClick={() => onDelete(cat)} title={`Remove "${cat}"`}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: P, padding: '0 1px', lineHeight: 1, display: 'flex', alignItems: 'center' }}
+                ><X size={9} /></button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {extraCats.length === 0 && (
+        <div style={{ padding: '5px 12px 4px', borderBottom: '1px solid #F5F3FF' }}>
+          <span style={{ fontSize: 10.5, color: '#C4C0DC', fontStyle: 'italic' }}>No custom categories yet.</span>
+        </div>
+      )}
+
+      {/* Add new */}
+      <div style={{ padding: '8px 12px' }}>
+        <div style={{ display: 'flex', gap: 5 }}>
+          <input
+            ref={inputRef}
+            value={newCat}
+            onChange={e => setNewCat(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') handleAdd(); if (e.key === 'Escape') onClose() }}
+            placeholder="New category name…"
+            style={{ flex: 1, padding: '4px 8px', border: '1px solid #E4E0FF', borderRadius: 5, fontSize: 11, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' as const, minWidth: 0 }}
+          />
+          <button
+            onClick={handleAdd}
+            disabled={!newCat.trim() || BUILTIN_CATS.includes(newCat.trim()) || extraCats.includes(newCat.trim())}
+            style={{
+              background: (!newCat.trim() || BUILTIN_CATS.includes(newCat.trim()) || extraCats.includes(newCat.trim())) ? '#E8E4FF' : P,
+              color: '#fff', border: 'none', borderRadius: 5,
+              padding: '4px 11px', fontSize: 14, fontWeight: 700,
+              cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0,
+            }}
+          >+</button>
+        </div>
+      </div>
+    </div>,
+    document.body,
   )
 }
 
@@ -405,7 +521,7 @@ function GradeSlotRow({
 // ─── Expanded grade-level slots view ─────────────────────────────────────────
 function ClassSlotsExpanded({
   sub, unit, sessionMins, onUpdateGradeSlots, onRemoveGrade, onChange,
-  onUpdateSectionMaxDay, onUpdateSectionConfig, onAddCategory, extraCats = [],
+  onUpdateSectionMaxDay, onUpdateSectionConfig, onAddCategory, onDeleteCategory, extraCats = [],
 }: {
   sub: Subject
   unit: AllocationUnit
@@ -416,8 +532,10 @@ function ClassSlotsExpanded({
   onUpdateSectionMaxDay: (sectionName: string, max: number) => void
   onUpdateSectionConfig: (sectionName: string, patch: Partial<SubjectClassConfig>) => void
   onAddCategory:         (cat: string) => void
+  onDeleteCategory?:     (cat: string) => void
   extraCats?:            string[]
 }) {
+  const [catMgrAnchor, setCatMgrAnchor] = useState<HTMLElement | null>(null)
   const classes = getAssignedClasses(sub)
 
   if (classes.length === 0) {
@@ -467,8 +585,26 @@ function ClassSlotsExpanded({
             <th style={{ ...thS, textAlign: 'left' }}>Grade</th>
             <th style={{ ...thS, textAlign: 'center' }}>{ALLOCATION_SHORT[unit]}</th>
             <th style={{ ...thS, textAlign: 'center' }}>Max/day</th>
-            <th style={{ ...thS, textAlign: 'left' }}>Category</th>
-            <th style={{ ...thS, textAlign: 'center', fontSize: 9 }}>Lab<br/>Req.</th>
+            <th style={{ ...thS, textAlign: 'left' }}>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                Category
+                <button
+                  onClick={e => { e.stopPropagation(); setCatMgrAnchor(o => o ? null : e.currentTarget) }}
+                  title="Manage categories"
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: catMgrAnchor ? P : '#C4C0DC', padding: '0 1px', lineHeight: 1, display: 'inline-flex', alignItems: 'center', fontFamily: 'inherit', fontSize: 11 }}
+                >⚙</button>
+                {catMgrAnchor && (
+                  <CategoryManager
+                    extraCats={extraCats}
+                    onAdd={onAddCategory}
+                    onDelete={cat => onDeleteCategory?.(cat)}
+                    anchorEl={catMgrAnchor}
+                    onClose={() => setCatMgrAnchor(null)}
+                  />
+                )}
+              </div>
+            </th>
+            <th style={{ ...thS, textAlign: 'center' }}>Lab</th>
             <th style={{ borderBottom: '1px solid #E4E0FF' }} />
           </tr>
         </thead>
@@ -553,7 +689,7 @@ function AddRow({ onAdd }: { onAdd: (s: Subject) => void }) {
 }
 
 // ─── Subject row ──────────────────────────────────────────────────────────────
-function SubjectRow({ sub, classOptions, sections, board, isAiAssigned, unit, sessionMins, onUpdate, onDelete, extraCats = [], onAddCategory, onScopeClick }: {
+function SubjectRow({ sub, classOptions, sections, board, isAiAssigned, unit, sessionMins, onUpdate, onDelete, extraCats = [], onAddCategory, onDeleteCategory, onScopeClick }: {
   sub:          Subject
   classOptions: ChipOption[]
   sections:     Section[]
@@ -563,9 +699,10 @@ function SubjectRow({ sub, classOptions, sections, board, isAiAssigned, unit, se
   sessionMins:  number
   onUpdate:     (patch: Partial<Subject>) => void
   onDelete:     () => void
-  extraCats?:       string[]
-  onAddCategory?:   (cat: string) => void
-  onScopeClick?:    (sub: Subject, rect: DOMRect) => void
+  extraCats?:        string[]
+  onAddCategory?:    (cat: string) => void
+  onDeleteCategory?: (cat: string) => void
+  onScopeClick?:     (sub: Subject, rect: DOMRect) => void
 }) {
   const [expandSlots,    setExpandSlots]    = useState(false)
   const [expandSettings, setExpandSettings] = useState(false)
@@ -744,12 +881,11 @@ function SubjectRow({ sub, classOptions, sections, board, isAiAssigned, unit, se
 
         {/* Actions */}
         <td style={{ ...TD, whiteSpace: 'nowrap' }}>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flexWrap: 'nowrap' }}>
             <button
               onClick={() => { setExpandSlots(o => !o); setExpandSettings(false) }}
               style={{
-                ...actionBtn,
-                gap: 5,
+                ...actionBtn, minWidth: 0, gap: 4, padding: '5px 10px',
                 ...(expandSlots ? { background: P_L, color: P_D, borderColor: P_B } : {}),
               }}
               onMouseEnter={e => { e.currentTarget.style.background = P_L; e.currentTarget.style.color = P_D; e.currentTarget.style.borderColor = P_B }}
@@ -759,14 +895,14 @@ function SubjectRow({ sub, classOptions, sections, board, isAiAssigned, unit, se
                 e.currentTarget.style.borderColor = expandSlots ? P_B : '#DDD8FF'
               }}
             >
-              {expandSlots ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-              {expandSlots ? 'Show Less' : 'Show More'}
+              {expandSlots ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              {expandSlots ? 'Less' : 'More'}
             </button>
             {onScopeClick && (
               <button
                 title="Set availability scope for this subject"
                 onClick={e => onScopeClick(sub, e.currentTarget.getBoundingClientRect())}
-                style={{ ...actionBtn, gap: 4 }}
+                style={{ ...actionBtn, minWidth: 0, gap: 4, padding: '5px 10px' }}
                 onMouseEnter={e => { e.currentTarget.style.background = P_L; e.currentTarget.style.color = P_D; e.currentTarget.style.borderColor = P_B }}
                 onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#8886A8'; e.currentTarget.style.borderColor = '#DDD8FF' }}
               >
@@ -792,6 +928,7 @@ function SubjectRow({ sub, classOptions, sections, board, isAiAssigned, unit, se
               onUpdateSectionMaxDay={handleUpdateSectionMaxDay}
               onUpdateSectionConfig={handleUpdateSectionConfig}
               onAddCategory={onAddCategory ?? (() => {})}
+              onDeleteCategory={onDeleteCategory}
               extraCats={extraCats}
             />
           </td>
@@ -845,6 +982,15 @@ export function SubjectsPanel({
     setExtraCats(prev => {
       if (prev.includes(cat)) return prev
       const next = [...prev, cat]
+      localStorage.setItem('schedu-subject-extra-cats', JSON.stringify(next))
+      return next
+    })
+  }
+
+  function deleteCategory(cat: string) {
+    if (BUILTIN_CATS.includes(cat)) return
+    setExtraCats(prev => {
+      const next = prev.filter(c => c !== cat)
       localStorage.setItem('schedu-subject-extra-cats', JSON.stringify(next))
       return next
     })
@@ -1152,19 +1298,19 @@ export function SubjectsPanel({
             <div style={{ fontSize: 11.5, color: '#C4C0DC' }}>Add subjects, then use ⚡ AI Assign to auto-fill class mappings and teacher workloads.</div>
           </div>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'auto' }}>
             <colgroup>
-              <col style={{ width: 200 }} />   {/* Subject */}
-              <col style={{ width: 72 }} />    {/* Short */}
-              <col />                          {/* Applicable Classes */}
-              <col style={{ width: 218 }} />   {/* Actions — fits ShowMore+Scope+Delete */}
+              <col style={{ minWidth: 155 }} />  {/* Subject */}
+              <col style={{ minWidth: 52 }} />   {/* Short */}
+              <col />                             {/* Applicable Classes — flexible */}
+              <col />                             {/* Actions — auto-sizes to buttons */}
             </colgroup>
             <thead>
               <tr>
                 <th style={TH}>Subject</th>
                 <th style={TH}>Short</th>
                 <th style={TH}>Applicable Classes</th>
-                <th style={{ ...TH, textAlign: 'right', paddingRight: 10 }}>Actions</th>
+                <th style={{ ...TH, textAlign: 'right', paddingRight: 10, whiteSpace: 'nowrap' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -1182,6 +1328,7 @@ export function SubjectsPanel({
                   onDelete={() => remove(sub.id)}
                   extraCats={extraCats}
                   onAddCategory={addCategory}
+                  onDeleteCategory={deleteCategory}
                   onScopeClick={onScopeClick
                     ? (s, rect) => onScopeClick(s, rect)
                     : undefined}
