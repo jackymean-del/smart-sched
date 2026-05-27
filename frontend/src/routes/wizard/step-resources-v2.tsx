@@ -249,11 +249,9 @@ export function StepResourcesV2() {
     if (aiLoading) return
     setAiLoading(true)
     setAiSnapshot({ subjects, sections, staff, rooms })
-    setAiStatus('Inferring room types & subject mappings…')
+    setAiStatus('Inferring room types & subject mappings from room names…')
     await sleep(480)
-    const result = runAIAssignment(subjects, sections, staff, rooms,
-      normalizeBoardType(config.board ?? 'CBSE') as CurriculumBoard)
-    setRooms(result.rooms)
+    handleRoomAIFix()   // name-pattern logic: Computer Lab, Sci Lab, Library, Gym…
     setAiStatus('✓ Room assignments updated')
     setAiLoading(false)
     setTimeout(() => setAiStatus(''), 3000)

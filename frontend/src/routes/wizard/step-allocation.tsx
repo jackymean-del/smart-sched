@@ -9,6 +9,7 @@
  */
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
+import * as XLSX from 'xlsx'
 import { useTimetableStore } from '@/store/timetableStore'
 import { AllocationGridAG } from '@/components/master/AllocationGridAG'
 import { TeacherAllocationSummary } from '@/components/master/TeacherAllocationSummary'
@@ -23,7 +24,7 @@ import type { Section, Subject, Staff } from '@/types'
 import {
   Grid3x3, Users, ChevronLeft, ChevronRight,
   Sparkles, AlertTriangle, CheckCircle2, Info, BookOpen,
-  BarChart3, ShieldCheck, XCircle, FileText,
+  BarChart3, ShieldCheck, XCircle, FileText, FileSpreadsheet, Printer,
 } from 'lucide-react'
 
 type Sub = 'periods' | 'teachers' | 'validation'
@@ -362,7 +363,69 @@ export function StepAllocation() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // intentionally mount-only — autoRanRef prevents double-fire in StrictMode
 
-  // Toolbar extra for the periods tab — thin spreadsheet ribbon
+  // ── Export helpers ──────────────────────────────────────────────────────────
+  const exportPeriodAllocation = useCallback((fmt: 'xlsx' | 'csv') => {
+    const secs = sections as Section[]
+    const subs = subjects as Subject[]
+    const allocs = subjectAllocations ?? {}
+    const header = ['Class', ...subs.map((s: Subject) => s.shortName ?? s.name), 'Total']
+    const rows = secs.map((sec: Section) => {
+      let total = 0
+      const cells = subs.map((s: Subject) => {
+        const raw = allocs[sec.name]?.[s.name]
+        const p = raw ? (parseAllocation(raw).weeklyTotal || 0) : 0
+        total += p
+        return p > 0 ? (displayMode === 'hours' ? `${Math.floor(p * periodMinutes / 60)}h${p * periodMinutes % 60 ? `${p * periodMinutes % 60}m` : ''}` : String(p)) : ''
+      })
+      return [sec.name, ...cells, String(total)]
+    })
+    const data = [header, ...rows]
+    const wb = XLSX.utils.book_new()
+    const ws = XLSX.utils.aoa_to_sheet(data)
+    ws['!cols'] = data[0].map((_, ci) => ({ wch: Math.min(20, Math.max(8, ...data.map(r => String(r[ci] ?? '').length))) }))
+    XLSX.utils.book_append_sheet(wb, ws, 'Period Allocation')
+    if (fmt === 'csv') {
+      const csv = data.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
+      const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'Period_Allocation.csv'; a.click()
+    } else {
+      XLSX.writeFile(wb, 'Period_Allocation.xlsx')
+    }
+  }, [sections, subjects, subjectAllocations, displayMode, periodMinutes])
+
+  const exportTeacherAllocation = useCallback((fmt: 'xlsx' | 'csv') => {
+    const allocs = teacherAllocations ?? {}
+    const header = ['Teacher', 'Total Periods', 'Max Periods', 'Utilisation %', 'Subjects', 'Classes', 'Assignment Detail']
+    const rows = (staff as Staff[]).map((t: Staff) => {
+      const tMap = allocs[t.name] ?? {}
+      let total = 0; const subSet = new Set<string>(); const secSet = new Set<string>()
+      const details: string[] = []
+      Object.entries(tMap).forEach(([sec, sMap]: [string, any]) => {
+        Object.entries(sMap ?? {}).forEach(([sub, p]: [string, any]) => {
+          if (typeof p === 'number' && p > 0) {
+            total += p; subSet.add(sub); secSet.add(sec)
+            details.push(`${sub}→${sec}(${p}p)`)
+          }
+        })
+      })
+      const max = (t as any).maxPeriodsPerWeek ?? 40
+      return [t.name, String(total), String(max), `${max > 0 ? Math.round(total / max * 100) : 0}%`, String(subSet.size), String(secSet.size), details.join('; ')]
+    })
+    const data = [header, ...rows]
+    const wb = XLSX.utils.book_new()
+    const ws = XLSX.utils.aoa_to_sheet(data)
+    ws['!cols'] = header.map((h, i) => ({ wch: Math.min(40, Math.max(12, ...data.map(r => String(r[i] ?? '').length))) }))
+    XLSX.utils.book_append_sheet(wb, ws, 'Teacher Allocation')
+    if (fmt === 'csv') {
+      const csv = data.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
+      const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'Teacher_Allocation.csv'; a.click()
+    } else {
+      XLSX.writeFile(wb, 'Teacher_Allocation.xlsx')
+    }
+  }, [staff, teacherAllocations])
+
+  // ── Toolbar extra for the periods tab — thin spreadsheet ribbon ──────────
   const periodsToolbarExtra = (
     <>
       {/* Mode toggle: Periods | Hours — flat underline tabs */}
@@ -397,16 +460,33 @@ export function StepAllocation() {
         <Sparkles size={9} /> Suggest
       </button>
 
-      {/* Reports */}
-      <button onClick={() => setShowReport('periods')} style={{
-        display: 'inline-flex', alignItems: 'center', gap: 3,
-        padding: '2px 7px', borderRadius: 4, border: '1px solid #EEECF2',
-        background: 'transparent', color: '#A8A4C0',
-        fontSize: 10, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-      }}
-        title="View class-wise and subject-wise reports">
-        <FileText size={9} /> Reports
-      </button>
+      {/* Reports & Export group */}
+      <div style={{ display: 'inline-flex', borderRadius: 5, overflow: 'hidden', border: '1px solid #EEECF2', gap: 0 }}>
+        <button onClick={() => setShowReport('periods')} style={{
+          display: 'inline-flex', alignItems: 'center', gap: 3,
+          padding: '2px 7px', border: 'none', borderRight: '1px solid #EEECF2',
+          background: 'transparent', color: '#A8A4C0',
+          fontSize: 10, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+        }} title="View class-wise and subject-wise reports">
+          <FileText size={9} /> Report
+        </button>
+        <button onClick={() => exportPeriodAllocation('xlsx')} style={{
+          display: 'inline-flex', alignItems: 'center', gap: 3,
+          padding: '2px 7px', border: 'none', borderRight: '1px solid #EEECF2',
+          background: 'transparent', color: '#16A34A',
+          fontSize: 10, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+        }} title="Export to Excel (.xlsx)">
+          <FileSpreadsheet size={9} /> Excel
+        </button>
+        <button onClick={() => exportPeriodAllocation('csv')} style={{
+          display: 'inline-flex', alignItems: 'center', gap: 3,
+          padding: '2px 7px', border: 'none',
+          background: 'transparent', color: '#0369A1',
+          fontSize: 10, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+        }} title="Export to CSV">
+          <FileText size={9} /> CSV
+        </button>
+      </div>
     </>
   )
 
@@ -537,14 +617,32 @@ export function StepAllocation() {
           {sub === 'periods'    && <AllocationGridAG displayMode={displayMode} periodMinutes={periodMinutes} toolbarExtra={periodsToolbarExtra} />}
           {sub === 'teachers'   && <TeacherAllocationSummary displayMode={displayMode} periodMinutes={periodMinutes}
             toolbarExtra={
-              <button onClick={() => setShowReport('teachers')} style={{
-                display: 'inline-flex', alignItems: 'center', gap: 5,
-                padding: '5px 11px', borderRadius: 7,
-                border: '1px solid #D8D2FF', background: '#F8F7FF', color: '#5B4EC0',
-                fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-              }}>
-                <FileText size={11} /> Reports
-              </button>
+              <div style={{ display: 'inline-flex', borderRadius: 7, overflow: 'hidden', border: '1px solid #D8D2FF' }}>
+                <button onClick={() => setShowReport('teachers')} style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  padding: '5px 11px', border: 'none', borderRight: '1px solid #D8D2FF',
+                  background: '#F8F7FF', color: '#5B4EC0',
+                  fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                }}>
+                  <FileText size={11} /> Report
+                </button>
+                <button onClick={() => exportTeacherAllocation('xlsx')} style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  padding: '5px 11px', border: 'none', borderRight: '1px solid #D8D2FF',
+                  background: '#F8F7FF', color: '#16A34A',
+                  fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                }} title="Export to Excel">
+                  <FileSpreadsheet size={11} /> Excel
+                </button>
+                <button onClick={() => exportTeacherAllocation('csv')} style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  padding: '5px 11px', border: 'none',
+                  background: '#F8F7FF', color: '#0369A1',
+                  fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                }} title="Export to CSV">
+                  <FileText size={11} /> CSV
+                </button>
+              </div>
             }
           />}
           {sub === 'validation' && (

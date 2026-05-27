@@ -9,10 +9,11 @@
  */
 
 import { useState, useMemo, useCallback } from 'react'
+import * as XLSX from 'xlsx'
 import { useTimetableStore } from '@/store/timetableStore'
 import type { Section, Subject, Staff } from '@/types'
 import { parseAllocation } from '@/lib/allocationSyntax'
-import { X, Printer, ChevronUp, ChevronDown, ArrowUpDown } from 'lucide-react'
+import { X, Printer, ChevronUp, ChevronDown, ArrowUpDown, Download, FileSpreadsheet, FileText as FileCsvIcon } from 'lucide-react'
 
 interface Props {
   mode: 'periods' | 'teachers'
@@ -168,6 +169,71 @@ export function AllocationReportModal({ mode, onClose, displayMode = 'periods', 
 
   const title = mode === 'teachers' ? 'Teacher Allocation Report' : 'Period Allocation Report'
 
+  // ── Build flat 2D array for the active tab (used by Excel / CSV export) ──
+  const buildExportData = useCallback((): string[][] => {
+    const subjs = subjects as Subject[]
+    if (activeTab === 'class') {
+      const header = ['Section', ...subjs.map(s => s.shortName ?? s.name), 'Total']
+      const rows = sortedClassRows.map((r: any) => [
+        r.section,
+        ...subjs.map((s: Subject) => {
+          const v = r[s.name]
+          return v ? (displayMode === 'hours' ? toHourMin(v, periodMinutes) : String(v)) : ''
+        }),
+        r.__total ? (displayMode === 'hours' ? toHourMin(r.__total, periodMinutes) : String(r.__total)) : '0',
+      ])
+      return [header, ...rows]
+    }
+    if (activeTab === 'subject') {
+      const header = ['Subject', 'Total periods', 'Sections covered', 'Default p/w']
+      const rows = sortedSubjectRows.map((r: any) => [
+        r.subject,
+        displayMode === 'hours' ? toHourMin(r.total, periodMinutes) : String(r.total),
+        String(r.sectionCount),
+        String(r.periodsPerWeek),
+      ])
+      return [header, ...rows]
+    }
+    if (activeTab === 'teacher') {
+      const header = ['Teacher', 'Assigned', 'Max', 'Utilisation %', 'Subjects', 'Classes']
+      const rows = sortedTeacherRows.map((r: any) => [
+        r.teacher,
+        displayMode === 'hours' ? toHourMin(r.total, periodMinutes) : String(r.total),
+        displayMode === 'hours' ? toHourMin(r.max, periodMinutes) : String(r.max),
+        String(r.utilisation),
+        String(r.subjects),
+        String(r.sections),
+      ])
+      return [header, ...rows]
+    }
+    return []
+  }, [activeTab, sortedClassRows, sortedSubjectRows, sortedTeacherRows, subjects, displayMode, periodMinutes])
+
+  const handleExportExcel = useCallback(() => {
+    const data = buildExportData()
+    if (!data.length) return
+    const wb = XLSX.utils.book_new()
+    const ws = XLSX.utils.aoa_to_sheet(data)
+    // Auto column widths
+    const colWidths = data[0].map((_, ci) =>
+      Math.min(30, Math.max(10, ...data.map(r => String(r[ci] ?? '').length)))
+    )
+    ws['!cols'] = colWidths.map(w => ({ wch: w }))
+    XLSX.utils.book_append_sheet(wb, ws, activeTab === 'class' ? 'Class-wise' : activeTab === 'subject' ? 'Subject-wise' : 'Teacher-wise')
+    XLSX.writeFile(wb, `${title.replace(/ /g, '_')}_${activeTab}.xlsx`)
+  }, [buildExportData, title, activeTab])
+
+  const handleExportCSV = useCallback(() => {
+    const data = buildExportData()
+    if (!data.length) return
+    const csv = data.map(row => row.map(cell => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(',')).join('\n')
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a'); a.href = url
+    a.download = `${title.replace(/ /g, '_')}_${activeTab}.csv`
+    a.click(); URL.revokeObjectURL(url)
+  }, [buildExportData, title, activeTab])
+
   // ── Print helper: hides all page siblings before printing so only the
   //    report is visible, then restores them via afterprint event.
   //    Plain window.print() fails because the modal lives inside #root —
@@ -240,15 +306,21 @@ export function AllocationReportModal({ mode, onClose, displayMode = 'periods', 
                 {displayMode === 'hours' ? `Hours (1 period = ${periodMinutes} min)` : 'Periods per week'} · Click column headers to sort
               </div>
             </div>
-            <button onClick={handlePrint}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 6,
-                padding: '8px 16px', borderRadius: 8, border: 'none',
-                background: '#7C6FE0', color: '#fff', fontSize: 12, fontWeight: 700,
-                cursor: 'pointer', fontFamily: 'inherit',
-              }}>
-              <Printer size={14} /> Download / Print A4
-            </button>
+            {/* Export group */}
+            <div style={{ display: 'inline-flex', borderRadius: 8, overflow: 'hidden', border: '1px solid #DDD8FF' }}>
+              <button onClick={handleExportExcel} title="Export to Excel (.xlsx)"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '7px 12px', border: 'none', background: '#F8F7FF', color: '#16A34A', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', borderRight: '1px solid #DDD8FF' }}>
+                <FileSpreadsheet size={13} /> Excel
+              </button>
+              <button onClick={handleExportCSV} title="Export to CSV"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '7px 12px', border: 'none', background: '#F8F7FF', color: '#0369A1', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', borderRight: '1px solid #DDD8FF' }}>
+                <FileCsvIcon size={13} /> CSV
+              </button>
+              <button onClick={handlePrint} title="Print / Save as PDF"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '7px 12px', border: 'none', background: '#7C6FE0', color: '#fff', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                <Printer size={13} /> Print / PDF
+              </button>
+            </div>
             <button onClick={onClose}
               style={{ display: 'inline-flex', padding: 8, borderRadius: 8, border: 'none', background: '#F0EDFF', cursor: 'pointer', color: '#7C6FE0' }}>
               <X size={16} />
