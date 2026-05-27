@@ -413,72 +413,72 @@ export function StepAllocation() {
   return (
     <div style={{ padding: '12px 20px 20px', maxWidth: 1400, margin: '0 auto' }}>
 
-      {/* ── Sub-tabs + Sync button ── */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 0, marginBottom: 10,
-        borderBottom: '1px solid #EEECF8',
-      }}>
-        <span style={{ fontSize: 13, fontWeight: 700, color: '#13111E', padding: '0 14px 0 0', marginRight: 4, borderRight: '1px solid #EEECF8' }}>
-          Allocation
-        </span>
-        <SubTab active={sub === 'periods'}    onClick={() => setSub('periods')}    icon={<Grid3x3 size={11} />}      label="Period allocation" />
-        <SubTab active={sub === 'teachers'}   onClick={() => setSub('teachers')}   icon={<Users size={11} />}         label="Teacher allocation" />
-        <SubTab active={sub === 'validation'} onClick={() => setSub('validation')} icon={<ShieldCheck size={11} />}   label="Validation" />
-        <div style={{ marginLeft: 'auto', paddingBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <button
-            onClick={handleSyncFromResources}
-            title="Re-derive period slots + teacher assignments from Resources data"
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 5,
-              padding: '5px 13px', borderRadius: 6, border: '1px solid #BBF7D0',
-              background: '#F0FDF4', color: '#15803D', fontSize: 11.5, fontWeight: 700,
-              cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' as const,
-            }}
-            onMouseEnter={e => { e.currentTarget.style.background = '#DCFCE7' }}
-            onMouseLeave={e => { e.currentTarget.style.background = '#F0FDF4' }}
-          >
-            <Sparkles size={11} /> Sync from Resources
-          </button>
-        </div>
-      </div>
-
-      {/* ── Persistent conflict banner — real-time alert on all tabs ── */}
-      {hardConflicts.length > 0 && (
-        <div style={{
-          display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 10,
-          padding: '8px 12px', borderRadius: 7,
-          background: '#FEF2F2', border: '1px solid #FECACA',
-        }}>
-          <XCircle size={14} color="#DC2626" style={{ flexShrink: 0, marginTop: 1 }} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <span style={{ fontSize: 11.5, fontWeight: 700, color: '#DC2626' }}>
-              {hardConflicts.length} hard conflict{hardConflicts.length > 1 ? 's' : ''}
-            </span>
-            <span style={{ fontSize: 11, color: '#B91C1C', marginLeft: 6 }}>
-              {hardConflicts.slice(0, 2).join(' · ')}{hardConflicts.length > 2 ? ` +${hardConflicts.length - 2} more` : ''}
-            </span>
-          </div>
-          <button
-            onClick={handleSyncFromResources}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0,
-              padding: '3px 10px', borderRadius: 5, border: '1px solid #FCA5A5',
-              background: '#DC2626', color: '#fff', fontSize: 10.5, fontWeight: 700,
-              cursor: 'pointer', fontFamily: 'inherit',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.background = '#B91C1C' }}
-            onMouseLeave={e => { e.currentTarget.style.background = '#DC2626' }}
-          >
-            <Sparkles size={9} /> Auto-fix
-          </button>
-        </div>
-      )}
-
       {/* ── Two-panel body ── */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 276px', gap: 16, alignItems: 'start' }}>
 
         {/* ── Left: main content ── */}
         <div style={{ minWidth: 0 }}>
+
+          {/* ── Sub-tabs + Sync button — right edge aligns exactly with the table ── */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 0, marginBottom: 10,
+            borderBottom: '1px solid #EEECF8',
+          }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#13111E', padding: '0 14px 0 0', marginRight: 4, borderRight: '1px solid #EEECF8' }}>
+              Allocation
+            </span>
+            <SubTab active={sub === 'periods'}    onClick={() => setSub('periods')}    icon={<Grid3x3 size={11} />}      label="Period allocation" />
+            <SubTab active={sub === 'teachers'}   onClick={() => setSub('teachers')}   icon={<Users size={11} />}         label="Teacher allocation" />
+            <SubTab active={sub === 'validation'} onClick={() => setSub('validation')} icon={<ShieldCheck size={11} />}   label="Validation" />
+            <div style={{ marginLeft: 'auto', paddingBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button
+                onClick={handleSyncFromResources}
+                title="Re-derive period slots + teacher assignments from Resources data"
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  padding: '5px 13px', borderRadius: 6, border: '1px solid #BBF7D0',
+                  background: '#F0FDF4', color: '#15803D', fontSize: 11.5, fontWeight: 700,
+                  cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' as const,
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = '#DCFCE7' }}
+                onMouseLeave={e => { e.currentTarget.style.background = '#F0FDF4' }}
+              >
+                <Sparkles size={11} /> Sync from Resources
+              </button>
+            </div>
+          </div>
+
+          {/* ── Persistent conflict banner — real-time alert on all tabs ── */}
+          {hardConflicts.length > 0 && (
+            <div style={{
+              display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 10,
+              padding: '8px 12px', borderRadius: 7,
+              background: '#FEF2F2', border: '1px solid #FECACA',
+            }}>
+              <XCircle size={14} color="#DC2626" style={{ flexShrink: 0, marginTop: 1 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ fontSize: 11.5, fontWeight: 700, color: '#DC2626' }}>
+                  {hardConflicts.length} hard conflict{hardConflicts.length > 1 ? 's' : ''}
+                </span>
+                <span style={{ fontSize: 11, color: '#B91C1C', marginLeft: 6 }}>
+                  {hardConflicts.slice(0, 2).join(' · ')}{hardConflicts.length > 2 ? ` +${hardConflicts.length - 2} more` : ''}
+                </span>
+              </div>
+              <button
+                onClick={handleSyncFromResources}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0,
+                  padding: '3px 10px', borderRadius: 5, border: '1px solid #FCA5A5',
+                  background: '#DC2626', color: '#fff', fontSize: 10.5, fontWeight: 700,
+                  cursor: 'pointer', fontFamily: 'inherit',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = '#B91C1C' }}
+                onMouseLeave={e => { e.currentTarget.style.background = '#DC2626' }}
+              >
+                <Sparkles size={9} /> Auto-fix
+              </button>
+            </div>
+          )}
 
           {/* Action bar — only shown for teacher + validation tabs */}
           {sub !== 'periods' && (
@@ -617,7 +617,7 @@ export function StepAllocation() {
           )}
         </span>
         <button onClick={() => setStep(4)} disabled={hardConflicts.length > 0} style={btnPrimary(hardConflicts.length === 0)}>
-          Next: Student groups <ChevronRight size={14} />
+          Save & Continue <ChevronRight size={14} />
         </button>
       </div>
     </div>

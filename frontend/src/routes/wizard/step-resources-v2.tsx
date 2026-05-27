@@ -183,14 +183,12 @@ export function StepResourcesV2() {
 
   function sleep(ms: number) { return new Promise<void>(r => setTimeout(r, ms)) }
 
+  // ── Full AI assign (all resources) — used by empty-state & Regenerate All ──
   async function handleGlobalAIAssign(board: CurriculumBoard) {
     if (aiLoading) return
     aiAbortRef.current = false
     setAiLoading(true)
-
-    // Take a full snapshot for undo
     setAiSnapshot({ subjects, sections, staff, rooms })
-
     const steps = [
       `Applying ${board} curriculum standards...`,
       `Mapping subjects → grade levels...`,
@@ -205,17 +203,60 @@ export function StepResourcesV2() {
       await sleep(320)
     }
     if (aiAbortRef.current) { setAiLoading(false); return }
-
     const result = runAIAssignment(subjects, sections, staff, rooms, board)
-
     setSections(result.sections)
     setSubjects(result.subjects)
     setStaff(result.staff)
     setRooms(result.rooms)
-
     setAiStatus(`✓ ${board} curriculum assigned`)
     setAiLoading(false)
     setTimeout(() => setAiStatus(''), 3500)
+  }
+
+  // ── Per-tab AI assign — only touches the relevant resource ───────────────
+  async function handleSubjectsAIAssign(board: CurriculumBoard) {
+    if (aiLoading) return
+    setAiLoading(true)
+    setAiSnapshot({ subjects, sections, staff, rooms })
+    setAiStatus(`Calculating ${board} subject allocations…`)
+    await sleep(480)
+    const result = runAIAssignment(subjects, sections, staff, rooms, board)
+    setSubjects(result.subjects)
+    setAiStatus('✓ Subject slots assigned')
+    setAiLoading(false)
+    setTimeout(() => setAiStatus(''), 3000)
+  }
+
+  async function handleFacultyAIAssign() {
+    if (aiLoading) return
+    setAiLoading(true)
+    setAiSnapshot({ subjects, sections, staff, rooms })
+    const board = normalizeBoardType(config.board ?? 'CBSE') as CurriculumBoard
+    const boardPeriods: Record<string, number> = { CBSE: 32, ICSE: 32, IB: 24, Cambridge: 24, Custom: 28 }
+    const maxPeriods = boardPeriods[board] ?? 28
+    setAiStatus('Assigning teacher workloads & subjects…')
+    await sleep(480)
+    const result = runAIAssignment(subjects, sections, staff, rooms, board)
+    // Apply AI staff but preserve max periods from board standard
+    const newStaff = result.staff.map((t: any) => ({ ...t, maxPeriodsPerWeek: maxPeriods }))
+    setStaff(newStaff)
+    setAiStatus('✓ Faculty assignments updated')
+    setAiLoading(false)
+    setTimeout(() => setAiStatus(''), 3000)
+  }
+
+  async function handleRoomsAIAssign() {
+    if (aiLoading) return
+    setAiLoading(true)
+    setAiSnapshot({ subjects, sections, staff, rooms })
+    setAiStatus('Inferring room types & subject mappings…')
+    await sleep(480)
+    const result = runAIAssignment(subjects, sections, staff, rooms,
+      normalizeBoardType(config.board ?? 'CBSE') as CurriculumBoard)
+    setRooms(result.rooms)
+    setAiStatus('✓ Room assignments updated')
+    setAiLoading(false)
+    setTimeout(() => setAiStatus(''), 3000)
   }
 
   function handleGlobalAIUndo() {
@@ -564,7 +605,7 @@ export function StepResourcesV2() {
                 <SubjectsPanel
                   subjects={subjects} setSubjects={setSubjects}
                   sections={sections} board={config.board}
-                  onGlobalAIAssign={handleGlobalAIAssign}
+                  onGlobalAIAssign={handleSubjectsAIAssign}
                   globalAILoading={aiLoading}
                   globalAIStatus={aiStatus}
                   globalAIHasSnapshot={!!aiSnapshot}
@@ -585,7 +626,7 @@ export function StepResourcesV2() {
                       ? { kind: 'BulkTeacher', entity: t, rect }
                       : { kind: 'Teacher', entity: t, rect })
                   }
-                  onAIFix={handleTeacherAIFix}
+                  onAIFix={handleFacultyAIAssign}
                 />
               </div>
               <div style={{ flex: 1, minHeight: 0, display: activeTab === 'rooms' ? 'flex' : 'none', flexDirection: 'column' }}>
@@ -597,7 +638,7 @@ export function StepResourcesV2() {
                       ? { kind: 'BulkRoom', entity: r, rect }
                       : { kind: 'Room', entity: r, rect })
                   }
-                  onAIFix={handleRoomAIFix}
+                  onAIFix={handleRoomsAIAssign}
                 />
               </div>
             </div>
@@ -691,7 +732,7 @@ export function StepResourcesV2() {
             onMouseEnter={e => { if (allReady) { (e.currentTarget.style.background = P_D); (e.currentTarget.style.boxShadow = '0 4px 16px rgba(99,88,196,0.42)') } }}
             onMouseLeave={e => { if (allReady) { (e.currentTarget.style.background = P); (e.currentTarget.style.boxShadow = '0 3px 12px rgba(124,111,224,0.36)') } }}
           >
-            Next: Allocation <ChevronRight size={14} />
+            Save & Continue <ChevronRight size={14} />
           </button>
         </div>
       </div>

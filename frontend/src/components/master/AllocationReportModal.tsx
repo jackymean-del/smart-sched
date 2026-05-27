@@ -8,7 +8,7 @@
  * that hide everything except the report content.
  */
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { useTimetableStore } from '@/store/timetableStore'
 import type { Section, Subject, Staff } from '@/types'
 import { parseAllocation } from '@/lib/allocationSyntax'
@@ -168,15 +168,50 @@ export function AllocationReportModal({ mode, onClose, displayMode = 'periods', 
 
   const title = mode === 'teachers' ? 'Teacher Allocation Report' : 'Period Allocation Report'
 
+  // ── Print helper: hides all page siblings before printing so only the
+  //    report is visible, then restores them via afterprint event.
+  //    Plain window.print() fails because the modal lives inside #root —
+  //    the old "body > * { display:none }" CSS hides #root itself.
+  const handlePrint = useCallback(() => {
+    const overlay = document.querySelector('.print-report-overlay') as HTMLElement | null
+    if (!overlay) { window.print(); return }
+    const root = document.getElementById('root') ?? document.body
+    // Walk from overlay up to the direct child of root
+    let topEl: HTMLElement = overlay
+    while (topEl.parentElement && topEl.parentElement !== root) {
+      topEl = topEl.parentElement as HTMLElement
+    }
+    const siblings = Array.from(root.children).filter(c => c !== topEl) as HTMLElement[]
+    const saved = siblings.map(s => s.style.display)
+    siblings.forEach(s => (s.style.display = 'none'))
+    const restore = () => {
+      siblings.forEach((s, i) => (s.style.display = saved[i]))
+      window.removeEventListener('afterprint', restore)
+    }
+    window.addEventListener('afterprint', restore)
+    window.print()
+  }, [])
+
   return (
     <>
-      {/* Print styles — injected inline so they work with any bundler */}
+      {/* Print styles — overlay becomes the whole page; no-print items are hidden */}
       <style>{`
         @media print {
-          body > * { display: none !important; }
-          .print-report-overlay { display: block !important; position: static !important; background: white !important; }
+          .print-report-overlay {
+            position: static !important;
+            background: white !important;
+            display: block !important;
+            padding: 0 !important;
+            overflow: visible !important;
+          }
           .print-report-overlay .no-print { display: none !important; }
-          .print-report-overlay .print-content { box-shadow: none !important; max-height: none !important; overflow: visible !important; }
+          .print-report-overlay .print-content {
+            box-shadow: none !important;
+            max-height: none !important;
+            overflow: visible !important;
+            border-radius: 0 !important;
+            max-width: 100% !important;
+          }
           @page { size: A4; margin: 15mm; }
         }
       `}</style>
@@ -205,7 +240,7 @@ export function AllocationReportModal({ mode, onClose, displayMode = 'periods', 
                 {displayMode === 'hours' ? `Hours (1 period = ${periodMinutes} min)` : 'Periods per week'} · Click column headers to sort
               </div>
             </div>
-            <button onClick={() => window.print()}
+            <button onClick={handlePrint}
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 6,
                 padding: '8px 16px', borderRadius: 8, border: 'none',

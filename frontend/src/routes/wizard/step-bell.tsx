@@ -1479,6 +1479,19 @@ export function StepBell() {
   }, [displayRows, workDays.length])
 
   const handleNext = () => {
+    // Flush bell state to localStorage synchronously before unmounting.
+    // The persistence useEffect is async (fires after paint) so there is a
+    // race condition: if the user clicks Save & Continue immediately after an
+    // edit, the most-recent state might not yet be in localStorage.
+    // Writing it here guarantees re-mount reads the correct values.
+    try {
+      localStorage.setItem(BELL_KEY, JSON.stringify({
+        shiftName, startTime, use12h, periodDur, maxPeriods, workDays, rows,
+        cycleWeeks, useDayNames, cycleStartDate, fixedDuration, rotationDays,
+        weekWorkDays, dayStartTimes, dayPeriodDurs, dayOffRules, varyByDay, dayRows,
+        scheduleMode, shifts, activeShiftId, shiftRows,
+      } satisfies SavedBell))
+    } catch { /* localStorage might be full */ }
     setConfig({
       workDays: workDays.map(d => DAY_TO_FULL[d] ?? d.toUpperCase()),
       startTime, endTime, periodsPerDay: maxPeriods, defaultSessionDuration: periodDur,
@@ -2785,7 +2798,7 @@ export function StepBell() {
         </button>
         <span style={{ fontSize: 13, color: '#9CA3AF' }}>Step 1 of 5</span>
         <button className="b-nav-pri" onClick={handleNext} disabled={workDays.length === 0} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '9px 20px', borderRadius: 8, border: 'none', background: workDays.length > 0 ? '#13111E' : '#E5E7EB', color: workDays.length > 0 ? '#fff' : '#9CA3AF', fontSize: 13, fontWeight: 700, cursor: workDays.length > 0 ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>
-          Next: Resources <ChevronRight size={14} />
+          Save & Continue <ChevronRight size={14} />
         </button>
       </div>
     </div>

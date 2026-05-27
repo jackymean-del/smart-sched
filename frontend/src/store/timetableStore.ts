@@ -843,9 +843,12 @@ export const useTimetableStore = create<ScheduState>()(
           subjectGroupingRules: state.subjectGroupingRules,
           sectionStrengths: state.sectionStrengths,
           subjectAllocations: state.subjectAllocations,
+          sectionCapacityOverrides: state.sectionCapacityOverrides,
           teacherAllocations: state.teacherAllocations,
           dynamicLearningGroups: state.dynamicLearningGroups,
           blockedSlots: state.blockedSlots,
+          optionalBlocks: state.optionalBlocks,
+          subjectCombinations: state.subjectCombinations,
         }),
       }
     ),
