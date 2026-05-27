@@ -387,6 +387,9 @@ export function StepStudentGroups() {
         } else if (!applicable && val === 0) {
           // Unfilled cell became non-applicable → mark NA
           newStrengths[col.key] = -1; rowChanged = true
+        } else if (applicable && val === -1) {
+          // Was NA, but subject now applies to this section → make editable
+          newStrengths[col.key] = 0; rowChanged = true
         }
       })
       if (rowChanged) { globalChanged = true; return { ...row, subjectStrengths: newStrengths } }
@@ -680,8 +683,9 @@ export function StepStudentGroups() {
 
                         {displayCols.map((col, ci) => {
                           const raw = row.subjectStrengths?.[col.key]
-                          const isNA = raw === -1
                           const sub = (subjects as any[]).find(s => s.name === col.key)
+                          // Re-check applicability at render time so stale -1 values clear immediately
+                          const isNA = raw === -1 && !isApplicableToSection(sub, row.sectionName, subjectAllocations)
                           const wouldBeNA = raw === undefined && !isApplicableToSection(sub, row.sectionName, subjectAllocations)
 
                           if (isNA || wouldBeNA) {
