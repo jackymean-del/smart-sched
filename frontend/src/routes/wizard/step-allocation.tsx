@@ -250,16 +250,25 @@ export function StepAllocation() {
     store.setSubjectAllocations?.(derivePeriodsFromResources())
   }, [derivePeriodsFromResources, store])
 
-  // ── Derive teacher allocations — respects subjectMappings set in Resources ────
-  // Pass 1: explicit subjectMappings → 1-to-1 teacher↔subject↔class assignment.
-  // Pass 2: intelligent load-balanced fallback for any uncovered pairs.
+  // ── Derive teacher allocations — NEVER exceeds maxPeriodsPerWeek ─────────────
+  // Pass 1a: explicit subjectMappings, strictly capped at teacher's weekly max.
+  // Pass 1b: overflow from capped mappings re-assigned to any other qualified teacher.
+  // Pass 2:  remaining uncovered pairs filled with load-balanced intelligent assign.
+  // Hard rule: if no teacher has remaining capacity, skip the pair (soft warning)
+  //            rather than creating an overload hard conflict.
   const handleAITeacherAllocate = useCallback((periodAllocs?: Record<string, Record<string, string>>) => {
-    const allocs  = periodAllocs ?? subjectAllocations ?? {}
+    const allocs   = periodAllocs ?? subjectAllocations ?? {}
     const next: Record<string, Record<string, Record<string, number>>> = {}
-    const covered = new Set<string>()  // "cls::subject" pairs covered by mappings
+    const load:  Record<string, number> = {}
+    const covered  = new Set<string>()  // "cls::subject" pairs definitively assigned
+    const overflow: Array<{ cls: string; subject: string; target: number }> = []
 
-    // PASS 1 — use explicit subjectMappings from TeachersPanel (100% accurate)
+    // Init load counters
+    ;(staff as Staff[]).forEach((t: Staff) => { load[t.name] = 0 })
+
+    // PASS 1a — explicit subjectMappings, capped at maxPeriodsPerWeek
     ;(staff as Staff[]).forEach((t: Staff) => {
+      const maxPeriods = (t as any).maxPeriodsPerWeek ?? 32
       const maps: Array<{ subject: string; classes: string[] }> = ((t as any).subjectMappings ?? [])
         .filter((m: any) => (m.classes ?? []).length > 0)
       if (!maps.length) return
@@ -269,24 +278,47 @@ export function StepAllocation() {
           if (!raw) return
           const target = parseAllocation(raw).weeklyTotal || 0
           if (target <= 0) return
+          if ((load[t.name] ?? 0) + target > maxPeriods) {
+            // Teacher is at capacity — queue this pair for re-assignment
+            overflow.push({ cls, subject: m.subject, target })
+            return
+          }
           if (!next[t.name])      next[t.name]      = {}
           if (!next[t.name][cls]) next[t.name][cls] = {}
           next[t.name][cls][m.subject] = (next[t.name][cls][m.subject] ?? 0) + target
+          load[t.name]  = (load[t.name]  ?? 0) + target
           covered.add(`${cls}::${m.subject}`)
         })
       })
     })
 
-    // PASS 2 — intelligent assignment for pairs not covered by explicit mappings
-    const load: Record<string, number> = {}
-    ;(staff as Staff[]).forEach((t: Staff) => {
-      let l = 0
-      const tMap = next[t.name] ?? {}
-      Object.values(tMap).forEach((sMap: any) =>
-        Object.values(sMap ?? {}).forEach((p: any) => { if (typeof p === 'number') l += p })
+    // Shared helper: assign a cls+subject to the best available qualified teacher.
+    // Returns false if no teacher has remaining capacity (caller logs soft warning).
+    const assignToAvailable = (cls: string, subject: string, target: number): boolean => {
+      if (covered.has(`${cls}::${subject}`)) return true
+      const pool = (staff as Staff[]).filter(t =>
+        (t.subjects ?? []).some((x: string) => x === subject)
       )
-      load[t.name] = l
-    })
+      const eligible = pool.length > 0 ? pool : (staff as Staff[])
+      const maxFn = (t: Staff) => (t as any).maxPeriodsPerWeek ?? 32
+      // Strictly only pick teachers who still have capacity — never breach max
+      const withRoom = eligible
+        .filter(t => (load[t.name] ?? 0) + target <= maxFn(t))
+        .sort((a, b) => (load[a.name] ?? 0) - (load[b.name] ?? 0))
+      const chosen = withRoom[0]
+      if (!chosen) return false  // no capacity — surfaces as soft warning in Validation
+      if (!next[chosen.name])            next[chosen.name]            = {}
+      if (!next[chosen.name][cls])       next[chosen.name][cls]       = {}
+      next[chosen.name][cls][subject] = (next[chosen.name][cls][subject] ?? 0) + target
+      load[chosen.name] = (load[chosen.name] ?? 0) + target
+      covered.add(`${cls}::${subject}`)
+      return true
+    }
+
+    // PASS 1b — re-assign overflowed explicit mappings to other available teachers
+    overflow.forEach(({ cls, subject, target }) => assignToAvailable(cls, subject, target))
+
+    // PASS 2 — intelligent assignment for pairs not covered by any mapping
     ;(sections as Section[]).forEach((sec: Section) => {
       ;(subjects as Subject[]).forEach((s: Subject) => {
         if (covered.has(`${sec.name}::${s.name}`)) return
@@ -294,32 +326,17 @@ export function StepAllocation() {
         if (!raw) return
         const target = parseAllocation(raw).weeklyTotal || 0
         if (target <= 0) return
-        // Confirm subject is actually assigned to this section in Resources
+        // Only assign if subject is actually mapped to this section in Resources
         const sExt    = s as any
         const configs = sExt.classConfigs as any[] | undefined
         const isAssigned = configs?.length
           ? configs.some((c: any) => c.sectionName === sec.name)
           : (sExt.sections ?? []).includes(sec.name)
         if (!isAssigned) return
-        // Find most-available qualified teacher
-        const pool = (staff as Staff[]).filter(t =>
-          (t.subjects ?? []).some((x: string) => x === s.name)
-        )
-        const eligible = pool.length > 0 ? pool : (staff as Staff[])
-        if (!eligible.length) return
-        const maxFn = (t: Staff) => (t as any).maxPeriodsPerWeek ?? 40
-        const withRoom = eligible
-          .filter(t => (load[t.name] ?? 0) + target <= maxFn(t))
-          .sort((a, b) => (load[a.name] ?? 0) - (load[b.name] ?? 0))
-        const chosen = withRoom[0] ?? [...eligible].sort((a, b) =>
-          (load[a.name] ?? 0) - (load[b.name] ?? 0)
-        )[0]
-        if (!next[chosen.name])            next[chosen.name]            = {}
-        if (!next[chosen.name][sec.name])  next[chosen.name][sec.name]  = {}
-        next[chosen.name][sec.name][s.name] = (next[chosen.name][sec.name][s.name] ?? 0) + target
-        load[chosen.name] = (load[chosen.name] ?? 0) + target
+        assignToAvailable(sec.name, s.name, target)
       })
     })
+
     Object.keys(next).forEach(k => { if (!Object.keys(next[k]).length) delete next[k] })
     store.setTeacherAllocations?.(next)
   }, [staff, sections, subjects, subjectAllocations, store])
@@ -393,7 +410,7 @@ export function StepAllocation() {
   return (
     <div style={{ padding: '12px 20px 20px', maxWidth: 1400, margin: '0 auto' }}>
 
-      {/* ── Sub-tabs (single navigation — no redundant subtitle) ── */}
+      {/* ── Sub-tabs + Sync button ── */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 0, marginBottom: 10,
         borderBottom: '1px solid #EEECF8',
@@ -404,7 +421,55 @@ export function StepAllocation() {
         <SubTab active={sub === 'periods'}    onClick={() => setSub('periods')}    icon={<Grid3x3 size={11} />}      label="Period allocation" />
         <SubTab active={sub === 'teachers'}   onClick={() => setSub('teachers')}   icon={<Users size={11} />}         label="Teacher allocation" />
         <SubTab active={sub === 'validation'} onClick={() => setSub('validation')} icon={<ShieldCheck size={11} />}   label="Validation" />
+        <div style={{ marginLeft: 'auto', paddingBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button
+            onClick={handleSyncFromResources}
+            title="Re-derive period slots + teacher assignments from Resources data"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+              padding: '5px 13px', borderRadius: 6, border: '1px solid #BBF7D0',
+              background: '#F0FDF4', color: '#15803D', fontSize: 11.5, fontWeight: 700,
+              cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' as const,
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = '#DCFCE7' }}
+            onMouseLeave={e => { e.currentTarget.style.background = '#F0FDF4' }}
+          >
+            <Sparkles size={11} /> Sync from Resources
+          </button>
+        </div>
       </div>
+
+      {/* ── Persistent conflict banner — real-time alert on all tabs ── */}
+      {hardConflicts.length > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 10,
+          padding: '8px 12px', borderRadius: 7,
+          background: '#FEF2F2', border: '1px solid #FECACA',
+        }}>
+          <XCircle size={14} color="#DC2626" style={{ flexShrink: 0, marginTop: 1 }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <span style={{ fontSize: 11.5, fontWeight: 700, color: '#DC2626' }}>
+              {hardConflicts.length} hard conflict{hardConflicts.length > 1 ? 's' : ''}
+            </span>
+            <span style={{ fontSize: 11, color: '#B91C1C', marginLeft: 6 }}>
+              {hardConflicts.slice(0, 2).join(' · ')}{hardConflicts.length > 2 ? ` +${hardConflicts.length - 2} more` : ''}
+            </span>
+          </div>
+          <button
+            onClick={handleSyncFromResources}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0,
+              padding: '3px 10px', borderRadius: 5, border: '1px solid #FCA5A5',
+              background: '#DC2626', color: '#fff', fontSize: 10.5, fontWeight: 700,
+              cursor: 'pointer', fontFamily: 'inherit',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = '#B91C1C' }}
+            onMouseLeave={e => { e.currentTarget.style.background = '#DC2626' }}
+          >
+            <Sparkles size={9} /> Auto-fix
+          </button>
+        </div>
+      )}
 
       {/* ── Two-panel body ── */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 276px', gap: 16, alignItems: 'start' }}>
@@ -420,18 +485,6 @@ export function StepAllocation() {
             {sub === 'teachers' && (
               <>
                 <AISuggestButton onClick={() => handleAITeacherAllocate()} label="AI allocate all" />
-                <button
-                  onClick={handleSyncFromResources}
-                  title="Re-derive period slots from subject configs, then assign teachers from subject mappings — overwrites current allocations"
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 5,
-                    padding: '4px 11px', borderRadius: 6, border: '1px solid #BBF7D0',
-                    background: '#F0FDF4', color: '#15803D', fontSize: 11, fontWeight: 700,
-                    cursor: 'pointer', fontFamily: 'inherit',
-                  }}
-                >
-                  <Sparkles size={10} /> Sync from Resources
-                </button>
                 <button
                   style={{
                     display: 'inline-flex', alignItems: 'center', gap: 5,
