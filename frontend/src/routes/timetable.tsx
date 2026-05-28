@@ -206,25 +206,55 @@ function buildTeacherPeriods(
 }
 
 /**
- * Returns true when EVERY working-day cell in a period column is a
- * lunch break — i.e. the whole column should be rendered as a merged
- * "Lunch Break" column rather than a mixed period column.
+ * Returns true if a given section has the specified break in its
+ * class-wise break configuration (i.e. this break applies to this class).
+ */
+function sectionHasBreak(
+  sectionName: string,
+  breakId: string,
+  cwBreaks: Array<{id:string; classes:string[]}> | undefined,
+): boolean {
+  if (!cwBreaks?.length) return true
+  const brk = cwBreaks.find(b => b.id === breakId)
+  if (!brk || brk.classes.length === 0) return true // applies to all
+  return brk.classes.includes(getSectionClassKey(sectionName))
+}
+
+/**
+ * Returns true when this period column should be rendered as a FULLY
+ * merged "Lunch Break" column (all working-day cells are lunch).
  *
- * For the current data model (break periods are structurally always breaks,
- * class periods are never lunch) this is equivalent to `p.type === "lunch"`.
- * The usedDays + sch params allow the check to work correctly if future data
- * ever embeds explicit isLunch flags in the teacher schedule.
+ * Rule: a lunch period is a "full lunch" for teacher T only when EVERY
+ * section that T teaches has their lunch at this break position.
+ *
+ * Example:
+ *   Teacher teaches VIII-D (lunch after P4) AND XII-Arts (lunch after P6).
+ *   → break after P4: VIII-D ✓ but XII-Arts ✗  → NOT full lunch
+ *   → break after P6: XII-Arts ✓ but VIII-D ✗  → NOT full lunch
+ *   Only a break whose classes list contains ALL of T's class keys is full.
+ *
+ * When classwiseBreaks is unconfigured or the break isn't in the config,
+ * falls back to p.type === "lunch" (old behaviour).
  */
 function isFullLunchColumn(
   p: Period,
   usedDays: string[],
   sch: Record<string, Record<string, any>>,
+  teacherClasses?: string[],
+  cwBreaks?: Array<{id:string; classes:string[]}>,
 ): boolean {
-  if (p.type !== 'class') return p.type === 'lunch'
+  if (p.type !== 'class') {
+    if (p.type !== 'lunch') return false
+    if (!cwBreaks?.length || !teacherClasses?.length) return true // no config → full lunch
+    const brk = cwBreaks.find(b => b.id === p.id)
+    if (!brk || brk.classes.length === 0) return true // applies to all classes
+    const teacherKeys = teacherClasses.map(getSectionClassKey)
+    return teacherKeys.every(key => brk.classes.includes(key))
+  }
   // Class period: only "full lunch" if every day explicitly marks it as lunch
   return usedDays.length > 0 && usedDays.every(day => {
     const cell = sch[day]?.[p.id]
-    return cell && (cell.isLunch === true || cell.type === 'lunch')
+    return cell && ((cell as any).isLunch === true || (cell as any).type === 'lunch')
   })
 }
 
@@ -638,14 +668,32 @@ export function TimetablePage() {
                 <tr key={day} style={{ background:di%2===0?"#fff":"#FAFAFE" }}>
                   <td style={{ padding:"6px 12px", fontWeight:700, fontSize:11, color:"#1e293b", border:"1px solid #E8E4FF", whiteSpace:"nowrap" as const }}>{DAY_SHORT[day]??day.slice(0,3)}</td>
                   {teacherPeriods.map(p => {
-                    // ── Full lunch column ── all days are lunch → merged break cell
-                    if (isFullLunchColumn(p, usedDays, sch)) return <BreakCell key={p.id} p={p} />
+                    const isFullLunch = isFullLunchColumn(p, usedDays, sch, tdata.classes, cwBreaksTT)
+                    // ── Full lunch column ── all teacher's classes have this lunch
+                    if (isFullLunch) return <BreakCell key={p.id} p={p} />
+                    // ── Mixed / partial lunch break ────────────────────
+                    // Not all teacher's classes have lunch here. Show per-day:
+                    //   • "Lunch Break" if the teacher's section in the preceding period has this break
+                    //   • "Free" otherwise
+                    if (p.type === 'lunch') {
+                      const brk = cwBreaksTT?.find(b => b.id === p.id)
+                      const prevPeriod = brk ? classPeriods[brk.afterPeriod - 1] : null
+                      const prevCell  = prevPeriod ? sch[day]?.[prevPeriod.id] : null
+                      const hasLunch  = !!prevCell?.sectionName && sectionHasBreak(prevCell.sectionName, p.id, cwBreaksTT)
+                      if (hasLunch) return (
+                        <td key={p.id} style={{ background:"#fffbeb", border:"1px solid #E8E4FF", textAlign:"center" as const, color:"#D4920E", fontSize:9, fontStyle:"italic", padding:6 }}>Lunch Break</td>
+                      )
+                      return (
+                        <td key={p.id} style={{ border:"1px solid #E8E4FF", padding:2 }}>
+                          <div style={{ height:44, background:"#FAFAFE", borderRadius:5, display:"flex", alignItems:"center", justifyContent:"center", color:"#cbd5e1", fontSize:9, fontStyle:"italic" }}>Free</div>
+                        </td>
+                      )
+                    }
                     // ── Other break periods (assembly, morning break, etc.)
                     if (p.type !== "class") return <BreakCell key={p.id} p={p} />
-                    // ── Class period: mixed column ─────────────────────
+                    // ── Class period ───────────────────────────────────
                     const cell = sch[day]?.[p.id]
                     if (!cell?.subject) {
-                      // Explicit lunch flag on a class period slot (edge case / future data)
                       if ((cell as any)?.isLunch || (cell as any)?.type === "lunch") return (
                         <td key={p.id} style={{ background:"#fffbeb", border:"1px solid #E8E4FF", textAlign:"center" as const, color:"#D4920E", fontSize:9, fontStyle:"italic", padding:6 }}>
                           Lunch Break
@@ -715,10 +763,13 @@ export function TimetablePage() {
             </tr></thead>
             <tbody>
               {teacherPeriodsT.map((p, pi) => {
-                const isFullLunch = isFullLunchColumn(p, usedDays, sch)
+                const isFullLunch = isFullLunchColumn(p, usedDays, sch, tdata.classes, cwBreaksTTT)
                 const isBreak = p.type !== "class"
                 const times = teacherTimesT.get(p.id)
                 const rowBg = isBreak ? "#fffbeb" : pi%2===0 ? "#fff" : "#FAFAFE"
+                // For mixed lunch rows: precompute per-day lunch status
+                const mixedLunchBreak = (!isFullLunch && p.type === 'lunch') ? cwBreaksTTT?.find(b => b.id === p.id) : null
+                const mixedPrevPeriod = mixedLunchBreak ? classPeriods[mixedLunchBreak.afterPeriod - 1] : null
                 return (
                   <tr key={p.id} style={{ background: rowBg }}>
                     <td style={{ padding:"6px 10px", border:"1px solid #E8E4FF", whiteSpace:"nowrap" as const }}>
@@ -727,15 +778,27 @@ export function TimetablePage() {
                     </td>
                     {usedDays.map(day => {
                       // ── Full lunch row → all day cells show Lunch Break ──
-                      if (isFullLunch || (isBreak && p.type === "lunch")) {
+                      if (isFullLunch) {
                         return <td key={day} style={{ background:"#fffbeb", border:"1px solid #E8E4FF", textAlign:"center" as const, fontSize:9, color:"#D4920E", fontStyle:"italic", padding:6 }}>Lunch Break</td>
+                      }
+                      // ── Mixed / partial lunch break ── per-day check ─────
+                      if (p.type === 'lunch') {
+                        const prevCell = mixedPrevPeriod ? sch[day]?.[mixedPrevPeriod.id] : null
+                        const hasLunch = !!prevCell?.sectionName && sectionHasBreak(prevCell.sectionName, p.id, cwBreaksTTT)
+                        if (hasLunch) return (
+                          <td key={day} style={{ background:"#fffbeb", border:"1px solid #E8E4FF", textAlign:"center" as const, fontSize:9, color:"#D4920E", fontStyle:"italic", padding:6 }}>Lunch Break</td>
+                        )
+                        return (
+                          <td key={day} style={{ border:"1px solid #E8E4FF", padding:2 }}>
+                            <div style={{ height:42, background:"#FAFAFE", borderRadius:4, display:"flex", alignItems:"center", justifyContent:"center", color:"#cbd5e1", fontSize:9, fontStyle:"italic" }}>Free</div>
+                          </td>
+                        )
                       }
                       // ── Other break (assembly, morning break) ────────────
                       if (isBreak) return <td key={day} style={{ background:"#fffbeb", border:"1px solid #E8E4FF", textAlign:"center" as const, fontSize:9, color:"#D4920E", fontStyle:"italic", padding:6 }}>{p.name}</td>
-                      // ── Class period: mixed column ───────────────────────
+                      // ── Class period ─────────────────────────────────────
                       const cell = sch[day]?.[p.id]
                       if (!cell?.subject) {
-                        // Edge case: cell explicitly marked as lunch
                         if ((cell as any)?.isLunch || (cell as any)?.type === "lunch") return (
                           <td key={day} style={{ background:"#fffbeb", border:"1px solid #E8E4FF", textAlign:"center" as const, color:"#D4920E", fontSize:9, fontStyle:"italic", padding:6 }}>Lunch Break</td>
                         )
