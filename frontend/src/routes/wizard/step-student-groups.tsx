@@ -68,6 +68,47 @@ const BEHAVIORS: GroupingBehavior[] = [
 const GROUP_COLORS = ['#7C6FE0', '#10B981', '#F59E0B', '#EF4444', '#3B82F6', '#EC4899', '#8B5CF6', '#06B6D4']
 function groupColor(i: number) { return GROUP_COLORS[i % GROUP_COLORS.length] }
 
+// ── multi-select grouping helpers ─────────────────────────────────────────────
+
+/** Normalise stored rule → array (handles both legacy string and new array). */
+function getBehaviors(rule: any): GroupingBehavior[] {
+  if (!rule) return ['SAME_GRADE_ONLY']
+  if (Array.isArray(rule)) return (rule as GroupingBehavior[]).length ? rule as GroupingBehavior[] : ['SAME_GRADE_ONLY']
+  return [rule as GroupingBehavior]
+}
+
+type GroupingMode = 'none' | 'grade' | 'stream' | 'grade_stream' | 'all' | 'flexible'
+
+/**
+ * Collapse a set of selected behaviors into one canonical mode used for
+ * group generation.  Multiple selections combine their constraints:
+ *   SAME_GRADE_ONLY + SAME_STREAM_ONLY  →  grade_stream
+ *   CROSS_STREAM_ALLOWED                →  grade_stream  (shorthand)
+ *   CROSS_GRADE_ALLOWED alone           →  all (one big group)
+ *   NO_GROUPING                         →  none  (overrides all)
+ *   FLEXIBLE_GROUPING                   →  flexible (overrides non-exclusive)
+ */
+function computeGroupingMode(behaviors: GroupingBehavior[]): GroupingMode {
+  if (!behaviors.length) return 'grade'
+  if (behaviors.includes('NO_GROUPING')) return 'none'
+  if (behaviors.includes('FLEXIBLE_GROUPING')) return 'flexible'
+  const wantsGrade  = behaviors.some(b => b === 'SAME_GRADE_ONLY'  || b === 'CROSS_STREAM_ALLOWED')
+  const wantsStream = behaviors.some(b => b === 'SAME_STREAM_ONLY' || b === 'CROSS_STREAM_ALLOWED')
+  if (wantsGrade && wantsStream) return 'grade_stream'
+  if (wantsGrade)  return 'grade'
+  if (wantsStream) return 'stream'
+  return 'all'
+}
+
+const MODE_META: Record<GroupingMode, { label: string; bg: string; fg: string; border: string }> = {
+  none:         { label: 'No grouping',      bg: '#F8F7FF', fg: '#8B87AD', border: '#E8E4FF' },
+  all:          { label: 'Cross grade',      bg: '#EDE9FF', fg: '#7C3AED', border: '#C4B5FD' },
+  grade:        { label: 'Same grade only',  bg: '#EFF6FF', fg: '#1D4ED8', border: '#DBEAFE' },
+  stream:       { label: 'Same stream only', bg: '#FFF7ED', fg: '#C2410C', border: '#FED7AA' },
+  grade_stream: { label: 'Grade + Stream',   bg: '#FCE7F3', fg: '#9D174D', border: '#FBCFE8' },
+  flexible:     { label: 'Flexible (AI)',    bg: '#DCFCE7', fg: '#15803D', border: '#BBF7D0' },
+}
+
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 function guessStream(secName: string): string {
@@ -550,8 +591,9 @@ export function StepStudentGroups() {
     const ts = Date.now()
 
     allCols.forEach((col, si) => {
-      const behavior = (subjectGroupingRules[col.key] ?? 'SAME_GRADE_ONLY') as GroupingBehavior
-      if (behavior === 'NO_GROUPING') return
+      const behaviors = getBehaviors(subjectGroupingRules[col.key])
+      const mode      = computeGroupingMode(behaviors)
+      if (mode === 'none') return
 
       const participating = rows.filter(r => (r.subjectStrengths?.[col.key] ?? 0) > 0)
       if (participating.length === 0) return
@@ -572,11 +614,11 @@ export function StepStudentGroups() {
           room: room?.name ?? `Room ${101 + si + groupIdx}`,
           roomCapacity: room?.capacity ?? 0,
           capacityWarning: (room?.capacity ?? 0) > 0 && totalStr > (room?.capacity ?? 0),
-          behavior, day: optionalDay, periodId: optionalPeriod,
+          behavior: mode, day: optionalDay, periodId: optionalPeriod,
         })
       }
 
-      if (behavior === 'SAME_GRADE_ONLY') {
+      if (mode === 'grade') {
         // One group per grade — all streams in that grade merged
         const byGrade = new Map<string, SectionStrength[]>()
         participating.forEach(r => {
@@ -587,9 +629,8 @@ export function StepStudentGroups() {
         let gIdx = 0
         byGrade.forEach(gradeSections => { pushGroup(gradeSections, gIdx++) })
 
-      } else if (behavior === 'CROSS_STREAM_ALLOWED') {
-        // One group per grade, streams kept SEPARATE within the grade
-        // (opposite of SAME_GRADE_ONLY which merges streams within a grade)
+      } else if (mode === 'grade_stream') {
+        // One group per grade+stream combination — streams kept SEPARATE within each grade
         const byGradeStream = new Map<string, SectionStrength[]>()
         participating.forEach(r => {
           const key = `${extractGrade(r.sectionName)}::${guessStream(r.sectionName)}`
@@ -599,8 +640,8 @@ export function StepStudentGroups() {
         let gsIdx = 0
         byGradeStream.forEach(gs => { pushGroup(gs, gsIdx++) })
 
-      } else if (behavior === 'SAME_STREAM_ONLY') {
-        // One group per stream across ALL grades (e.g. XI-Arts + XII-Arts)
+      } else if (mode === 'stream') {
+        // One group per stream across ALL grades (e.g. XI-Arts + XII-Arts together)
         const byStream = new Map<string, SectionStrength[]>()
         participating.forEach(r => {
           const stream = guessStream(r.sectionName)
@@ -611,7 +652,7 @@ export function StepStudentGroups() {
         byStream.forEach(streamSections => { pushGroup(streamSections, sIdx++) })
 
       } else {
-        // CROSS_GRADE_ALLOWED / FLEXIBLE_GROUPING — all sections in one group
+        // 'all' / 'flexible' — all sections in one big group
         pushGroup(participating, 0)
       }
     })
@@ -657,11 +698,12 @@ export function StepStudentGroups() {
     }
 
     allCols.forEach(col => {
-      const behavior = (subjectGroupingRules[col.key] ?? 'SAME_GRADE_ONLY') as GroupingBehavior
+      const behaviors = getBehaviors(subjectGroupingRules[col.key])
+      const mode      = computeGroupingMode(behaviors)
       const participating = rows.filter(r => (r.subjectStrengths?.[col.key] ?? 0) > 0)
-      if (participating.length === 0) return
+      if (participating.length === 0 || mode === 'none') return
 
-      if (behavior === 'SAME_GRADE_ONLY') {
+      if (mode === 'grade') {
         const byGrade = new Map<string, SectionStrength[]>()
         participating.forEach(r => {
           const grade = r.sectionName.split('-')[0].trim()
@@ -671,8 +713,8 @@ export function StepStudentGroups() {
         byGrade.forEach((gradeSections, grade) =>
           addGroup(col.key, `${col.key}::${grade}`, `${col.label} — Class ${grade}`, gradeSections),
         )
-      } else if (behavior === 'CROSS_STREAM_ALLOWED') {
-        // One group per grade, streams kept SEPARATE within the grade
+      } else if (mode === 'grade_stream') {
+        // One group per grade+stream combination
         const byGradeStream = new Map<string, SectionStrength[]>()
         participating.forEach(r => {
           const k = `${r.sectionName.split('-')[0].trim()}::${guessStream(r.sectionName)}`
@@ -683,8 +725,8 @@ export function StepStudentGroups() {
           const [grade, stream] = k.split('::')
           addGroup(col.key, `${col.key}::${k}`, `${col.label} — Class ${grade} (${stream})`, gs)
         })
-      } else if (behavior === 'SAME_STREAM_ONLY') {
-        // One group per stream across all grades (e.g. XI-Arts + XII-Arts)
+      } else if (mode === 'stream') {
+        // One group per stream across all grades
         const byStream = new Map<string, SectionStrength[]>()
         participating.forEach(r => {
           const stream = guessStream(r.sectionName)
@@ -695,7 +737,7 @@ export function StepStudentGroups() {
           addGroup(col.key, `${col.key}::stream::${stream}`, `${col.label} — ${stream}`, streamSections),
         )
       } else {
-        // CROSS_GRADE_ALLOWED / FLEXIBLE_GROUPING — all sections in one group
+        // 'all' / 'flexible' — one big group
         addGroup(col.key, col.key, col.label, participating)
       }
     })
@@ -915,23 +957,42 @@ export function StepStudentGroups() {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {allCols.map(col => {
-              const current = (subjectGroupingRules[col.key] ?? 'SAME_GRADE_ONLY') as GroupingBehavior
-              const meta = BEHAVIOR_META[current]
+              const behaviors = getBehaviors(subjectGroupingRules[col.key])
+              const mode      = computeGroupingMode(behaviors)
+              const modeMeta  = MODE_META[mode]
+
+              /** Toggle one behavior in/out of the multi-select. */
+              const toggleBeh = (beh: GroupingBehavior) => {
+                const curr = getBehaviors(subjectGroupingRules[col.key])
+                let next: GroupingBehavior[]
+                if (beh === 'NO_GROUPING' || beh === 'FLEXIBLE_GROUPING') {
+                  // Exclusive: clicking replaces everything; second click deselects back to default
+                  next = curr.includes(beh) ? ['SAME_GRADE_ONLY'] : [beh]
+                } else {
+                  // Normal toggle — strip exclusive behaviors first
+                  const base = curr.filter(b => b !== 'NO_GROUPING' && b !== 'FLEXIBLE_GROUPING')
+                  next = base.includes(beh) ? base.filter(b => b !== beh) : [...base, beh]
+                  if (!next.length) next = ['SAME_GRADE_ONLY'] // never leave empty
+                }
+                setSubjectGroupingRule(col.key, next)
+              }
+
               return (
                 <div key={col.key} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 10, background: '#fff', border: '1px solid #E8E4FF', flexWrap: 'wrap' }}>
                   <div style={{ minWidth: 140, fontSize: 13, fontWeight: 600, color: '#13111E' }}>{col.label}</div>
                   <div style={{ flex: 1, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     {BEHAVIORS.map(beh => {
-                      const bm = BEHAVIOR_META[beh]; const active = beh === current
+                      const bm = BEHAVIOR_META[beh]
+                      const active = behaviors.includes(beh)
                       return (
-                        <button key={beh} onClick={() => setSubjectGroupingRule(col.key, beh)} title={bm.desc}
-                          style={{ padding: '4px 10px', borderRadius: 20, border: `1px solid ${active ? bm.border : '#E8E4FF'}`, background: active ? bm.bg : '#F8F7FF', color: active ? bm.fg : '#8B87AD', fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-                          {bm.short}
+                        <button key={beh} onClick={() => toggleBeh(beh)} title={bm.desc}
+                          style={{ padding: '4px 10px', borderRadius: 20, border: `1.5px solid ${active ? bm.border : '#E8E4FF'}`, background: active ? bm.bg : '#F8F7FF', color: active ? bm.fg : '#8B87AD', fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.1s' }}>
+                          {active && <span style={{ marginRight: 3, fontSize: 9 }}>✓</span>}{bm.short}
                         </button>
                       )
                     })}
                   </div>
-                  <span style={{ fontSize: 10, color: meta.fg, fontWeight: 600, padding: '2px 8px', borderRadius: 10, background: meta.bg, border: `1px solid ${meta.border}` }}>{meta.label}</span>
+                  <span style={{ fontSize: 10, color: modeMeta.fg, fontWeight: 600, padding: '2px 8px', borderRadius: 10, background: modeMeta.bg, border: `1px solid ${modeMeta.border}`, whiteSpace: 'nowrap' }}>{modeMeta.label}</span>
                 </div>
               )
             })}
