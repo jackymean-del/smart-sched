@@ -643,7 +643,7 @@ export function TimetablePage() {
                     const cell = sch[day]?.[p.id]
                     if (!cell?.subject) {
                       // Explicit lunch flag on a class period slot (edge case / future data)
-                      if (cell?.isLunch || cell?.type === "lunch") return (
+                      if ((cell as any)?.isLunch || (cell as any)?.type === "lunch") return (
                         <td key={p.id} style={{ background:"#fffbeb", border:"1px solid #E8E4FF", textAlign:"center" as const, color:"#D4920E", fontSize:9, fontStyle:"italic", padding:6 }}>
                           Lunch Break
                         </td>
@@ -731,7 +731,7 @@ export function TimetablePage() {
                       const cell = sch[day]?.[p.id]
                       if (!cell?.subject) {
                         // Edge case: cell explicitly marked as lunch
-                        if (cell?.isLunch || cell?.type === "lunch") return (
+                        if ((cell as any)?.isLunch || (cell as any)?.type === "lunch") return (
                           <td key={day} style={{ background:"#fffbeb", border:"1px solid #E8E4FF", textAlign:"center" as const, color:"#D4920E", fontSize:9, fontStyle:"italic", padding:6 }}>Lunch Break</td>
                         )
                         return (
