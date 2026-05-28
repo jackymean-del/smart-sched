@@ -5,6 +5,76 @@ import { buildPeriodSequence } from "@/lib/aiEngine"
 import { solveTimetable, generateSuggestions, durationToWeeklyPeriods } from "@/lib/schedulingEngine"
 import { ReviewDashboard } from "@/components/master/ReviewDashboard"
 import { getCountry } from "@/lib/orgData"
+import type { OptionalBlock, Period } from "@/types"
+
+// ── DLG → OptionalBlock bridge ─────────────────────────────────────────────
+//
+// Step 4 (Student Groups) produces `dynamicLearningGroups` — one DLG per
+// subject group with an explicit day + periodId (e.g. "Monday" / "P6").
+// The solver, however, expects `optionalBlocks` (OptionalBlock[]).
+//
+// When the user has gone through Step 4 but never hand-authored manual
+// optional blocks, we convert the Step-4 DLGs into OptionalBlocks so the
+// solver honours the user's period assignments instead of re-deriving from
+// scratch (which would pick Period 2 — the first available slot).
+//
+// Normalisation:
+//   - day: "Monday" / "monday"  → "MONDAY"   (matches workDays format)
+//   - periodId: "P6" / "p6"    → "p6"        (matches buildPeriodSequence ids)
+//   - Fallback: if the normalised period doesn't exist in the bell schedule,
+//     use the last class period so the block is still placed.
+//
+// Grouping: DLGs with the same (sorted) sectionNames are parallel subject
+// choices for those sections → one OptionalBlock with multiple options.
+function dlgsToOptionalBlocks(
+  dlgs: Array<{
+    id: string; subject: string; sectionNames: string[]
+    totalStrength: number; teacher: string; room: string
+    behavior: string; day: string; periodId: string
+  }>,
+  classPeriods: Period[],
+  workDays: string[],
+): OptionalBlock[] {
+  if (!dlgs.length) return []
+
+  const validPids  = new Set(classPeriods.map(p => p.id))
+  const fallbackPid = classPeriods[classPeriods.length - 1]?.id ?? 'p1'
+  const fallbackDay = workDays[workDays.length - 1] ?? 'MONDAY'
+
+  const blockMap = new Map<string, OptionalBlock>()
+
+  dlgs.forEach(dlg => {
+    // Normalise: day → UPPERCASE, periodId → lowercase
+    const day = (dlg.day || fallbackDay).toUpperCase()
+    const rawPid = (dlg.periodId || fallbackPid).toLowerCase()
+    const periodId = validPids.has(rawPid) ? rawPid : fallbackPid
+
+    // DLGs sharing the same (sorted) sections → one OptionalBlock
+    const secKey = [...(dlg.sectionNames ?? [])].sort().join('|')
+
+    if (!blockMap.has(secKey)) {
+      const idx = blockMap.size + 1
+      blockMap.set(secKey, {
+        id: `dlg-block-${idx}`,
+        name: `Optional Block ${idx}`,
+        sectionNames: dlg.sectionNames ?? [],
+        day,
+        periodId,
+        options: [],
+      })
+    }
+
+    ;(blockMap.get(secKey)!.options as any[]).push({
+      subject: dlg.subject,
+      teacher: dlg.teacher ?? '',
+      room: dlg.room ?? '',
+      capacity: dlg.totalStrength ?? 0,
+      allocatedStrength: dlg.totalStrength ?? 0,
+    })
+  })
+
+  return [...blockMap.values()]
+}
 
 type JobStatus = "idle" | "running" | "completed" | "failed"
 
@@ -105,11 +175,22 @@ export function Step6Generate() {
         : subjects
 
       const staff = store.staff
-      const optionalBlocks      = (store as any).optionalBlocks ?? []
-      const subjectCombinations = (store as any).subjectCombinations ?? []
-      const sectionStrengths    = (store as any).sectionStrengths ?? []
-      const subjectAllocations  = (store as any).subjectAllocations ?? {}
+      const manualOptionalBlocks = (store as any).optionalBlocks ?? []
+      const storeDLGs            = (store as any).dynamicLearningGroups ?? []
+      const subjectCombinations  = (store as any).subjectCombinations ?? []
+      const sectionStrengths     = (store as any).sectionStrengths ?? []
+      const subjectAllocations   = (store as any).subjectAllocations ?? {}
       const rooms                = (store as any).rooms ?? []
+
+      // Prefer manually-authored optional blocks; if none exist but the user
+      // ran Step 4 (Student Groups), convert those DLGs into OptionalBlocks
+      // so the solver honours the user's period assignments.
+      const classPeriods = periods.filter((p: Period) => p.type === 'class')
+      const optionalBlocks: OptionalBlock[] =
+        manualOptionalBlocks.length > 0
+          ? manualOptionalBlocks
+          : dlgsToOptionalBlocks(storeDLGs, classPeriods, workDays)
+
       output  = solveTimetable({
         sections, staff, subjects: resolvedSubjects, periods, workDays,
         requirements: [],

@@ -605,30 +605,63 @@ export function ReviewDashboard({
       )}
 
       {/* ─── G. Unplaced Slots (Why-this-was-blocked) ─── */}
-      {blockedSlots.length > 0 && (
-        <Card
-          title="Unplaced Slots"
-          icon={<Ban size={14} />}
-          accent="#D4920E"
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap' as const }}>
-            <Pill color="#D4920E" bg="#FEF3C7" label={`${blockedSlots.length} slot${blockedSlots.length !== 1 ? 's' : ''} blocked`} />
-            <span style={{ fontSize: 11, color: '#4B5275' }}>
-              Engine couldn't place anything in these (section, day, period) cells.
-            </span>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 6, maxHeight: 280, overflowY: 'auto' as const }}>
-            {blockedSlots.slice(0, 40).map((slot, i) => (
-              <BlockedRow key={`b${i}`} slot={slot} periods={periods} />
-            ))}
-            {blockedSlots.length > 40 && (
-              <div style={{ fontSize: 10.5, color: '#8B87AD', padding: '4px 8px', textAlign: 'center' as const }}>
-                … +{blockedSlots.length - 40} more
+      {blockedSlots.length > 0 && (() => {
+        // Split into two categories:
+        // • "free" — quota-met / all-subjects-exhausted slots (expected empty periods, not errors)
+        // • "hard" — scope-locked, no-teacher, etc. (genuine placement failures)
+        const freeCategories = new Set(['subject-quota-met', 'all-subjects-exhausted'])
+        const freeSlots = blockedSlots.filter(s =>
+          s.reasons.length > 0 && s.reasons.every(r => freeCategories.has(r.category))
+        )
+        const hardSlots = blockedSlots.filter(s =>
+          s.reasons.some(r => !freeCategories.has(r.category))
+        )
+        return (
+          <Card
+            title="Schedule Gaps"
+            icon={<Ban size={14} />}
+            accent={hardSlots.length > 0 ? '#D4920E' : '#8B87AD'}
+          >
+            {/* Summary row */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap' as const }}>
+              {hardSlots.length > 0 && (
+                <Pill color="#D4920E" bg="#FEF3C7" label={`${hardSlots.length} unplaced slot${hardSlots.length !== 1 ? 's' : ''}`} />
+              )}
+              {freeSlots.length > 0 && (
+                <Pill color="#6B7280" bg="#F3F4F6" label={`${freeSlots.length} free period${freeSlots.length !== 1 ? 's' : ''}`} />
+              )}
+              <span style={{ fontSize: 11, color: '#4B5275' }}>
+                {hardSlots.length > 0
+                  ? 'Some slots couldn\'t be filled — see details below.'
+                  : 'All subjects met their weekly quota — remaining slots are free/activity periods.'
+                }
+              </span>
+            </div>
+
+            {/* Hard failures first */}
+            {hardSlots.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 6, maxHeight: 280, overflowY: 'auto' as const, marginBottom: freeSlots.length > 0 ? 10 : 0 }}>
+                {hardSlots.slice(0, 40).map((slot, i) => (
+                  <BlockedRow key={`h${i}`} slot={slot} periods={periods} />
+                ))}
+                {hardSlots.length > 40 && (
+                  <div style={{ fontSize: 10.5, color: '#8B87AD', padding: '4px 8px', textAlign: 'center' as const }}>
+                    … +{hardSlots.length - 40} more
+                  </div>
+                )}
               </div>
             )}
-          </div>
-        </Card>
-      )}
+
+            {/* Free periods — collapsed summary, not a list of rows */}
+            {freeSlots.length > 0 && (
+              <div style={{ padding: '8px 12px', borderRadius: 8, background: '#F8F9FA', border: '1px solid #E5E7EB', fontSize: 11, color: '#6B7280' }}>
+                💡 <strong>{freeSlots.length} period{freeSlots.length !== 1 ? 's' : ''}</strong> are unscheduled because all subjects reached their weekly target.
+                These become free/study/activity periods. To fill them, increase the <em>periods-per-week</em> target for the affected subjects or sections.
+              </div>
+            )}
+          </Card>
+        )
+      })()}
 
       {/* ─── Conflict Resolution Wizard ─── */}
       {wizardOpen && conflicts.length > 0 && (
