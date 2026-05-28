@@ -604,6 +604,9 @@ export function TimetablePage() {
     // A teacher who only teaches Nursery must NOT see Primary's lunch column.
     const cwBreaksTT = (config as any).classwiseBreaks as Parameters<typeof buildTeacherPeriods>[2]
     const teacherPeriods = buildTeacherPeriods(tdata.classes, periods, cwBreaksTT)
+    // Compute times from teacher-specific period sequence so breaks from other
+    // class groups don't shift every period's start/end time.
+    const teacherTimes = calcTimes(teacherPeriods, config)
 
     return (
       <div>
@@ -628,7 +631,7 @@ export function TimetablePage() {
           <table style={{ borderCollapse:"collapse", fontSize:11, width:"100%" }}>
             <thead><tr>
               <th style={{ background:"#1e293b", color:"#fff", padding:"8px 12px", textAlign:"left", minWidth:70, fontSize:11, fontWeight:700, border:"1px solid #1e293b" }}>Day</th>
-              {teacherPeriods.map(p => <PeriodCol key={p.id} p={p} times={periodTimes.get(p.id)} />)}
+              {teacherPeriods.map(p => <PeriodCol key={p.id} p={p} times={teacherTimes.get(p.id)} />)}
             </tr></thead>
             <tbody>
               {usedDays.map((day, di) => (
@@ -693,6 +696,8 @@ export function TimetablePage() {
     // ── Teacher-specific periods (same logic as normal view)
     const cwBreaksTTT = (config as any).classwiseBreaks as Parameters<typeof buildTeacherPeriods>[2]
     const teacherPeriodsT = buildTeacherPeriods(tdata.classes, periods, cwBreaksTTT)
+    // Teacher-specific times so Primary's P5 starts at 11:55 AM, not 12:25 AM
+    const teacherTimesT = calcTimes(teacherPeriodsT, config)
 
     return (
       <div>
@@ -712,7 +717,7 @@ export function TimetablePage() {
               {teacherPeriodsT.map((p, pi) => {
                 const isFullLunch = isFullLunchColumn(p, usedDays, sch)
                 const isBreak = p.type !== "class"
-                const times = periodTimes.get(p.id)
+                const times = teacherTimesT.get(p.id)
                 const rowBg = isBreak ? "#fffbeb" : pi%2===0 ? "#fff" : "#FAFAFE"
                 return (
                   <tr key={p.id} style={{ background: rowBg }}>
