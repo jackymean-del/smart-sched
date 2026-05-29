@@ -444,8 +444,9 @@ export function TimetablePage() {
   const [classTTHistory, setClassTTHistory] = useState<typeof classTT[]>([])
   const [classTTFuture,  setClassTTFuture]  = useState<typeof classTT[]>([])
 
-  // ── Pool panel section filter ────────────────────────────
-  const [poolFilterSection, setPoolFilterSection] = useState("ALL")
+  // ── Pool panel filters ───────────────────────────────────
+  const [poolFilterClass,   setPoolFilterClass]   = useState("ALL")
+  const [poolFilterTeacher, setPoolFilterTeacher] = useState("ALL")
 
   // ── Period Pool panel state ──────────────────────────────
   const [poolPanelOpen, setPoolPanelOpen] = useState(false)
@@ -657,6 +658,20 @@ export function TimetablePage() {
 
   // ── isDragging — true while any drag is active ───────────
   const isDragging = !!poolDragItem || !!dragItem
+
+  // ── Auto-sync pool filters when the active view/entity changes ──
+  useEffect(() => {
+    if (viewMode === 'teacher' && selectedEntity !== 'ALL') {
+      setPoolFilterTeacher(selectedEntity)
+    } else {
+      setPoolFilterTeacher('ALL')
+    }
+    if (viewMode === 'class' && selectedEntity !== 'ALL') {
+      setPoolFilterClass(selectedEntity)
+    } else {
+      setPoolFilterClass('ALL')
+    }
+  }, [viewMode, selectedEntity])
 
   // ── DnD handlers ──
   const handleDragStart = (e: React.DragEvent, item: {section:string;day:string;periodId:string}) => {
@@ -1660,67 +1675,132 @@ export function TimetablePage() {
         <button onClick={() => setPoolPanelOpen(false)} style={{ border:"none", background:"none", fontSize:16, cursor:"pointer", color:"#6D64C0", lineHeight:1 }}>✕</button>
       </div>
 
-      {/* Hint + filter */}
-      <div style={{ padding:"7px 12px 0", background:"#F5F2FF", borderBottom:"1px solid #E8E4FF" }}>
-        <div style={{ fontSize:10, color:"#7C6FE0", lineHeight:1.4, marginBottom:6 }}>Drag a chip onto any cell to assign or replace. Changes reflect across all views.</div>
-        {poolData.length > 1 && (
-          <div style={{ display:"flex", alignItems:"center", gap:6, paddingBottom:7 }}>
-            <span style={{ fontSize:9, color:"#8B87AD", fontWeight:600 }}>Filter:</span>
-            <select value={poolFilterSection} onChange={e => setPoolFilterSection(e.target.value)}
-              style={{ flex:1, padding:"3px 6px", border:"1px solid #D8D2FF", borderRadius:5, fontSize:10, background:"#fff", outline:"none", color:"#4338ca" }}>
-              <option value="ALL">All classes</option>
-              {poolData.map(s => <option key={s.section} value={s.section}>{s.section}</option>)}
-            </select>
-          </div>
-        )}
+      {/* Hint */}
+      <div style={{ padding:"7px 12px 7px", background:"#F5F2FF", borderBottom:"1px solid #E8E4FF", fontSize:10, color:"#7C6FE0", lineHeight:1.4 }}>
+        Drag onto any cell to assign or replace. Changes reflect across all views.
       </div>
+
+      {/* ── Filters ── */}
+      {(() => {
+        const autoTeacher = viewMode === 'teacher' && selectedEntity !== 'ALL'
+        const autoClass   = viewMode === 'class'   && selectedEntity !== 'ALL'
+        const hasFilters  = poolData.length > 1 || staff.length > 0
+        if (!hasFilters) return null
+        return (
+          <div style={{ padding:"8px 12px", background:"#fff", borderBottom:"1px solid #E8E4FF", display:"flex", flexDirection:"column" as const, gap:6 }}>
+            {/* Class filter */}
+            <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+              <span style={{ fontSize:9, fontWeight:700, color:"#8B87AD", width:44, flexShrink:0, textTransform:"uppercase" as const, letterSpacing:"0.06em" }}>Class</span>
+              <select value={poolFilterClass} onChange={e => setPoolFilterClass(e.target.value)}
+                style={{ flex:1, padding:"4px 7px", border:`1px solid ${autoClass?"#a5b4fc":"#D8D2FF"}`, borderRadius:6, fontSize:10, background: autoClass?"#F0EDFF":"#fff", outline:"none", color:"#1e293b", cursor:"pointer" }}>
+                <option value="ALL">All classes</option>
+                {poolData.map(s => <option key={s.section} value={s.section}>{s.section}</option>)}
+              </select>
+              {autoClass && (
+                <span title="Auto-filtered by current view" style={{ fontSize:9, color:"#7C6FE0", background:"#EDE9FF", padding:"1px 5px", borderRadius:4, flexShrink:0, fontWeight:600 }}>⇌ view</span>
+              )}
+            </div>
+
+            {/* Teacher filter */}
+            <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+              <span style={{ fontSize:9, fontWeight:700, color:"#8B87AD", width:44, flexShrink:0, textTransform:"uppercase" as const, letterSpacing:"0.06em" }}>Teacher</span>
+              <select value={poolFilterTeacher} onChange={e => setPoolFilterTeacher(e.target.value)}
+                style={{ flex:1, padding:"4px 7px", border:`1px solid ${autoTeacher?"#a5b4fc":"#D8D2FF"}`, borderRadius:6, fontSize:10, background: autoTeacher?"#F0EDFF":"#fff", outline:"none", color:"#1e293b", cursor:"pointer" }}>
+                <option value="ALL">All teachers</option>
+                {staff.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+              </select>
+              {autoTeacher && (
+                <span title="Auto-filtered by current teacher view" style={{ fontSize:9, color:"#7C6FE0", background:"#EDE9FF", padding:"1px 5px", borderRadius:4, flexShrink:0, fontWeight:600 }}>⇌ view</span>
+              )}
+            </div>
+
+            {/* Clear filters */}
+            {(poolFilterClass !== 'ALL' || poolFilterTeacher !== 'ALL') && (
+              <button onClick={() => { setPoolFilterClass('ALL'); setPoolFilterTeacher('ALL') }}
+                style={{ alignSelf:"flex-end" as const, padding:"2px 8px", border:"1px solid #E8E4FF", borderRadius:5, background:"#fff", color:"#8B87AD", fontSize:9, cursor:"pointer" }}>
+                ✕ Clear filters
+              </button>
+            )}
+          </div>
+        )
+      })()}
 
       {/* Body — scrollable list */}
       <div style={{ flex:1, overflowY:"auto" as const }}>
-        {poolTotalDeficit === 0 ? (
-          <div style={{ padding:"32px 16px", textAlign:"center" as const, color:"#8B87AD", fontSize:13 }}>
-            <div style={{ fontSize:32, marginBottom:8 }}>🎉</div>
-            Every subject has its target periods scheduled!
-          </div>
-        ) : poolData.filter(s => poolFilterSection === "ALL" || s.section === poolFilterSection).map(sec => (
-          <div key={sec.section}>
-            {/* Section header — hidden in teacher view (section name embedded in chip label) */}
-            {!(viewMode === 'teacher' && selectedEntity !== 'ALL') && (
-              <div style={{ padding:"6px 14px", background:"#F5F2FF", borderBottom:"1px solid #E8E4FF", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-                <span style={{ fontSize:11, fontWeight:700, color:"#4338ca" }}>{sec.section}</span>
+        {(() => {
+          // Apply both filters to the pool data
+          const isTeacherEligible = (secName: string, subName: string): boolean => {
+            if (poolFilterTeacher === 'ALL') return true
+            const t = staff.find(st => st.name === poolFilterTeacher)
+            if (!t) return true
+            const tSubs: string[] = (t as any).subjects ?? []
+            if (!tSubs.length) return false
+            const sectionKey = `${secName}::${subName}`
+            if (tSubs.some(ts => ts.includes('::')))
+              return tSubs.some(ts => ts === sectionKey || ts.endsWith(`::${subName}`))
+            return tSubs.includes(subName)
+          }
+
+          const filtered = poolData
+            .filter(s => poolFilterClass === 'ALL' || s.section === poolFilterClass)
+            .map(s => ({ ...s, subjects: s.subjects.filter(sub => isTeacherEligible(s.section, sub.name)) }))
+            .filter(s => s.subjects.length > 0)
+
+          if (poolTotalDeficit === 0) return (
+            <div style={{ padding:"32px 16px", textAlign:"center" as const, color:"#8B87AD", fontSize:13 }}>
+              <div style={{ fontSize:32, marginBottom:8 }}>🎉</div>
+              Every subject has its target periods scheduled!
+            </div>
+          )
+          if (filtered.length === 0) return (
+            <div style={{ padding:"28px 16px", textAlign:"center" as const, color:"#8B87AD", fontSize:12 }}>
+              <div style={{ fontSize:24, marginBottom:8 }}>🔍</div>
+              No unscheduled periods match the selected filters.
+            </div>
+          )
+
+          return filtered.map(sec => (
+            <div key={sec.section}>
+              {/* Section header */}
+              <div style={{ padding:"5px 14px", background:"#F5F2FF", borderBottom:"1px solid #E8E4FF", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                  <span style={{ fontSize:11, fontWeight:700, color:"#4338ca" }}>{sec.section}</span>
+                  {poolFilterTeacher !== 'ALL' && (
+                    <span style={{ fontSize:9, color:"#7C6FE0", background:"#EDE9FF", padding:"1px 5px", borderRadius:4, fontWeight:600 }}>
+                      {poolFilterTeacher}
+                    </span>
+                  )}
+                </div>
                 <span style={{ fontSize:9, color:"#7C6FE0", padding:"1px 6px", background:"#EDE9FF", borderRadius:8, fontWeight:600 }}>
                   {sec.subjects.reduce((t,s) => t+s.deficit, 0)} needed
                 </span>
               </div>
-            )}
-            {/* Subject chips */}
-            <div style={{ padding:"8px 10px 10px", display:"flex", flexWrap:"wrap" as const, gap:5 }}>
-              {sec.subjects.map(sub => (
-                <div key={sub.name}
-                  draggable
-                  onDragStart={e => {
-                    setPoolDragItem({ section: sec.section, subject: sub.name })
-                    e.dataTransfer.setData('application/pool-subject', sub.name)
-                    e.dataTransfer.setData('application/pool-section', sec.section)
-                    e.dataTransfer.effectAllowed = "copy"
-                  }}
-                  onDragEnd={() => setPoolDragItem(null)}
-                  title={`${sub.scheduled}/${sub.target} scheduled — drag onto an empty cell`}
-                  className={getSubjectColor(sub.name)}
-                  style={{ display:"flex", alignItems:"center", gap:4, padding:"5px 9px", borderRadius:6, fontSize:10, fontWeight:600, cursor:"grab", userSelect:"none" as const, boxShadow:"0 1px 3px rgba(0,0,0,0.08)", transition:"box-shadow 0.1s" }}>
-                  <span>
-                    {(viewMode === 'teacher' && selectedEntity !== 'ALL')
-                      ? `${sec.section} · ${sub.name}`
-                      : sub.name}
-                  </span>
-                  <span style={{ padding:"1px 5px", borderRadius:4, background:"rgba(0,0,0,0.15)", fontSize:9, fontWeight:700 }}>
-                    -{sub.deficit}
-                  </span>
-                </div>
-              ))}
+
+              {/* Subject chips */}
+              <div style={{ padding:"8px 10px 10px", display:"flex", flexWrap:"wrap" as const, gap:5 }}>
+                {sec.subjects.map(sub => (
+                  <div key={sub.name}
+                    draggable
+                    onDragStart={e => {
+                      setPoolDragItem({ section: sec.section, subject: sub.name })
+                      e.dataTransfer.setData('application/pool-subject', sub.name)
+                      e.dataTransfer.setData('application/pool-section', sec.section)
+                      e.dataTransfer.effectAllowed = "copy"
+                    }}
+                    onDragEnd={() => setPoolDragItem(null)}
+                    title={`${sub.scheduled}/${sub.target} scheduled · drag to assign`}
+                    className={getSubjectColor(sub.name)}
+                    style={{ display:"flex", alignItems:"center", gap:4, padding:"5px 9px", borderRadius:6, fontSize:10, fontWeight:600, cursor:"grab", userSelect:"none" as const, boxShadow:"0 1px 3px rgba(0,0,0,0.08)" }}>
+                    <span>{sub.name}</span>
+                    <span style={{ padding:"1px 5px", borderRadius:4, background:"rgba(0,0,0,0.15)", fontSize:9, fontWeight:700 }}>
+                      -{sub.deficit}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
+          ))
+        })()}
       </div>
 
       {/* Footer legend */}
