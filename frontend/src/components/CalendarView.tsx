@@ -1,12 +1,22 @@
 /**
- * CalendarView — Real calendar UI for SmartSched / Schedu
+ * CalendarView — Timeline-based timetable visualizer for SmartSched / Schedu
  *
- * Modes:  month | week | day
- * Navigation: prev / next / today for each mode
- * Transpose:  week & day views can be transposed (time on X-axis instead of Y)
+ * ┌────────────────────────────────────────────────────────────────────┐
+ * │  Timeline view                                                     │
+ * │  X-axis = actual clock time  (zoom: 15 min | 30 min | 60 min)     │
+ * │  Y-axis = entities  (classes / teachers / rooms / subjects)        │
+ * │                                                                    │
+ * │  Each block is positioned and sized by real duration:              │
+ * │    left  = (startMin − dayStart) × pxPerMin                        │
+ * │    width = duration × pxPerMin                                     │
+ * │                                                                    │
+ * │  Handles heterogeneous schedules naturally — classes with          │
+ * │  different break timings just render their blocks at the           │
+ * │  correct absolute time without special-casing.                     │
+ * └────────────────────────────────────────────────────────────────────┘
  *
- * The timetable is a repeating weekly pattern, so every Monday
- * always shows the same schedule as every other Monday.
+ * Month view is kept as a compact calendar overview.
+ * All period-header-based week / day table views have been removed.
  */
 
 import { useState, useMemo } from "react"
@@ -18,9 +28,10 @@ import { BlockedSlotIcon, buildBlockedMap } from "@/components/master/BlockedSlo
 import { DLGCellIcon, buildDLGMap } from "@/components/master/DLGCellIcon"
 
 // ─────────────────────────────────────────────
-// Types
+// Public types
 // ─────────────────────────────────────────────
-export type CalMode = "month" | "week" | "day"
+export type CalMode = "month" | "timeline"
+export type ZoomLevel = "15min" | "30min" | "60min"
 
 export interface CalendarViewProps {
   classTT: ClassTimetable
@@ -39,25 +50,33 @@ export interface CalendarViewProps {
   showRoom: boolean
   onCellClick?: (section: string, day: string, periodId: string) => void
   onCellSwap?: (from: {section:string, day:string, periodId:string}, to: {section:string, day:string, periodId:string}) => void
-  /** Called when a period-pool chip is dropped onto an empty cell. */
   onCellFill?: (section: string, day: string, periodId: string, suggestedSubject: string) => void
   absentHighlights?: Array<{ teacher: string; day: string }>
-  /** Optional: solver-emitted reasons for empty cells.
-   *  When present, empty cells get a clickable ? icon → reasons popover. */
   blockedSlots?: BlockedSlot[]
-  /** Optional: Dynamic Learning Groups from the last solve.
-   *  When present, cells that belong to a DLG get a small Layers icon
-   *  → popover showing parallel options at that slot. */
   dynamicLearningGroups?: DynamicLearningGroup[]
-  /** Rooms — used for capacity gauges in the DLG popover. */
   rooms?: Array<{ actualName?: string; generatedName?: string; name?: string; capacity?: number }>
-  /** Class-wise break config from the scheduler — when provided, classes with
-   *  different period structures automatically switch to Dynamic Calendar View. */
   classwiseBreaks?: Array<{id:string; name:string; type:string; classes:string[]; afterPeriod:number; duration:number}>
 }
 
 // ─────────────────────────────────────────────
-// Calendar helpers
+// Layout constants
+// ─────────────────────────────────────────────
+const LABEL_W = 104  // px — sticky left entity-label column
+const ROW_H   = 66   // px — per-entity row height
+const RULER_H = 42   // px — time ruler / sticky header height
+
+// Pixels per minute at each zoom level:
+//   "15min" → 4 px/min  → each hour = 240 px   (most detailed)
+//   "30min" → 2 px/min  → each hour = 120 px
+//   "60min" → 1 px/min  → each hour =  60 px   (overview)
+const PX_PER_MIN: Record<ZoomLevel, number> = { "15min": 4, "30min": 2, "60min": 1 }
+// Primary grid-line (tick-label) interval in minutes
+const TICK_INT:  Record<ZoomLevel, number>  = { "15min": 15, "30min": 30, "60min": 60 }
+// Minor grid-line interval (half of primary)
+const MINOR_INT: Record<ZoomLevel, number>  = { "15min": 5,  "30min": 15, "60min": 30 }
+
+// ─────────────────────────────────────────────
+// Calendar helpers (date math)
 // ─────────────────────────────────────────────
 const DOW_KEY: Record<number, string> = {
   0: "SUNDAY", 1: "MONDAY", 2: "TUESDAY", 3: "WEDNESDAY",
@@ -67,104 +86,136 @@ const MONTH_NAMES = [
   "January","February","March","April","May","June",
   "July","August","September","October","November","December",
 ]
-const DAY_ABBR = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
+const DAY_ABBR    = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
+const DAY_FULL: Record<string, string> = {
+  MONDAY:"Monday", TUESDAY:"Tuesday", WEDNESDAY:"Wednesday",
+  THURSDAY:"Thursday", FRIDAY:"Friday", SATURDAY:"Saturday", SUNDAY:"Sunday",
+}
+const DAY_SHORT: Record<string, string> = {
+  MONDAY:"Mon", TUESDAY:"Tue", WEDNESDAY:"Wed",
+  THURSDAY:"Thu", FRIDAY:"Fri", SATURDAY:"Sat", SUNDAY:"Sun",
+}
 
 function getMondayOfWeek(d: Date): Date {
   const copy = new Date(d)
-  const dow = copy.getDay() // 0=Sun
+  const dow  = copy.getDay()
   const diff = dow === 0 ? -6 : 1 - dow
   copy.setDate(copy.getDate() + diff)
   return copy
 }
-
 function getWeekDays(monday: Date): Date[] {
   return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(monday)
-    d.setDate(monday.getDate() + i)
-    return d
+    const d = new Date(monday); d.setDate(monday.getDate() + i); return d
   })
 }
-
 function getMonthGrid(year: number, month: number): Date[][] {
-  const firstDay = new Date(year, month, 1)
-  const startDow = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1
-  const start = new Date(firstDay)
-  start.setDate(firstDay.getDate() - startDow)
-
+  const firstDay  = new Date(year, month, 1)
+  const startDow  = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1
+  const start     = new Date(firstDay); start.setDate(firstDay.getDate() - startDow)
   const weeks: Date[][] = []
   const cur = new Date(start)
   for (let w = 0; w < 6; w++) {
     const week: Date[] = []
-    for (let d = 0; d < 7; d++) {
-      week.push(new Date(cur))
-      cur.setDate(cur.getDate() + 1)
-    }
+    for (let d = 0; d < 7; d++) { week.push(new Date(cur)); cur.setDate(cur.getDate() + 1) }
     weeks.push(week)
     if (cur.getMonth() > month && week[6].getMonth() > month) break
   }
   return weeks
 }
-
-function fmtDate(d: Date, fmt: "short" | "long" = "short"): string {
+function fmtDate(d: Date, fmt: "short"|"long" = "short"): string {
   return fmt === "long"
     ? d.toLocaleDateString("en-GB", { weekday:"long", day:"numeric", month:"long", year:"numeric" })
     : d.toLocaleDateString("en-GB", { day:"numeric", month:"short" })
 }
-
 function isSameDay(a: Date, b: Date): boolean {
-  return a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
+  return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate()
 }
-
 function isToday(d: Date): boolean { return isSameDay(d, new Date()) }
 
 // Parse "09:00" → minutes since midnight
 function parseTime(t: string): number {
-  const [h, m] = t.split(":").map(Number)
-  return h * 60 + m
+  const [h, m] = t.split(":").map(Number); return h * 60 + m
 }
-
-// Format minutes-since-midnight
-function fmtTime(mins: number, fmt: "12h" | "24h" = "12h"): string {
+// Format minutes-since-midnight → "9:00 AM" or "09:00"
+function fmtTime(mins: number, fmt: "12h"|"24h" = "12h"): string {
   const h = Math.floor(mins / 60), m = mins % 60
   if (fmt === "24h") return `${h.toString().padStart(2,"0")}:${m.toString().padStart(2,"0")}`
   const ap = h >= 12 ? "PM" : "AM", h12 = h % 12 || 12
-  return `${h12}:${m.toString().padStart(2,"0")} ${ap}`
+  return `${h12}${m === 0 ? "" : `:${m.toString().padStart(2,"0")}`} ${ap}`
+}
+// Short time label — drop ":00" and AM/PM for clean ruler
+function fmtTimeShort(mins: number, fmt: "12h"|"24h" = "12h"): string {
+  const h = Math.floor(mins / 60), m = mins % 60
+  if (fmt === "24h") return m === 0
+    ? `${h}`
+    : `${h}:${m.toString().padStart(2,"0")}`
+  const ap = h >= 12 ? "p" : "a", h12 = h % 12 || 12
+  return m === 0 ? `${h12}${ap}` : `${h12}:${m.toString().padStart(2,"0")}`
 }
 
-const PX_PER_MIN = 1.4  // pixel height per minute of school time
-
-// ── Private: per-section period sequence (mirrors buildClassPeriods in timetable.tsx) ──
+// ── Per-section period builder (mirrors timetable.tsx logic) ──────────
 function getSectionClassKeyLocal(sn: string): string {
   const norm = sn.toLowerCase().replace(/[\s-]/g, "")
   const m = norm.match(/^([a-z]+)/)
   return m ? m[1] : norm.slice(0, 6)
 }
 type CwBreak = {id:string; name:string; type:string; classes:string[]; afterPeriod:number; duration:number}
+
 function buildSectionPeriodsLocal(sn: string, allPeriods: Period[], cwBreaks?: CwBreak[]): Period[] {
   if (!cwBreaks?.length) return allPeriods
   const key = getSectionClassKeyLocal(sn)
-  const sb = cwBreaks.filter(b => b.classes.length === 0 || b.classes.includes(key))
+  const sb  = cwBreaks.filter(b => b.classes.length === 0 || b.classes.includes(key))
   if (!sb.length) return allPeriods
   const mk = (b: CwBreak): Period => ({
     id: b.id, name: b.name, duration: b.duration,
-    type: (b.type === 'lunch' ? 'lunch' : 'break') as Period['type'], shiftable: false,
+    type: (b.type === "lunch" ? "lunch" : "break") as Period["type"], shiftable: false,
   })
-  const cp = allPeriods.filter(p => p.type === 'class')
-  const out: Period[] = [...allPeriods.filter(p => p.type === 'fixed-start')]
+  const cp  = allPeriods.filter(p => p.type === "class")
+  const out: Period[] = [...allPeriods.filter(p => p.type === "fixed-start")]
   sb.filter(b => b.afterPeriod === 0).forEach(b => out.push(mk(b)))
   cp.forEach((p, i) => {
     out.push(p)
     sb.filter(b => b.afterPeriod === i + 1).forEach(b => out.push(mk(b)))
   })
-  out.push(...allPeriods.filter(p => p.type === 'fixed-end'))
+  out.push(...allPeriods.filter(p => p.type === "fixed-end"))
   return out
 }
 
-// ─────────────────────────────────────────────
-// Event slot helper — returns events in a given period×day
-// ─────────────────────────────────────────────
+// ── Cumulative times for a period list starting at a given minute ──────
+function calcPeriodTimes(
+  ps: Period[], startMins: number
+): Map<string, { start: number; end: number }> {
+  const map = new Map<string, { start: number; end: number }>()
+  let cur = startMins
+  for (const p of ps) {
+    map.set(p.id, { start: cur, end: cur + p.duration })
+    cur += p.duration
+  }
+  return map
+}
+
+// ─────────────────────────────────────────────────────────
+// Internal block data for the timeline renderer
+// ─────────────────────────────────────────────────────────
+interface TimeBlock {
+  key: string
+  periodId: string
+  periodName: string
+  periodType: Period["type"]
+  startMin: number
+  endMin: number
+  sectionName: string
+  subject: string
+  teacher: string
+  room: string
+  isSub: boolean
+  isClassTeacher: boolean
+  absent: boolean
+}
+
+// ─────────────────────────────────────────────────────────
+// Compact month event hook (reused by month view)
+// ─────────────────────────────────────────────────────────
 function useSlotEvents(
   classTT: ClassTimetable,
   sections: Section[],
@@ -181,293 +232,371 @@ function useSlotEvents(
       if (viewMode === "subject" && selectedEntity !== "ALL" && cell.subject !== selectedEntity) return []
       if (viewMode === "room"    && selectedEntity !== "ALL" && cell.room !== selectedEntity) return []
       const subKey = `${sec.name}|${day}|${periodId}`
-      const isSub = !!substitutions[subKey]
-      const subTeacher = substitutions[subKey]
+      const isSub  = !!substitutions[subKey]
       return [{
-        section: sec.name,
-        subject: cell.subject,
-        teacher: isSub ? subTeacher : (cell.teacher ?? ""),
-        room: cell.room ?? "",
-        isSub,
+        section: sec.name, subject: cell.subject,
+        teacher: isSub ? substitutions[subKey] : (cell.teacher ?? ""),
+        room: cell.room ?? "", isSub,
         isClassTeacher: !!cell.isClassTeacher,
-        options: (cell as any).options,        // Optional-block parallel offerings (if any)
+        options: (cell as any).options,
       }]
     })
   }, [classTT, sections, substitutions, viewMode, selectedEntity])
 }
 
-// ─────────────────────────────────────────────
-// Event chip (used in all views)
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────
+// EventChip — compact chip used inside month calendar cells
+// ─────────────────────────────────────────────────────────
 function EventChip({
   subject, section, teacher, room, isSub, isClassTeacher,
-  showTeacher, showRoom, compact, absent, hideSection,
-  options, onClick,
+  showTeacher, showRoom, compact, absent, hideSection, options, onClick,
 }: {
   subject: string; section: string; teacher: string; room: string;
   isSub: boolean; isClassTeacher: boolean;
   showTeacher: boolean; showRoom: boolean;
   compact?: boolean; absent?: boolean; hideSection?: boolean;
-  /** When this cell is an OPTIONAL BLOCK, options[] holds the
-   *  parallel offerings. Cell renders as a multi-row stack. */
-  options?: Array<{ subject: string; teacher: string; room: string; capacity?: number; allocatedStrength?: number }>;
+  options?: Array<{ subject:string; teacher:string; room:string; capacity?:number; allocatedStrength?:number }>;
   onClick?: () => void;
 }) {
   const cc = getSubjectColor(subject)
-  const isMultiOption = options && options.length > 1
-
-  // ── MULTI-OPTION cell (Optional Block) ──
-  if (isMultiOption) {
+  if (options && options.length > 1) {
     return (
-      <div
-        onClick={onClick}
+      <div onClick={onClick}
         title="Optional Block — multiple parallel subjects"
         style={{
-          borderRadius: 6, padding: compact ? "3px 5px" : "5px 7px",
+          borderRadius:6, padding: compact ? "3px 5px" : "5px 7px",
           cursor: onClick ? "pointer" : "default",
-          background: "linear-gradient(135deg, #F5F2FF 0%, #FAFAFE 100%)",
-          border: "1.5px solid #D8D2FF", borderLeft: "4px solid #7C6FE0",
-          marginBottom: 2, position: "relative" as const,
-          minWidth: 0, overflow: "hidden",
-        }}
-      >
+          background:"linear-gradient(135deg,#F5F2FF 0%,#FAFAFE 100%)",
+          border:"1.5px solid #D8D2FF", borderLeft:"4px solid #7C6FE0",
+          marginBottom:2, position:"relative" as const, minWidth:0, overflow:"hidden",
+        }}>
         {!compact && section && !hideSection && (
-          <div style={{ fontSize: 9, fontWeight: 800, opacity: 0.85, letterSpacing: '0.05em', lineHeight: 1.2, marginBottom: 2, color: "#13111E", textTransform: "uppercase" as const }}>
+          <div style={{ fontSize:9, fontWeight:800, opacity:0.85, letterSpacing:"0.05em", lineHeight:1.2, marginBottom:2, color:"#13111E", textTransform:"uppercase" as const }}>
             {section} · OPTIONAL BLOCK
           </div>
         )}
-        {compact && (
-          <div style={{ fontSize: 8, fontWeight: 700, color: "#7C6FE0", marginBottom: 2, letterSpacing: '0.08em' }}>
-            ◇ OPTIONAL ({options.length})
+        {options.map((opt, i) => (
+          <div key={i} className={getSubjectColor(opt.subject)}
+            style={{ display:"flex", alignItems:"center", gap:4, fontSize: compact?8:9.5, fontWeight:600,
+              padding: compact?"1px 4px":"2px 5px", borderRadius:3, marginBottom: i<options.length-1?2:0,
+              lineHeight:1.2, overflow:"hidden", textOverflow:"ellipsis" as const, whiteSpace:"nowrap" as const }}
+            title={`${opt.subject} → ${opt.room}${opt.teacher?" · "+opt.teacher:""}${opt.capacity?" · cap "+opt.capacity:""}`}>
+            <span style={{ fontWeight:800 }}>{opt.subject}</span>
+            {opt.room && <span style={{ opacity:0.65 }}>→ {opt.room}</span>}
+            {opt.allocatedStrength != null && opt.capacity && (
+              <span style={{ marginLeft:"auto", fontSize:8, opacity:0.6, fontFamily:"'DM Mono',monospace" }}>
+                {opt.allocatedStrength}/{opt.capacity}
+              </span>
+            )}
           </div>
-        )}
-        {options.map((opt, i) => {
-          // Get color stripe per option subject
-          const optCC = getSubjectColor(opt.subject)
-          // Extract border color from Tailwind class string (e.g. "border-green-500")
-          const borderMatch = optCC.match(/border-([a-z]+)-(\d{3})/)
-          const stripeColor = borderMatch ? `var(--tw-${borderMatch[0]})` : '#7C6FE0'
-          return (
-            <div key={i} className={optCC}
-              style={{
-                display: "flex", alignItems: "center", gap: 4,
-                fontSize: compact ? 8 : 9.5, fontWeight: 600,
-                padding: compact ? "1px 4px" : "2px 5px",
-                borderRadius: 3, marginBottom: i < options.length - 1 ? 2 : 0,
-                lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis" as const, whiteSpace: "nowrap" as const,
-              }}
-              title={`${opt.subject} → ${opt.room}${opt.teacher ? ' · ' + opt.teacher : ''}${opt.capacity ? ' · cap ' + opt.capacity : ''}`}
-            >
-              <span style={{ fontWeight: 800 }}>{opt.subject}</span>
-              {opt.room && <span style={{ opacity: 0.65 }}>→ {opt.room}</span>}
-              {opt.allocatedStrength != null && opt.capacity && (
-                <span style={{ marginLeft: 'auto', fontSize: 8, opacity: 0.6, fontFamily: "'DM Mono', monospace" }}>
-                  {opt.allocatedStrength}/{opt.capacity}
-                </span>
-              )}
-            </div>
-          )
-        })}
+        ))}
       </div>
     )
   }
-
-  // ── Single-subject cell (default) ──
   return (
-    <div
-      className={cc}
-      onClick={onClick}
+    <div className={cc} onClick={onClick}
       style={{
-        borderRadius: 5, padding: compact ? "2px 5px" : "4px 7px",
+        borderRadius:5, padding: compact ? "2px 5px" : "4px 7px",
         cursor: onClick ? "pointer" : "default",
         outline: absent ? "2px solid #f59e0b" : isSub ? "1.5px dashed #f59e0b" : "none",
-        marginBottom: 2, position: "relative" as const,
-        minWidth: 0, overflow: "hidden",
-      }}
-    >
+        marginBottom:2, position:"relative" as const, minWidth:0, overflow:"hidden",
+      }}>
       {isSub && (
         <span style={{ position:"absolute" as const, top:2, right:3, width:5, height:5, borderRadius:"50%", background:"#f59e0b" }} />
       )}
       {!compact && section && !hideSection && (
-        <div style={{ fontSize: 9, fontWeight: 800, opacity: 0.9, letterSpacing: '0.05em', lineHeight: 1.2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const, marginBottom: 2, textTransform: 'uppercase' }}>
+        <div style={{ fontSize:9, fontWeight:800, opacity:0.9, letterSpacing:"0.05em", lineHeight:1.2,
+          overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const, marginBottom:2, textTransform:"uppercase" as const }}>
           {section}
         </div>
       )}
-      <div style={{ fontSize: compact ? 9 : 11, fontWeight: 700, lineHeight: 1.2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const }}>
+      <div style={{ fontSize: compact?9:11, fontWeight:700, lineHeight:1.2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const }}>
         {subject}
       </div>
       {showTeacher && teacher && !compact && (
-        <div style={{ fontSize: 8.5, opacity: 0.7, lineHeight: 1.25, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const, marginTop: 2 }}>
+        <div style={{ fontSize:8.5, opacity:0.7, lineHeight:1.25, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const, marginTop:2 }}>
           {isClassTeacher && <span style={{ color:"#7C6FE0" }}>★ </span>}
           {isSub ? `🔄 ${teacher}` : teacher}
         </div>
       )}
       {showRoom && room && !compact && (
-        <div style={{ fontSize: 7.5, opacity: 0.55, fontFamily: "'DM Mono', monospace", marginTop: 1 }}>{room}</div>
+        <div style={{ fontSize:7.5, opacity:0.55, fontFamily:"'DM Mono',monospace", marginTop:1 }}>{room}</div>
       )}
     </div>
   )
 }
 
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────
+// TimelineBlock — a single block on the Gantt row
+// ─────────────────────────────────────────────────────────
+function TimelineBlock({
+  block, pxPerMin, globalStart, timeFormat, showTeacher, showRoom,
+  viewMode, onClick,
+}: {
+  block: TimeBlock
+  pxPerMin: number
+  globalStart: number
+  timeFormat: "12h"|"24h"
+  showTeacher: boolean
+  showRoom: boolean
+  viewMode: CalendarViewProps["viewMode"]
+  onClick?: () => void
+}) {
+  const left  = (block.startMin - globalStart) * pxPerMin
+  const width = (block.endMin - block.startMin) * pxPerMin
+
+  // ── Break / assembly / fixed block ───────────────────────────────────
+  if (block.periodType !== "class") {
+    const isLunch    = block.periodType === "lunch"
+    const isAssembly = block.periodType === "fixed-start" || block.periodType === "fixed-end"
+    const bg    = isLunch ? "#FEF3C7" : isAssembly ? "#EDE9FF" : "#FEFCE8"
+    const color = isLunch ? "#92400E" : isAssembly ? "#4F3FC0" : "#854D0E"
+    const border= isLunch ? "#F6D860" : isAssembly ? "#C4B5FD" : "#FDE68A"
+    return (
+      <div style={{
+        position:"absolute" as const, left, width: Math.max(width - 1, 1),
+        top:0, bottom:0, background:bg,
+        borderLeft:`2px solid ${border}`,
+        borderRight:`1px solid ${border}50`,
+        display:"flex", flexDirection:"column" as const,
+        alignItems:"center", justifyContent:"center",
+        overflow:"hidden", userSelect:"none" as const,
+      }}>
+        {width >= 22 && (
+          <div style={{
+            fontSize: Math.min(9, Math.max(7, width / 6)),
+            fontWeight:700, color, textAlign:"center" as const,
+            padding:"0 3px", lineHeight:1.25,
+            whiteSpace:"nowrap" as const, overflow:"hidden", textOverflow:"ellipsis" as const,
+          }}>
+            {block.periodName}
+          </div>
+        )}
+        {width >= 56 && (
+          <div style={{ fontSize:7.5, color, opacity:0.65, fontFamily:"monospace", marginTop:1 }}>
+            {block.endMin - block.startMin}m
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ── Empty / free period ───────────────────────────────────────────────
+  if (!block.subject) {
+    return (
+      <div style={{
+        position:"absolute" as const, left: left + 1, width: Math.max(width - 2, 1),
+        top:4, bottom:4,
+        background:"#F9FAFB", borderLeft:"1px dashed #E0DBFF",
+        borderRadius:4, overflow:"hidden",
+        display:"flex", alignItems:"center", justifyContent:"center",
+      }}>
+        {width >= 36 && <span style={{ fontSize:9, color:"#C4BFEA" }}>—</span>}
+      </div>
+    )
+  }
+
+  // ── Subject period block ──────────────────────────────────────────────
+  const cc = getSubjectColor(block.subject)
+  // Adaptive font sizes based on available width
+  const fs  = width >= 100 ? 10.5 : width >= 60 ? 9.5 : 8.5
+  const fs2 = width >= 100 ? 8.5  : 7.5
+
+  return (
+    <div
+      className={cc}
+      onClick={onClick}
+      title={[
+        block.subject,
+        block.sectionName && viewMode !== "class" ? block.sectionName : "",
+        block.teacher ? `👤 ${block.teacher}` : "",
+        block.room ? `🚪 ${block.room}` : "",
+        `${fmtTime(block.startMin, timeFormat)} – ${fmtTime(block.endMin, timeFormat)}`,
+      ].filter(Boolean).join("  ·  ")}
+      style={{
+        position:"absolute" as const, left: left + 1, width: Math.max(width - 2, 2),
+        top:4, bottom:4,
+        borderRadius:6, overflow:"hidden",
+        cursor: onClick ? "pointer" : "default",
+        padding: width >= 40 ? "3px 6px" : "2px 3px",
+        outline: block.absent  ? "2px solid #f59e0b" :
+                 block.isSub   ? "1.5px dashed #f59e0b" : "none",
+        display:"flex", flexDirection:"column" as const, justifyContent:"center",
+        transition:"filter 0.1s",
+      }}
+    >
+      {/* Subject name */}
+      {width >= 24 && (
+        <div style={{
+          fontSize:fs, fontWeight:700, lineHeight:1.2,
+          overflow:"hidden", textOverflow:"ellipsis" as const, whiteSpace:"nowrap" as const,
+        }}>
+          {block.subject}
+        </div>
+      )}
+      {/* Section name (for teacher/room views) */}
+      {viewMode !== "class" && width >= 70 && block.sectionName && (
+        <div style={{
+          fontSize:fs2, fontWeight:800, opacity:0.85,
+          textTransform:"uppercase" as const, letterSpacing:"0.04em",
+          overflow:"hidden", textOverflow:"ellipsis" as const, whiteSpace:"nowrap" as const,
+          marginTop:1,
+        }}>
+          {block.sectionName}
+        </div>
+      )}
+      {/* Teacher */}
+      {showTeacher && block.teacher && width >= 90 && (
+        <div style={{
+          fontSize:fs2, opacity:0.72, marginTop:1,
+          overflow:"hidden", textOverflow:"ellipsis" as const, whiteSpace:"nowrap" as const,
+        }}>
+          {block.isClassTeacher && <span style={{ color:"#7C6FE0" }}>★ </span>}
+          {block.isSub ? `🔄 ${block.teacher}` : block.teacher}
+        </div>
+      )}
+      {/* Room */}
+      {showRoom && block.room && viewMode !== "room" && width >= 90 && (
+        <div style={{
+          fontSize: Math.min(fs2, 7.5), opacity:0.55,
+          fontFamily:"'DM Mono',monospace", marginTop:1,
+          overflow:"hidden", textOverflow:"ellipsis" as const, whiteSpace:"nowrap" as const,
+        }}>
+          {block.room}
+        </div>
+      )}
+      {/* Time range — shown when there's room */}
+      {width >= 70 && (
+        <div style={{
+          fontSize:7.5, opacity:0.5, marginTop:2,
+          fontFamily:"monospace", whiteSpace:"nowrap" as const,
+        }}>
+          {fmtTimeShort(block.startMin, timeFormat)}–{fmtTimeShort(block.endMin, timeFormat)}
+        </div>
+      )}
+      {/* Sub / absent indicator dot */}
+      {block.isSub && (
+        <span style={{ position:"absolute" as const, top:3, right:4, width:5, height:5, borderRadius:"50%", background:"#f59e0b" }} />
+      )}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────
 // Main CalendarView component
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────
 export function CalendarView({
   classTT, teacherTT, periods, workDays, startTime, timeFormat = "12h",
   staff, sections, subjects, substitutions,
   viewMode, selectedEntity,
   showTeacher, showRoom,
-  onCellClick, onCellSwap, onCellFill, absentHighlights, blockedSlots,
-  dynamicLearningGroups, rooms, classwiseBreaks,
+  onCellClick, absentHighlights, blockedSlots, dynamicLearningGroups, rooms,
+  classwiseBreaks,
 }: CalendarViewProps) {
 
-  // O(1) lookup map for blocked-slot reasons (Doc Part 2)
-  const blockedMap = useMemo(
-    () => buildBlockedMap(blockedSlots ?? []),
-    [blockedSlots],
-  )
-  // O(1) lookup map for DLG cell membership (Doc Part 3)
-  const dlgMap = useMemo(
-    () => buildDLGMap(dynamicLearningGroups ?? []),
-    [dynamicLearningGroups],
-  )
+  // ── Lookup maps ───────────────────────────────────────
+  const blockedMap = useMemo(() => buildBlockedMap(blockedSlots ?? []), [blockedSlots])
+  const dlgMap     = useMemo(() => buildDLGMap(dynamicLearningGroups ?? []), [dynamicLearningGroups])
 
+  // ── View state ─────────────────────────────────────────
+  const [calMode,     setCalMode]     = useState<CalMode>("timeline")
   const [currentDate, setCurrentDate] = useState(new Date())
-  const [calMode, setCalMode] = useState<CalMode>("week")
-  // Calendar manages its own transpose — defaults to true (transposed = periods as columns)
-  const [transposed, setTransposed] = useState(true)
+  const [zoom,        setZoom]        = useState<ZoomLevel>("30min")
+  const [selectedDay, setSelectedDay] = useState<string>(() => {
+    const dk = DOW_KEY[new Date().getDay()]
+    return workDays.includes(dk) ? dk : (workDays[0] ?? "MONDAY")
+  })
 
-  // Drag-and-drop state for cell swapping
-  const [dragFrom, setDragFrom] = useState<{section:string, day:string, periodId:string} | null>(null)
-  const [dragOverCell, setDragOverCell] = useState<string|null>(null)
-
-  // Detect if classes have mixed period structures — triggers Dynamic Calendar View
-  const isDynamicMode = useMemo(() => {
-    if (viewMode !== "class") return false
-    const vc = selectedEntity !== "ALL" ? sections.filter(s => s.name === selectedEntity) : sections
-    if (vc.length <= 1) return false
-    const sigs = new Set(vc.map(sec =>
-      buildSectionPeriodsLocal(sec.name, periods, classwiseBreaks)
-        .map(p => `${p.type}:${p.id}:${p.duration}`).join('|')
-    ))
-    return sigs.size > 1
-  }, [viewMode, selectedEntity, sections, periods, classwiseBreaks])
-
-  const today = new Date()
+  const today       = new Date()
   const classPeriods = periods.filter(p => p.type === "class")
+  const getEvents    = useSlotEvents(classTT, sections, substitutions, viewMode, selectedEntity)
 
-  // Compute period times (cumulative from startTime)
-  const periodTimes = useMemo(() => {
-    const map = new Map<string, { start: number; end: number }>()  // minutes
-    let mins = parseTime(startTime)
-    periods.forEach(p => {
-      const s = mins
-      mins += p.duration
-      map.set(p.id, { start: s, end: mins })
-    })
-    return map
-  }, [periods, startTime])
+  // ── Day-start in minutes ──────────────────────────────
+  const dayStartMin = useMemo(() => parseTime(startTime), [startTime])
 
-  const dayStart = parseTime(startTime)
-  const dayEnd = useMemo(() => {
-    let m = parseTime(startTime)
-    periods.forEach(p => { m += p.duration })
-    return m
-  }, [periods, startTime])
-  const totalMins = dayEnd - dayStart
+  // ── All rooms (for room view) ─────────────────────────
+  const allRooms = useMemo(() => {
+    const roomSet = new Set<string>()
+    sections.forEach(s => { if (s.room) roomSet.add(s.room) })
+    Object.values(classTT).forEach(sd =>
+      Object.values(sd).forEach(dd =>
+        Object.values(dd).forEach((cell: any) => { if (cell?.room) roomSet.add(cell.room) })
+      )
+    )
+    return [...roomSet].sort()
+  }, [sections, classTT])
 
-  const getEvents = useSlotEvents(classTT, sections, substitutions, viewMode, selectedEntity)
-
-  // ── Navigation ──────────────────────────────────────────
+  // ── Navigation helpers ────────────────────────────────
   const navigate = (dir: -1 | 1) => {
     const d = new Date(currentDate)
-    if (calMode === "month") d.setMonth(d.getMonth() + dir)
-    else if (calMode === "week") d.setDate(d.getDate() + dir * 7)
-    else d.setDate(d.getDate() + dir)
+    d.setMonth(d.getMonth() + dir)
     setCurrentDate(d)
   }
   const goToday = () => setCurrentDate(new Date())
 
-  // ── Header label ────────────────────────────────────────
   const headerLabel = useMemo(() => {
-    if (calMode === "month")
+    if (calMode === "month") {
       return `${MONTH_NAMES[currentDate.getMonth()]} ${currentDate.getFullYear()}`
-    if (calMode === "week") {
-      const mon = getMondayOfWeek(currentDate)
-      const sun = new Date(mon); sun.setDate(mon.getDate() + 6)
-      return `${fmtDate(mon)} – ${fmtDate(sun)}`
     }
-    return fmtDate(currentDate, "long")
-  }, [calMode, currentDate])
+    return DAY_FULL[selectedDay] ?? selectedDay
+  }, [calMode, currentDate, selectedDay])
 
-  // ─────────────────────────────────────────────────────────
-  // RENDER: Month view
-  // ─────────────────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════
+  // RENDER — Month view (unchanged compact calendar)
+  // ══════════════════════════════════════════════════════
   const renderMonth = () => {
-    const grid = getMonthGrid(currentDate.getFullYear(), currentDate.getMonth())
+    const grid  = getMonthGrid(currentDate.getFullYear(), currentDate.getMonth())
     const month = currentDate.getMonth()
-
     return (
-      <div style={{ flex: 1, overflowY: "auto" }}>
-        {/* Day-of-week headers */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", borderBottom: "1px solid #e2e8f0" }}>
+      <div style={{ flex:1, overflowY:"auto" }}>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", borderBottom:"1px solid #e2e8f0" }}>
           {DAY_ABBR.map(d => (
-            <div key={d} style={{ padding: "6px 0", textAlign: "center" as const, fontSize: 11, fontWeight: 700, color: "#64748b", borderRight: "1px solid #f1f5f9" }}>{d}</div>
+            <div key={d} style={{ padding:"6px 0", textAlign:"center" as const, fontSize:11, fontWeight:700, color:"#64748b", borderRight:"1px solid #f1f5f9" }}>{d}</div>
           ))}
         </div>
-        {/* Weeks */}
         {grid.map((week, wi) => (
-          <div key={wi} style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", borderBottom: "1px solid #e2e8f0", minHeight: 110 }}>
+          <div key={wi} style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", borderBottom:"1px solid #e2e8f0", minHeight:110 }}>
             {week.map((day, di) => {
               const dayKey = DOW_KEY[day.getDay()]
-              const isWorkDay = workDays.includes(dayKey)
-              const isCurrentMonth = day.getMonth() === month
-              const todayFlag = isToday(day)
-              const isSelected = isSameDay(day, currentDate)
-              const events: { pid: string; subject: string; section: string; teacher: string; room: string; isSub: boolean; isClassTeacher: boolean }[] = []
-
-              if (isWorkDay && isCurrentMonth) {
+              const isWork = workDays.includes(dayKey)
+              const isCurM = day.getMonth() === month
+              const todayF = isToday(day)
+              const isSel  = isSameDay(day, currentDate)
+              const absent = absentHighlights?.some(h => h.day === dayKey)
+              const events: any[] = []
+              if (isWork && isCurM) {
                 classPeriods.slice(0, 4).forEach(p => {
-                  getEvents(dayKey, p.id).slice(0, 2).forEach(ev => {
-                    events.push({ pid: p.id, ...ev })
-                  })
+                  getEvents(dayKey, p.id).slice(0, 2).forEach(ev => events.push({ pid:p.id, ...ev }))
                 })
               }
-
-              const absentSlot = absentHighlights?.some(h => h.day === dayKey)
-
               return (
-                <div
-                  key={di}
-                  onClick={() => { setCurrentDate(day); setCalMode("day") }}
+                <div key={di}
+                  onClick={() => { setCurrentDate(day); setSelectedDay(dayKey); setCalMode("timeline") }}
                   style={{
-                    borderRight: "1px solid #f1f5f9",
-                    padding: "4px 5px",
-                    background: !isCurrentMonth ? "#f8fafc" : todayFlag ? "#F5F2FF" : absentSlot ? "#fffbeb" : "#fff",
-                    cursor: "pointer",
-                    opacity: isCurrentMonth ? 1 : 0.4,
-                    outline: isSelected ? "2px solid #7C6FE0" : "none",
-                    outlineOffset: -2,
-                    transition: "background 0.12s",
-                  }}
-                >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
+                    borderRight:"1px solid #f1f5f9", padding:"4px 5px",
+                    background: !isCurM?"#f8fafc":todayF?"#F5F2FF":absent?"#fffbeb":"#fff",
+                    cursor:"pointer", opacity: isCurM?1:0.4,
+                    outline: isSel?"2px solid #7C6FE0":"none", outlineOffset:-2,
+                    transition:"background 0.12s",
+                  }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:3 }}>
                     <span style={{
-                      width: 22, height: 22, borderRadius: "50%",
-                      display: "inline-flex", alignItems: "center", justifyContent: "center",
-                      fontSize: 11, fontWeight: 700,
-                      background: todayFlag ? "#7C6FE0" : "transparent",
-                      color: todayFlag ? "#fff" : !isCurrentMonth ? "#FFFFFF" : "#7C6FE0",
+                      width:22, height:22, borderRadius:"50%",
+                      display:"inline-flex", alignItems:"center", justifyContent:"center",
+                      fontSize:11, fontWeight:700,
+                      background:todayF?"#7C6FE0":"transparent",
+                      color:todayF?"#fff":!isCurM?"#c0c0c0":"#7C6FE0",
                     }}>{day.getDate()}</span>
-                    {absentSlot && <span style={{ fontSize: 8, color: "#D4920E", fontWeight: 600 }}>⚠ absent</span>}
-                    {!isWorkDay && isCurrentMonth && <span style={{ fontSize: 8, color: "#FFFFFF" }}>off</span>}
+                    {absent && <span style={{ fontSize:8, color:"#D4920E", fontWeight:600 }}>⚠ absent</span>}
+                    {!isWork && isCurM && <span style={{ fontSize:8, color:"#c0c0c0" }}>off</span>}
                   </div>
-                  <div style={{ display: "flex", flexDirection: "column" as const, gap: 1 }}>
-                    {events.slice(0, 3).map((ev, ei) => (
-                      <EventChip key={ei} {...ev} showTeacher={false} showRoom={false} compact absent={!!(absentSlot && absentHighlights?.some(h => h.day === dayKey && h.teacher === ev.teacher))} />
+                  <div style={{ display:"flex", flexDirection:"column" as const, gap:1 }}>
+                    {events.slice(0,3).map((ev,ei) => (
+                      <EventChip key={ei} {...ev} showTeacher={false} showRoom={false} compact
+                        absent={!!(absent && absentHighlights?.some(h => h.day===dayKey && h.teacher===ev.teacher))} />
                     ))}
                     {events.length > 3 && (
-                      <div style={{ fontSize: 8, color: "#FFFFFF", paddingLeft: 4 }}>+{events.length - 3} more</div>
+                      <div style={{ fontSize:8, color:"#8B87AD", paddingLeft:4 }}>+{events.length-3} more</div>
                     )}
                   </div>
                 </div>
@@ -479,733 +608,481 @@ export function CalendarView({
     )
   }
 
-  // ─────────────────────────────────────────────────────────
-  // RENDER: Week view — Normal (Y=time, X=days)
-  // ─────────────────────────────────────────────────────────
-  const renderWeekNormal = (weekDays: Date[]) => {
-    const visibleDays = weekDays.filter(d => workDays.includes(DOW_KEY[d.getDay()]))
-    // Filter classes by viewMode; show all by default
-    const visibleClasses = viewMode === "class" && selectedEntity !== "ALL"
-      ? sections.filter(s => s.name === selectedEntity)
-      : sections
+  // ══════════════════════════════════════════════════════
+  // RENDER — Timeline view  (the main new view)
+  // ══════════════════════════════════════════════════════
+  const renderTimeline = (dayKey: string) => {
+    const pxPerMin  = PX_PER_MIN[zoom]
+    const tickInt   = TICK_INT[zoom]
+    const minorInt  = MINOR_INT[zoom]
+    const isWorkDay = workDays.includes(dayKey)
+    const absentHL  = absentHighlights?.filter(h => h.day === dayKey) ?? []
 
-    return (
-      <div style={{ flex: 1, overflow: "auto" }}>
-        <table style={{ borderCollapse: "collapse", width: "100%", tableLayout: "fixed" as const }}>
-          <colgroup>
-            <col style={{ width: '72px' }} />
-            <col style={{ width: '62px' }} />
-            {visibleDays.map(d => <col key={DOW_KEY[d.getDay()]} />)}
-          </colgroup>
-          <thead style={{ position: 'sticky' as const, top: 0, zIndex: 5 }}>
-            <tr>
-              <th style={{ width: 72, background: "#7C6FE0", color: "#fff", padding: "8px 6px", fontSize: 10, fontWeight: 800, border: "1px solid #9B8EF5", letterSpacing: "0.06em" }}>Class</th>
-              <th style={{ width: 62, background: "#7C6FE0", color: "#fff", padding: "8px 6px", fontSize: 10, fontWeight: 700, border: "1px solid #9B8EF5" }}>Time</th>
-              {visibleDays.map(d => {
-                const dayKey = DOW_KEY[d.getDay()]
-                const todayFlag = isToday(d)
-                const absentFlag = absentHighlights?.some(h => h.day === dayKey)
-                return (
-                  <th key={dayKey}
-                    style={{
-                      background: todayFlag ? "#D4920E" : "#7C6FE0",
-                      color: "#fff", border: "1px solid #9B8EF5",
-                      padding: "8px 10px", fontSize: 11, fontWeight: 700,
-                      textAlign: "center" as const,
-                      outline: absentFlag ? "2px solid #F5A623" : "none",
-                      outlineOffset: -2,
-                    }}
-                  >
-                    <div>{DAY_ABBR[(d.getDay() + 6) % 7]}</div>
-                    <div style={{ fontSize: 14, fontWeight: 800 }}>{d.getDate()}</div>
-                    <div style={{ fontSize: 9, opacity: 0.75 }}>{MONTH_NAMES[d.getMonth()].slice(0, 3)}</div>
-                    {absentFlag && <div style={{ fontSize: 8, color: "#fff", marginTop: 2 }}>⚠ absent</div>}
-                  </th>
-                )
-              })}
-            </tr>
-          </thead>
-          <tbody>
-            {visibleClasses.flatMap((sec, sIdx) => {
-              const classBg = sIdx % 2 === 0 ? "#FAFAFE" : "#FFFFFF"
-              const periodRows = periods.map((p, pi) => {
-                const times = periodTimes.get(p.id)
-                const isBreak = p.type !== "class"
-                const breakBg = p.type === "lunch" ? "#FEF3C7" : p.type === "fixed-start" ? "#EDE9FF" : p.type === "fixed-end" ? "#EDE9FF" : "#FEFCE8"
-                const breakColor = p.type === "lunch" ? "#92400E" : p.type === "fixed-start" ? "#4F3FC0" : p.type === "fixed-end" ? "#065F46" : "#854D0E"
-                const isFirstRow = pi === 0
-                return (
-                  <tr key={`${sec.name}-${p.id}`} style={{ background: isBreak ? breakBg : classBg, height: `${p.duration * PX_PER_MIN}px` }}>
-                    {/* Class column — rowSpan across all periods for this class */}
-                    {isFirstRow && (
-                      <td rowSpan={periods.length}
-                        style={{
-                          background: "linear-gradient(180deg, #EDE9FF 0%, #F5F2FF 100%)",
-                          border: "1px solid #D8D2FF",
-                          padding: "10px 6px", verticalAlign: "middle" as const, textAlign: "center" as const,
-                        }}>
-                        <div style={{ fontSize: 13, fontWeight: 900, color: "#13111E", letterSpacing: "0.04em" }}>{sec.name}</div>
-                        <div style={{ fontSize: 9, fontWeight: 600, color: "#7C6FE0", textTransform: "uppercase" as const, letterSpacing: "0.1em", marginTop: 3 }}>Class</div>
-                      </td>
-                    )}
-                    {/* Time column — break rows show no heading (shown cell-wise instead) */}
-                    <td style={{ border: "1px solid #E8E4FF", padding: "4px 6px", verticalAlign: "top" as const, background: isBreak ? breakBg : "#FAFAFE" }}>
-                      {!isBreak && (
-                        <>
-                          <div style={{ fontSize: 10, fontWeight: 700, color: "#4B5275" }}>{p.name}</div>
-                          {times && (
-                            <>
-                              <div style={{ fontSize: 8, color: "#8B87AD", fontFamily: "'DM Mono', monospace" }}>{fmtTime(times.start, timeFormat)}</div>
-                              <div style={{ fontSize: 8, color: "#B8B4D4", fontFamily: "'DM Mono', monospace" }}>{fmtTime(times.end, timeFormat)}</div>
-                            </>
-                          )}
-                        </>
-                      )}
-                    </td>
-                    {/* Day cells — ONE event per cell for this class */}
-                    {visibleDays.map(d => {
-                      const dayKey = DOW_KEY[d.getDay()]
-                      if (isBreak) {
-                        const bTimes = times
-                        return (
-                          <td key={dayKey} style={{ border: "1px solid #E8E4FF", textAlign: "center" as const, padding: "4px 3px", background: breakBg }}>
-                            <div style={{ fontSize: 8, fontWeight: 700, color: breakColor, lineHeight: 1.3 }}>{p.name}</div>
-                            {bTimes && <div style={{ fontSize: 7, color: breakColor, opacity: 0.75, fontFamily: "'DM Mono', monospace", marginTop: 1 }}>{fmtTime(bTimes.start, timeFormat)} – {fmtTime(bTimes.end, timeFormat)}</div>}
-                          </td>
-                        )
-                      }
-                      const cell = classTT[sec.name]?.[dayKey]?.[p.id]
-                      const absentFlag = absentHighlights?.some(h => h.day === dayKey)
-                      const teacherAbsent = !!(absentFlag && cell?.teacher && absentHighlights?.some(h => h.day === dayKey && h.teacher === cell.teacher))
-                      const subKey = `${sec.name}|${dayKey}|${p.id}`
-                      const isSub = !!substitutions[subKey]
-                      const subTeacher = substitutions[subKey]
-                      const cellDragKey = `${sec.name}|${dayKey}|${p.id}`
-                      const isDragOver = dragOverCell === cellDragKey
-                      return (
-                        <td key={dayKey}
-                          draggable
-                          onDragStart={cell?.subject ? () => setDragFrom({section: sec.name, day: dayKey, periodId: p.id}) : undefined}
-                          onDragOver={e => { e.preventDefault(); setDragOverCell(cellDragKey) }}
-                          onDragLeave={() => setDragOverCell(null)}
-                          onDrop={e => {
-                            setDragOverCell(null)
-                            const poolSubject = e.dataTransfer.getData('application/pool-subject')
-                            const poolSection = e.dataTransfer.getData('application/pool-section')
-                            if (poolSubject && (!poolSection || poolSection === sec.name)) {
-                              onCellFill?.(sec.name, dayKey, p.id, poolSubject)
-                              setDragFrom(null)
-                            } else if (dragFrom) {
-                              onCellSwap?.(dragFrom, {section: sec.name, day: dayKey, periodId: p.id})
-                              setDragFrom(null)
-                            }
-                          }}
-                          style={{ border: isDragOver ? "2px dashed #7C6FE0" : "1px solid #E8E4FF", padding: 3, verticalAlign: "top" as const, background: teacherAbsent ? "#FFFBEB" : isDragOver ? "#EDE9FF" : undefined, position: "relative" as const, cursor: "grab" }}>
-                          {/* DLG icon overlay — top-right when cell is part of a DLG */}
-                          {cell?.subject && (() => {
-                            const dlgs = dlgMap.get(`${sec.name}|${dayKey}|${p.id}`)
-                            return dlgs && dlgs.length > 0 ? (
-                              <span style={{ position: "absolute" as const, top: 2, right: 4, zIndex: 2 }}>
-                                <DLGCellIcon dlgs={dlgs} currentSubject={cell.subject} rooms={rooms} />
-                              </span>
-                            ) : null
-                          })()}
-                          {!cell?.subject
-                            ? (() => {
-                                const reasons = blockedMap.get(`${sec.name}|${dayKey}|${p.id}`)
-                                return (
-                                  <div style={{ minHeight: 32, display: "flex", alignItems: "center", justifyContent: "center", gap: 4, color: isDragOver ? "#7C6FE0" : "#D8D2FF", fontSize: isDragOver ? 10 : 11 }}>
-                                    {isDragOver ? "Drop here" : reasons && reasons.length > 0 ? <BlockedSlotIcon reasons={reasons} /> : '—'}
-                                  </div>
-                                )
-                              })()
-                            : <EventChip
-                                subject={cell.subject}
-                                section={sec.name}
-                                teacher={isSub ? subTeacher : (cell.teacher ?? "")}
-                                room={cell.room ?? ""}
-                                isSub={isSub}
-                                isClassTeacher={!!cell.isClassTeacher}
-                                showTeacher={showTeacher}
-                                showRoom={showRoom}
-                                hideSection
-                                absent={teacherAbsent}
-                                onClick={() => onCellClick?.(sec.name, dayKey, p.id)}
-                              />
-                          }
-                        </td>
-                      )
-                    })}
-                  </tr>
-                )
-              })
-              // Insert divider row after this class (except after the last one)
-              if (sIdx < visibleClasses.length - 1) {
-                periodRows.push(
-                  <tr key={`divider-${sec.name}`}>
-                    <td colSpan={2 + visibleDays.length} style={{ height: 3, background: '#7C6FE0', padding: 0, border: 'none' }} />
-                  </tr>
-                )
-              }
-              return periodRows
-            })}
-          </tbody>
-        </table>
-      </div>
+    if (!isWorkDay) {
+      return (
+        <div style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column" as const, gap:12, color:"#8B87AD" }}>
+          <div style={{ fontSize:36 }}>🏖️</div>
+          <div style={{ fontSize:15, fontWeight:700 }}>{DAY_FULL[dayKey] ?? dayKey} is not a school day</div>
+          <div style={{ fontSize:12 }}>Select a workday from the buttons above.</div>
+        </div>
+      )
+    }
+
+    // ── 1. Build entity list ─────────────────────────────────────────────
+    type EntityRow = {
+      id: string
+      label: string
+      sublabel: string
+      blocks: TimeBlock[]
+      totalEnd: number
+    }
+
+    const buildClassBlocks = (secName: string): TimeBlock[] => {
+      const ps = buildSectionPeriodsLocal(secName, periods, classwiseBreaks)
+      const tm = calcPeriodTimes(ps, dayStartMin)
+      return ps.map(p => {
+        const t = tm.get(p.id)!
+        const cell = classTT[secName]?.[dayKey]?.[p.id]
+        const subKey = `${secName}|${dayKey}|${p.id}`
+        const isSub  = !!substitutions[subKey]
+        const absent = !!(absentHL.length && cell?.teacher && absentHL.some(h => h.teacher === cell.teacher))
+        return {
+          key: `${secName}|${p.id}`,
+          periodId: p.id, periodName: p.name, periodType: p.type,
+          startMin: t.start, endMin: t.end,
+          sectionName: secName,
+          subject:       p.type !== "class" ? "" : (cell?.subject ?? ""),
+          teacher:       p.type !== "class" ? "" : (isSub ? substitutions[subKey] : (cell?.teacher ?? "")),
+          room:          p.type !== "class" ? "" : (cell?.room ?? ""),
+          isSub, isClassTeacher: !!(cell?.isClassTeacher), absent,
+        }
+      })
+    }
+
+    // For teacher/room views: gather blocks from sections, positioned by section's own timing
+    const buildTeacherBlocks = (teacherName: string): TimeBlock[] => {
+      const blocks: TimeBlock[] = []
+      sections.forEach(sec => {
+        const ps = buildSectionPeriodsLocal(sec.name, periods, classwiseBreaks)
+        const tm = calcPeriodTimes(ps, dayStartMin)
+        ps.forEach(p => {
+          if (p.type !== "class") return
+          const cell = classTT[sec.name]?.[dayKey]?.[p.id]
+          if (cell?.teacher !== teacherName) return
+          const t = tm.get(p.id)!
+          const subKey = `${sec.name}|${dayKey}|${p.id}`
+          const isSub  = !!substitutions[subKey]
+          const absent = !!(absentHL.some(h => h.teacher === teacherName))
+          blocks.push({
+            key: `${sec.name}|${p.id}`,
+            periodId: p.id, periodName: p.name, periodType: p.type,
+            startMin: t.start, endMin: t.end,
+            sectionName: sec.name,
+            subject: cell.subject ?? "",
+            teacher: isSub ? substitutions[subKey] : (cell.teacher ?? ""),
+            room: cell.room ?? "",
+            isSub, isClassTeacher: !!(cell.isClassTeacher), absent,
+          })
+        })
+      })
+      return blocks
+    }
+
+    const buildRoomBlocks = (roomName: string): TimeBlock[] => {
+      const blocks: TimeBlock[] = []
+      sections.forEach(sec => {
+        const ps = buildSectionPeriodsLocal(sec.name, periods, classwiseBreaks)
+        const tm = calcPeriodTimes(ps, dayStartMin)
+        ps.forEach(p => {
+          if (p.type !== "class") return
+          const cell = classTT[sec.name]?.[dayKey]?.[p.id]
+          if (!cell?.subject || cell.room !== roomName) return
+          const t = tm.get(p.id)!
+          const subKey = `${sec.name}|${dayKey}|${p.id}`
+          const isSub  = !!substitutions[subKey]
+          blocks.push({
+            key: `${sec.name}|${p.id}`,
+            periodId: p.id, periodName: p.name, periodType: p.type,
+            startMin: t.start, endMin: t.end,
+            sectionName: sec.name,
+            subject: cell.subject ?? "",
+            teacher: isSub ? substitutions[subKey] : (cell.teacher ?? ""),
+            room: roomName,
+            isSub, isClassTeacher: !!(cell.isClassTeacher), absent: false,
+          })
+        })
+      })
+      return blocks
+    }
+
+    const entityRows: EntityRow[] = []
+
+    if (viewMode === "class") {
+      const vc = selectedEntity !== "ALL"
+        ? sections.filter(s => s.name === selectedEntity)
+        : sections
+      vc.forEach(sec => {
+        const blocks = buildClassBlocks(sec.name)
+        const totalEnd = blocks.length ? Math.max(...blocks.map(b => b.endMin)) : dayStartMin
+        entityRows.push({ id: sec.name, label: sec.name, sublabel: "Class", blocks, totalEnd })
+      })
+    } else if (viewMode === "teacher") {
+      const vt = selectedEntity !== "ALL"
+        ? staff.filter(s => s.name === selectedEntity)
+        : staff
+      vt.forEach(t => {
+        const blocks   = buildTeacherBlocks(t.name)
+        const totalEnd = blocks.length ? Math.max(...blocks.map(b => b.endMin)) : dayStartMin
+        // Also add global breaks so teacher row shows when breaks occur
+        const globalTm = calcPeriodTimes(periods, dayStartMin)
+        periods.forEach(p => {
+          if (p.type === "class") return
+          const t2 = globalTm.get(p.id)!
+          blocks.push({
+            key: `__brk|${p.id}`, periodId: p.id, periodName: p.name, periodType: p.type,
+            startMin: t2.start, endMin: t2.end, sectionName: "",
+            subject: "", teacher: "", room: "", isSub: false, isClassTeacher: false, absent: false,
+          })
+        })
+        blocks.sort((a, b) => a.startMin - b.startMin)
+        entityRows.push({ id: t.name, label: t.name, sublabel: "Teacher", blocks, totalEnd })
+      })
+    } else if (viewMode === "room") {
+      const vr = selectedEntity !== "ALL"
+        ? allRooms.filter(r => r === selectedEntity)
+        : allRooms
+      vr.forEach(room => {
+        const blocks   = buildRoomBlocks(room)
+        const totalEnd = blocks.length ? Math.max(...blocks.map(b => b.endMin)) : dayStartMin
+        const globalTm = calcPeriodTimes(periods, dayStartMin)
+        periods.forEach(p => {
+          if (p.type === "class") return
+          const t2 = globalTm.get(p.id)!
+          blocks.push({
+            key: `__brk|${p.id}`, periodId: p.id, periodName: p.name, periodType: p.type,
+            startMin: t2.start, endMin: t2.end, sectionName: "",
+            subject: "", teacher: "", room: "", isSub: false, isClassTeacher: false, absent: false,
+          })
+        })
+        blocks.sort((a, b) => a.startMin - b.startMin)
+        entityRows.push({ id: room, label: room, sublabel: "Room", blocks, totalEnd })
+      })
+    } else {
+      // subject view — rows are sections that have this subject
+      const vc = selectedEntity !== "ALL"
+        ? sections.filter(sec => Object.values(classTT[sec.name] ?? {}).some(dd =>
+            Object.values(dd).some((c: any) => c?.subject === selectedEntity)
+          ))
+        : sections
+      vc.forEach(sec => {
+        const blocks = buildClassBlocks(sec.name).map(b => ({
+          ...b,
+          // Dim blocks that aren't for this subject (keep them for context, just fade)
+          subject: b.periodType !== "class" ? b.subject :
+                   b.subject === selectedEntity ? b.subject : "",
+        }))
+        const totalEnd = blocks.length ? Math.max(...blocks.map(b => b.endMin)) : dayStartMin
+        entityRows.push({ id: sec.name, label: sec.name, sublabel: "Class", blocks, totalEnd })
+      })
+    }
+
+    if (!entityRows.length) {
+      return (
+        <div style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", color:"#8B87AD", fontSize:14 }}>
+          No entities to display.
+        </div>
+      )
+    }
+
+    // ── 2. Global time range ────────────────────────────────────────────
+    const globalStart = dayStartMin
+    const globalEnd   = Math.max(
+      dayStartMin + 60,
+      ...entityRows.map(r => r.totalEnd),
+      ...entityRows.flatMap(r => r.blocks.map(b => b.endMin))
     )
-  }
+    const totalWidth = (globalEnd - globalStart) * pxPerMin
 
-  // ─────────────────────────────────────────────────────────
-  // RENDER: Week view — Transposed (Y=days, X=periods)
-  // ─────────────────────────────────────────────────────────
-  const renderWeekTransposed = (weekDays: Date[]) => {
-    const visibleDays = weekDays.filter(d => workDays.includes(DOW_KEY[d.getDay()]))
-    const visibleClasses = viewMode === "class" && selectedEntity !== "ALL"
-      ? sections.filter(s => s.name === selectedEntity)
-      : sections
+    // ── 3. Time ruler ticks ─────────────────────────────────────────────
+    const ticks: number[]      = []
+    const minorTicks: number[] = []
+    for (let t = globalStart; t <= globalEnd; t += tickInt)   ticks.push(t)
+    for (let t = globalStart; t <= globalEnd; t += minorInt) {
+      if (t % tickInt !== 0) minorTicks.push(t)
+    }
 
-    return (
-      <div style={{ flex: 1, overflow: "auto" }}>
-        <table style={{ borderCollapse: "collapse", width: "100%", tableLayout: "fixed" as const }}>
-          <colgroup>
-            <col style={{ width: '72px' }} />
-            <col style={{ width: '62px' }} />
-            {periods.map(p => p.type !== 'class'
-              ? <col key={p.id} style={{ width: '46px' }} />
-              : <col key={p.id} />
-            )}
-          </colgroup>
-          <thead style={{ position: 'sticky' as const, top: 0, zIndex: 5 }}>
-            <tr>
-              <th style={{ background: "#7C6FE0", color: "#fff", border: "1px solid #9B8EF5", padding: "8px 6px", fontSize: 10, fontWeight: 800, letterSpacing: "0.06em" }}>Class</th>
-              <th style={{ background: "#7C6FE0", color: "#fff", border: "1px solid #9B8EF5", padding: "8px 6px", fontSize: 10, fontWeight: 700 }}>Day</th>
-              {periods.map(p => {
-                const times = periodTimes.get(p.id)
-                const isBreak = p.type !== "class"
-                if (isBreak) {
-                  // No heading for break columns — content shown cell-wise
-                  return (
-                    <th key={p.id} style={{ background: '#9B8EF5', border: '1px solid #9B8EF5', padding: '2px', width: 30, minWidth: 22 }} />
-                  )
-                }
-                return (
-                  <th key={p.id} style={{ background: '#7C6FE0', color: '#fff', border: '1px solid #9B8EF5', padding: '6px 4px', fontSize: 10, fontWeight: 700, textAlign: 'center' as const }}>
-                    <div>{p.name}</div>
-                    {times && <div style={{ fontSize: 8, opacity: 0.75, fontWeight: 400 }}>{fmtTime(times.start, timeFormat)}</div>}
-                  </th>
-                )
-              })}
-            </tr>
-          </thead>
-          <tbody>
-            {visibleClasses.flatMap((sec, sIdx) => {
-              const classBg = sIdx % 2 === 0 ? "#FAFAFE" : "#FFFFFF"
-              const dayRows = visibleDays.map((d, di) => {
-                const dayKey = DOW_KEY[d.getDay()]
-                const todayFlag = isToday(d)
-                const absentFlag = absentHighlights?.some(h => h.day === dayKey)
-                const isFirstRow = di === 0
-                return (
-                  <tr key={`${sec.name}-${dayKey}`} style={{ background: todayFlag ? "#F5F2FF" : classBg }}>
-                    {/* Class column — rowSpan across all days for this class */}
-                    {isFirstRow && (
-                      <td rowSpan={visibleDays.length}
-                        style={{
-                          background: "linear-gradient(180deg, #EDE9FF 0%, #F5F2FF 100%)",
-                          border: "1px solid #D8D2FF",
-                          padding: "10px 6px", verticalAlign: "middle" as const, textAlign: "center" as const,
-                        }}>
-                        <div style={{ fontSize: 13, fontWeight: 900, color: "#13111E", letterSpacing: "0.04em" }}>{sec.name}</div>
-                        <div style={{ fontSize: 9, fontWeight: 600, color: "#7C6FE0", textTransform: "uppercase" as const, letterSpacing: "0.1em", marginTop: 3 }}>Class</div>
-                      </td>
-                    )}
-                    {/* Day column */}
-                    <td style={{
-                      border: "1px solid #E8E4FF", padding: "6px 10px",
-                      fontWeight: 700, fontSize: 11, color: "#13111E",
-                      background: todayFlag ? "#EDE9FF" : absentFlag ? "#FFFBEB" : "#FAFAFE",
-                      whiteSpace: "nowrap" as const,
-                      outline: absentFlag ? "2px solid #F5A623" : "none",
-                      outlineOffset: -2,
-                    }}>
-                      <div>{DAY_ABBR[(d.getDay() + 6) % 7]}</div>
-                      <div style={{ fontSize: 10, color: "#8B87AD", fontWeight: 500, fontFamily: "'DM Mono', monospace" }}>{d.getDate()} {MONTH_NAMES[d.getMonth()].slice(0,3)}</div>
-                      {absentFlag && <div style={{ fontSize: 8, color: "#D4920E" }}>⚠ absent</div>}
-                    </td>
-                    {/* Period cells — ONE event per cell for this class */}
-                    {periods.map(p => {
-                      const isBreak = p.type !== "class"
-                      if (isBreak) {
-                        // Merge break across all days for this section — render once on first row
-                        if (!isFirstRow) return null
-                        const bTimes = periodTimes.get(p.id)
-                        const breakBg = p.type === "lunch" ? "#FEF3C7" : p.type === "fixed-start" ? "#EDE9FF" : "#FEFCE8"
-                        const breakColor = p.type === "lunch" ? "#92400E" : p.type === "fixed-start" ? "#4F3FC0" : "#854D0E"
-                        return (
-                          <td key={p.id} rowSpan={visibleDays.length}
-                            style={{ border: "1px solid #E8E4FF", textAlign: "center" as const, verticalAlign: "middle" as const, padding: "4px 3px", background: breakBg }}>
-                            <div style={{ fontSize: 8, fontWeight: 700, color: breakColor, lineHeight: 1.3 }}>{p.name}</div>
-                            {bTimes && <div style={{ fontSize: 7, color: breakColor, opacity: 0.75, fontFamily: "'DM Mono', monospace", marginTop: 1 }}>{fmtTime(bTimes.start, timeFormat)}</div>}
-                            {bTimes && <div style={{ fontSize: 7, color: breakColor, opacity: 0.55, fontFamily: "'DM Mono', monospace" }}>–{fmtTime(bTimes.end, timeFormat)}</div>}
-                          </td>
-                        )
-                      }
-                      const cell = classTT[sec.name]?.[dayKey]?.[p.id]
-                      const teacherAbsent = !!(absentFlag && cell?.teacher && absentHighlights?.some(h => h.day === dayKey && h.teacher === cell.teacher))
-                      const subKey = `${sec.name}|${dayKey}|${p.id}`
-                      const isSub = !!substitutions[subKey]
-                      const subTeacher = substitutions[subKey]
-                      const cellDragKey = `${sec.name}|${dayKey}|${p.id}`
-                      const isDragOver = dragOverCell === cellDragKey
-                      return (
-                        <td key={p.id}
-                          draggable={!!cell?.subject}
-                          onDragStart={cell?.subject ? () => setDragFrom({section: sec.name, day: dayKey, periodId: p.id}) : undefined}
-                          onDragOver={e => { e.preventDefault(); setDragOverCell(cellDragKey) }}
-                          onDragLeave={() => setDragOverCell(null)}
-                          onDrop={e => {
-                            setDragOverCell(null)
-                            const poolSubject = e.dataTransfer.getData('application/pool-subject')
-                            const poolSection = e.dataTransfer.getData('application/pool-section')
-                            if (poolSubject && (!poolSection || poolSection === sec.name)) {
-                              onCellFill?.(sec.name, dayKey, p.id, poolSubject)
-                              setDragFrom(null)
-                            } else if (dragFrom) {
-                              onCellSwap?.(dragFrom, {section: sec.name, day: dayKey, periodId: p.id})
-                              setDragFrom(null)
-                            }
-                          }}
-                          style={{ border: isDragOver ? "2px dashed #7C6FE0" : "1px solid #E8E4FF", padding: 3, verticalAlign: "top" as const, background: teacherAbsent ? "#FFFBEB" : isDragOver ? "#EDE9FF" : undefined, position: "relative" as const, cursor: "grab" }}>
-                          {/* DLG icon overlay — top-right when cell is part of a DLG */}
-                          {cell?.subject && (() => {
-                            const dlgs = dlgMap.get(`${sec.name}|${dayKey}|${p.id}`)
-                            return dlgs && dlgs.length > 0 ? (
-                              <span style={{ position: "absolute" as const, top: 2, right: 4, zIndex: 2 }}>
-                                <DLGCellIcon dlgs={dlgs} currentSubject={cell.subject} rooms={rooms} />
-                              </span>
-                            ) : null
-                          })()}
-                          {!cell?.subject
-                            ? (() => {
-                                const reasons = blockedMap.get(`${sec.name}|${dayKey}|${p.id}`)
-                                return (
-                                  <div style={{ minHeight: 36, display: "flex", alignItems: "center", justifyContent: "center", gap: 4, color: isDragOver ? "#7C6FE0" : "#D8D2FF", fontSize: isDragOver ? 10 : 11 }}>
-                                    {isDragOver ? "Drop here" : reasons && reasons.length > 0 ? <BlockedSlotIcon reasons={reasons} /> : '—'}
-                                  </div>
-                                )
-                              })()
-                            : <EventChip
-                                subject={cell.subject}
-                                section={sec.name}
-                                teacher={isSub ? subTeacher : (cell.teacher ?? "")}
-                                room={cell.room ?? ""}
-                                isSub={isSub}
-                                isClassTeacher={!!cell.isClassTeacher}
-                                showTeacher={showTeacher}
-                                showRoom={showRoom}
-                                hideSection
-                                absent={teacherAbsent}
-                                onClick={() => onCellClick?.(sec.name, dayKey, p.id)}
-                              />
-                          }
-                        </td>
-                      )
-                    })}
-                  </tr>
-                )
-              })
-              // Insert divider row after this class (except after the last one)
-              if (sIdx < visibleClasses.length - 1) {
-                dayRows.push(
-                  <tr key={`divider-${sec.name}`}>
-                    <td colSpan={2 + periods.length} style={{ height: 3, background: '#7C6FE0', padding: 0, border: 'none' }} />
-                  </tr>
-                )
-              }
-              return dayRows
-            })}
-          </tbody>
-        </table>
-      </div>
-    )
-  }
-
-  // ─────────────────────────────────────────────────────────
-  // RENDER: Dynamic Calendar View — for mixed-structure classes
-  // Header: Class | Day | S1 | S2 | ... | Sn  (no period timings)
-  // Each class block has a schedule-summary row showing what each Sn is.
-  // ─────────────────────────────────────────────────────────
-  const renderDynamicCalendar = (weekDays: Date[]) => {
-    const visibleDays = weekDays.filter(d => workDays.includes(DOW_KEY[d.getDay()]))
-    const visibleClasses = selectedEntity !== "ALL"
-      ? sections.filter(s => s.name === selectedEntity)
-      : sections
-
-    // Per-class period sequences
-    const secPeriods = new Map(visibleClasses.map(sec => [
-      sec.name,
-      buildSectionPeriodsLocal(sec.name, periods, classwiseBreaks),
-    ]))
-
-    // Max slot count (drives column count)
-    const maxSlots = Math.max(0, ...Array.from(secPeriods.values()).map(ps => ps.length))
-
-    // Per-class cumulative times
-    const secTimes = new Map(Array.from(secPeriods.entries()).map(([sn, ps]) => {
-      let mins = parseTime(startTime)
-      const tm = new Map<string, {start:number; end:number}>()
-      ps.forEach(p => { tm.set(p.id, {start: mins, end: mins + p.duration}); mins += p.duration })
-      return [sn, tm] as [string, Map<string, {start:number; end:number}>]
-    }))
+    // ── 4. Render ───────────────────────────────────────────────────────
+    const labelBg = "linear-gradient(90deg,#EDE9FF 0%,#F5F2FF 100%)"
 
     return (
-      <div style={{ flex: 1, overflow: "auto" }}>
-        <table style={{ borderCollapse: "collapse", width: "100%", tableLayout: "fixed" as const }}>
-          <colgroup>
-            <col style={{ width: '72px' }} />
-            <col style={{ width: '62px' }} />
-            {Array.from({ length: maxSlots }, (_, i) => <col key={i} />)}
-          </colgroup>
-          <thead style={{ position: 'sticky' as const, top: 0, zIndex: 5 }}>
-            <tr>
-              <th style={{ background:"#7C6FE0", color:"#fff", border:"1px solid #9B8EF5", padding:"8px 6px", fontSize:10, fontWeight:800, letterSpacing:"0.06em" }}>Class</th>
-              <th style={{ background:"#7C6FE0", color:"#fff", border:"1px solid #9B8EF5", padding:"8px 6px", fontSize:10, fontWeight:700 }}>Day</th>
-              {Array.from({ length: maxSlots }, (_, i) => (
-                <th key={i} style={{ background:"#7C6FE0", color:"#fff", border:"1px solid #9B8EF5", padding:"6px 4px", fontSize:10, fontWeight:700, textAlign:"center" as const }}>
-                  S{i + 1}
-                </th>
+      <div style={{ flex:1, overflow:"auto", position:"relative" as const }}>
+        {/* Minimum layout width = label + timeline */}
+        <div style={{ minWidth: LABEL_W + totalWidth + 16 }}>
+
+          {/* ── Time ruler (sticky top) ─────────────────────────────── */}
+          <div style={{
+            display:"flex", position:"sticky" as const, top:0, zIndex:15,
+            height:RULER_H, background:"#fff",
+            borderBottom:"2px solid #7C6FE0",
+            boxShadow:"0 2px 8px rgba(124,111,224,0.10)",
+          }}>
+            {/* Corner cell */}
+            <div style={{
+              width:LABEL_W, flexShrink:0,
+              position:"sticky" as const, left:0, zIndex:20,
+              background:labelBg, borderRight:"2px solid #D8D2FF",
+              display:"flex", flexDirection:"column" as const,
+              alignItems:"center", justifyContent:"center", padding:"0 6px",
+            }}>
+              <div style={{ fontSize:11, fontWeight:800, color:"#7C6FE0" }}>
+                {DAY_SHORT[dayKey] ?? dayKey.slice(0,3)}
+              </div>
+              <div style={{ fontSize:8, color:"#8B87AD", fontWeight:600 }}>timeline</div>
+            </div>
+
+            {/* Tick marks */}
+            <div style={{ position:"relative" as const, width:totalWidth, flexShrink:0 }}>
+              {/* Minor grid lines */}
+              {minorTicks.map(t => (
+                <div key={t} style={{
+                  position:"absolute" as const,
+                  left: (t - globalStart) * pxPerMin,
+                  top:"60%", bottom:0,
+                  borderLeft:"1px solid #F0EDFF",
+                  pointerEvents:"none" as const,
+                }} />
               ))}
-            </tr>
-          </thead>
-          <tbody>
-            {visibleClasses.flatMap((sec, sIdx) => {
-              const sp = secPeriods.get(sec.name) ?? []
-              const tm = secTimes.get(sec.name)
-              const classBg = sIdx % 2 === 0 ? "#FAFAFE" : "#FFFFFF"
-              const schoolStart = parseTime(startTime)
-              const schoolEnd = schoolStart + sp.reduce((a, p) => a + p.duration, 0)
-
-              // Schedule summary: S1=Assembly(9:00–9:15) · S2=Period 1(9:25–10:05) ...
-              const summaryParts = sp.map((p, i) => {
-                const t = tm?.get(p.id)
-                const timing = t ? ` (${fmtTime(t.start, timeFormat)}–${fmtTime(t.end, timeFormat)})` : ''
-                return `S${i + 1}=${p.name}${timing}`
-              })
-
-              const summaryRow = (
-                <tr key={`summary-${sec.name}`}>
-                  <td colSpan={2 + maxSlots} style={{
-                    background: "linear-gradient(90deg, #EDE9FF 0%, #F8F7FF 60%, #fff 100%)",
-                    borderTop: sIdx > 0 ? "2px solid #7C6FE0" : "1px solid #E8E4FF",
-                    borderBottom: "1px solid #D8D2FF",
-                    padding: "5px 14px",
-                  }}>
-                    <div style={{ display:"flex", gap:12, alignItems:"baseline", flexWrap:"wrap" as const }}>
-                      <span style={{ fontWeight:900, fontSize:12, color:"#13111E" }}>{sec.name}</span>
-                      <span style={{ fontSize:10, color:"#7C6FE0", fontWeight:700, fontFamily:"'DM Mono',monospace" }}>
-                        {fmtTime(schoolStart, timeFormat)} – {fmtTime(schoolEnd, timeFormat)}
-                      </span>
-                      <span style={{ fontSize:9, color:"#8B87AD" }}>{summaryParts.join(' · ')}</span>
-                    </div>
-                  </td>
-                </tr>
-              )
-
-              const dayRows = visibleDays.map((d, di) => {
-                const dayKey = DOW_KEY[d.getDay()]
-                const todayFlag = isToday(d)
-                const absentFlag = absentHighlights?.some(h => h.day === dayKey)
-                return (
-                  <tr key={`${sec.name}-${dayKey}`} style={{ background: todayFlag ? "#F5F2FF" : classBg }}>
-                    {di === 0 && (
-                      <td rowSpan={visibleDays.length} style={{
-                        background:"linear-gradient(180deg, #EDE9FF 0%, #F5F2FF 100%)",
-                        border:"1px solid #D8D2FF", padding:"10px 6px",
-                        verticalAlign:"middle" as const, textAlign:"center" as const,
-                      }}>
-                        <div style={{ fontSize:12, fontWeight:900, color:"#13111E", letterSpacing:"0.03em" }}>{sec.name}</div>
-                        <div style={{ fontSize:8, fontWeight:600, color:"#7C6FE0", textTransform:"uppercase" as const, letterSpacing:"0.1em", marginTop:3 }}>Class</div>
-                      </td>
-                    )}
-                    <td style={{
-                      border:"1px solid #E8E4FF", padding:"6px 10px",
-                      fontWeight:700, fontSize:11, color:"#13111E",
-                      background: todayFlag ? "#EDE9FF" : absentFlag ? "#FFFBEB" : "#FAFAFE",
-                      whiteSpace:"nowrap" as const,
-                      outline: absentFlag ? "2px solid #F5A623" : "none", outlineOffset:-2,
-                    }}>
-                      <div>{DAY_ABBR[(d.getDay() + 6) % 7]}</div>
-                      <div style={{ fontSize:10, color:"#8B87AD", fontWeight:500, fontFamily:"'DM Mono',monospace" }}>
-                        {d.getDate()} {MONTH_NAMES[d.getMonth()].slice(0, 3)}
-                      </div>
-                      {absentFlag && <div style={{ fontSize:8, color:"#D4920E" }}>⚠ absent</div>}
-                    </td>
-                    {Array.from({ length: maxSlots }, (_, si) => {
-                      const p = sp[si]
-                      // Slot beyond this class's range → empty
-                      if (!p) return <td key={si} style={{ border:"1px solid #E8E4FF", background:"#F9FAFB" }} />
-                      // Break slot
-                      if (p.type !== 'class') {
-                        const breakBg = p.type==="lunch"?"#FEF3C7":p.type==="fixed-start"?"#EDE9FF":"#FEFCE8"
-                        const breakColor = p.type==="lunch"?"#92400E":p.type==="fixed-start"?"#4F3FC0":"#854D0E"
-                        const t = tm?.get(p.id)
-                        return (
-                          <td key={si} style={{ border:"1px solid #E8E4FF", textAlign:"center" as const, verticalAlign:"middle" as const, padding:"3px 2px", background:breakBg }}>
-                            <div style={{ fontSize:8, fontWeight:700, color:breakColor }}>{p.name}</div>
-                            {t && <div style={{ fontSize:7, color:breakColor, opacity:0.7, fontFamily:"'DM Mono',monospace" }}>{fmtTime(t.start, timeFormat)}–{fmtTime(t.end, timeFormat)}</div>}
-                          </td>
-                        )
-                      }
-                      // Class period slot
-                      const cell = classTT[sec.name]?.[dayKey]?.[p.id]
-                      const subKey = `${sec.name}|${dayKey}|${p.id}`
-                      const isSub = !!substitutions[subKey]
-                      const subTeacher = substitutions[subKey]
-                      const teacherAbsent = !!(absentFlag && cell?.teacher && absentHighlights?.some(h => h.day===dayKey && h.teacher===cell.teacher))
-                      const cellKey = `${sec.name}|${dayKey}|${p.id}`
-                      const isOver = dragOverCell === cellKey
-                      return (
-                        <td key={si}
-                          draggable={!!cell?.subject}
-                          onDragStart={cell?.subject ? () => setDragFrom({section:sec.name, day:dayKey, periodId:p.id}) : undefined}
-                          onDragOver={e => { e.preventDefault(); setDragOverCell(cellKey) }}
-                          onDragLeave={() => setDragOverCell(null)}
-                          onDrop={e => {
-                            setDragOverCell(null)
-                            const ps2 = e.dataTransfer.getData('application/pool-subject')
-                            const pSec = e.dataTransfer.getData('application/pool-section')
-                            if (ps2 && (!pSec || pSec === sec.name)) { onCellFill?.(sec.name, dayKey, p.id, ps2); setDragFrom(null) }
-                            else if (dragFrom) { onCellSwap?.(dragFrom, {section:sec.name, day:dayKey, periodId:p.id}); setDragFrom(null) }
-                          }}
-                          style={{ border:isOver?"2px dashed #7C6FE0":"1px solid #E8E4FF", padding:3, verticalAlign:"top" as const, background:teacherAbsent?"#FFFBEB":isOver?"#EDE9FF":undefined, position:"relative" as const, cursor:"grab" }}>
-                          {!cell?.subject
-                            ? <div style={{ minHeight:32, display:"flex", alignItems:"center", justifyContent:"center", color:isOver?"#7C6FE0":"#D8D2FF", fontSize:isOver?10:11 }}>{isOver?"Drop here":"—"}</div>
-                            : <EventChip subject={cell.subject} section={sec.name} teacher={isSub?subTeacher:(cell.teacher??"")} room={cell.room??""} isSub={isSub} isClassTeacher={!!cell.isClassTeacher} showTeacher={showTeacher} showRoom={showRoom} hideSection absent={teacherAbsent} onClick={() => onCellClick?.(sec.name, dayKey, p.id)} />
-                          }
-                        </td>
-                      )
-                    })}
-                  </tr>
-                )
-              })
-
-              return [summaryRow, ...dayRows]
-            })}
-          </tbody>
-        </table>
-      </div>
-    )
-  }
-
-  // ─────────────────────────────────────────────────────────
-  // RENDER: Day view — Normal (Y=periods, single day)
-  // ─────────────────────────────────────────────────────────
-  const renderDayNormal = (date: Date) => {
-    const dayKey = DOW_KEY[date.getDay()]
-    const isWorkDay = workDays.includes(dayKey)
-    const todayFlag = isToday(date)
-
-    return (
-      <div style={{ flex: 1, overflow: "auto", maxWidth: 600, margin: "0 auto" }}>
-        {!isWorkDay && (
-          <div style={{ padding: 40, textAlign: "center" as const, color: "#FFFFFF", fontSize: 14 }}>
-            <div style={{ fontSize: 32 }}>🏖️</div>
-            <div style={{ marginTop: 8 }}>No school on {fmtDate(date, "long").split(",")[0]}</div>
-          </div>
-        )}
-        {isWorkDay && (
-          <table style={{ borderCollapse: "collapse", width: "100%" }}>
-            <thead style={{ position: 'sticky' as const, top: 0, zIndex: 5 }}>
-              <tr>
-                <th style={{ width: 90, background: "#7C6FE0", color: "#FFFFFF", border: "1px solid #374151", padding: "8px 6px", fontSize: 10, fontWeight: 600 }}>Time</th>
-                <th style={{
-                  background: todayFlag ? "#D4920E" : "#7C6FE0", color: "#fff",
-                  border: "1px solid #374151", padding: "10px 14px",
-                  fontSize: 13, fontWeight: 800,
+              {/* Major ticks with labels */}
+              {ticks.map(t => (
+                <div key={t} style={{
+                  position:"absolute" as const,
+                  left: (t - globalStart) * pxPerMin,
+                  top:0, bottom:0,
+                  display:"flex", alignItems:"flex-end", paddingBottom:7, paddingLeft:4,
+                  borderLeft:"1px solid #D8D2FF",
                 }}>
-                  <div>{fmtDate(date, "long")}</div>
-                  {absentHighlights?.some(h => h.day === dayKey) && (
-                    <div style={{ fontSize: 10, color: "#F5A623", fontWeight: 500, marginTop: 2 }}>
-                      ⚠ {absentHighlights.filter(h => h.day === dayKey).map(h => h.teacher).join(', ')} absent today
-                    </div>
+                  <span style={{
+                    fontSize:10, fontWeight:700, color:"#7C6FE0",
+                    fontFamily:"'DM Mono',monospace", whiteSpace:"nowrap" as const,
+                    userSelect:"none" as const,
+                  }}>
+                    {fmtTimeShort(t, timeFormat)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* ── Entity rows ─────────────────────────────────────────── */}
+          {entityRows.map((row, ri) => {
+            const isAbsent = absentHL.some(h => h.teacher === row.id)
+            return (
+              <div key={row.id} style={{
+                display:"flex", height:ROW_H,
+                borderBottom:"1px solid #E8E4FF",
+                background: isAbsent ? "#FFFBEB" :
+                            ri % 2 === 0 ? "#FAFAFE" : "#FFFFFF",
+              }}>
+                {/* ── Sticky entity label ─────────────────────── */}
+                <div style={{
+                  width:LABEL_W, flexShrink:0,
+                  position:"sticky" as const, left:0, zIndex:10,
+                  background:labelBg,
+                  borderRight:"2px solid #D8D2FF",
+                  display:"flex", flexDirection:"column" as const,
+                  alignItems:"center", justifyContent:"center",
+                  padding:"0 8px",
+                  boxShadow:"2px 0 4px rgba(124,111,224,0.06)",
+                }}>
+                  <div style={{
+                    fontSize:12, fontWeight:900, color:"#13111E",
+                    textAlign:"center" as const, letterSpacing:"0.03em",
+                    overflow:"hidden", textOverflow:"ellipsis" as const,
+                    whiteSpace:"nowrap" as const, maxWidth:"100%",
+                  }}>
+                    {row.label}
+                  </div>
+                  <div style={{
+                    fontSize:8, fontWeight:600, color:"#7C6FE0",
+                    textTransform:"uppercase" as const, letterSpacing:"0.08em", marginTop:2,
+                  }}>
+                    {row.sublabel}
+                  </div>
+                  {isAbsent && (
+                    <div style={{ fontSize:8, color:"#D4920E", fontWeight:700, marginTop:2 }}>⚠ absent</div>
                   )}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {periods.map((p, pi) => {
-                const times = periodTimes.get(p.id)
-                const isBreak = p.type !== "class"
-                const breakBg = p.type === "lunch" ? "#fef3c7" : p.type === "fixed-start" ? "#EDE9FF" : p.type === "fixed-end" ? "#EDE9FF" : "#fefce8"
-                const breakColor = p.type === "lunch" ? "#92400e" : p.type === "fixed-start" ? "#1e40af" : "#854d0e"
-                const events = isBreak ? [] : getEvents(dayKey, p.id)
-                const absentFlag = absentHighlights?.some(h => h.day === dayKey)
+                </div>
 
-                return (
-                  <tr key={p.id} style={{ background: isBreak ? breakBg : pi % 2 === 0 ? "#fff" : "#f8fafc" }}>
-                    <td style={{ border: "1px solid #e2e8f0", padding: "6px 8px", verticalAlign: "top" as const, background: "#f8fafc" }}>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: isBreak ? breakColor : "#475569" }}>{p.name}</div>
-                      {times && (
-                        <>
-                          <div style={{ fontSize: 8, color: "#FFFFFF" }}>{fmtTime(times.start, timeFormat)}</div>
-                          <div style={{ fontSize: 8, color: "#FFFFFF" }}>→ {fmtTime(times.end, timeFormat)}</div>
-                        </>
-                      )}
-                    </td>
-                    <td style={{ border: "1px solid #e2e8f0", padding: 6, verticalAlign: "top" as const, background: absentFlag ? "#fffbeb" : undefined }}>
-                      {isBreak ? (
-                        <div style={{ color: breakColor, fontSize: 11, fontStyle: "italic", fontWeight: 600 }}>{p.name}</div>
-                      ) : events.length === 0 ? (
-                        <div style={{ color: "#cbd5e1", fontSize: 11, padding: "6px 0" }}>No classes scheduled</div>
-                      ) : (
-                        <div style={{ display: "flex", flexWrap: "wrap" as const, gap: 6 }}>
-                          {events.map((ev, ei) => (
-                            <div key={ei} style={{ minWidth: 180, maxWidth: 280 }}>
-                              <EventChip {...ev} showTeacher={showTeacher} showRoom={showRoom}
-                                absent={!!(absentFlag && absentHighlights?.some(h => h.day === dayKey && h.teacher === ev.teacher))}
-                                onClick={() => onCellClick?.(ev.section, dayKey, p.id)} />
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        )}
+                {/* ── Timeline track ──────────────────────────── */}
+                <div style={{
+                  position:"relative" as const, width:totalWidth, flexShrink:0, overflow:"hidden",
+                }}>
+                  {/* Minor grid lines */}
+                  {minorTicks.map(t => (
+                    <div key={t} style={{
+                      position:"absolute" as const,
+                      left: (t - globalStart) * pxPerMin,
+                      top:0, bottom:0,
+                      borderLeft:"1px solid #F8F7FF",
+                      pointerEvents:"none" as const,
+                    }} />
+                  ))}
+                  {/* Major grid lines */}
+                  {ticks.map(t => (
+                    <div key={t} style={{
+                      position:"absolute" as const,
+                      left: (t - globalStart) * pxPerMin,
+                      top:0, bottom:0,
+                      borderLeft:"1px solid #F0EDFF",
+                      pointerEvents:"none" as const,
+                    }} />
+                  ))}
+
+                  {/* ── Period blocks ─────────────────────────── */}
+                  {row.blocks.map(block => (
+                    <TimelineBlock
+                      key={block.key}
+                      block={block}
+                      pxPerMin={pxPerMin}
+                      globalStart={globalStart}
+                      timeFormat={timeFormat}
+                      showTeacher={showTeacher}
+                      showRoom={showRoom}
+                      viewMode={viewMode}
+                      onClick={block.subject && block.sectionName
+                        ? () => onCellClick?.(block.sectionName, dayKey, block.periodId)
+                        : undefined}
+                    />
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+
+          {/* Bottom padding */}
+          <div style={{ height:16 }} />
+        </div>
       </div>
     )
   }
 
-  // ─────────────────────────────────────────────────────────
-  // RENDER: Day view — Transposed (Y=nothing, X=periods as columns)
-  // ─────────────────────────────────────────────────────────
-  const renderDayTransposed = (date: Date) => {
-    const dayKey = DOW_KEY[date.getDay()]
-    const isWorkDay = workDays.includes(dayKey)
-    if (!isWorkDay) return renderDayNormal(date)
-
-    return (
-      <div style={{ flex: 1, overflow: "auto" }}>
-        <table style={{ borderCollapse: "collapse" }}>
-          <thead style={{ position: 'sticky' as const, top: 0, zIndex: 5 }}>
-            <tr>
-              {periods.map(p => {
-                const times = periodTimes.get(p.id)
-                const isBreak = p.type !== "class"
-                const bg = isBreak ? "#9B8EF5" : "#7C6FE0"
-                return (
-                  <th key={p.id} style={{ background: bg, color: isBreak ? "#F5A623" : "#fff", border: "1px solid #374151", padding: "8px 10px", fontSize: 10, fontWeight: 700, minWidth: isBreak ? 64 : 130, textAlign: "center" as const, verticalAlign: "bottom" as const }}>
-                    <div>{p.name}</div>
-                    {times && <div style={{ fontSize: 8, opacity: 0.6, fontWeight: 400 }}>{fmtTime(times.start, timeFormat)} → {fmtTime(times.end, timeFormat)}</div>}
-                  </th>
-                )
-              })}
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              {periods.map(p => {
-                const isBreak = p.type !== "class"
-                const breakBg = p.type === "lunch" ? "#fef3c7" : p.type === "fixed-start" ? "#F5F2FF" : "#fefce8"
-                const breakColor = p.type === "lunch" ? "#D4920E" : "#ca8a04"
-                const events = isBreak ? [] : getEvents(dayKey, p.id)
-                const absentFlag = absentHighlights?.some(h => h.day === dayKey)
-
-                return (
-                  <td key={p.id} style={{ border: "1px solid #e2e8f0", padding: 5, verticalAlign: "top" as const, minWidth: isBreak ? 64 : 130, background: isBreak ? breakBg : absentFlag ? "#fffbeb" : undefined, maxWidth: 160 }}>
-                    {isBreak ? (
-                      <div style={{ color: breakColor, fontSize: 10, fontStyle: "italic", textAlign: "center" as const, padding: "8px 0" }}>{p.name}</div>
-                    ) : events.length === 0 ? (
-                      <div style={{ minHeight: 60, display: "flex", alignItems: "center", justifyContent: "center", color: "#e2e8f0", fontSize: 10 }}>—</div>
-                    ) : (
-                      events.map((ev, ei) => (
-                        <EventChip key={ei} {...ev} showTeacher={showTeacher} showRoom={showRoom}
-                          absent={!!(absentFlag && absentHighlights?.some(h => h.day === dayKey && h.teacher === ev.teacher))}
-                          onClick={() => onCellClick?.(ev.section, dayKey, p.id)} />
-                      ))
-                    )}
-                  </td>
-                )
-              })}
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    )
-  }
-
-  // ─────────────────────────────────────────────────────────
-  // Main render
-  // ─────────────────────────────────────────────────────────
-  const monday = getMondayOfWeek(currentDate)
-  const weekDays = getWeekDays(monday)
-
-  const modeLabel: Record<CalMode, string> = { month: "Month", week: "Week", day: "Day" }
-  const navLabel: Record<CalMode, string> = { month: "month", week: "week", day: "day" }
-
+  // ══════════════════════════════════════════════════════
+  // TOOLBAR + SHELL
+  // ══════════════════════════════════════════════════════
   return (
-    <div style={{ display: "flex", flexDirection: "column" as const, flex: 1, overflow: "hidden", background: "#fff", borderRadius: 12, boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
-      {/* ── Calendar toolbar ── */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 16px", borderBottom: "1px solid #e2e8f0", flexShrink: 0, flexWrap: "wrap" as const }}>
+    <div style={{
+      display:"flex", flexDirection:"column" as const, flex:1, overflow:"hidden",
+      background:"#fff", borderRadius:12, boxShadow:"0 1px 3px rgba(0,0,0,0.08)",
+    }}>
+      {/* ── Toolbar ─────────────────────────────────────────────────── */}
+      <div style={{
+        display:"flex", alignItems:"center", gap:8, padding:"10px 14px",
+        borderBottom:"1px solid #E8E4FF", flexShrink:0, flexWrap:"wrap" as const,
+        background:"#FAFAFE",
+      }}>
 
-        {/* Mode switcher */}
-        <div style={{ display: "flex", border: "1px solid #e2e8f0", borderRadius: 7, overflow: "hidden" }}>
-          {(["month","week","day"] as CalMode[]).map(m => (
+        {/* Mode: Month | Timeline */}
+        <div style={{ display:"flex", border:"1px solid #E8E4FF", borderRadius:7, overflow:"hidden" }}>
+          {(["month","timeline"] as CalMode[]).map(m => (
             <button key={m} onClick={() => setCalMode(m)}
-              style={{ padding: "5px 14px", border: "none", background: calMode === m ? "#7C6FE0" : "#fff", color: calMode === m ? "#fff" : "#64748b", fontSize: 11, fontWeight: 500, cursor: "pointer" }}>
-              {modeLabel[m]}
+              style={{
+                padding:"5px 14px", border:"none",
+                background: calMode===m ? "#7C6FE0" : "#fff",
+                color:      calMode===m ? "#fff" : "#64748b",
+                fontSize:11, fontWeight:500, cursor:"pointer",
+                textTransform:"capitalize" as const,
+              }}>
+              {m === "month" ? "📅 Month" : "⏱ Timeline"}
             </button>
           ))}
         </div>
 
-        {/* Navigation */}
-        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          <button onClick={() => navigate(-1)}
-            style={{ width: 28, height: 28, border: "1px solid #e2e8f0", borderRadius: 6, background: "#fff", cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", color: "#9B8EF5" }}>
-            ‹
-          </button>
-          <button onClick={goToday}
-            style={{ padding: "4px 12px", border: "1px solid #e2e8f0", borderRadius: 6, background: "#fff", cursor: "pointer", fontSize: 11, color: "#9B8EF5", fontWeight: 500 }}>
-            Today
-          </button>
-          <button onClick={() => navigate(1)}
-            style={{ width: 28, height: 28, border: "1px solid #e2e8f0", borderRadius: 6, background: "#fff", cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", color: "#9B8EF5" }}>
-            ›
-          </button>
-        </div>
+        {/* Month navigation — only for month view */}
+        {calMode === "month" && (
+          <>
+            <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+              <button onClick={() => navigate(-1)}
+                style={{ width:28, height:28, border:"1px solid #E8E4FF", borderRadius:6, background:"#fff", cursor:"pointer", fontSize:14, display:"flex", alignItems:"center", justifyContent:"center", color:"#9B8EF5" }}>
+                ‹
+              </button>
+              <button onClick={goToday}
+                style={{ padding:"4px 12px", border:"1px solid #E8E4FF", borderRadius:6, background:"#fff", cursor:"pointer", fontSize:11, color:"#9B8EF5", fontWeight:500 }}>
+                Today
+              </button>
+              <button onClick={() => navigate(1)}
+                style={{ width:28, height:28, border:"1px solid #E8E4FF", borderRadius:6, background:"#fff", cursor:"pointer", fontSize:14, display:"flex", alignItems:"center", justifyContent:"center", color:"#9B8EF5" }}>
+                ›
+              </button>
+            </div>
+            <div style={{ fontSize:14, fontWeight:700, color:"#7C6FE0", minWidth:160 }}>{headerLabel}</div>
+          </>
+        )}
 
-        {/* Current range label */}
-        <div style={{ fontSize: 14, fontWeight: 700, color: "#7C6FE0", minWidth: 200 }}>{headerLabel}</div>
+        {/* Day selector — only for timeline view */}
+        {calMode === "timeline" && (
+          <div style={{ display:"flex", gap:4, alignItems:"center" }}>
+            {workDays.map(day => {
+              const isToday2 = DOW_KEY[new Date().getDay()] === day
+              const isActive = selectedDay === day
+              return (
+                <button key={day} onClick={() => setSelectedDay(day)}
+                  style={{
+                    padding:"4px 11px", border:"none", borderRadius:6, cursor:"pointer",
+                    fontSize:11, fontWeight:isActive?700:500,
+                    background: isActive ? "#7C6FE0" : isToday2 ? "#EDE9FF" : "#fff",
+                    color:      isActive ? "#fff"    : isToday2 ? "#7C6FE0" : "#64748b",
+                    outline:    isToday2 && !isActive ? "1.5px solid #C4B5FD" : "none",
+                  }}>
+                  {DAY_SHORT[day] ?? day.slice(0,3)}
+                </button>
+              )
+            })}
+          </div>
+        )}
 
-        <div style={{ flex: 1 }} />
+        {/* Header label for timeline */}
+        {calMode === "timeline" && (
+          <div style={{ fontSize:13, fontWeight:700, color:"#7C6FE0" }}>{headerLabel}</div>
+        )}
 
-        {/* Transpose toggle — only for week/day */}
-        {calMode !== "month" && (
-          <div style={{ display: "flex", border: "1px solid #e2e8f0", borderRadius: 7, overflow: "hidden" }}>
-            <button onClick={() => setTransposed(false)}
-              style={{ padding: "4px 12px", border: "none", background: !transposed ? "#7C6FE0" : "#fff", color: !transposed ? "#fff" : "#64748b", fontSize: 11, fontWeight: 500, cursor: "pointer" }}>
-              ☰ Normal
-            </button>
-            <button onClick={() => setTransposed(true)}
-              style={{ padding: "4px 12px", border: "none", background: transposed ? "#7C6FE0" : "#fff", color: transposed ? "#fff" : "#64748b", fontSize: 11, fontWeight: 500, cursor: "pointer" }}>
-              ⊞ Transposed
-            </button>
+        <div style={{ flex:1 }} />
+
+        {/* Absent warning badge */}
+        {calMode === "timeline" && absentHighlights?.some(h => h.day === selectedDay) && (
+          <div style={{
+            background:"#FFFBEB", border:"1px solid #F6D860", borderRadius:6,
+            padding:"4px 10px", fontSize:11, color:"#92400E", fontWeight:600,
+            display:"flex", alignItems:"center", gap:5,
+          }}>
+            ⚠ {absentHighlights.filter(h=>h.day===selectedDay).map(h=>h.teacher).join(", ")} absent
+          </div>
+        )}
+
+        {/* Zoom selector — only for timeline view */}
+        {calMode === "timeline" && (
+          <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+            <span style={{ fontSize:10, color:"#8B87AD", fontWeight:600 }}>Zoom</span>
+            <div style={{ display:"flex", border:"1px solid #E8E4FF", borderRadius:7, overflow:"hidden" }}>
+              {(["60min","30min","15min"] as ZoomLevel[]).map(z => (
+                <button key={z} onClick={() => setZoom(z)}
+                  style={{
+                    padding:"4px 10px", border:"none", cursor:"pointer",
+                    background: zoom===z ? "#7C6FE0" : "#fff",
+                    color:      zoom===z ? "#fff"    : "#64748b",
+                    fontSize:10, fontWeight:zoom===z?700:400,
+                  }}>
+                  {z}
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </div>
 
-      {/* ── Calendar body ── */}
-      <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" as const }}>
-        {calMode === "month" && renderMonth()}
-        {calMode === "week" && (
-          isDynamicMode
-            ? renderDynamicCalendar(weekDays)
-            : transposed ? renderWeekTransposed(weekDays) : renderWeekNormal(weekDays)
-        )}
-        {calMode === "day"  && (transposed ? renderDayTransposed(currentDate) : renderDayNormal(currentDate))}
+      {/* ── Body ─────────────────────────────────────────────────────── */}
+      <div style={{ flex:1, overflow:"hidden", display:"flex", flexDirection:"column" as const }}>
+        {calMode === "month"    && renderMonth()}
+        {calMode === "timeline" && renderTimeline(selectedDay)}
       </div>
     </div>
   )
