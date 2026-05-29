@@ -51,6 +51,9 @@ export interface CalendarViewProps {
   dynamicLearningGroups?: DynamicLearningGroup[]
   /** Rooms — used for capacity gauges in the DLG popover. */
   rooms?: Array<{ actualName?: string; generatedName?: string; name?: string; capacity?: number }>
+  /** Class-wise break config from the scheduler — when provided, classes with
+   *  different period structures automatically switch to Dynamic Calendar View. */
+  classwiseBreaks?: Array<{id:string; name:string; type:string; classes:string[]; afterPeriod:number; duration:number}>
 }
 
 // ─────────────────────────────────────────────
@@ -131,6 +134,33 @@ function fmtTime(mins: number, fmt: "12h" | "24h" = "12h"): string {
 }
 
 const PX_PER_MIN = 1.4  // pixel height per minute of school time
+
+// ── Private: per-section period sequence (mirrors buildClassPeriods in timetable.tsx) ──
+function getSectionClassKeyLocal(sn: string): string {
+  const norm = sn.toLowerCase().replace(/[\s-]/g, "")
+  const m = norm.match(/^([a-z]+)/)
+  return m ? m[1] : norm.slice(0, 6)
+}
+type CwBreak = {id:string; name:string; type:string; classes:string[]; afterPeriod:number; duration:number}
+function buildSectionPeriodsLocal(sn: string, allPeriods: Period[], cwBreaks?: CwBreak[]): Period[] {
+  if (!cwBreaks?.length) return allPeriods
+  const key = getSectionClassKeyLocal(sn)
+  const sb = cwBreaks.filter(b => b.classes.length === 0 || b.classes.includes(key))
+  if (!sb.length) return allPeriods
+  const mk = (b: CwBreak): Period => ({
+    id: b.id, name: b.name, duration: b.duration,
+    type: (b.type === 'lunch' ? 'lunch' : 'break') as Period['type'], shiftable: false,
+  })
+  const cp = allPeriods.filter(p => p.type === 'class')
+  const out: Period[] = [...allPeriods.filter(p => p.type === 'fixed-start')]
+  sb.filter(b => b.afterPeriod === 0).forEach(b => out.push(mk(b)))
+  cp.forEach((p, i) => {
+    out.push(p)
+    sb.filter(b => b.afterPeriod === i + 1).forEach(b => out.push(mk(b)))
+  })
+  out.push(...allPeriods.filter(p => p.type === 'fixed-end'))
+  return out
+}
 
 // ─────────────────────────────────────────────
 // Event slot helper — returns events in a given period×day
@@ -288,7 +318,7 @@ export function CalendarView({
   viewMode, selectedEntity,
   showTeacher, showRoom,
   onCellClick, onCellSwap, onCellFill, absentHighlights, blockedSlots,
-  dynamicLearningGroups, rooms,
+  dynamicLearningGroups, rooms, classwiseBreaks,
 }: CalendarViewProps) {
 
   // O(1) lookup map for blocked-slot reasons (Doc Part 2)
@@ -310,6 +340,18 @@ export function CalendarView({
   // Drag-and-drop state for cell swapping
   const [dragFrom, setDragFrom] = useState<{section:string, day:string, periodId:string} | null>(null)
   const [dragOverCell, setDragOverCell] = useState<string|null>(null)
+
+  // Detect if classes have mixed period structures — triggers Dynamic Calendar View
+  const isDynamicMode = useMemo(() => {
+    if (viewMode !== "class") return false
+    const vc = selectedEntity !== "ALL" ? sections.filter(s => s.name === selectedEntity) : sections
+    if (vc.length <= 1) return false
+    const sigs = new Set(vc.map(sec =>
+      buildSectionPeriodsLocal(sec.name, periods, classwiseBreaks)
+        .map(p => `${p.type}:${p.id}:${p.duration}`).join('|')
+    ))
+    return sigs.size > 1
+  }, [viewMode, selectedEntity, sections, periods, classwiseBreaks])
 
   const today = new Date()
   const classPeriods = periods.filter(p => p.type === "class")
@@ -789,6 +831,173 @@ export function CalendarView({
   }
 
   // ─────────────────────────────────────────────────────────
+  // RENDER: Dynamic Calendar View — for mixed-structure classes
+  // Header: Class | Day | S1 | S2 | ... | Sn  (no period timings)
+  // Each class block has a schedule-summary row showing what each Sn is.
+  // ─────────────────────────────────────────────────────────
+  const renderDynamicCalendar = (weekDays: Date[]) => {
+    const visibleDays = weekDays.filter(d => workDays.includes(DOW_KEY[d.getDay()]))
+    const visibleClasses = selectedEntity !== "ALL"
+      ? sections.filter(s => s.name === selectedEntity)
+      : sections
+
+    // Per-class period sequences
+    const secPeriods = new Map(visibleClasses.map(sec => [
+      sec.name,
+      buildSectionPeriodsLocal(sec.name, periods, classwiseBreaks),
+    ]))
+
+    // Max slot count (drives column count)
+    const maxSlots = Math.max(0, ...Array.from(secPeriods.values()).map(ps => ps.length))
+
+    // Per-class cumulative times
+    const secTimes = new Map(Array.from(secPeriods.entries()).map(([sn, ps]) => {
+      let mins = parseTime(startTime)
+      const tm = new Map<string, {start:number; end:number}>()
+      ps.forEach(p => { tm.set(p.id, {start: mins, end: mins + p.duration}); mins += p.duration })
+      return [sn, tm] as [string, Map<string, {start:number; end:number}>]
+    }))
+
+    return (
+      <div style={{ flex: 1, overflow: "auto" }}>
+        <table style={{ borderCollapse: "collapse", width: "100%", tableLayout: "fixed" as const }}>
+          <colgroup>
+            <col style={{ width: '72px' }} />
+            <col style={{ width: '62px' }} />
+            {Array.from({ length: maxSlots }, (_, i) => <col key={i} />)}
+          </colgroup>
+          <thead style={{ position: 'sticky' as const, top: 0, zIndex: 5 }}>
+            <tr>
+              <th style={{ background:"#7C6FE0", color:"#fff", border:"1px solid #9B8EF5", padding:"8px 6px", fontSize:10, fontWeight:800, letterSpacing:"0.06em" }}>Class</th>
+              <th style={{ background:"#7C6FE0", color:"#fff", border:"1px solid #9B8EF5", padding:"8px 6px", fontSize:10, fontWeight:700 }}>Day</th>
+              {Array.from({ length: maxSlots }, (_, i) => (
+                <th key={i} style={{ background:"#7C6FE0", color:"#fff", border:"1px solid #9B8EF5", padding:"6px 4px", fontSize:10, fontWeight:700, textAlign:"center" as const }}>
+                  S{i + 1}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {visibleClasses.flatMap((sec, sIdx) => {
+              const sp = secPeriods.get(sec.name) ?? []
+              const tm = secTimes.get(sec.name)
+              const classBg = sIdx % 2 === 0 ? "#FAFAFE" : "#FFFFFF"
+              const schoolStart = parseTime(startTime)
+              const schoolEnd = schoolStart + sp.reduce((a, p) => a + p.duration, 0)
+
+              // Schedule summary: S1=Assembly(9:00–9:15) · S2=Period 1(9:25–10:05) ...
+              const summaryParts = sp.map((p, i) => {
+                const t = tm?.get(p.id)
+                const timing = t ? ` (${fmtTime(t.start, timeFormat)}–${fmtTime(t.end, timeFormat)})` : ''
+                return `S${i + 1}=${p.name}${timing}`
+              })
+
+              const summaryRow = (
+                <tr key={`summary-${sec.name}`}>
+                  <td colSpan={2 + maxSlots} style={{
+                    background: "linear-gradient(90deg, #EDE9FF 0%, #F8F7FF 60%, #fff 100%)",
+                    borderTop: sIdx > 0 ? "2px solid #7C6FE0" : "1px solid #E8E4FF",
+                    borderBottom: "1px solid #D8D2FF",
+                    padding: "5px 14px",
+                  }}>
+                    <div style={{ display:"flex", gap:12, alignItems:"baseline", flexWrap:"wrap" as const }}>
+                      <span style={{ fontWeight:900, fontSize:12, color:"#13111E" }}>{sec.name}</span>
+                      <span style={{ fontSize:10, color:"#7C6FE0", fontWeight:700, fontFamily:"'DM Mono',monospace" }}>
+                        {fmtTime(schoolStart, timeFormat)} – {fmtTime(schoolEnd, timeFormat)}
+                      </span>
+                      <span style={{ fontSize:9, color:"#8B87AD" }}>{summaryParts.join(' · ')}</span>
+                    </div>
+                  </td>
+                </tr>
+              )
+
+              const dayRows = visibleDays.map((d, di) => {
+                const dayKey = DOW_KEY[d.getDay()]
+                const todayFlag = isToday(d)
+                const absentFlag = absentHighlights?.some(h => h.day === dayKey)
+                return (
+                  <tr key={`${sec.name}-${dayKey}`} style={{ background: todayFlag ? "#F5F2FF" : classBg }}>
+                    {di === 0 && (
+                      <td rowSpan={visibleDays.length} style={{
+                        background:"linear-gradient(180deg, #EDE9FF 0%, #F5F2FF 100%)",
+                        border:"1px solid #D8D2FF", padding:"10px 6px",
+                        verticalAlign:"middle" as const, textAlign:"center" as const,
+                      }}>
+                        <div style={{ fontSize:12, fontWeight:900, color:"#13111E", letterSpacing:"0.03em" }}>{sec.name}</div>
+                        <div style={{ fontSize:8, fontWeight:600, color:"#7C6FE0", textTransform:"uppercase" as const, letterSpacing:"0.1em", marginTop:3 }}>Class</div>
+                      </td>
+                    )}
+                    <td style={{
+                      border:"1px solid #E8E4FF", padding:"6px 10px",
+                      fontWeight:700, fontSize:11, color:"#13111E",
+                      background: todayFlag ? "#EDE9FF" : absentFlag ? "#FFFBEB" : "#FAFAFE",
+                      whiteSpace:"nowrap" as const,
+                      outline: absentFlag ? "2px solid #F5A623" : "none", outlineOffset:-2,
+                    }}>
+                      <div>{DAY_ABBR[(d.getDay() + 6) % 7]}</div>
+                      <div style={{ fontSize:10, color:"#8B87AD", fontWeight:500, fontFamily:"'DM Mono',monospace" }}>
+                        {d.getDate()} {MONTH_NAMES[d.getMonth()].slice(0, 3)}
+                      </div>
+                      {absentFlag && <div style={{ fontSize:8, color:"#D4920E" }}>⚠ absent</div>}
+                    </td>
+                    {Array.from({ length: maxSlots }, (_, si) => {
+                      const p = sp[si]
+                      // Slot beyond this class's range → empty
+                      if (!p) return <td key={si} style={{ border:"1px solid #E8E4FF", background:"#F9FAFB" }} />
+                      // Break slot
+                      if (p.type !== 'class') {
+                        const breakBg = p.type==="lunch"?"#FEF3C7":p.type==="fixed-start"?"#EDE9FF":"#FEFCE8"
+                        const breakColor = p.type==="lunch"?"#92400E":p.type==="fixed-start"?"#4F3FC0":"#854D0E"
+                        const t = tm?.get(p.id)
+                        return (
+                          <td key={si} style={{ border:"1px solid #E8E4FF", textAlign:"center" as const, verticalAlign:"middle" as const, padding:"3px 2px", background:breakBg }}>
+                            <div style={{ fontSize:8, fontWeight:700, color:breakColor }}>{p.name}</div>
+                            {t && <div style={{ fontSize:7, color:breakColor, opacity:0.7, fontFamily:"'DM Mono',monospace" }}>{fmtTime(t.start, timeFormat)}–{fmtTime(t.end, timeFormat)}</div>}
+                          </td>
+                        )
+                      }
+                      // Class period slot
+                      const cell = classTT[sec.name]?.[dayKey]?.[p.id]
+                      const subKey = `${sec.name}|${dayKey}|${p.id}`
+                      const isSub = !!substitutions[subKey]
+                      const subTeacher = substitutions[subKey]
+                      const teacherAbsent = !!(absentFlag && cell?.teacher && absentHighlights?.some(h => h.day===dayKey && h.teacher===cell.teacher))
+                      const cellKey = `${sec.name}|${dayKey}|${p.id}`
+                      const isOver = dragOverCell === cellKey
+                      return (
+                        <td key={si}
+                          draggable={!!cell?.subject}
+                          onDragStart={cell?.subject ? () => setDragFrom({section:sec.name, day:dayKey, periodId:p.id}) : undefined}
+                          onDragOver={e => { e.preventDefault(); setDragOverCell(cellKey) }}
+                          onDragLeave={() => setDragOverCell(null)}
+                          onDrop={e => {
+                            setDragOverCell(null)
+                            const ps2 = e.dataTransfer.getData('application/pool-subject')
+                            const pSec = e.dataTransfer.getData('application/pool-section')
+                            if (ps2 && (!pSec || pSec === sec.name)) { onCellFill?.(sec.name, dayKey, p.id, ps2); setDragFrom(null) }
+                            else if (dragFrom) { onCellSwap?.(dragFrom, {section:sec.name, day:dayKey, periodId:p.id}); setDragFrom(null) }
+                          }}
+                          style={{ border:isOver?"2px dashed #7C6FE0":"1px solid #E8E4FF", padding:3, verticalAlign:"top" as const, background:teacherAbsent?"#FFFBEB":isOver?"#EDE9FF":undefined, position:"relative" as const, cursor:"grab" }}>
+                          {!cell?.subject
+                            ? <div style={{ minHeight:32, display:"flex", alignItems:"center", justifyContent:"center", color:isOver?"#7C6FE0":"#D8D2FF", fontSize:isOver?10:11 }}>{isOver?"Drop here":"—"}</div>
+                            : <EventChip subject={cell.subject} section={sec.name} teacher={isSub?subTeacher:(cell.teacher??"")} room={cell.room??""} isSub={isSub} isClassTeacher={!!cell.isClassTeacher} showTeacher={showTeacher} showRoom={showRoom} hideSection absent={teacherAbsent} onClick={() => onCellClick?.(sec.name, dayKey, p.id)} />
+                          }
+                        </td>
+                      )
+                    })}
+                  </tr>
+                )
+              })
+
+              return [summaryRow, ...dayRows]
+            })}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+
+  // ─────────────────────────────────────────────────────────
   // RENDER: Day view — Normal (Y=periods, single day)
   // ─────────────────────────────────────────────────────────
   const renderDayNormal = (date: Date) => {
@@ -991,7 +1200,11 @@ export function CalendarView({
       {/* ── Calendar body ── */}
       <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" as const }}>
         {calMode === "month" && renderMonth()}
-        {calMode === "week" && (transposed ? renderWeekTransposed(weekDays) : renderWeekNormal(weekDays))}
+        {calMode === "week" && (
+          isDynamicMode
+            ? renderDynamicCalendar(weekDays)
+            : transposed ? renderWeekTransposed(weekDays) : renderWeekNormal(weekDays)
+        )}
         {calMode === "day"  && (transposed ? renderDayTransposed(currentDate) : renderDayNormal(currentDate))}
       </div>
     </div>

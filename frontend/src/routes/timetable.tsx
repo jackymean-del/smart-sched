@@ -432,6 +432,11 @@ export function TimetablePage() {
   } = store
 
   const [editTarget, setEditTarget] = useState<{section:string;day:string;periodId:string}|null>(null)
+  const [swapPreview, setSwapPreview] = useState<{
+    idxA:number; idxB:number; pA:Period; pB:Period;
+    bothClass:boolean; safe:number; conflicted:number;
+    conflictingSections:Set<string>;
+  } | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>("class")
   const [transposed, setTransposed] = useState(false)
   const [selectedEntity, setSelectedEntity] = useState<string>("ALL")
@@ -554,12 +559,72 @@ export function TimetablePage() {
 
   const poolTotalDeficit = poolData.reduce((t, s) => t + s.subjects.reduce((ts, ss) => ts + ss.deficit, 0), 0)
 
+  // ── Simulate which sections would get teacher conflicts after a period swap ──
+  const simulateSwapConflicts = (idxA: number, idxB: number) => {
+    const pA = periods[idxA], pB = periods[idxB]
+    const conflictingSections = new Set<string>()
+    if (pA.type !== 'class' || pB.type !== 'class')
+      return { safe: sections.length, conflicted: 0, conflictingSections }
+    config.workDays.forEach(day => {
+      const atA = new Map<string, string[]>()
+      const atB = new Map<string, string[]>()
+      sections.forEach(s => {
+        const ca = classTT[s.name]?.[day]?.[pA.id]
+        const cb = classTT[s.name]?.[day]?.[pB.id]
+        if (ca?.teacher) atA.set(ca.teacher, [...(atA.get(ca.teacher) ?? []), s.name])
+        if (cb?.teacher) atB.set(cb.teacher, [...(atB.get(cb.teacher) ?? []), s.name])
+      })
+      // After swap: pB teachers move to pA slot — conflict if a teacher teaches >1 section at pB
+      atB.forEach(secs => { if (secs.length > 1) secs.forEach(s => conflictingSections.add(s)) })
+      // After swap: pA teachers move to pB slot — conflict if a teacher teaches >1 section at pA
+      atA.forEach(secs => { if (secs.length > 1) secs.forEach(s => conflictingSections.add(s)) })
+    })
+    const conflicted = conflictingSections.size
+    return { safe: sections.length - conflicted, conflicted, conflictingSections }
+  }
+
+  // ── Show swap preview modal; actual apply happens via applyShift ──
   const handleShift = (idx: number, dir: -1|1) => {
-    const np = shiftPeriod(periods, classTT, idx, dir)
-    setPeriods(np)
-    const ntt = { ...teacherTT }
-    rebuildTeacherTT(classTT, ntt, config.workDays)
-    setTeacherTT(ntt)
+    const idxB = idx + dir
+    if (idxB < 0 || idxB >= periods.length) return
+    const pA = periods[idx], pB = periods[idxB]
+    const bothClass = pA.type === 'class' && pB.type === 'class'
+    const { safe, conflicted, conflictingSections } = simulateSwapConflicts(idx, idxB)
+    setSwapPreview({ idxA: idx, idxB, pA, pB, bothClass, safe, conflicted, conflictingSections })
+  }
+
+  // ── Apply the swap after user confirms in the preview modal ──
+  const applyShift = (safeSectionsOnly: boolean) => {
+    if (!swapPreview) return
+    const { idxA, idxB, bothClass, conflictingSections } = swapPreview
+    const pA = periods[idxA], pB = periods[idxB]
+    if (bothClass) {
+      // Period ↔ Period: swap cell data; headers stay in place
+      const newTT = { ...classTT }
+      sections.forEach(s => {
+        if (safeSectionsOnly && conflictingSections.has(s.name)) return
+        const sd = classTT[s.name]; if (!sd) return
+        newTT[s.name] = { ...sd }
+        config.workDays.forEach(day => {
+          const dd = sd[day]; if (!dd) return
+          newTT[s.name][day] = { ...dd }
+          const tmp = newTT[s.name][day][pA.id]
+          newTT[s.name][day][pA.id] = newTT[s.name][day][pB.id]
+          newTT[s.name][day][pB.id] = tmp
+        })
+      })
+      commitTT(newTT)
+    } else {
+      // Break ↔ Period or Break ↔ Break: swap slot positions in periods array
+      // (cell data follows period IDs, so no classTT change needed)
+      const np = [...periods]
+      np[idxA] = pB; np[idxB] = pA
+      setPeriods(np)
+      const ntt = { ...teacherTT }
+      rebuildTeacherTT(classTT, ntt, config.workDays)
+      setTeacherTT(ntt)
+    }
+    setSwapPreview(null)
   }
 
   // ── Auto-assign helpers for pool drops ──────────────────────
@@ -1622,6 +1687,7 @@ export function TimetablePage() {
         blockedSlots={(store as any).blockedSlots ?? []}
         dynamicLearningGroups={(store as any).dynamicLearningGroups ?? []}
         rooms={(store as any).rooms ?? []}
+        classwiseBreaks={(config as any).classwiseBreaks}
         onCellClick={(section, day, periodId) => {
           if (editMode) setEditTarget({ section, day, periodId })
         }}
@@ -2338,6 +2404,71 @@ export function TimetablePage() {
           onClose={() => { setEditTarget(null); setPoolSuggestSubject("") }}
         />
       )}
+
+      {/* ── Swap / Shift Preview Modal ───────────────────────── */}
+      {swapPreview && (() => {
+        const { pA, pB, bothClass, safe, conflicted } = swapPreview
+        const total = sections.length
+        const noConflicts = conflicted === 0
+        return (
+          <div style={{ position:"fixed" as const, inset:0, zIndex:1500, background:"rgba(0,0,0,0.38)", display:"flex", alignItems:"center", justifyContent:"center" }}
+            onClick={() => setSwapPreview(null)}>
+            <div onClick={e => e.stopPropagation()} style={{
+              background:"#fff", borderRadius:14, boxShadow:"0 8px 48px rgba(0,0,0,0.22)",
+              padding:"26px 30px", minWidth:380, maxWidth:460, width:"100%",
+            }}>
+              {/* Title */}
+              <div style={{ fontSize:16, fontWeight:800, color:"#13111E", marginBottom:4 }}>
+                Swap: <span style={{ color:"#7C6FE0" }}>{pA.name}</span>
+                {" ↔ "}
+                <span style={{ color:"#7C6FE0" }}>{pB.name}</span>
+              </div>
+              <div style={{ fontSize:11, color:"#8B87AD", marginBottom:18 }}>
+                {bothClass
+                  ? "Period contents will be swapped across all classes. Headers stay in place."
+                  : bothClass === false && (pA.type === 'class' || pB.type === 'class')
+                    ? "Slot positions will be reordered — headers and contents move together."
+                    : "Break positions will be reordered."}
+              </div>
+
+              {/* Results box */}
+              <div style={{ background:"#F8F7FF", border:"1px solid #E8E4FF", borderRadius:9, padding:"12px 16px", marginBottom:20 }}>
+                <div style={{ fontWeight:700, fontSize:12, color:"#4B5275", marginBottom:8 }}>
+                  Affected classes: {total}
+                </div>
+                {noConflicts ? (
+                  <div style={{ fontSize:12, color:"#16a34a", fontWeight:700 }}>
+                    ✓ No conflicts detected — swap can be applied safely.
+                  </div>
+                ) : (
+                  <div style={{ display:"flex", gap:20 }}>
+                    <div style={{ fontSize:12, color:"#16a34a", fontWeight:700 }}>✓ {safe} safe</div>
+                    <div style={{ fontSize:12, color:"#dc2626", fontWeight:700 }}>⚠ {conflicted} conflict{conflicted !== 1 ? "s" : ""}</div>
+                  </div>
+                )}
+              </div>
+
+              {/* Actions */}
+              <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
+                <button onClick={() => setSwapPreview(null)}
+                  style={{ padding:"8px 16px", border:"1px solid #E8E4FF", borderRadius:7, background:"#fff", color:"#8B87AD", fontSize:12, cursor:"pointer" }}>
+                  Cancel
+                </button>
+                {!noConflicts && bothClass && (
+                  <button onClick={() => applyShift(true)}
+                    style={{ padding:"8px 16px", border:"none", borderRadius:7, background:"#FEF3C7", color:"#92400E", fontSize:12, fontWeight:600, cursor:"pointer" }}>
+                    Apply Safe Only ({safe})
+                  </button>
+                )}
+                <button onClick={() => applyShift(false)}
+                  style={{ padding:"8px 16px", border:"none", borderRadius:7, background:"#7C6FE0", color:"#fff", fontSize:12, fontWeight:700, cursor:"pointer" }}>
+                  {noConflicts ? "Apply Swap" : "Proceed Anyway"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* ── Publish confirmation overlay ── */}
       {publishConfirm && (
