@@ -1922,32 +1922,6 @@ export function TimetablePage() {
 
           <div style={{ width:1, height:20, background:"#E8E4FF" }} />
 
-          {/* Undo / Redo */}
-          <div style={{ display:"flex", border:"1px solid #E8E4FF", borderRadius:7, overflow:"hidden" }}>
-            <button onClick={() => {
-              if (!classTTHistory.length) return
-              const prev = classTTHistory[classTTHistory.length - 1]
-              setClassTTFuture(f => [classTT, ...f.slice(0,49)])
-              setClassTTHistory(classTTHistory.slice(0,-1))
-              setClassTT(prev)
-              const ntt = { ...teacherTT }; rebuildTeacherTT(prev, ntt, config.workDays); setTeacherTT(ntt)
-            }} disabled={!classTTHistory.length}
-              title="Undo (Ctrl+Z)"
-              style={{ padding:"5px 10px", border:"none", background: classTTHistory.length?"#fff":"#FAFAFE", color:classTTHistory.length?"#4B5275":"#C4C0D8", fontSize:11, cursor:classTTHistory.length?"pointer":"not-allowed" }}>↩ Undo</button>
-            <button onClick={() => {
-              if (!classTTFuture.length) return
-              const next = classTTFuture[0]
-              setClassTTHistory(h => [...h.slice(-49), classTT])
-              setClassTTFuture(classTTFuture.slice(1))
-              setClassTT(next)
-              const ntt = { ...teacherTT }; rebuildTeacherTT(next, ntt, config.workDays); setTeacherTT(ntt)
-            }} disabled={!classTTFuture.length}
-              title="Redo (Ctrl+Y)"
-              style={{ padding:"5px 10px", border:"none", background: classTTFuture.length?"#fff":"#FAFAFE", color:classTTFuture.length?"#4B5275":"#C4C0D8", fontSize:11, cursor:classTTFuture.length?"pointer":"not-allowed", borderLeft:"1px solid #E8E4FF" }}>↪ Redo</button>
-          </div>
-
-          <div style={{ width:1, height:20, background:"#E8E4FF" }} />
-
           {/* Edit + Substitution */}
           {TBtn(editMode, () => setEditMode(!editMode), editMode ? "✏️ Editing" : "✏️ Edit")}
           <button onClick={() => setSubPanelOpen(o => !o)}
@@ -1985,7 +1959,63 @@ export function TimetablePage() {
         </div>
 
         {/* Timetable content */}
-        <div style={{ flex:1, overflowY: viewMode === "calendar" ? "hidden" : "auto", padding:20, display: viewMode === "calendar" ? "flex" : "block", flexDirection: "column" as const }}>
+        <div style={{ flex:1, overflowY: viewMode === "calendar" ? "hidden" : "auto", padding:20, display: viewMode === "calendar" ? "flex" : "block", flexDirection: "column" as const, position:"relative" as const }}>
+
+          {/* ── Floating undo/redo pill — appears only when history exists ── */}
+          {(classTTHistory.length > 0 || classTTFuture.length > 0) && viewMode !== "calendar" && (
+            <div style={{
+              position:"sticky" as const, top:0, zIndex:40,
+              display:"flex", justifyContent:"center",
+              pointerEvents:"none",
+              marginBottom:8,
+            }}>
+              <div style={{
+                display:"inline-flex", alignItems:"center", gap:2,
+                background:"rgba(255,255,255,0.82)", backdropFilter:"blur(8px)",
+                border:"1px solid rgba(124,111,224,0.25)", borderRadius:20,
+                boxShadow:"0 2px 12px rgba(124,111,224,0.15)",
+                padding:"4px 6px",
+                pointerEvents:"auto",
+                opacity: 0.88,
+                transition:"opacity 0.2s",
+              }}>
+                <button onClick={() => {
+                  if (!classTTHistory.length) return
+                  const prev = classTTHistory[classTTHistory.length - 1]
+                  setClassTTFuture(f => [classTT, ...f.slice(0,49)])
+                  setClassTTHistory(classTTHistory.slice(0,-1))
+                  setClassTT(prev)
+                  const ntt = { ...teacherTT }; rebuildTeacherTT(prev, ntt, config.workDays); setTeacherTT(ntt)
+                }} disabled={!classTTHistory.length}
+                  title="Undo (Ctrl+Z)"
+                  style={{ display:"flex", alignItems:"center", gap:4, padding:"4px 12px", borderRadius:14, border:"none",
+                    background: classTTHistory.length?"rgba(124,111,224,0.12)":"transparent",
+                    color: classTTHistory.length?"#4338ca":"#c4c0d8",
+                    fontSize:11, fontWeight:600, cursor:classTTHistory.length?"pointer":"default",
+                    transition:"background 0.15s" }}>
+                  <span style={{ fontSize:13 }}>↩</span> Undo {classTTHistory.length > 0 && <span style={{ fontSize:9, opacity:0.6, marginLeft:1 }}>({classTTHistory.length})</span>}
+                </button>
+                <div style={{ width:1, height:16, background:"rgba(124,111,224,0.2)" }} />
+                <button onClick={() => {
+                  if (!classTTFuture.length) return
+                  const next = classTTFuture[0]
+                  setClassTTHistory(h => [...h.slice(-49), classTT])
+                  setClassTTFuture(classTTFuture.slice(1))
+                  setClassTT(next)
+                  const ntt = { ...teacherTT }; rebuildTeacherTT(next, ntt, config.workDays); setTeacherTT(ntt)
+                }} disabled={!classTTFuture.length}
+                  title="Redo (Ctrl+Y)"
+                  style={{ display:"flex", alignItems:"center", gap:4, padding:"4px 12px", borderRadius:14, border:"none",
+                    background: classTTFuture.length?"rgba(124,111,224,0.12)":"transparent",
+                    color: classTTFuture.length?"#4338ca":"#c4c0d8",
+                    fontSize:11, fontWeight:600, cursor:classTTFuture.length?"pointer":"default",
+                    transition:"background 0.15s" }}>
+                  <span style={{ fontSize:13 }}>↪</span> Redo
+                </button>
+              </div>
+            </div>
+          )}
+
           {viewMode === "calendar" ? renderCalendarView(selectedEntity) : (
             <>
               <div style={{ background:"#fff", borderRadius:12, boxShadow:"0 1px 3px rgba(0,0,0,0.08)", overflow:"hidden" }}>
