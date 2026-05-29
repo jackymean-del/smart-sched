@@ -500,8 +500,9 @@ export function TimetablePage() {
       return subs.includes(subjectName)
     }
 
+    // Exclude the current section's slot — we may be replacing it
     const isBusy = (name: string): boolean =>
-      sections.some(s => classTT[s.name]?.[day]?.[periodId]?.teacher === name)
+      sections.some(s => s.name !== sectionName && classTT[s.name]?.[day]?.[periodId]?.teacher === name)
 
     let candidates = staff.filter(st => isEligible(st) && !isBusy(st.name))
     if (!candidates.length)
@@ -534,10 +535,13 @@ export function TimetablePage() {
         setPoolDragItem(null)
         return
       }
-      const existingSubject = classTT[section]?.[day]?.[periodId]?.subject
-      if (!existingSubject) {
-        const teacher = pickBestTeacher(section, poolDragItem.subject, day, periodId)
-        const room    = pickHomeRoom(section)
+      // Allow replacing occupied cells — but only if the new teacher has no clash
+      const teacher = pickBestTeacher(section, poolDragItem.subject, day, periodId)
+      const teacherConflict = teacher && sections.some(s =>
+        s.name !== section && classTT[s.name]?.[day]?.[periodId]?.teacher === teacher
+      )
+      if (!teacherConflict) {
+        const room = pickHomeRoom(section)
         const newTT = { ...classTT }
         newTT[section] = { ...newTT[section] }
         newTT[section][day] = { ...(newTT[section][day] ?? {}) }
@@ -1315,10 +1319,13 @@ export function TimetablePage() {
           if (editMode) setEditTarget({ section, day, periodId })
         }}
         onCellFill={(section, day, periodId, suggestedSubject) => {
-          // Direct save — no modal; auto-assign teacher + home room
-          if (!classTT[section]?.[day]?.[periodId]?.subject) {
-            const teacher = pickBestTeacher(section, suggestedSubject, day, periodId)
-            const room    = pickHomeRoom(section)
+          // Allow replacing occupied cells — only reject on teacher clash
+          const teacher = pickBestTeacher(section, suggestedSubject, day, periodId)
+          const teacherConflict = teacher && sections.some(s =>
+            s.name !== section && classTT[s.name]?.[day]?.[periodId]?.teacher === teacher
+          )
+          if (!teacherConflict) {
+            const room = pickHomeRoom(section)
             const newTT = { ...classTT }
             newTT[section] = { ...newTT[section] }
             newTT[section][day] = { ...(newTT[section][day] ?? {}) }
@@ -1704,8 +1711,6 @@ export function TimetablePage() {
                 })()}
               </div>
 
-              {/* Uncovered periods pool */}
-              {renderUncoveredPool()}
 
               {/* Conflicts list */}
               {conflicts.length > 0 && (

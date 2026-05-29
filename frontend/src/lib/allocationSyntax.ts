@@ -40,6 +40,26 @@ export function parseAllocation(input: string | undefined | null): Allocation {
   // Normalize: strip spaces, uppercase, allow `x` or `X`
   const s = raw.replace(/\s+/g, '').toUpperCase()
 
+  // Pattern 0: "<x>S=<y>P"  -> x sessions of y consecutive periods each
+  //   e.g. "1s=2p"  = 1 double-period block (same as "1(2X)")
+  //        "2s=3p"  = 2 triple-period blocks
+  //        "3s=1p"  = 3 single-period sessions (plain theory, no consecutive)
+  const sessionMatch = s.match(/^(\d+)S=(\d+)P$/)
+  if (sessionMatch) {
+    const sessions = parseInt(sessionMatch[1])
+    const perSession = parseInt(sessionMatch[2])
+    if (sessions <= 0 || perSession <= 0) return { ...EMPTY, raw, error: 'invalid session syntax' }
+    if (perSession === 1) {
+      // single-period sessions = ordinary theory
+      return { theoryPeriods: sessions, labPeriods: 0, doublePeriods: 0, doubleSpan: 1, valid: true, weeklyTotal: sessions, raw }
+    }
+    return {
+      theoryPeriods: 0, labPeriods: 0,
+      doublePeriods: sessions, doubleSpan: perSession,
+      valid: true, weeklyTotal: sessions * perSession, raw,
+    }
+  }
+
   // Pattern 1: "<n>(<m>X)"  -> n double-periods each spanning m units
   const dblMatch = s.match(/^(\d+)\((\d+)X\)$/)
   if (dblMatch) {
@@ -107,7 +127,7 @@ export function parseAllocation(input: string | undefined | null): Allocation {
 
 /** Format an Allocation back to its canonical compact syntax. */
 export function formatAllocation(a: Pick<Allocation, 'theoryPeriods' | 'labPeriods' | 'doublePeriods' | 'doubleSpan'>): string {
-  if (a.doublePeriods > 0) return `${a.doublePeriods}(${a.doubleSpan}X)`
+  if (a.doublePeriods > 0) return `${a.doublePeriods}s=${a.doubleSpan}p`
   if (a.theoryPeriods > 0 && a.labPeriods > 0) return `${a.theoryPeriods}+${a.labPeriods}`
   if (a.labPeriods > 0)     return `${a.labPeriods}L`
   if (a.theoryPeriods > 0)  return String(a.theoryPeriods)

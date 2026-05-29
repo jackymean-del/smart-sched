@@ -524,9 +524,11 @@ export function CalendarView({
                     {visibleDays.map(d => {
                       const dayKey = DOW_KEY[d.getDay()]
                       if (isBreak) {
+                        const bTimes = times
                         return (
-                          <td key={dayKey} style={{ border: "1px solid #E8E4FF", textAlign: "center" as const, fontSize: 9, color: breakColor, fontStyle: "italic", padding: 4, background: breakBg }}>
-                            {p.name}
+                          <td key={dayKey} style={{ border: "1px solid #E8E4FF", textAlign: "center" as const, padding: "4px 3px", background: breakBg }}>
+                            <div style={{ fontSize: 8, fontWeight: 700, color: breakColor, lineHeight: 1.3 }}>{p.name}</div>
+                            {bTimes && <div style={{ fontSize: 7, color: breakColor, opacity: 0.75, fontFamily: "'DM Mono', monospace", marginTop: 1 }}>{fmtTime(bTimes.start, timeFormat)} – {fmtTime(bTimes.end, timeFormat)}</div>}
                           </td>
                         )
                       }
@@ -540,7 +542,7 @@ export function CalendarView({
                       const isDragOver = dragOverCell === cellDragKey
                       return (
                         <td key={dayKey}
-                          draggable={!!cell?.subject}
+                          draggable
                           onDragStart={cell?.subject ? () => setDragFrom({section: sec.name, day: dayKey, periodId: p.id}) : undefined}
                           onDragOver={e => { e.preventDefault(); setDragOverCell(cellDragKey) }}
                           onDragLeave={() => setDragOverCell(null)}
@@ -548,7 +550,7 @@ export function CalendarView({
                             setDragOverCell(null)
                             const poolSubject = e.dataTransfer.getData('application/pool-subject')
                             const poolSection = e.dataTransfer.getData('application/pool-section')
-                            if (poolSubject && !cell?.subject && (!poolSection || poolSection === sec.name)) {
+                            if (poolSubject && (!poolSection || poolSection === sec.name)) {
                               onCellFill?.(sec.name, dayKey, p.id, poolSubject)
                               setDragFrom(null)
                             } else if (dragFrom) {
@@ -556,7 +558,7 @@ export function CalendarView({
                               setDragFrom(null)
                             }
                           }}
-                          style={{ border: isDragOver ? "2px dashed #7C6FE0" : "1px solid #E8E4FF", padding: 3, verticalAlign: "top" as const, background: teacherAbsent ? "#FFFBEB" : isDragOver ? "#EDE9FF" : undefined, position: "relative" as const, cursor: cell?.subject ? "grab" : "default" }}>
+                          style={{ border: isDragOver ? "2px dashed #7C6FE0" : "1px solid #E8E4FF", padding: 3, verticalAlign: "top" as const, background: teacherAbsent ? "#FFFBEB" : isDragOver ? "#EDE9FF" : undefined, position: "relative" as const, cursor: "grab" }}>
                           {/* DLG icon overlay — top-right when cell is part of a DLG */}
                           {cell?.subject && (() => {
                             const dlgs = dlgMap.get(`${sec.name}|${dayKey}|${p.id}`)
@@ -692,11 +694,17 @@ export function CalendarView({
                     {periods.map(p => {
                       const isBreak = p.type !== "class"
                       if (isBreak) {
+                        // Merge break across all days for this section — render once on first row
+                        if (!isFirstRow) return null
+                        const bTimes = periodTimes.get(p.id)
                         const breakBg = p.type === "lunch" ? "#FEF3C7" : p.type === "fixed-start" ? "#EDE9FF" : "#FEFCE8"
-                        const breakColor = p.type === "lunch" ? "#92400E" : "#854D0E"
+                        const breakColor = p.type === "lunch" ? "#92400E" : p.type === "fixed-start" ? "#4F3FC0" : "#854D0E"
                         return (
-                          <td key={p.id} style={{ border: "1px solid #E8E4FF", textAlign: "center" as const, fontSize: 9, color: breakColor, fontStyle: "italic", padding: 4, background: breakBg }}>
-                            {p.type === 'lunch' ? '🍽' : '☕'}
+                          <td key={p.id} rowSpan={visibleDays.length}
+                            style={{ border: "1px solid #E8E4FF", textAlign: "center" as const, verticalAlign: "middle" as const, padding: "4px 3px", background: breakBg }}>
+                            <div style={{ fontSize: 8, fontWeight: 700, color: breakColor, lineHeight: 1.3 }}>{p.name}</div>
+                            {bTimes && <div style={{ fontSize: 7, color: breakColor, opacity: 0.75, fontFamily: "'DM Mono', monospace", marginTop: 1 }}>{fmtTime(bTimes.start, timeFormat)}</div>}
+                            {bTimes && <div style={{ fontSize: 7, color: breakColor, opacity: 0.55, fontFamily: "'DM Mono', monospace" }}>–{fmtTime(bTimes.end, timeFormat)}</div>}
                           </td>
                         )
                       }
@@ -717,7 +725,7 @@ export function CalendarView({
                             setDragOverCell(null)
                             const poolSubject = e.dataTransfer.getData('application/pool-subject')
                             const poolSection = e.dataTransfer.getData('application/pool-section')
-                            if (poolSubject && !cell?.subject && (!poolSection || poolSection === sec.name)) {
+                            if (poolSubject && (!poolSection || poolSection === sec.name)) {
                               onCellFill?.(sec.name, dayKey, p.id, poolSubject)
                               setDragFrom(null)
                             } else if (dragFrom) {
@@ -725,7 +733,7 @@ export function CalendarView({
                               setDragFrom(null)
                             }
                           }}
-                          style={{ border: isDragOver ? "2px dashed #7C6FE0" : "1px solid #E8E4FF", padding: 3, verticalAlign: "top" as const, background: teacherAbsent ? "#FFFBEB" : isDragOver ? "#EDE9FF" : undefined, position: "relative" as const, cursor: cell?.subject ? "grab" : "default" }}>
+                          style={{ border: isDragOver ? "2px dashed #7C6FE0" : "1px solid #E8E4FF", padding: 3, verticalAlign: "top" as const, background: teacherAbsent ? "#FFFBEB" : isDragOver ? "#EDE9FF" : undefined, position: "relative" as const, cursor: "grab" }}>
                           {/* DLG icon overlay — top-right when cell is part of a DLG */}
                           {cell?.subject && (() => {
                             const dlgs = dlgMap.get(`${sec.name}|${dayKey}|${p.id}`)

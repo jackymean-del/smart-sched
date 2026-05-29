@@ -606,20 +606,68 @@ export function solveTimetable(input: SolverInput): SolverOutput {
   //   subjects still below their daily budget get a priority bonus so the
   //   solver fills budgeted days first, spreading empty slots evenly.
 
-  // ── Heavy-subject adjacency helper ───────────────────────
-  //   "Heavy" subjects are cognitively demanding — placing two of them
-  //   back-to-back is tiring for students. The scorer applies a strong
-  //   penalty when the previous filled period was also a heavy subject.
-  const HEAVY_KEYWORDS = [
-    'math', 'maths', 'mathematics',
-    'science', 'physics', 'chemistry', 'biology', 'biotech',
-    'computer', 'informatics',
-    'accounts', 'accountancy', 'economics', 'statistics',
+  // ── Subject-group adjacency helpers ──────────────────────
+  //   Subjects in the same group (languages, sciences, etc.) should NOT
+  //   be placed back-to-back — it's cognitively exhausting (e.g. Hindi
+  //   then Sanskrit then Odia in three consecutive periods).
+  //   Heavy (cognitively demanding) subjects also penalise back-to-back.
+  const SUBJECT_GROUPS: Array<[string, string[]]> = [
+    ['language', [
+      'hindi', 'english', 'sanskrit', 'odia', 'bengali', 'tamil', 'telugu',
+      'kannada', 'malayalam', 'marathi', 'urdu', 'punjabi', 'gujarati',
+      'regional language', 'english literature', 'english lang', 'second language',
+      'third language', 'literature',
+    ]],
+    ['science', [
+      'physics', 'chemistry', 'biology', 'science', 'environmental science',
+      'evs', 'biotech', 'biotechnology', 'zoology', 'botany',
+    ]],
+    ['maths', [
+      'math', 'maths', 'mathematics', 'computer science', 'computer', 'statistics',
+      'informatics', 'data science',
+    ]],
+    ['social', [
+      'history', 'geography', 'political science', 'economics', 'civics',
+      'social studies', 'social science', 'accountancy', 'accounts', 'commerce',
+    ]],
+    ['arts', [
+      'art', 'drawing', 'craft', 'art & craft', 'art and craft',
+      'music', 'dance', 'physical education', 'yoga', 'pe', 'sports',
+    ]],
   ]
-  const isHeavySubject = (name: string): boolean => {
+
+  const getSubjectGroup = (name: string): string | null => {
     const n = name.toLowerCase()
-    return HEAVY_KEYWORDS.some(kw => n === kw || n.startsWith(kw + ' ') || n.includes(' ' + kw))
+    for (const [group, keywords] of SUBJECT_GROUPS) {
+      if (keywords.some(kw => n === kw || n.startsWith(kw + ' ') || n.includes(' ' + kw) || n.includes(kw + '/')))
+        return group
+    }
+    return null
   }
+
+  const HEAVY_GROUPS = new Set(['maths', 'science'])
+  const isHeavySubject = (name: string): boolean => {
+    const g = getSubjectGroup(name)
+    return g !== null && HEAVY_GROUPS.has(g)
+  }
+
+  // ── Per-subject session span (consecutive periods per placement) ──
+  //   Built from the subjectAllocations matrix — doublePeriods > 0 means the
+  //   subject must be placed as consecutive blocks of doubleSpan periods.
+  //   e.g. "1s=2p" → doublePeriods=1 doubleSpan=2  → every placement is a 2-period block
+  const sessionSpan: Record<string, Record<string, number>> = {}
+  sections.forEach(sec => {
+    sessionSpan[sec.name] = {}
+    subjects.forEach(sub => {
+      const cell = (input.subjectAllocations ?? {})[sec.name]?.[sub.name]
+      if (cell) {
+        const parsed = parseAllocation(cell)
+        sessionSpan[sec.name][sub.name] = (parsed.valid && parsed.doublePeriods > 0) ? parsed.doubleSpan : 1
+      } else {
+        sessionSpan[sec.name][sub.name] = 1
+      }
+    })
+  })
 
   const subjectDayQuota: Record<string, Record<string, Record<string, number>>> = {}
   sections.forEach((sec, si) => {
@@ -895,6 +943,8 @@ export function solveTimetable(input: SolverInput): SolverOutput {
           : ''
         const prevIsHeavy = prevSubject ? isHeavySubject(prevSubject) : false
 
+        const prevGroup = prevSubject ? getSubjectGroup(prevSubject) : null
+
         const scoredSubs = availableSubs.map((sub, idx) => {
           const quota = subjectDayQuota[sec.name]?.[sub.name]?.[day] ?? 0
           const todayDone = Object.values(classTT[sec.name][day] ?? {})
@@ -902,9 +952,12 @@ export function solveTimetable(input: SolverInput): SolverOutput {
           const dayScore = todayDone < quota ? 25 : todayDone === quota ? 0 : -10
           // Rotation tie-break: keeps subject variety when several score equally
           const rotScore = ((si * 11 + di * 7 + pi * 3) + idx * 3) % 7
-          // Avoid placing a heavy subject immediately after another heavy subject
-          const adjacentHeavyPenalty = (prevIsHeavy && isHeavySubject(sub.name)) ? -22 : 0
-          return { sub, score: dayScore + rotScore + adjacentHeavyPenalty }
+          // Penalise same-group adjacency (e.g. Hindi → Sanskrit, or Physics → Chemistry)
+          const thisGroup = getSubjectGroup(sub.name)
+          const sameGroupPenalty = (prevGroup && thisGroup && prevGroup === thisGroup) ? -20 : 0
+          // Extra penalty for two heavy subjects back-to-back
+          const adjacentHeavyPenalty = (prevIsHeavy && isHeavySubject(sub.name)) ? -10 : 0
+          return { sub, score: dayScore + rotScore + sameGroupPenalty + adjacentHeavyPenalty }
         }).sort((a, b) => b.score - a.score)
         const chosenSub = scoredSubs[0]?.sub ?? availableSubs[0]
 
@@ -1085,6 +1138,28 @@ export function solveTimetable(input: SolverInput): SolverOutput {
         }
 
         ensureBusy(teacher.name)
+
+        // ── Consecutive session placement (Xs=Yp / doublePeriods) ───────────
+        //   If this subject is configured as a multi-period session block,
+        //   try to fill `span` consecutive class periods at once.  Falls back
+        //   to single-period placement when not enough free consecutive slots.
+        const span = sessionSpan[sec.name]?.[chosenSub.name] ?? 1
+        if (span > 1) {
+          const spanPeriods = classPeriods.slice(pi, pi + span)
+          const allFree = spanPeriods.length === span &&
+            spanPeriods.every(cp => !classTT[sec.name][day][cp.id]) &&
+            spanPeriods.every(cp => !teacherBusy[teacher.name][day].has(cp.id))
+          if (allFree) {
+            spanPeriods.forEach(cp => {
+              classTT[sec.name][day][cp.id] = { subject: chosenSub.name, teacher: teacher.name, room: sec.room }
+              teacherBusy[teacher.name][day].add(cp.id)
+            })
+            subjectCount[sec.name][chosenSub.name] = (subjectCount[sec.name][chosenSub.name] ?? 0) + span
+            return
+          }
+          // Consecutive not available — fall through to single placement as graceful degradation
+        }
+
         classTT[sec.name][day][period.id] = {
           subject: chosenSub.name,
           teacher: teacher.name,
