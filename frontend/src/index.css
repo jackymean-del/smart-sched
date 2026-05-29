@@ -61,82 +61,68 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 .rounded-2xl { border-radius: 1rem; }
 
 /* ══ Print / PDF styles ══════════════════════════════════════════════════
-   Activated by window.print() for Class-wise / Teacher-wise / Room-wise exports
+   Activated by window.print()
+   Strategy: hide everything via visibility, show only .warm-tt content
    ========================================================================= */
 @media print {
-  @page { size: A4 landscape; margin: 12mm 10mm; }
+  @page { size: A4 landscape; margin: 10mm 8mm; }
 
-  /* Hide everything except the timetable tables */
-  body > *:not(#print-root) { display: none !important; }
-  #root > * { display: none !important; }
-  .warm-tt  { display: block !important; }
+  /* 1. Hide the entire page */
+  * { visibility: hidden !important; }
 
-  /* Show the currently-active timetable grid */
-  body::before {
-    content: attr(data-print-title);
-    display: block;
-    font-size: 18pt;
-    font-weight: 700;
-    text-align: center;
-    color: #374151;
-    margin-bottom: 8pt;
-    font-family: 'Inter', sans-serif;
+  /* 2. Show only the timetable and its children */
+  .warm-tt,
+  .warm-tt * { visibility: visible !important; }
+
+  /* 3. Position the timetable at the top-left corner of the page */
+  .warm-tt {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    background: #fff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
-  /* Table base */
-  table { width: 100%; border-collapse: collapse; font-size: 8pt; font-family: 'Inter', sans-serif; }
-  th, td {
-    border: 1px solid #CBD5E1 !important;
+  /* Table styles */
+  .warm-tt table { width: 100%; border-collapse: collapse; font-size: 8pt; }
+  .warm-tt th, .warm-tt td {
+    border: 1px solid #9CA3AF !important;
     padding: 4pt 5pt !important;
     vertical-align: top;
-    page-break-inside: avoid;
   }
-  thead th {
-    background: #F1F5F9 !important;
+  .warm-tt thead th {
+    background: #E5EBF5 !important;
     color: #1e293b !important;
     font-weight: 700 !important;
-    font-size: 7.5pt !important;
+    font-size: 7pt !important;
     text-align: center;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
 
-  /* Day header cells */
-  td:first-child, th:first-child {
-    font-weight: 700 !important;
-    color: #374151 !important;
-    background: #F8FAFC !important;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
+  /* Cell background colors preserved */
+  .warm-tt [class*="bg-"] {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
-  /* Subject cells — warm backgrounds */
-  .warm-tt td[class*="bg-"] {
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
+  /* All text black */
+  .warm-tt * { color: #111 !important; }
 
-  /* Lunch / break cells */
-  .warm-tt [class*="bg-yellow"], .warm-tt [class*="bg-amber"] {
-    background-color: #FFFBEB !important;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-
-  /* Hide UI controls */
-  button, input, select, .no-print,
-  [style*="position: fixed"], [style*="position:fixed"],
-  [style*="position: sticky"]:not(td):not(th) { display: none !important; }
-
-  /* All text black for print */
-  * { color: #111111 !important; }
-
-  /* Section dividers — thicker line between entity groups */
-  tr[style*="height: 3px"], tr[style*="height:3px"] {
+  /* Section dividers */
+  .warm-tt tr[style*="height: 3px"],
+  .warm-tt tr[style*="height:3px"] td {
     background: #374151 !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
+
+  /* Hide interactive controls inside the table */
+  .warm-tt button,
+  .warm-tt input,
+  .warm-tt select { display: none !important; visibility: hidden !important; }
 }
 .shadow-sm   { box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); }
 .shadow-md   { box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }

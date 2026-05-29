@@ -51,6 +51,8 @@ export interface CalendarViewProps {
   selectedEntity: string
   showTeacher: boolean
   showRoom: boolean
+  showTime?: boolean      // show start–end time inside blocks
+  shortNames?: boolean    // abbreviate subject / teacher / room names
   onCellClick?: (section: string, day: string, periodId: string) => void
   onCellSwap?: (from: { section:string; day:string; periodId:string },
                 to:   { section:string; day:string; periodId:string }) => void
@@ -85,43 +87,59 @@ const TICK_INT:   Record<ZoomLevel, number> = { "60min": 60, "30min": 30, "15min
 const MINOR_INT:  Record<ZoomLevel, number> = { "60min": 30, "30min": 15, "15min": 5  }
 
 // ─────────────────────────────────────────────
-// Vivid block colours (hash-based, consistent per subject name)
+// Soft accent colour palette — light bg + coloured left border, black text
 // ─────────────────────────────────────────────
-const PALETTE: Array<{ bg: string; text: string }> = [
-  { bg:"#7C6FE0", text:"#fff" }, // indigo
-  { bg:"#EC4899", text:"#fff" }, // pink
-  { bg:"#3B82F6", text:"#fff" }, // blue
-  { bg:"#10B981", text:"#fff" }, // emerald
-  { bg:"#F59E0B", text:"#1a1a1a" }, // amber
-  { bg:"#EF4444", text:"#fff" }, // red
-  { bg:"#8B5CF6", text:"#fff" }, // violet
-  { bg:"#14B8A6", text:"#fff" }, // teal
-  { bg:"#F97316", text:"#fff" }, // orange
-  { bg:"#06B6D4", text:"#fff" }, // cyan
-  { bg:"#84CC16", text:"#1a2e05" }, // lime
-  { bg:"#A855F7", text:"#fff" }, // purple
-  { bg:"#E11D48", text:"#fff" }, // rose
-  { bg:"#0891B2", text:"#fff" }, // sky
-  { bg:"#D97706", text:"#fff" }, // dark-amber
-  { bg:"#059669", text:"#fff" }, // dark-green
+const ACCENT_PALETTE: Array<{ accent: string; bg: string }> = [
+  { accent:"#F97316", bg:"#FFF5EC" }, // orange
+  { accent:"#8B5CF6", bg:"#F3EFFE" }, // purple
+  { accent:"#10B981", bg:"#ECFDF5" }, // green
+  { accent:"#3B82F6", bg:"#EFF6FF" }, // blue
+  { accent:"#EF4444", bg:"#FEF2F2" }, // red
+  { accent:"#14B8A6", bg:"#F0FDFA" }, // teal
+  { accent:"#F59E0B", bg:"#FFFBEB" }, // amber
+  { accent:"#EC4899", bg:"#FDF2F8" }, // pink
+  { accent:"#06B6D4", bg:"#ECFEFF" }, // cyan
+  { accent:"#84CC16", bg:"#F7FEE7" }, // lime
+  { accent:"#6366F1", bg:"#EEF2FF" }, // indigo
+  { accent:"#D97706", bg:"#FEF3C7" }, // dark-amber
+  { accent:"#059669", bg:"#D1FAE5" }, // emerald
+  { accent:"#7C3AED", bg:"#F5F3FF" }, // violet
+  { accent:"#BE185D", bg:"#FCE7F3" }, // deep-pink
+  { accent:"#0369A1", bg:"#E0F2FE" }, // sky
 ]
 
-const _colorCache = new Map<string, { bg: string; text: string }>()
-function subjectColor(name: string): { bg: string; text: string } {
-  if (!name) return { bg:"#E8E4FF", text:"#4B5275" }
+const _colorCache = new Map<string, { accent:string; bg:string }>()
+function subjectColor(name: string): { accent:string; bg:string } {
+  if (!name) return { accent:"#7C6FE0", bg:"#F0EDFF" }
   const k = name.toLowerCase().trim()
   if (_colorCache.has(k)) return _colorCache.get(k)!
   const h = k.split("").reduce((a,c) => (a*31 + c.charCodeAt(0)) & 0xFFFF, 0)
-  const c = PALETTE[h % PALETTE.length]
+  const c = ACCENT_PALETTE[h % ACCENT_PALETTE.length]
   _colorCache.set(k, c)
   return c
 }
 
 function breakStyle(type: Period["type"]): { bg:string; border:string; text:string } {
-  if (type==="lunch")       return { bg:"#FFFBEB", border:"#F6D860", text:"#B45309" }
+  if (type==="lunch")       return { bg:"#FFFBEB", border:"#F6D860", text:"#92400E" }
   if (type==="fixed-start") return { bg:"#F5F2FF", border:"#C4B5FD", text:"#6D28D9" }
   if (type==="fixed-end")   return { bg:"#F0FDF4", border:"#86EFAC", text:"#166534" }
-  return { bg:"#FEFCE8", border:"#FDE68A", text:"#854D0E" }
+  return { bg:"#FEFCE8", border:"#FDE68A", text:"#92400E" }
+}
+
+// ─── Short-name helpers ──────────────────────────────────────
+function shortSubject(name: string): string {
+  if (!name) return ""
+  const words = name.trim().split(/\s+/)
+  if (words.length >= 3) return words.map(w => w[0].toUpperCase()).join("") // "Physical Education" → "PE"
+  if (words.length === 2) return `${words[0].slice(0,4)} ${words[1].slice(0,3)}`
+  return name.slice(0, 8)
+}
+function shortPerson(name: string): string {
+  if (!name) return ""
+  return name.split(/\s+/)[0].slice(0, 9)
+}
+function shortRoom(name: string): string {
+  return name.slice(0, 9)
 }
 
 // ─────────────────────────────────────────────
@@ -320,13 +338,16 @@ function DetailPanel({d,tf,onClose,onEdit}:{
 
 // ─────────────────────────────────────────────
 // Single timeline block renderer
+// Soft-accent style: light background + coloured left border + black text
 // ─────────────────────────────────────────────
 function Block({
-  block, left, width, rowH, compact, showTeacherVal, showRoomVal, viewMode,
+  block, left, width, rowH, compact,
+  showTeacherVal, showRoomVal, showTimeVal, shortNamesVal, viewMode,
   onHover, onLeave, onClick,
 }: {
   block:TimeBlock; left:number; width:number; rowH:number; compact:boolean
-  showTeacherVal:boolean; showRoomVal:boolean; viewMode:CalendarViewProps["viewMode"]
+  showTeacherVal:boolean; showRoomVal:boolean; showTimeVal:boolean; shortNamesVal:boolean
+  viewMode:CalendarViewProps["viewMode"]
   onHover:(b:TimeBlock,e:React.MouseEvent)=>void
   onLeave:()=>void
   onClick:(b:TimeBlock)=>void
@@ -341,25 +362,20 @@ function Block({
         onMouseEnter={e=>onHover(block,e)} onMouseLeave={onLeave}
         style={{
           position:"absolute" as const, left, width:Math.max(width-1,1),
-          top:0, bottom:0,
-          background:bs.bg,
-          borderLeft:`2.5px solid ${bs.border}`,
-          borderRight:`1px solid ${bs.border}50`,
+          top:0, bottom:0, background:bs.bg,
+          borderLeft:`3px solid ${bs.border}`,
           display:"flex", flexDirection:"column" as const,
-          alignItems:"center", justifyContent:"center",
-          overflow:"hidden",
+          alignItems:"center", justifyContent:"center", overflow:"hidden",
         }}>
-        {width >= 26 && (
-          <div style={{
-            fontSize:Math.min(compact?8:9, width/5),
-            fontWeight:700, color:bs.text, textAlign:"center" as const,
-            padding:"0 3px", whiteSpace:"nowrap" as const, overflow:"hidden", textOverflow:"ellipsis" as const,
-          }}>
-            {block.periodName}
+        {width >= 24 && (
+          <div style={{ fontSize:Math.min(compact?7.5:9, width/5), fontWeight:700, color:bs.text,
+            textAlign:"center" as const, padding:"0 3px", whiteSpace:"nowrap" as const,
+            overflow:"hidden", textOverflow:"ellipsis" as const }}>
+            {compact&&width<50 ? "" : block.periodName}
           </div>
         )}
-        {!compact && width >= 58 && (
-          <div style={{ fontSize:8, color:bs.text, opacity:0.7, fontFamily:"monospace", marginTop:1 }}>
+        {!compact && width >= 60 && (
+          <div style={{ fontSize:8, color:bs.text, opacity:0.65, fontFamily:"monospace", marginTop:1 }}>
             {fmtTime(block.startMin,"24h")}–{fmtTime(block.endMin,"24h")}
           </div>
         )}
@@ -372,19 +388,24 @@ function Block({
     return (
       <div style={{
         position:"absolute" as const, left:left+1, width:Math.max(width-2,1),
-        top: compact?1:3, bottom: compact?1:3,
-        background:"transparent",
+        top:compact?1:3, bottom:compact?1:3, background:"transparent",
       }} />
     )
   }
 
-  // ── Subject block ────────────────────────────────────────────────────
-  const col      = subjectColor(block.subject)
-  const showTch  = !compact && showTeacherVal && width >= 62 && !!block.teacher
-  const showRoom = !compact && showRoomVal    && width >= 90 && !!block.room && viewMode!=="room"
-  const showSec  = !compact && viewMode!=="class" && width >= 68 && !!block.sectionName
-  const fsSub    = compact ? (width<26?0:8.5) : (width<32?0:width<60?10:12)
-  const fsMeta   = compact ? 7.5 : 10.5
+  // ── Subject block — soft accent style ────────────────────────────────
+  const col     = subjectColor(block.subject)
+  const subDisp = shortNamesVal ? shortSubject(block.subject) : block.subject
+  const tchDisp = block.teacher ? (shortNamesVal ? shortPerson(block.teacher) : block.teacher) : ""
+  const rmDisp  = block.room    ? (shortNamesVal ? shortRoom(block.room)      : block.room)    : ""
+  const secDisp = block.sectionName ? (shortNamesVal ? shortRoom(block.sectionName) : block.sectionName) : ""
+
+  const showTch  = showTeacherVal && width >= 58 && !!tchDisp
+  const showRm   = showRoomVal    && width >= 80 && !!rmDisp && viewMode!=="room"
+  const showSec  = viewMode!=="class" && width >= 60 && !!secDisp
+  const showTm   = showTimeVal    && width >= 70
+  const fsSub    = compact ? (width<22?0:8) : (width<28?0:width<55?9.5:11)
+  const fsMeta   = compact ? 7 : 9.5
 
   return (
     <div
@@ -394,46 +415,55 @@ function Block({
       style={{
         position:"absolute" as const,
         left: left+1, width: Math.max(width-2, 2),
-        top: compact?2:4, bottom: compact?2:4,
-        background: col.bg, color: col.text,
-        borderRadius:5, overflow:"hidden",
-        cursor:"pointer", padding: width<30?"1px 2px": compact?"2px 6px":"4px 8px",
+        top: compact?2:3, bottom: compact?2:3,
+        background: col.bg,
+        borderLeft: `3px solid ${col.accent}`,
+        borderRadius: "0 5px 5px 0",
+        overflow:"hidden", cursor:"pointer",
+        padding: width<26?"1px 2px": compact?"2px 5px":"3px 7px",
         display:"flex", flexDirection:"column" as const, justifyContent:"center",
         outline: block.absent?"2px solid #F59E0B":block.isSub?"1.5px dashed #F59E0B":"none",
         userSelect:"none" as const,
+        boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
       }}>
+      {/* Subject name — in accent color */}
       {fsSub > 0 && (
         <div style={{
-          fontSize:fsSub, fontWeight:700, lineHeight:1.2,
+          fontSize:fsSub, fontWeight:700, lineHeight:1.2, color: col.accent,
           overflow:"hidden", textOverflow:"ellipsis" as const, whiteSpace:"nowrap" as const,
-        }}>{block.subject}</div>
+        }}>{subDisp}</div>
       )}
+      {/* Section (teacher/room views) */}
       {showSec && (
-        <div style={{
-          fontSize:fsMeta-0.5, fontWeight:800, opacity:0.88, marginTop:1,
-          textTransform:"uppercase" as const, letterSpacing:"0.03em",
-          overflow:"hidden", textOverflow:"ellipsis" as const, whiteSpace:"nowrap" as const,
-        }}>{block.sectionName}</div>
-      )}
-      {showTch && (
-        <div style={{
-          fontSize:fsMeta, opacity:0.87, marginTop:1,
-          overflow:"hidden", textOverflow:"ellipsis" as const, whiteSpace:"nowrap" as const,
-        }}>
-          {block.isSub?"🔄 ":block.isClassTeacher?"★ ":""}{block.teacher}
+        <div style={{ fontSize:fsMeta, fontWeight:700, color:"#374151", marginTop:1,
+          overflow:"hidden", textOverflow:"ellipsis" as const, whiteSpace:"nowrap" as const }}>
+          {secDisp}
         </div>
       )}
-      {showRoom && (
-        <div style={{
-          fontSize:fsMeta-0.5, opacity:0.72, marginTop:1, fontFamily:"monospace",
-          overflow:"hidden", textOverflow:"ellipsis" as const, whiteSpace:"nowrap" as const,
-        }}>{block.room}</div>
+      {/* Teacher */}
+      {showTch && (
+        <div style={{ fontSize:fsMeta, color:"#555", marginTop:1,
+          overflow:"hidden", textOverflow:"ellipsis" as const, whiteSpace:"nowrap" as const }}>
+          {block.isSub?"🔄 ":block.isClassTeacher?"★ ":""}{tchDisp}
+        </div>
+      )}
+      {/* Room */}
+      {showRm && (
+        <div style={{ fontSize:fsMeta-0.5, color:"#777", marginTop:1, fontFamily:"monospace",
+          overflow:"hidden", textOverflow:"ellipsis" as const, whiteSpace:"nowrap" as const }}>
+          {rmDisp}
+        </div>
+      )}
+      {/* Time */}
+      {showTm && (
+        <div style={{ fontSize:fsMeta-0.5, color:"#888", marginTop:1, fontFamily:"monospace",
+          whiteSpace:"nowrap" as const }}>
+          {fmtTime(block.startMin,"24h")}–{fmtTime(block.endMin,"24h")}
+        </div>
       )}
       {block.isSub && (
-        <span style={{
-          position:"absolute" as const, top:3, right:4,
-          width:5, height:5, borderRadius:"50%", background:"#F59E0B",
-        }} />
+        <span style={{ position:"absolute" as const, top:3, right:4,
+          width:5, height:5, borderRadius:"50%", background:"#F59E0B" }} />
       )}
     </div>
   )
@@ -445,7 +475,8 @@ function Block({
 export function CalendarView({
   classTT, periods, workDays, startTime, timeFormat="12h",
   staff, sections, substitutions, viewMode, selectedEntity,
-  showTeacher, showRoom, onCellClick, absentHighlights, classwiseBreaks,
+  showTeacher, showRoom, showTime=false, shortNames=false,
+  onCellClick, absentHighlights, classwiseBreaks,
 }: CalendarViewProps) {
 
   // ── State ────────────────────────────────────────────────────────────
@@ -671,7 +702,9 @@ export function CalendarView({
           left={(b.startMin-dayStartMin)*pxPerMin}
           width={(b.endMin-b.startMin)*pxPerMin}
           rowH={rowH} compact={compact}
-          showTeacherVal={showTeacher} showRoomVal={showRoom} viewMode={viewMode}
+          showTeacherVal={showTeacher} showRoomVal={showRoom}
+          showTimeVal={showTime} shortNamesVal={shortNames}
+          viewMode={viewMode}
           onHover={(bl,e)=>onHover(bl,e,dayKey)} onLeave={onLeave} onClick={bl=>onClick(bl,dayKey)}
         />
       ))}
@@ -762,11 +795,11 @@ export function CalendarView({
             {/* ── Entity rows ── */}
             {entityList.map((entity,ri)=>{
               const isAbsent=!!(absentHighlights?.some(h=>h.teacher===entity.id))
-              const rowBg = ri%2===0?"#FFFFFF":"#F6F8FF"
+              const rowBg = ri%2===0?"#FFFFFF":"#F8FAFC"
               return (
                 <div key={entity.id} style={{
                   display:"flex", height:rowH, background:rowBg,
-                  borderBottom:"1px solid #EEF2FF",
+                  borderBottom:"1px solid #CBD5E1",
                 }}>
                   {/* Entity label (sticky left) */}
                   <div style={{
@@ -895,11 +928,11 @@ export function CalendarView({
                   {grpEntities.map(entity=>
                     workDays.map((day,di)=>{
                       const ri = di
-                      const rowBg = ri%2===0?"#FFFFFF":"#F6F8FF"
+                      const rowBg = ri%2===0?"#FFFFFF":"#F8FAFC"
                       return (
                         <div key={`${entity.id}-${day}`} style={{
                           display:"flex", height:rowH, background:rowBg,
-                          borderBottom:"1px solid #EEF2FF",
+                          borderBottom:"1px solid #CBD5E1",
                         }}>
                           {/* Entity label (first day row only) */}
                           <div style={{
@@ -982,12 +1015,12 @@ export function CalendarView({
             {/* Day rows */}
             {workDays.map((day,ri)=>{
               const isT2=DOW_KEY[new Date().getDay()]===day
-              const rowBg=isT2?"#F5F2FF":ri%2===0?"#FFFFFF":"#F6F8FF"
+              const rowBg=isT2?"#F5F2FF":ri%2===0?"#FFFFFF":"#F8FAFC"
               const absent=!!(absentHighlights?.some(h=>h.day===day&&h.teacher===selectedEntity))
               return (
                 <div key={day} style={{
                   display:"flex", height:rowH, background:rowBg,
-                  borderBottom:"1px solid #EEF2FF",
+                  borderBottom:"1px solid #CBD5E1",
                 }}>
                   {/* Day label (sticky) */}
                   <div style={{

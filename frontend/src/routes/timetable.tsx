@@ -482,6 +482,9 @@ export function TimetablePage() {
   const [swappedPeriodIds, setSwappedPeriodIds] = useState<[string,string]|null>(null)
   const [mainMode, setMainMode] = useState<"traditional"|"calendar">("traditional")
   const [showExportMenu, setShowExportMenu] = useState(false)
+  const [showTime, setShowTime] = useState(false)
+  const [shortNames, setShortNames] = useState(false)
+  const [showInsights, setShowInsights] = useState(false)
   const [viewMode, setViewMode] = useState<ViewMode>("class")
   const [transposed, setTransposed] = useState(false)
   const [selectedEntity, setSelectedEntity] = useState<string>("ALL")
@@ -1880,11 +1883,8 @@ export function TimetablePage() {
   // RENDER: Calendar View — real month/week/day calendar
   // ═══════════════════════════════════════════════════════════
   const renderCalendarView = (entityFilter: string) => {
-    // Derive viewMode for the calendar entity filter
-    const calEntityMode: "class" | "teacher" | "subject" | "room" =
-      staff.some(s => s.name === entityFilter) ? "teacher" :
-      subjects.some(s => s.name === entityFilter) ? "subject" :
-      allRooms.includes(entityFilter) ? "room" : "class"
+    // Always use the active viewMode tab — fixes teacher/room/subject calendar views
+    const calEntityMode = viewMode
 
     const absentHL = subPanelOpen && subAbsentTeacher
       ? { teacher: subAbsentTeacher, day: subAbsentDay }
@@ -1906,6 +1906,8 @@ export function TimetablePage() {
         selectedEntity={entityFilter}
         showTeacher={showTeacher}
         showRoom={showRoom}
+        showTime={showTime}
+        shortNames={shortNames}
         blockedSlots={(store as any).blockedSlots ?? []}
         dynamicLearningGroups={(store as any).dynamicLearningGroups ?? []}
         rooms={(store as any).rooms ?? []}
@@ -2218,48 +2220,9 @@ export function TimetablePage() {
     : undefined
 
   return (
-    <div style={{ display:"flex", height:"calc(100vh - 52px)", background:"#F8F7FF" }}>
+    <div style={{ display:"flex", height:"calc(100vh - 52px)", background:"#F8FAFC", position:"relative" as const }}>
 
-      {/* ── Left sidebar ─────────────────────────────────── */}
-      <div style={{ width:184, background:"#fff", borderRight:"1px solid #E8E4FF", padding:"12px", overflowY:"auto", flexShrink:0 }}>
-        <div style={{ fontSize:10, fontWeight:700, textTransform:"uppercase" as const, letterSpacing:"0.08em", color:"#8B87AD", marginBottom:8 }}>Subject Colors</div>
-        {subjects.map(s => {
-          const cc = getSubjectColor(s.name)
-          return <div key={s.id} className={cc} style={{ display:"flex", alignItems:"center", gap:6, padding:"4px 8px", borderRadius:5, marginBottom:3, fontSize:11 }}><span style={{ fontWeight:600 }}>{s.name}</span></div>
-        })}
-
-        <div style={{ fontSize:10, fontWeight:700, textTransform:"uppercase" as const, letterSpacing:"0.08em", color:"#8B87AD", margin:"14px 0 8px" }}>Legend</div>
-        {[
-          { label:"Assembly/Start",  bg:"#dbeafe", color:"#1e40af" },
-          { label:"Break",            bg:"#fef9c3", color:"#854d0e" },
-          { label:"Lunch",            bg:"#fef3c7", color:"#92400e" },
-          { label:"Dispersal/End",   bg:"#EDE9FF", color:"#065f46" },
-          { label:"Substituted",     bg:"#fff7ed", color:"#c2410c", border:"2px dashed #f59e0b" },
-          { label:"★ Class Teacher", bg:"#f0fdf4", color:"#7C6FE0" },
-        ].map(s => <div key={s.label} style={{ display:"flex", alignItems:"center", gap:6, padding:"4px 8px", borderRadius:5, marginBottom:3, background:s.bg, color:s.color, fontSize:10, border:(s as any).border }}>{s.label}</div>)}
-
-        <div style={{ fontSize:10, fontWeight:700, textTransform:"uppercase" as const, letterSpacing:"0.08em", color:"#8B87AD", margin:"14px 0 8px" }}>Staff Workload</div>
-        {staff.slice(0,10).map(st => {
-          const total = Object.values(teacherTT[st.name]?.schedule ?? {}).reduce((a,d) => a + Object.values(d).filter(x=>x?.subject).length, 0)
-          const max = st.maxPeriodsPerWeek ?? country.maxPeriodsWeek
-          const pct = Math.min(100, Math.round(total/max*100))
-          const color = pct>90?"#dc2626":pct>75?"#D4920E":"#7C6FE0"
-          return (
-            <div key={st.id} style={{ marginBottom:6 }}>
-              <div style={{ display:"flex", justifyContent:"space-between", fontSize:10, marginBottom:2 }}>
-                <span style={{ color:"#475569", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const, maxWidth:110 }}>{st.name}</span>
-                <span style={{ color, fontFamily:"monospace", fontWeight:600, flexShrink:0 }}>{total}/{max}</span>
-              </div>
-              <div style={{ height:3, background:"#E8E4FF", borderRadius:2 }}>
-                <div style={{ height:"100%", width:`${pct}%`, background:color, borderRadius:2 }} />
-              </div>
-            </div>
-          )
-        })}
-
-      </div>
-
-      {/* ── Main area ─────────────────────────────────────── */}
+      {/* ── Main area (full width) ────────────────────────── */}
       <div style={{ flex:1, display:"flex", flexDirection:"column" as const, overflow:"hidden" }}>
 
         {/* ══ Main Navigation Bar ══════════════════════════════════════ */}
@@ -2426,6 +2389,15 @@ export function TimetablePage() {
             )}
           </div>
 
+          {/* ── Insights ── */}
+          <div style={{ display:"flex", alignItems:"center", padding:"0 8px", borderRight:"1px solid #E5EBF5" }}>
+            <button onClick={() => setShowInsights(v=>!v)}
+              style={{ display:"flex", alignItems:"center", gap:4, padding:"5px 11px", border:`1px solid ${showInsights?"#7C6FE0":"#E5EBF5"}`, borderRadius:6,
+                background:showInsights?"#EDE9FF":"#fff", color:showInsights?"#7C6FE0":"#64748b", fontSize:11, fontWeight:showInsights?700:400, cursor:"pointer" }}>
+              📊 Insights
+            </button>
+          </div>
+
           {/* ── Publish ── */}
           <div style={{ display:"flex", alignItems:"center", paddingLeft:8 }}>
             {timetableStatus === "published" ? (
@@ -2455,6 +2427,8 @@ export function TimetablePage() {
             <div style={{ width:1, height:18, background:"#CBD5E1" }} />
             {TBtn(showTeacher, () => setShowTeacher(!showTeacher), "Teacher", "👤")}
             {TBtn(showRoom,    () => setShowRoom(!showRoom),       "Room",    "🚪")}
+            {TBtn(showTime,    () => setShowTime(!showTime),       "Time",    "⏱")}
+            {TBtn(shortNames,  () => setShortNames(!shortNames),   "Short",   "⇥")}
             <div style={{ width:1, height:18, background:"#CBD5E1" }} />
             {TBtn(editMode, () => setEditMode(!editMode), editMode ? "✏️ Editing" : "✏️ Edit")}
             <button onClick={() => setSubPanelOpen(o => !o)}
@@ -2711,6 +2685,71 @@ export function TimetablePage() {
 
       {/* ── Period Pool Panel ────────────────────────────── */}
       {poolPanelOpen && renderPoolPanel()}
+
+      {/* ── Insights Panel (slide-in from right) ─────────── */}
+      {showInsights && (
+        <div style={{
+          position:"fixed" as const, top:0, right:0, bottom:0, width:300, zIndex:500,
+          background:"#fff", borderLeft:"1px solid #E5EBF5",
+          boxShadow:"-6px 0 24px rgba(0,0,0,0.10)",
+          display:"flex", flexDirection:"column" as const, overflowY:"auto" as const,
+        }}>
+          <div style={{ padding:"14px 16px", borderBottom:"1px solid #E5EBF5", display:"flex", justifyContent:"space-between", alignItems:"center", background:"#F8FAFC", flexShrink:0 }}>
+            <div style={{ fontSize:14, fontWeight:800, color:"#1e293b" }}>📊 Insights</div>
+            <button onClick={() => setShowInsights(false)} style={{ border:"none", background:"none", fontSize:18, color:"#94A3B8", cursor:"pointer", lineHeight:1 }}>×</button>
+          </div>
+          <div style={{ padding:"14px 16px", flex:1 }}>
+
+            {/* Conflicts */}
+            <div style={{ fontSize:10, fontWeight:700, color:"#94A3B8", textTransform:"uppercase" as const, letterSpacing:"0.07em", marginBottom:8 }}>Conflicts</div>
+            {conflicts.length === 0 ? (
+              <div style={{ fontSize:12, color:"#10B981", fontWeight:600, marginBottom:16 }}>✓ No conflicts</div>
+            ) : (
+              <div style={{ marginBottom:16 }}>
+                {conflicts.map((c, i) => (
+                  <div key={i} style={{ fontSize:11, color:"#c2410c", padding:"4px 0", borderBottom:"1px solid #FEE2E2" }}>{c.message}</div>
+                ))}
+              </div>
+            )}
+
+            {/* Legend */}
+            <div style={{ fontSize:10, fontWeight:700, color:"#94A3B8", textTransform:"uppercase" as const, letterSpacing:"0.07em", marginBottom:8 }}>Legend</div>
+            <div style={{ marginBottom:16 }}>
+              {[
+                { label:"Assembly / Start", bg:"#F5F2FF", border:"#C4B5FD", color:"#6D28D9" },
+                { label:"Break",             bg:"#FEFCE8", border:"#FDE68A", color:"#92400E" },
+                { label:"Lunch Break",       bg:"#FFFBEB", border:"#F6D860", color:"#92400E" },
+                { label:"Substituted",       bg:"#FFF7ED", border:"#F59E0B", color:"#C2410C" },
+                { label:"★ Class Teacher",   bg:"#F0FDF4", border:"#86EFAC", color:"#166534" },
+              ].map(s => (
+                <div key={s.label} style={{ display:"flex", alignItems:"center", gap:6, padding:"4px 8px", borderRadius:5, marginBottom:4, background:s.bg, borderLeft:`3px solid ${s.border}`, fontSize:11, color:s.color, fontWeight:500 }}>
+                  {s.label}
+                </div>
+              ))}
+            </div>
+
+            {/* Staff Workload */}
+            <div style={{ fontSize:10, fontWeight:700, color:"#94A3B8", textTransform:"uppercase" as const, letterSpacing:"0.07em", marginBottom:8 }}>Staff Workload</div>
+            {staff.map(st => {
+              const total = Object.values(teacherTT[st.name]?.schedule ?? {}).reduce((a,d) => a + Object.values(d).filter(x=>x?.subject).length, 0)
+              const max   = st.maxPeriodsPerWeek ?? country.maxPeriodsWeek
+              const pct   = Math.min(100, Math.round(total/max*100))
+              const color = pct>100?"#dc2626":pct>90?"#ea580c":pct>75?"#D4920E":"#10B981"
+              return (
+                <div key={st.id} style={{ marginBottom:8 }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, marginBottom:3 }}>
+                    <span style={{ color:"#374151", overflow:"hidden", textOverflow:"ellipsis" as const, whiteSpace:"nowrap" as const, maxWidth:190 }}>{st.name}</span>
+                    <span style={{ color, fontFamily:"monospace", fontWeight:700, flexShrink:0, fontSize:11 }}>{total}/{max}</span>
+                  </div>
+                  <div style={{ height:4, background:"#E5EBF5", borderRadius:3 }}>
+                    <div style={{ height:"100%", width:`${Math.min(pct,100)}%`, background:color, borderRadius:3, transition:"width 0.3s" }} />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {editTarget && (
         <EditCellModal
