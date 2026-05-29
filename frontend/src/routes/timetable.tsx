@@ -7,7 +7,7 @@ import { shiftPeriod, rebuildTeacherTT } from "@/lib/aiEngine"
 import { useExport } from "@/hooks/useExport"
 import type { Period } from "@/types"
 
-type ViewMode = "class" | "teacher" | "subject" | "room" | "calendar"
+type ViewMode = "class" | "teacher" | "subject" | "room"
 
 const DAY_SHORT: Record<string,string> = {
   MONDAY:"Mon",TUESDAY:"Tue",WEDNESDAY:"Wed",THURSDAY:"Thu",
@@ -480,6 +480,8 @@ export function TimetablePage() {
   } | null>(null)
   const [swapScope,        setSwapScope]        = useState<"section"|"class"|"all">("all")
   const [swappedPeriodIds, setSwappedPeriodIds] = useState<[string,string]|null>(null)
+  const [mainMode, setMainMode] = useState<"traditional"|"calendar">("traditional")
+  const [showExportMenu, setShowExportMenu] = useState(false)
   const [viewMode, setViewMode] = useState<ViewMode>("class")
   const [transposed, setTransposed] = useState(false)
   const [selectedEntity, setSelectedEntity] = useState<string>("ALL")
@@ -516,6 +518,19 @@ export function TimetablePage() {
   const [subActiveTab, setSubActiveTab] = useState<"assign"|"active">("assign")
 
   const { exportXLSX } = useExport()
+
+  // ── PDF print trigger ────────────────────────────────────
+  const triggerPrint = (type: "class"|"teacher"|"room", scope: "combined"|"individual") => {
+    // Store print params in sessionStorage, then open a print-specific page/window
+    // For now we use window.print() after setting a data attribute for CSS targeting
+    document.body.setAttribute("data-print-type", type)
+    document.body.setAttribute("data-print-scope", scope)
+    window.print()
+    setTimeout(() => {
+      document.body.removeAttribute("data-print-type")
+      document.body.removeAttribute("data-print-scope")
+    }, 1000)
+  }
 
   const org = ORG_CONFIGS[config.orgType ?? "school"]
   const country = getCountry(config.countryCode ?? "IN")
@@ -2192,12 +2207,11 @@ export function TimetablePage() {
   )
 
   const entities = getEntityList()
-  const VIEW_TABS: { key: ViewMode; icon: string; label: string }[] = [
-    { key:"class",    icon:"📚", label:org.sectionLabel },
-    { key:"teacher",  icon:"👤", label:org.staffLabel },
-    { key:"subject",  icon:"📖", label:"Subject" },
-    { key:"room",     icon:"🚪", label:"Room" },
-    { key:"calendar", icon:"📅", label:"Calendar" },
+  const VIEW_TABS: { key: ViewMode; label: string }[] = [
+    { key:"class",   label: org.sectionLabel || "Section" },
+    { key:"teacher", label: org.staffLabel   || "Faculty"  },
+    { key:"room",    label: "Room"  },
+    { key:"subject", label: "Subject" },
   ]
 
   const absentHighlightProp = subPanelOpen && subAbsentTeacher
@@ -2249,166 +2263,261 @@ export function TimetablePage() {
       {/* ── Main area ─────────────────────────────────────── */}
       <div style={{ flex:1, display:"flex", flexDirection:"column" as const, overflow:"hidden" }}>
 
-        {/* Timetable name + date banner */}
-        {(config.timetableName || config.timetableStartDate) && (
-          <div style={{ background: timetableStatus==="published"?"#f0fdf4":"#fffbeb", borderBottom:`1px solid ${timetableStatus==="published"?"#D8D2FF":"#fde68a"}`, padding:"6px 16px", display:"flex", alignItems:"center", gap:12, flexShrink:0 }}>
-            <span style={{ fontSize:13, fontWeight:700, color: timetableStatus==="published"?"#065f46":"#92400e" }}>
-              {config.timetableName || "Timetable"}
-            </span>
-            {config.timetableStartDate && config.timetableEndDate && (
-              <span style={{ fontSize:11, color:"#4B5275" }}>
-                {new Date(config.timetableStartDate).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"})}
-                {" – "}
-                {new Date(config.timetableEndDate).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"})}
-              </span>
-            )}
-            <span style={{ fontSize:10, fontWeight:600, padding:"2px 8px", borderRadius:10, background: timetableStatus==="published"?"#EDE9FF":"#fef9c3", color: timetableStatus==="published"?"#166534":"#854d0e", border:`1px solid ${timetableStatus==="published"?"#D8D2FF":"#fde047"}` }}>
-              {timetableStatus === "published" ? "🔒 Published" : "📋 Draft"}
-            </span>
-          </div>
-        )}
-
-        {/* Toolbar row 1 — view mode + entity selector */}
-        <div style={{ background:"#fff", borderBottom:"1px solid #E8E4FF", padding:"8px 16px", display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" as const }}>
-
-          {/* Transpose — hidden for calendar */}
-          {viewMode !== "calendar" && (
-            <div style={{ display:"flex", border:"1px solid #E8E4FF", borderRadius:7, overflow:"hidden" }}>
-              <button onClick={() => setTransposed(false)} style={{ padding:"5px 12px", border:"none", background:!transposed?"#7C6FE0":"#fff", color:!transposed?"#fff":"#4B5275", fontSize:11, fontWeight:500, cursor:"pointer" }}>☰ Normal</button>
-              <button onClick={() => setTransposed(true)}  style={{ padding:"5px 12px", border:"none", background:transposed?"#7C6FE0":"#fff",  color:transposed?"#fff":"#4B5275",  fontSize:11, fontWeight:500, cursor:"pointer" }}>⊞ Transposed</button>
+        {/* ══ Main Navigation Bar ══════════════════════════════════════ */}
+        <div style={{
+          background:"#fff", borderBottom:"1px solid #E5EBF5",
+          display:"flex", alignItems:"stretch", height:50, flexShrink:0,
+          padding:"0 12px", gap:0,
+        }}>
+          {/* ── Left: back + name ── */}
+          <div style={{ display:"flex", alignItems:"center", gap:8, paddingRight:12, borderRight:"1px solid #E5EBF5", flexShrink:0 }}>
+            <button onClick={() => window.location.href="/wizard"}
+              style={{ width:28, height:28, border:"1px solid #E5EBF5", borderRadius:6, background:"#fff", cursor:"pointer", fontSize:14, color:"#64748b", display:"flex", alignItems:"center", justifyContent:"center" }}>
+              ←
+            </button>
+            <div style={{ maxWidth:180 }}>
+              <div style={{ fontSize:13, fontWeight:700, color:"#1e293b", overflow:"hidden", textOverflow:"ellipsis" as const, whiteSpace:"nowrap" as const }}>
+                {config.timetableName || "Timetable"}
+              </div>
+              {config.timetableStartDate && config.timetableEndDate && (
+                <div style={{ fontSize:9.5, color:"#94A3B8" }}>
+                  {new Date(config.timetableStartDate).toLocaleDateString("en-GB",{day:"numeric",month:"short"})}
+                  {" – "}
+                  {new Date(config.timetableEndDate).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"})}
+                </div>
+              )}
             </div>
-          )}
+          </div>
 
-          <div style={{ width:1, height:20, background:"#E8E4FF" }} />
-
-          {/* View mode tabs */}
-          <div style={{ display:"flex", border:"1px solid #E8E4FF", borderRadius:7, overflow:"hidden" }}>
+          {/* ── Center: entity-type tabs ── */}
+          <div style={{ display:"flex", alignItems:"stretch", marginLeft:4 }}>
             {VIEW_TABS.map(v => (
-              <button key={v.key} onClick={() => { setViewMode(v.key); setSelectedEntity("ALL"); setTransposed(false) }}
-                style={{ padding:"5px 12px", border:"none", background:viewMode===v.key?"#7C6FE0":"#fff", color:viewMode===v.key?"#fff":"#4B5275", fontSize:11, fontWeight:500, cursor:"pointer", display:"flex", alignItems:"center", gap:4 }}>
-                {v.icon} {v.label}
+              <button key={v.key}
+                onClick={() => { setViewMode(v.key as ViewMode); setSelectedEntity("ALL"); setTransposed(false) }}
+                style={{
+                  padding:"0 16px", height:"100%", border:"none", background:"none",
+                  cursor:"pointer", fontSize:12.5,
+                  fontWeight: viewMode===v.key ? 700 : 400,
+                  color: viewMode===v.key ? "#1e293b" : "#64748b",
+                  borderBottom: viewMode===v.key ? "2.5px solid #1e293b" : "2.5px solid transparent",
+                  whiteSpace:"nowrap" as const,
+                }}>
+                {v.label}
               </button>
             ))}
           </div>
 
-          {/* Entity selector */}
-          <select value={selectedEntity} onChange={e => setSelectedEntity(e.target.value)}
-            style={{ padding:"5px 10px", border:"1px solid #E8E4FF", borderRadius:6, fontSize:11, background:"#fff", cursor:"pointer", outline:"none", maxWidth:160 }}>
-            {entities.map(e => <option key={e} value={e}>{e === "ALL" ? `All ${VIEW_TABS.find(v=>v.key===viewMode)?.label ?? ""}s` : e}</option>)}
-          </select>
-
-          <div style={{ width:1, height:20, background:"#E8E4FF" }} />
-
-          {/* Visibility toggles */}
-          {TBtn(showTeacher, () => setShowTeacher(!showTeacher), "Teacher", "👤")}
-          {TBtn(showRoom,    () => setShowRoom(!showRoom),       "Room",    "🚪")}
-
-          <div style={{ width:1, height:20, background:"#E8E4FF" }} />
-
-          {/* Edit + Substitution */}
-          {TBtn(editMode, () => setEditMode(!editMode), editMode ? "✏️ Editing" : "✏️ Edit")}
-          <button onClick={() => setSubPanelOpen(o => !o)}
-            style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 12px", borderRadius:6, border:`1px solid ${subPanelOpen?"#f59e0b":"#fbbf24"}`, background:subPanelOpen?"#fff7ed":"#fffbeb", color:"#92400e", fontSize:11, fontWeight:600, cursor:"pointer" }}>
-            🔄 Substitution{activeSubCount > 0 ? ` (${activeSubCount})` : ""}
-          </button>
-          <button onClick={() => setPoolPanelOpen(o => !o)}
-            style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 12px", borderRadius:6, border:`1px solid ${poolPanelOpen?"#7C6FE0":"#D8D2FF"}`, background:poolPanelOpen?"#EDE9FF":"#fff", color:poolPanelOpen?"#4338ca":"#6D64C0", fontSize:11, fontWeight:600, cursor:"pointer" }}>
-            📦 Pool{poolTotalDeficit > 0 ? ` (${poolTotalDeficit})` : ""}
-          </button>
+          {/* Entity dropdown */}
+          <div style={{ display:"flex", alignItems:"center", marginLeft:6 }}>
+            <select value={selectedEntity} onChange={e => setSelectedEntity(e.target.value)}
+              style={{
+                padding:"5px 10px", border:"1px solid #E5EBF5", borderRadius:6,
+                fontSize:12, background:"#fff", color:"#374151",
+                cursor:"pointer", outline:"none", minWidth:150, maxWidth:200,
+              }}>
+              {entities.map(e => (
+                <option key={e} value={e}>
+                  {e === "ALL" ? `All ${VIEW_TABS.find(v=>v.key===viewMode)?.label ?? ""}s` : e}
+                </option>
+              ))}
+            </select>
+          </div>
 
           <div style={{ flex:1 }} />
 
-          {/* Draft / Publish status */}
-          {timetableStatus === "published" ? (
-            <span style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 12px", borderRadius:6, border:"1px solid #D8D2FF", background:"#f0fdf4", color:"#7C6FE0", fontSize:11, fontWeight:700 }}>
-              🔒 Published
-            </span>
-          ) : (
-            <button onClick={() => setPublishConfirm(true)}
-              style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 12px", borderRadius:6, border:"1px solid #fcd34d", background:"#fffbeb", color:"#92400e", fontSize:11, fontWeight:700, cursor:"pointer" }}>
-              📋 Draft · Publish
+          {/* ── Traditional / Calendar toggle ── */}
+          <div style={{ display:"flex", alignItems:"center", gap:4, paddingRight:8, borderRight:"1px solid #E5EBF5" }}>
+            <div style={{ display:"flex", border:"1px solid #E5EBF5", borderRadius:6, overflow:"hidden" }}>
+              <button onClick={() => setMainMode("traditional")}
+                style={{ padding:"5px 12px", border:"none", cursor:"pointer", fontSize:11, fontWeight:500,
+                  background: mainMode==="traditional" ? "#1e293b" : "#fff",
+                  color:      mainMode==="traditional" ? "#fff"    : "#64748b" }}>
+                ⊞ Traditional
+              </button>
+              <button onClick={() => setMainMode("calendar")}
+                style={{ padding:"5px 12px", border:"none", cursor:"pointer", fontSize:11, fontWeight:500,
+                  background: mainMode==="calendar" ? "#1e293b" : "#fff",
+                  color:      mainMode==="calendar" ? "#fff"    : "#64748b" }}>
+                📅 Calendar
+              </button>
+            </div>
+          </div>
+
+          {/* ── Undo / Redo ── */}
+          <div style={{ display:"flex", alignItems:"center", gap:2, padding:"0 8px", borderRight:"1px solid #E5EBF5" }}>
+            <button
+              disabled={!classTTHistory.length}
+              onClick={() => {
+                if (!classTTHistory.length) return
+                const prev = classTTHistory[classTTHistory.length-1]
+                setClassTTFuture(f=>[classTT,...f.slice(0,49)])
+                setClassTTHistory(h=>h.slice(0,-1))
+                setClassTT(prev)
+                const ntt={...teacherTT}; rebuildTeacherTT(prev,ntt,config.workDays); setTeacherTT(ntt)
+              }}
+              title="Undo (Ctrl+Z)"
+              style={{ width:30, height:30, border:"1px solid #E5EBF5", borderRadius:6, background:"#fff", cursor:classTTHistory.length?"pointer":"default", fontSize:14, color:classTTHistory.length?"#374151":"#CBD5E1", display:"flex", alignItems:"center", justifyContent:"center" }}>
+              ↩
             </button>
-          )}
+            <button
+              disabled={!classTTFuture.length}
+              onClick={() => {
+                if (!classTTFuture.length) return
+                const next = classTTFuture[0]
+                setClassTTHistory(h=>[...h.slice(-49),classTT])
+                setClassTTFuture(f=>f.slice(1))
+                setClassTT(next)
+                const ntt={...teacherTT}; rebuildTeacherTT(next,ntt,config.workDays); setTeacherTT(ntt)
+              }}
+              title="Redo (Ctrl+Y)"
+              style={{ width:30, height:30, border:"1px solid #E5EBF5", borderRadius:6, background:"#fff", cursor:classTTFuture.length?"pointer":"default", fontSize:14, color:classTTFuture.length?"#374151":"#CBD5E1", display:"flex", alignItems:"center", justifyContent:"center" }}>
+              ↪
+            </button>
+          </div>
 
-          {/* Export */}
-          <button onClick={exportXLSX} style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 12px", borderRadius:6, border:"1px solid #E8E4FF", background:"#fff", color:"#4B5275", fontSize:11, cursor:"pointer" }}>📊 Excel</button>
-          <button onClick={() => window.print()} style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 12px", borderRadius:6, border:"1px solid #E8E4FF", background:"#fff", color:"#4B5275", fontSize:11, cursor:"pointer" }}>🖨️ Print/PDF</button>
-          <button onClick={() => window.location.href="/wizard"} style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 12px", borderRadius:6, border:"1px solid #E8E4FF", background:"#fff", color:"#4B5275", fontSize:11, cursor:"pointer" }}>← Wizard</button>
+          {/* ── Export dropdown ── */}
+          <div style={{ display:"flex", alignItems:"center", padding:"0 8px", borderRight:"1px solid #E5EBF5", position:"relative" as const }}>
+            <button onClick={() => setShowExportMenu(m=>!m)}
+              style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 12px", border:"1px solid #E5EBF5", borderRadius:6, background:"#fff", color:"#374151", fontSize:11.5, fontWeight:600, cursor:"pointer" }}>
+              ↑ Export ▾
+            </button>
+            {showExportMenu && (
+              <div onClick={e=>e.stopPropagation()}
+                style={{ position:"absolute" as const, top:"calc(100% + 4px)", right:0, zIndex:200,
+                  background:"#fff", border:"1px solid #E5EBF5", borderRadius:10,
+                  boxShadow:"0 8px 30px rgba(0,0,0,0.12)", minWidth:240, padding:"6px 0" }}>
+                {/* Excel exports */}
+                <div style={{ padding:"6px 14px 4px", fontSize:10, fontWeight:700, color:"#94A3B8", textTransform:"uppercase" as const, letterSpacing:"0.08em" }}>
+                  Excel Export
+                </div>
+                {[
+                  ["Class-wise (Days in Tabs)",       ()=>exportXLSX("class-day")],
+                  ["Class-wise (Classes in Tabs)",     ()=>exportXLSX("class-class")],
+                  ["Teacher-wise (Days in Tabs)",      ()=>exportXLSX("teacher-day")],
+                  ["Teacher-wise (Teachers in Tabs)", ()=>exportXLSX("teacher-teacher")],
+                  ["Room-wise (Days in Tabs)",         ()=>exportXLSX("room-day")],
+                  ["Room-wise (Rooms in Tabs)",        ()=>exportXLSX("room-room")],
+                ].map(([label, fn]) => (
+                  <button key={label as string}
+                    onClick={() => { (fn as ()=>void)(); setShowExportMenu(false) }}
+                    style={{ display:"flex", alignItems:"center", gap:8, width:"100%", padding:"7px 14px", border:"none", background:"none", textAlign:"left" as const, fontSize:12, color:"#374151", cursor:"pointer" }}>
+                    <span style={{ fontSize:14 }}>📊</span> {label as string}
+                  </button>
+                ))}
+                <div style={{ height:1, background:"#E5EBF5", margin:"6px 0" }} />
+                {/* PDF exports */}
+                <div style={{ padding:"4px 14px 4px", fontSize:10, fontWeight:700, color:"#94A3B8", textTransform:"uppercase" as const, letterSpacing:"0.08em" }}>
+                  PDF Export
+                </div>
+                {[
+                  ["Class-wise (Combined)",    ()=>triggerPrint("class","combined")],
+                  ["Class-wise (Individual)",  ()=>triggerPrint("class","individual")],
+                  ["Teacher-wise (Combined)",  ()=>triggerPrint("teacher","combined")],
+                  ["Teacher-wise (Individual)",()=>triggerPrint("teacher","individual")],
+                  ["Room-wise (Combined)",     ()=>triggerPrint("room","combined")],
+                  ["Room-wise (Individual)",   ()=>triggerPrint("room","individual")],
+                ].map(([label, fn]) => (
+                  <button key={label as string}
+                    onClick={() => { (fn as ()=>void)(); setShowExportMenu(false) }}
+                    style={{ display:"flex", alignItems:"center", gap:8, width:"100%", padding:"7px 14px", border:"none", background:"none", textAlign:"left" as const, fontSize:12, color:"#374151", cursor:"pointer" }}>
+                    <span style={{ fontSize:14 }}>📄</span> {label as string}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
-          {/* Conflicts badge */}
-          <span style={{ padding:"4px 10px", borderRadius:20, fontSize:10, fontWeight:600, background:conflicts.length===0?"#f0fdf4":"#fff7ed", color:conflicts.length===0?"#7C6FE0":"#c2410c", border:`1px solid ${conflicts.length===0?"#D8D2FF":"#fed7aa"}` }}>
-            {conflicts.length===0 ? "✅ 0 conflicts" : `⚠️ ${conflicts.length} conflict${conflicts.length>1?"s":""}`}
-          </span>
+          {/* ── Publish ── */}
+          <div style={{ display:"flex", alignItems:"center", paddingLeft:8 }}>
+            {timetableStatus === "published" ? (
+              <span style={{ padding:"5px 12px", borderRadius:6, border:"1px solid #D8D2FF", background:"#f0fdf4", color:"#166534", fontSize:11, fontWeight:700 }}>
+                🔒 Saved
+              </span>
+            ) : (
+              <button onClick={() => setPublishConfirm(true)}
+                style={{ padding:"5px 14px", borderRadius:6, border:"none", background:"#7C6FE0", color:"#fff", fontSize:11, fontWeight:700, cursor:"pointer" }}>
+                Publish
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* Timetable content */}
-        <div
-          style={{ flex:1, overflowY: viewMode === "calendar" ? "hidden" : "auto", padding:20, display: viewMode === "calendar" ? "flex" : "block", flexDirection: "column" as const, position:"relative" as const }}>
-
-          {/* ── Floating undo/redo pill — appears on change, hides on click/Escape ── */}
-          {showUndoRedo && (classTTHistory.length > 0 || classTTFuture.length > 0) && viewMode !== "calendar" && (
-            <div style={{
-              position:"sticky" as const, top:0, zIndex:40,
-              display:"flex", justifyContent:"center",
-              pointerEvents:"none",
-              marginBottom:8,
-            }}>
-              <div ref={undoPillRef}
-                style={{
-                display:"inline-flex", alignItems:"center", gap:2,
-                background:"rgba(255,255,255,0.88)", backdropFilter:"blur(8px)",
-                border:"1px solid rgba(124,111,224,0.25)", borderRadius:20,
-                boxShadow:"0 2px 12px rgba(124,111,224,0.15)",
-                padding:"4px 6px",
-                pointerEvents:"auto",
-                opacity: 0.92,
-                transition:"opacity 0.2s",
-              }}>
-                <button onClick={() => {
-                  if (!classTTHistory.length) return
-                  const prev = classTTHistory[classTTHistory.length - 1]
-                  const newHistory = classTTHistory.slice(0,-1)
-                  setClassTTFuture(f => [classTT, ...f.slice(0,49)])
-                  setClassTTHistory(newHistory)
-                  setClassTT(prev)
-                  // keep pill visible only while more history remains
-                  if (!newHistory.length && !classTTFuture.length) setShowUndoRedo(false)
-                  const ntt = { ...teacherTT }; rebuildTeacherTT(prev, ntt, config.workDays); setTeacherTT(ntt)
-                }} disabled={!classTTHistory.length}
-                  title="Undo (Ctrl+Z)"
-                  style={{ display:"flex", alignItems:"center", gap:4, padding:"4px 12px", borderRadius:14, border:"none",
-                    background: classTTHistory.length?"rgba(124,111,224,0.12)":"transparent",
-                    color: classTTHistory.length?"#4338ca":"#c4c0d8",
-                    fontSize:11, fontWeight:600, cursor:classTTHistory.length?"pointer":"default",
-                    transition:"background 0.15s" }}>
-                  <span style={{ fontSize:13 }}>↩</span> Undo {classTTHistory.length > 0 && <span style={{ fontSize:9, opacity:0.6, marginLeft:1 }}>({classTTHistory.length})</span>}
-                </button>
-                <div style={{ width:1, height:16, background:"rgba(124,111,224,0.2)" }} />
-                <button onClick={() => {
-                  if (!classTTFuture.length) return
-                  const next = classTTFuture[0]
-                  const newFuture = classTTFuture.slice(1)
-                  setClassTTHistory(h => [...h.slice(-49), classTT])
-                  setClassTTFuture(newFuture)
-                  setClassTT(next)
-                  if (!newFuture.length && !classTTHistory.length) setShowUndoRedo(false)
-                  const ntt = { ...teacherTT }; rebuildTeacherTT(next, ntt, config.workDays); setTeacherTT(ntt)
-                }} disabled={!classTTFuture.length}
-                  title="Redo (Ctrl+Y)"
-                  style={{ display:"flex", alignItems:"center", gap:4, padding:"4px 12px", borderRadius:14, border:"none",
-                    background: classTTFuture.length?"rgba(124,111,224,0.12)":"transparent",
-                    color: classTTFuture.length?"#4338ca":"#c4c0d8",
-                    fontSize:11, fontWeight:600, cursor:classTTFuture.length?"pointer":"default",
-                    transition:"background 0.15s" }}>
-                  <span style={{ fontSize:13 }}>↪</span> Redo
-                </button>
-              </div>
+        {/* ══ Secondary toolbar (Traditional mode only) ════════════════ */}
+        {mainMode === "traditional" && (
+          <div style={{
+            background:"#F8FAFC", borderBottom:"1px solid #E5EBF5",
+            padding:"6px 14px", display:"flex", alignItems:"center", gap:6, flexShrink:0, flexWrap:"wrap" as const,
+          }}>
+            {/* Normal / Transposed */}
+            <div style={{ display:"flex", border:"1px solid #E5EBF5", borderRadius:6, overflow:"hidden" }}>
+              <button onClick={() => setTransposed(false)} style={{ padding:"4px 11px", border:"none", background:!transposed?"#374151":"#fff", color:!transposed?"#fff":"#64748b", fontSize:11, fontWeight:500, cursor:"pointer" }}>☰ Normal</button>
+              <button onClick={() => setTransposed(true)}  style={{ padding:"4px 11px", border:"none", background:transposed?"#374151":"#fff",  color:transposed?"#fff":"#64748b",  fontSize:11, fontWeight:500, cursor:"pointer" }}>⊞ Transposed</button>
             </div>
-          )}
+            <div style={{ width:1, height:18, background:"#CBD5E1" }} />
+            {TBtn(showTeacher, () => setShowTeacher(!showTeacher), "Teacher", "👤")}
+            {TBtn(showRoom,    () => setShowRoom(!showRoom),       "Room",    "🚪")}
+            <div style={{ width:1, height:18, background:"#CBD5E1" }} />
+            {TBtn(editMode, () => setEditMode(!editMode), editMode ? "✏️ Editing" : "✏️ Edit")}
+            <button onClick={() => setSubPanelOpen(o => !o)}
+              style={{ display:"flex", alignItems:"center", gap:4, padding:"4px 11px", borderRadius:6, border:`1px solid ${subPanelOpen?"#f59e0b":"#E5EBF5"}`, background:subPanelOpen?"#fff7ed":"#fff", color:"#92400e", fontSize:11, fontWeight:500, cursor:"pointer" }}>
+              🔄 Sub{activeSubCount > 0 ? ` (${activeSubCount})` : ""}
+            </button>
+            <button onClick={() => setPoolPanelOpen(o => !o)}
+              style={{ display:"flex", alignItems:"center", gap:4, padding:"4px 11px", borderRadius:6, border:`1px solid ${poolPanelOpen?"#7C6FE0":"#E5EBF5"}`, background:poolPanelOpen?"#EDE9FF":"#fff", color:"#4B5275", fontSize:11, fontWeight:500, cursor:"pointer" }}>
+              📦 Pool{poolTotalDeficit > 0 ? ` (${poolTotalDeficit})` : ""}
+            </button>
+            <div style={{ flex:1 }} />
+            <span style={{ padding:"3px 10px", borderRadius:16, fontSize:10.5, fontWeight:600,
+              background:conflicts.length===0?"#f0fdf4":"#fff7ed",
+              color:conflicts.length===0?"#166534":"#c2410c",
+              border:`1px solid ${conflicts.length===0?"#86EFAC":"#fed7aa"}` }}>
+              {conflicts.length===0 ? "✓ No conflicts" : `⚠ ${conflicts.length} conflict${conflicts.length>1?"s":""}`}
+            </span>
+          </div>
+        )}
 
-          {viewMode === "calendar" ? renderCalendarView(selectedEntity) : (
+        {/* ══ Content area ═════════════════════════════════════════════ */}
+        <div
+          style={{ flex:1, overflowY: mainMode==="calendar" ? "hidden" : "auto",
+            padding: mainMode==="calendar" ? 0 : 16,
+            display: mainMode==="calendar" ? "flex" : "block",
+            flexDirection:"column" as const, position:"relative" as const,
+          }}
+          onClick={() => { if (showExportMenu) setShowExportMenu(false) }}
+        >
+
+          {/* ═══ Calendar mode ═══ */}
+          {mainMode === "calendar" && renderCalendarView(selectedEntity)}
+
+          {/* ═══ Traditional mode ═══ */}
+          {mainMode === "traditional" && (
             <>
-              <div style={{ background:"#fff", borderRadius:12, boxShadow:"0 1px 3px rgba(0,0,0,0.08)", overflow:"hidden" }}>
+              {/* Warm-cell style override */}
+              <style>{`
+                .warm-tt td, .warm-tt th { color: #111111 !important; }
+                .warm-tt [class*="bg-violet-100"] { background-color: #FFF9EC !important; }
+                .warm-tt [class*="bg-pink-100"]   { background-color: #FFF0F0 !important; }
+                .warm-tt [class*="bg-blue-100"]   { background-color: #EFF6FF !important; }
+                .warm-tt [class*="bg-green-100"]  { background-color: #F0FFF4 !important; }
+                .warm-tt [class*="bg-yellow-100"] { background-color: #FFFBEB !important; }
+                .warm-tt [class*="bg-red-100"]    { background-color: #FFF5F5 !important; }
+                .warm-tt [class*="bg-purple-100"] { background-color: #FAF5FF !important; }
+                .warm-tt [class*="bg-orange-100"] { background-color: #FFF8F0 !important; }
+                .warm-tt [class*="bg-teal-100"]   { background-color: #F0FDFA !important; }
+                .warm-tt [class*="bg-cyan-100"]   { background-color: #ECFEFF !important; }
+                .warm-tt [class*="bg-indigo-100"] { background-color: #EEF2FF !important; }
+                .warm-tt [class*="bg-lime-100"]   { background-color: #F7FEE7 !important; }
+                .warm-tt table { border-collapse: collapse !important; }
+                .warm-tt td, .warm-tt th {
+                  border: 1px solid #CBD5E1 !important;
+                }
+                .warm-tt thead th {
+                  background: #F1F5F9 !important;
+                  color: #374151 !important;
+                  border: 1px solid #CBD5E1 !important;
+                }
+              `}</style>
+              <div className="warm-tt" style={{ background:"#fff", borderRadius:10, boxShadow:"0 1px 4px rgba(0,0,0,0.07)", overflow:"hidden" }}>
                 {selectedEntity === "ALL" ? renderAllEntities() : (() => {
                   switch(viewMode) {
                     case "class":   return transposed ? renderClassTTTransposed(selectedEntity, absentHighlightProp) : renderClassTT(selectedEntity, absentHighlightProp)
@@ -2419,11 +2528,10 @@ export function TimetablePage() {
                 })()}
               </div>
 
-
               {/* Conflicts list */}
               {conflicts.length > 0 && (
-                <div style={{ marginTop:16, background:"#fff7ed", border:"1px solid #fed7aa", borderRadius:10, padding:"12px 16px" }}>
-                  <div style={{ fontSize:12, fontWeight:600, color:"#c2410c", marginBottom:8 }}>⚠️ {conflicts.length} Hard Conflicts Detected</div>
+                <div style={{ marginTop:14, background:"#fff7ed", border:"1px solid #fed7aa", borderRadius:10, padding:"12px 16px" }}>
+                  <div style={{ fontSize:12, fontWeight:700, color:"#c2410c", marginBottom:8 }}>⚠ {conflicts.length} Conflict{conflicts.length>1?"s":""} Detected</div>
                   {conflicts.map((c, i) => <div key={i} style={{ fontSize:11, color:"#9a3412", padding:"4px 0", borderBottom:"1px solid #fed7aa" }}>{c.message}</div>)}
                 </div>
               )}

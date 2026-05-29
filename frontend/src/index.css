@@ -59,6 +59,85 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 .rounded-lg  { border-radius: 0.5rem; }
 .rounded-xl  { border-radius: 0.75rem; }
 .rounded-2xl { border-radius: 1rem; }
+
+/* ══ Print / PDF styles ══════════════════════════════════════════════════
+   Activated by window.print() for Class-wise / Teacher-wise / Room-wise exports
+   ========================================================================= */
+@media print {
+  @page { size: A4 landscape; margin: 12mm 10mm; }
+
+  /* Hide everything except the timetable tables */
+  body > *:not(#print-root) { display: none !important; }
+  #root > * { display: none !important; }
+  .warm-tt  { display: block !important; }
+
+  /* Show the currently-active timetable grid */
+  body::before {
+    content: attr(data-print-title);
+    display: block;
+    font-size: 18pt;
+    font-weight: 700;
+    text-align: center;
+    color: #374151;
+    margin-bottom: 8pt;
+    font-family: 'Inter', sans-serif;
+  }
+
+  /* Table base */
+  table { width: 100%; border-collapse: collapse; font-size: 8pt; font-family: 'Inter', sans-serif; }
+  th, td {
+    border: 1px solid #CBD5E1 !important;
+    padding: 4pt 5pt !important;
+    vertical-align: top;
+    page-break-inside: avoid;
+  }
+  thead th {
+    background: #F1F5F9 !important;
+    color: #1e293b !important;
+    font-weight: 700 !important;
+    font-size: 7.5pt !important;
+    text-align: center;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Day header cells */
+  td:first-child, th:first-child {
+    font-weight: 700 !important;
+    color: #374151 !important;
+    background: #F8FAFC !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Subject cells — warm backgrounds */
+  .warm-tt td[class*="bg-"] {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Lunch / break cells */
+  .warm-tt [class*="bg-yellow"], .warm-tt [class*="bg-amber"] {
+    background-color: #FFFBEB !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Hide UI controls */
+  button, input, select, .no-print,
+  [style*="position: fixed"], [style*="position:fixed"],
+  [style*="position: sticky"]:not(td):not(th) { display: none !important; }
+
+  /* All text black for print */
+  * { color: #111111 !important; }
+
+  /* Section dividers — thicker line between entity groups */
+  tr[style*="height: 3px"], tr[style*="height:3px"] {
+    background: #374151 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
 .shadow-sm   { box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); }
 .shadow-md   { box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
 .shadow-lg   { box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1); }
