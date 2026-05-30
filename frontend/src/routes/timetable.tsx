@@ -265,7 +265,7 @@ function isFullLunchColumn(
 function LunchCell({ id, secName }: { id: string; secName?: string }) {
   return (
     <td key={id} style={{ background:"#FFFBEB", border:"1px solid #E8E4FF", padding:"4px 6px", textAlign:"center" as const, verticalAlign:"middle" as const }}>
-      <div style={{ fontSize:9, fontStyle:"italic", color:"#D4920E", fontWeight:600, lineHeight:1.4 }}>Lunch Break</div>
+      <div style={{ fontSize:9, fontStyle:"italic", color:"#D4920E", fontWeight:600, lineHeight:1.4 }}>🍱 Lunch Break</div>
       {secName && <div style={{ fontSize:9, color:"#D4920E", opacity:0.8, fontWeight:500 }}>{secName}</div>}
     </td>
   )
@@ -326,12 +326,13 @@ function ConflictModal({ message, onClose }:{ message:string; onClose:()=>void }
 
 // ── Period header — draggable column header in edit mode ──────
 function PeriodCol({ p, times, editMode, isDragSrc, isDragOver, isSwapped, isDimmed,
-  onDragStart, onDragEnd, onDragOver, onDrop }: {
+  onDragStart, onDragEnd, onDragOver, onDrop, breakGroupLabel }: {
   p: Period; times?: {start:string;end:string};
   editMode?: boolean; isDragSrc?: boolean; isDragOver?: boolean;
   isSwapped?: boolean; isDimmed?: boolean;
   onDragStart?: () => void; onDragEnd?: () => void;
   onDragOver?: (e: React.DragEvent) => void; onDrop?: () => void;
+  breakGroupLabel?: string;  // e.g. "VII-C, XI-Com-A" for partial lunch columns
 }) {
   const [hov, setHov] = useState(false)
   const isBreak = p.type !== "class"
@@ -370,6 +371,7 @@ function PeriodCol({ p, times, editMode, isDragSrc, isDragOver, isSwapped, isDim
       }}>
       <div>{p.name}</div>
       {times && <><div style={{ fontSize:8, fontWeight:600, opacity:0.9 }}>{times.start}</div><div style={{ fontSize:8, fontWeight:400, opacity:0.6 }}>→ {times.end}</div></>}
+      {breakGroupLabel && <div style={{ fontSize:7, fontWeight:600, color:"#D4920E", background:"#FEF9C3", borderRadius:3, padding:"1px 4px", marginTop:2, letterSpacing:"0.2px" }}>🍱 {breakGroupLabel}</div>}
       {canDrag && (
         <div style={{
           fontSize: hov || isDragSrc ? 14 : 10,
@@ -1406,6 +1408,14 @@ export function TimetablePage() {
               <th style={{ background:"#1e293b", color:"#fff", padding:"8px 12px", textAlign:"left", minWidth:70, fontSize:11, fontWeight:700, border:"1px solid #1e293b" }}>Day</th>
               {teacherPeriods.map(p => {
                 const gi = periods.findIndex(pp => pp.id === p.id)
+                // Build break-group label for partial lunch columns (matches PDF sub-header)
+                const isPartialLunch = p.type === 'lunch' && !isFullLunchColumn(p, usedDays, sch, tdata.classes, cwBreaksTT)
+                const brkDef = isPartialLunch ? cwBreaksTT?.find(b => b.id === p.id) : null
+                const breakGroupLabel = brkDef
+                  ? (brkDef.classes.length === 0
+                      ? 'All classes'
+                      : tdata.classes.filter(tc => brkDef.classes.includes(getSectionClassKey(tc))).join(', '))
+                  : undefined
                 return (
                   <PeriodCol key={p.id} p={p} times={teacherTimes.get(p.id)}
                     editMode={editMode}
@@ -1417,6 +1427,7 @@ export function TimetablePage() {
                     onDragEnd={() => { setColDragIdx(null); setColDragOverIdx(null) }}
                     onDragOver={e => { e.preventDefault(); if (colDragIdx !== null && colDragIdx !== gi) setColDragOverIdx(gi) }}
                     onDrop={() => { if (colDragIdx !== null && colDragIdx !== gi) handleShift(colDragIdx, gi); setColDragIdx(null); setColDragOverIdx(null) }}
+                    breakGroupLabel={breakGroupLabel}
                   />
                 )
               })}
@@ -1429,16 +1440,46 @@ export function TimetablePage() {
                     const isFullLunch = isFullLunchColumn(p, usedDays, sch, tdata.classes, cwBreaksTT)
                     // ── Full lunch column ── all teacher's classes have this lunch
                     if (isFullLunch) return <BreakCell key={p.id} p={p} />
-                    // ── Mixed / partial lunch break ────────────────────
-                    // Not all teacher's classes have lunch here. Show per-day:
-                    //   • "Lunch Break" if the teacher's section in the preceding period has this break
-                    //   • "Free" otherwise
+                    // ── Partial / staggered lunch break ───────────────────────────
+                    // PDF reference: teacher timetable uses a fixed global time grid.
+                    // Each break band column is labeled with its class group (B-NUR-KG, B-1…).
+                    // A teacher's cell shows:
+                    //   A) "Lunch Break" – teacher's own section is on break here
+                    //   B) Class assignment – teacher is teaching another group that is
+                    //      simultaneously in class (not on lunch at this time slot)
+                    //   C) "Free" – neither
                     if (p.type === 'lunch') {
                       const brk = cwBreaksTT?.find(b => b.id === p.id)
+                      // ── A: check if teacher's PREVIOUS period section has THIS break
                       const prevPeriod = brk ? classPeriods[brk.afterPeriod - 1] : null
-                      const prevCell  = prevPeriod ? sch[day]?.[prevPeriod.id] : null
-                      const hasLunch  = !!prevCell?.sectionName && sectionHasBreak(prevCell.sectionName, p.id, cwBreaksTT)
-                      if (hasLunch) return <LunchCell id={p.id} secName={prevCell?.sectionName} />
+                      const prevCell   = prevPeriod ? sch[day]?.[prevPeriod.id] : null
+                      const prevHasLunch = !!prevCell?.sectionName && sectionHasBreak(prevCell.sectionName, p.id, cwBreaksTT)
+                      if (prevHasLunch) return <LunchCell id={p.id} secName={prevCell?.sectionName} />
+
+                      // ── B: teacher may be teaching a DIFFERENT group that is in class
+                      //       during this break's time slot. That group's assignment sits
+                      //       in classPeriods[afterPeriod] (the period that runs concurrently
+                      //       with this break for non-lunch sections).
+                      const concurrentPeriod = brk ? classPeriods[brk.afterPeriod] : null
+                      const concurrentCell   = concurrentPeriod ? sch[day]?.[concurrentPeriod.id] : null
+                      const concurrentHasBreak = concurrentCell?.sectionName
+                        ? sectionHasBreak(concurrentCell.sectionName, p.id, cwBreaksTT)
+                        : false
+                      if (concurrentCell?.subject && !concurrentHasBreak) {
+                        // Teacher is teaching this section while another group is at lunch
+                        const colorClass = getSubjectColor(concurrentCell.subject.split(" (")[0])
+                        return (
+                          <td key={p.id} style={{ border:"1px solid #E8E4FF", padding:3, background:"#F8F9FF" }}>
+                            <div className={colorClass} style={{ borderRadius:5, padding:"3px 6px", minHeight:38 }}>
+                              <div style={{ fontSize:9, fontWeight:700, color:"#1e293b" }}>{concurrentCell.sectionName}</div>
+                              <div style={{ fontSize:9, color:"#475569" }}>{concurrentCell.subject}</div>
+                              {showTeacher && (concurrentCell as any).teacher && <div style={{ fontSize:8, color:"#64748b", opacity:0.8 }}>{(concurrentCell as any).teacher}</div>}
+                            </div>
+                          </td>
+                        )
+                      }
+
+                      // ── C: truly free
                       return (
                         <td key={p.id} style={{ border:"1px solid #E8E4FF", padding:2 }}>
                           <div style={{ height:44, background:"#FAFAFE", borderRadius:5, display:"flex", alignItems:"center", justifyContent:"center", color:"#cbd5e1", fontSize:9, fontStyle:"italic" }}>Free</div>
@@ -1616,11 +1657,32 @@ export function TimetablePage() {
                       if (isFullLunch) {
                         return <td key={day} style={{ background:"#fffbeb", border:"1px solid #E8E4FF", textAlign:"center" as const, fontSize:9, color:"#D4920E", fontStyle:"italic", padding:6 }}>Lunch Break</td>
                       }
-                      // ── Mixed / partial lunch break ── per-day check ─────
+                      // ── Partial / staggered lunch break (transposed) ──────────────
                       if (p.type === 'lunch') {
+                        // A: teacher's section before this break HAS the break → lunch
                         const prevCell = mixedPrevPeriod ? sch[day]?.[mixedPrevPeriod.id] : null
                         const hasLunch = !!prevCell?.sectionName && sectionHasBreak(prevCell.sectionName, p.id, cwBreaksTTT)
                         if (hasLunch) return <LunchCell id={day} secName={prevCell?.sectionName} />
+
+                        // B: teacher is teaching a DIFFERENT group concurrent with this break
+                        const concurrentPeriodTTT = mixedLunchBreak ? classPeriods[mixedLunchBreak.afterPeriod] : null
+                        const concurrentCellTTT   = concurrentPeriodTTT ? sch[day]?.[concurrentPeriodTTT.id] : null
+                        const concurrentHasBreakTTT = concurrentCellTTT?.sectionName
+                          ? sectionHasBreak(concurrentCellTTT.sectionName, p.id, cwBreaksTTT)
+                          : false
+                        if (concurrentCellTTT?.subject && !concurrentHasBreakTTT) {
+                          const colorClass = getSubjectColor(concurrentCellTTT.subject.split(" (")[0])
+                          return (
+                            <td key={day} style={{ border:"1px solid #E8E4FF", padding:3, background:"#F8F9FF" }}>
+                              <div className={colorClass} style={{ borderRadius:5, padding:"3px 6px", minHeight:38 }}>
+                                <div style={{ fontSize:9, fontWeight:700 }}>{concurrentCellTTT.sectionName}</div>
+                                <div style={{ fontSize:9, color:"#475569" }}>{concurrentCellTTT.subject}</div>
+                              </div>
+                            </td>
+                          )
+                        }
+
+                        // C: truly free
                         return (
                           <td key={day} style={{ border:"1px solid #E8E4FF", padding:2 }}>
                             <div style={{ height:42, background:"#FAFAFE", borderRadius:4, display:"flex", alignItems:"center", justifyContent:"center", color:"#cbd5e1", fontSize:9, fontStyle:"italic" }}>Free</div>
