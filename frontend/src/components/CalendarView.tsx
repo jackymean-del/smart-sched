@@ -1005,22 +1005,26 @@ export function CalendarView({
         if (b.key === dragSrcKey) return null   // skip the source cell itself
 
         // ── Filter by viewMode so the right cells get highlighted ──
-        const srcCell   = classTT[dragSrc.section]?.[dragSrc.day]?.[dragSrc.periodId]
+        const srcCell    = classTT[dragSrc.section]?.[dragSrc.day]?.[dragSrc.periodId]
         const srcTeacher = srcCell?.teacher
         const srcRoom    = srcCell?.room
         const srcSubject = srcCell?.subject
+        const isFreeSlot = !b.subject  // blank period — valid drop target in any view
         if (viewMode === "class") {
-          // Class view: only same section
+          // Class view: only same section (filled or free)
           if (b.sectionName !== dragSrc.section) return null
         } else if (viewMode === "teacher") {
-          // Teacher view: all blocks taught by the same teacher
-          if (!srcTeacher || b.teacher !== srcTeacher) return null
+          // Teacher view: same-teacher filled slots OR free slots (move to free period)
+          if (!srcTeacher) return null
+          if (!isFreeSlot && b.teacher !== srcTeacher) return null
         } else if (viewMode === "room") {
-          // Room view: all blocks using the same room
-          if (!srcRoom || b.room !== srcRoom) return null
+          // Room view: same-room filled slots OR free slots for this room
+          if (!srcRoom) return null
+          if (!isFreeSlot && b.room !== srcRoom) return null
         } else if (viewMode === "subject") {
-          // Subject view: all blocks with the same subject
-          if (!srcSubject || b.subject !== srcSubject) return null
+          // Subject view: same-subject filled slots OR free slots
+          if (!srcSubject) return null
+          if (!isFreeSlot && b.subject !== srcSubject) return null
         }
 
         const bLeft   = (b.startMin-dayStartMin)*pxPerMin
