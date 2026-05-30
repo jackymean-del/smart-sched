@@ -25,7 +25,7 @@
  *  Click → detail side-panel + Edit button
  */
 
-import { useState, useMemo, useRef, useCallback } from "react"
+import { useState, useMemo, useRef, useCallback, useEffect } from "react"
 import type { Period, Section, Staff, Subject } from "@/types"
 import type { ClassTimetable, TeacherSchedule } from "@/types"
 import type { BlockedSlot, DynamicLearningGroup } from "@/lib/schedulingEngine"
@@ -371,7 +371,7 @@ function Block({
   block, left, width, rowH, compact, dayKey,
   showTeacherVal, showRoomVal, showTimeVal, shortNamesVal, viewMode,
   staff, subjects, editMode, dragItem, dragOverCell,
-  onHover, onLeave, onClick, onEdit, onDelete, onDragStart, onDragOver, onDrop,
+  onHover, onLeave, onClick, onEdit, onDelete, onDragStart, onDragOver, onDrop, onDragEnd,
 }: {
   block:TimeBlock; left:number; width:number; rowH:number; compact:boolean; dayKey:string
   showTeacherVal:boolean; showRoomVal:boolean; showTimeVal:boolean; shortNamesVal:boolean
@@ -389,6 +389,7 @@ function Block({
   onDragStart?: (e:React.DragEvent,section:string,day:string,periodId:string)=>void
   onDragOver?: (e:React.DragEvent,section:string,day:string,periodId:string)=>void
   onDrop?: (e:React.DragEvent,section:string,day:string,periodId:string)=>void
+  onDragEnd?: ()=>void
 }) {
   if (width <= 0) return null
 
@@ -471,14 +472,15 @@ function Block({
   return (
     <div
       draggable={editMode && !!onDragStart && !!block.subject}
-      onMouseEnter={e=>{setHovered(true); onHover(block,e)}}
+      onMouseEnter={e=>{if(!dragItem){setHovered(true); onHover(block,e)}}}
       onMouseLeave={()=>{setHovered(false); onLeave()}}
-      onDragStart={e=>onDragStart?.(e, block.sectionName, dayKey, block.periodId)}
+      onDragStart={e=>{setHovered(false); onDragStart?.(e, block.sectionName, dayKey, block.periodId)}}
+      onDragEnd={()=>onDragEnd?.()}
       onDragOver={e=>{e.preventDefault(); onDragOver?.(e, block.sectionName, dayKey, block.periodId)}}
       onDragEnter={e=>e.preventDefault()}
       onDrop={e=>{e.preventDefault(); e.stopPropagation(); onDrop?.(e, block.sectionName, dayKey, block.periodId)}}
       onDoubleClick={()=>onEdit?.(block.sectionName, dayKey, block.periodId)}
-      onClick={()=>onClick(block)}
+      onClick={()=>{ if(!dragItem) onClick(block) }}
       style={{
         position:"absolute" as const,
         left: left+1, width: Math.max(width-2, 2),
@@ -617,6 +619,15 @@ export function CalendarView({
   const [dragItem,   setDragItem]   = useState<{section:string;day:string;periodId:string}|null>(null)
   const [dragOverCell, setDragOverCell] = useState<{section:string;day:string;periodId:string}|null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout>|null>(null)
+
+  // Clear drag state on any dragend / escape — prevents stale highlights
+  useEffect(()=>{
+    const clear = () => { setDragItem(null); setDragOverCell(null) }
+    const onKey = (e:KeyboardEvent) => { if(e.key==="Escape") clear() }
+    document.addEventListener("dragend", clear)
+    document.addEventListener("keydown", onKey)
+    return () => { document.removeEventListener("dragend", clear); document.removeEventListener("keydown", onKey) }
+  },[])
 
   const dayStartMin = useMemo(()=>parseTime(startTime),[startTime])
 
@@ -890,8 +901,9 @@ export function CalendarView({
           onHover={(bl,e)=>onHover(bl,e,dayKey)} onLeave={onLeave} onClick={bl=>onClick(bl,dayKey)}
           onEdit={onCellEdit ? (sec,d,p)=>onCellEdit(sec,d,p) : undefined}
           onDelete={onCellDelete ? (sec,d,p)=>onCellDelete(sec,d,p) : undefined}
-          onDragStart={(e,sec,d,p)=>{setDragItem({section:sec,day:d,periodId:p})}}
+          onDragStart={(e,sec,d,p)=>{setTooltip(null); setDragItem({section:sec,day:d,periodId:p})}}
           onDragOver={(e,sec,d,p)=>{setDragOverCell({section:sec,day:d,periodId:p})}}
+          onDragEnd={()=>{setDragItem(null); setDragOverCell(null)}}
           onDrop={(e,sec,d,p)=>{
             if (dragItem && onCellSwap && (dragItem.section !== sec || dragItem.day !== d || dragItem.periodId !== p)) {
               onCellSwap(dragItem, {section: sec, day: d, periodId: p})
