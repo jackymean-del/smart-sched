@@ -884,36 +884,66 @@ export function TimetablePage() {
   // ── conflictWarning modal state ───────────────────────────
   const [conflictWarning, setConflictWarning] = useState<string|null>(null)
 
+  // ── Global dragend listener — clears ALL drag state when drag ends for any reason ──
+  // Prevents frozen state when user drops outside a target, presses Escape during drag,
+  // or any other scenario where onDrop is not called on a valid target.
+  useEffect(() => {
+    const clearAll = () => {
+      setDragItem(null)
+      setPoolDragItem(null)
+      setDragOverCell(null)
+    }
+    document.addEventListener("dragend", clearAll)
+    return () => document.removeEventListener("dragend", clearAll)
+  }, []) // stable setters, empty deps OK
+
   // ── checkSwapConflict: returns conflict reason string or null if safe ──
+  // Works for class view (same section) AND teacher view (cross-section swaps)
   const checkSwapConflict = useCallback((section:string, day:string, periodId:string): string|null => {
-    if (!dragItem) return null
-    const fromCell = classTT[dragItem.section]?.[dragItem.day]?.[dragItem.periodId]
-    const toCell   = classTT[section]?.[day]?.[periodId]
+    if (!dragItem || !section) return null
+    const fromCell    = classTT[dragItem.section]?.[dragItem.day]?.[dragItem.periodId]
+    const toCell      = classTT[section]?.[day]?.[periodId]
     const fromTeacher = fromCell?.teacher?.trim()
     const toTeacher   = toCell?.teacher?.trim()
 
-    // Class-teacher protection
+    // Class-teacher protection (source cell)
     if (fromCell?.isClassTeacher && toTeacher && toTeacher !== fromTeacher)
       return `${fromTeacher} is the Class Teacher for ${dragItem.section}.\nCannot replace a Class Teacher's period with a different teacher.`
+    // Class-teacher protection (target cell)
     if (toCell?.isClassTeacher && fromTeacher && fromTeacher !== toTeacher)
       return `${toTeacher} is the Class Teacher for ${section}.\nCannot swap into a Class Teacher's designated period.`
 
-    // Teacher clash at target slot
+    // Teacher clash: fromTeacher would be in (day, periodId) — already teaching another section there?
     if (fromTeacher) {
       const clash = sections.find(s =>
         s.name !== section && s.name !== dragItem.section &&
         classTT[s.name]?.[day]?.[periodId]?.teacher === fromTeacher
       )
-      if (clash) return `${fromTeacher} is already teaching ${clash.name} at this time slot.`
+      if (clash) return `${fromTeacher} is already teaching ${clash.name} at this slot.`
     }
-    // Teacher clash at source slot
-    if (toTeacher) {
+
+    // Teacher clash: toTeacher would be in (dragItem.day, dragItem.periodId) — already teaching there?
+    if (toTeacher && toTeacher !== fromTeacher) {
       const clash = sections.find(s =>
         s.name !== section && s.name !== dragItem.section &&
         classTT[s.name]?.[dragItem.day]?.[dragItem.periodId]?.teacher === toTeacher
       )
-      if (clash) return `${toTeacher} is already teaching ${clash.name} in the original time slot.`
+      if (clash) return `${toTeacher} is already teaching ${clash.name} in the original slot.`
     }
+
+    // Teacher view: cross-section swap — check if target section already has ANOTHER teacher in source slot
+    if (section !== dragItem.section) {
+      const targetSectionSourceSlot = classTT[section]?.[dragItem.day]?.[dragItem.periodId]
+      if (targetSectionSourceSlot?.teacher && targetSectionSourceSlot.teacher !== fromTeacher) {
+        return `${section} already has ${targetSectionSourceSlot.teacher} in the source time slot.\nSwapping would displace that assignment.`
+      }
+      // Check if source section already has another teacher in target slot
+      const sourceSectionTargetSlot = classTT[dragItem.section]?.[day]?.[periodId]
+      if (sourceSectionTargetSlot?.teacher && sourceSectionTargetSlot.teacher !== fromTeacher) {
+        return `${dragItem.section} already has ${sourceSectionTargetSlot.teacher} in this slot.\nSwapping would displace that assignment.`
+      }
+    }
+
     return null
   }, [dragItem, classTT, sections])
 
