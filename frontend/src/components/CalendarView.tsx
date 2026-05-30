@@ -33,7 +33,7 @@ import type { BlockedSlot, DynamicLearningGroup } from "@/lib/schedulingEngine"
 // ─────────────────────────────────────────────
 // Public types
 // ─────────────────────────────────────────────
-export type CalMode   = "month" | "timeline" | "matrix" | "compact"
+export type CalMode   = "matrix" | "timeline" | "month"
 export type ZoomLevel = "15min" | "30min" | "60min"
 
 export interface CalendarViewProps {
@@ -121,8 +121,8 @@ function subjectColor(name: string): { accent:string; bg:string } {
 
 function breakStyle(type: Period["type"]): { bg:string; border:string; text:string } {
   if (type==="lunch")       return { bg:"#FFFBEB", border:"#F6D860", text:"#92400E" }
-  if (type==="fixed-start") return { bg:"#F5F2FF", border:"#C4B5FD", text:"#6D28D9" }
-  if (type==="fixed-end")   return { bg:"#F0FDF4", border:"#86EFAC", text:"#166534" }
+  if (type==="fixed-start") return { bg:"#F3F0FE", border:"#D8CCFF", text:"#6D28D9" }
+  if (type==="fixed-end")   return { bg:"#ECFDF5", border:"#86EFAC", text:"#166534" }
   return { bg:"#FEFCE8", border:"#FDE68A", text:"#92400E" }
 }
 
@@ -361,21 +361,22 @@ function Block({
       <div
         onMouseEnter={e=>onHover(block,e)} onMouseLeave={onLeave}
         style={{
-          position:"absolute" as const, left, width:Math.max(width-1,1),
-          top:0, bottom:0, background:bs.bg,
-          borderLeft:`3px solid ${bs.border}`,
+          position:"absolute" as const, left:left+1, width:Math.max(width-2,1),
+          top:compact?2:3, bottom:compact?2:3, background:bs.bg,
+          border:`1px solid ${bs.border}`, borderRadius:4,
           display:"flex", flexDirection:"column" as const,
           alignItems:"center", justifyContent:"center", overflow:"hidden",
+          cursor:"pointer",
         }}>
-        {width >= 24 && (
-          <div style={{ fontSize:Math.min(compact?7.5:9, width/5), fontWeight:700, color:bs.text,
-            textAlign:"center" as const, padding:"0 3px", whiteSpace:"nowrap" as const,
+        {width >= 22 && (
+          <div style={{ fontSize:Math.min(compact?7:8.5, width/4), fontWeight:700, color:bs.text,
+            textAlign:"center" as const, padding:"1px 3px", whiteSpace:"nowrap" as const,
             overflow:"hidden", textOverflow:"ellipsis" as const }}>
-            {compact&&width<50 ? "" : block.periodName}
+            {block.periodName}
           </div>
         )}
-        {!compact && width >= 60 && (
-          <div style={{ fontSize:8, color:bs.text, opacity:0.65, fontFamily:"monospace", marginTop:1 }}>
+        {!compact && width >= 58 && (
+          <div style={{ fontSize:7, color:bs.text, opacity:0.7, fontFamily:"monospace", marginTop:1 }}>
             {fmtTime(block.startMin,"24h")}–{fmtTime(block.endMin,"24h")}
           </div>
         )}
@@ -480,7 +481,7 @@ export function CalendarView({
 }: CalendarViewProps) {
 
   // ── State ────────────────────────────────────────────────────────────
-  const [calMode,    setCalMode]    = useState<CalMode>("timeline")
+  const [calMode,    setCalMode]    = useState<CalMode>("matrix")
   const [zoom,       setZoom]       = useState<ZoomLevel>("60min")
   const [curDate,    setCurDate]    = useState(new Date())
   const [tooltip,    setTooltip]    = useState<{lines:string[];x:number;y:number}|null>(null)
@@ -595,14 +596,50 @@ export function CalendarView({
     return blocks.sort((a,b)=>a.startMin-b.startMin)
   },[classTT,periods,classwiseBreaks,sections,substitutions,dayStartMin])
 
+  const buildSubjectBlocks = useCallback((subjectName:string, dayKey:string): TimeBlock[] => {
+    const blocks:TimeBlock[]=[]
+    const gTm=calcTimes(periods,dayStartMin)
+    periods.forEach(p=>{
+      if(p.type==="class") return
+      const t=gTm.get(p.id)!
+      blocks.push({
+        key:`__brk|${p.id}|${dayKey}`, periodId:p.id, periodName:p.name, periodType:p.type,
+        startMin:t.start, endMin:t.end, sectionName:"",
+        subject:"", teacher:"", room:"", isSub:false, isClassTeacher:false, absent:false,
+      })
+    })
+    sections.forEach(sec=>{
+      const ps=buildSecPeriods(sec.name,periods,classwiseBreaks)
+      const tm=calcTimes(ps,dayStartMin)
+      ps.forEach(p=>{
+        if(p.type!=="class") return
+        const cell=classTT[sec.name]?.[dayKey]?.[p.id]
+        if(cell?.subject!==subjectName) return
+        const t=tm.get(p.id)!
+        const subKey=`${sec.name}|${dayKey}|${p.id}`
+        const isSub=!!substitutions[subKey]
+        blocks.push({
+          key:`${sec.name}|${p.id}|${dayKey}`, periodId:p.id,
+          periodName:p.name, periodType:p.type,
+          startMin:t.start, endMin:t.end, sectionName:sec.name,
+          subject:subjectName,
+          teacher:isSub?substitutions[subKey]:(cell.teacher??""),
+          room:cell.room??"",
+          isSub, isClassTeacher:!!(cell.isClassTeacher), absent:false,
+        })
+      })
+    })
+    return blocks.sort((a,b)=>a.startMin-b.startMin)
+  },[classTT,periods,classwiseBreaks,sections,substitutions,dayStartMin])
+
   // ── Get blocks for entity × day ──────────────────────────────────────
   const getEntityBlocks = useCallback((entityId:string, dayKey:string): TimeBlock[] => {
     if (viewMode==="class")   return buildClassBlocks(entityId, dayKey)
     if (viewMode==="teacher") return buildTeacherBlocks(entityId, dayKey)
     if (viewMode==="room")    return buildRoomBlocks(entityId, dayKey)
-    // subject: treat as class filter
-    return buildClassBlocks(entityId, dayKey)
-  },[viewMode,buildClassBlocks,buildTeacherBlocks,buildRoomBlocks])
+    // subject
+    return buildSubjectBlocks(entityId, dayKey)
+  },[viewMode,buildClassBlocks,buildTeacherBlocks,buildRoomBlocks,buildSubjectBlocks])
 
   // ── Entity list ──────────────────────────────────────────────────────
   const entityList = useMemo(():{id:string;label:string;group:string}[] => {
@@ -618,12 +655,18 @@ export function CalendarView({
       const vr = selectedEntity!=="ALL" ? allRooms.filter(r=>r===selectedEntity) : allRooms
       return vr.map(r=>({ id:r, label:r, group:"Room" }))
     }
-    // subject
-    const vc = selectedEntity!=="ALL"
-      ? sections.filter(sec=>Object.values(classTT[sec.name]??{}).some(dd=>
-          Object.values(dd as any).some((c:any)=>c?.subject===selectedEntity)))
-      : sections
-    return vc.map(s=>({ id:s.name, label:s.name, group:gradeGroup(s.name) }))
+    // subject — show subjects as rows
+    if (viewMode==="subject") {
+      const subs = new Set<string>()
+      Object.values(classTT).forEach(sd=>Object.values(sd).forEach(dd=>
+        Object.values(dd as any).forEach((c:any)=>{if(c?.subject) subs.add(c.subject)})))
+      const subList = selectedEntity!=="ALL"
+        ? [...subs].filter(s=>s===selectedEntity)
+        : [...subs].sort()
+      return subList.map(s=>({ id:s, label:s, group:"Subject" }))
+    }
+    // fallback: sections
+    return sections.map(s=>({ id:s.name, label:s.name, group:gradeGroup(s.name) }))
   },[viewMode,selectedEntity,sections,staff,allRooms,classTT])
 
   // ── Time range (school day) ──────────────────────────────────────────
@@ -1147,7 +1190,7 @@ export function CalendarView({
       }}>
         {/* Mode tabs */}
         <div style={{ display:"flex", border:"1px solid #E5EBF5", borderRadius:6, overflow:"hidden" }}>
-          {([["timeline","⏱ Timeline"],["matrix","⊟ Matrix"],["compact","☰ Compact"],["month","📅 Month"]] as [CalMode,string][]).map(([m,lbl])=>(
+          {([["matrix","⊟ Matrix"],["timeline","📅 Weekly"],["month","📆 Month"]] as [CalMode,string][]).map(([m,lbl])=>(
             <button key={m} onClick={()=>setCalMode(m)}
               style={{
                 padding:"4px 11px", border:"none",
@@ -1207,7 +1250,6 @@ export function CalendarView({
       <div style={{ flex:1,overflow:"hidden",display:"flex",flexDirection:"column" as const }}>
         {calMode==="month"   &&renderMonth()}
         {calMode==="timeline"&&renderWeekView(false)}
-        {calMode==="compact" &&renderWeekView(true)}
         {calMode==="matrix"  &&renderMatrix()}
       </div>
 

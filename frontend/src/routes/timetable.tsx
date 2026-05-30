@@ -2413,6 +2413,26 @@ export function TimetablePage() {
           </div>
         </div>
 
+        {/* ══ Secondary toolbar (Calendar mode) ═════════════════════ */}
+        {mainMode === "calendar" && (
+          <div style={{
+            background:"#F8FAFC", borderBottom:"1px solid #E5EBF5",
+            padding:"6px 14px", display:"flex", alignItems:"center", gap:6, flexShrink:0, flexWrap:"wrap" as const,
+          }}>
+            {TBtn(showTeacher, () => setShowTeacher(!showTeacher), "Teacher", "👤")}
+            {TBtn(showRoom,    () => setShowRoom(!showRoom),       "Room",    "🚪")}
+            {TBtn(showTime,    () => setShowTime(!showTime),       "Time",    "⏱")}
+            {TBtn(shortNames,  () => setShortNames(!shortNames),   "Short",   "⇥")}
+            <div style={{ flex:1 }} />
+            <span style={{ padding:"3px 10px", borderRadius:16, fontSize:10.5, fontWeight:600,
+              background:conflicts.length===0?"#f0fdf4":"#fff7ed",
+              color:conflicts.length===0?"#166534":"#c2410c",
+              border:`1px solid ${conflicts.length===0?"#86EFAC":"#fed7aa"}` }}>
+              {conflicts.length===0 ? "✓ No conflicts" : `⚠ ${conflicts.length} conflict${conflicts.length>1?"s":""}`}
+            </span>
+          </div>
+        )}
+
         {/* ══ Secondary toolbar (Traditional mode only) ════════════════ */}
         {mainMode === "traditional" && (
           <div style={{
