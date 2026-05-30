@@ -1361,20 +1361,40 @@ export function TimetablePage() {
     // e.g. XI-Com-A lunch gets pushed to 2:05 PM because VII-C's 10-min break
     //      is also accumulated before it, but XI-Com-A doesn't have that break.
     // Fix: for each break column, use the REPRESENTATIVE SECTION'S actual times.
-    //      For class period columns, use the first section's times.
+    // ── Section-aware header times ─────────────────────────────────────────
+    // Root cause of wrong times (e.g. P8 at 2:55 instead of 2:35):
+    //   calcTimes(teacherPeriods) ACCUMULATES every break: LunchBase(30) +
+    //   LunchVIIC(10) + LunchXI(10) = 50 min total → P8 pushed 20 min late.
+    // Fix: use the FIRST teacher section's own period schedule for CLASS period
+    //   column times. Each class's section timetable shows the correct times
+    //   (e.g. P8 = 2:35-3:15 PM). Use those directly for the column headers.
+    //   Break column times are ALSO overridden using each break's representative
+    //   section (already done), so break columns also show correct times.
     const teacherTimes = (() => {
       const base = calcTimes(teacherPeriods, config)
       if (!cwBreaksTT?.length) return base
       const result = new Map(base)
-      // Override break column times using each break's representative section
+
+      // ── Class period times: use first section's actual schedule ────────
+      // This ensures column headers match what's shown in the class timetable.
+      // (avoids accumulated offset from multiple staggered breaks)
+      const baseSection = tdata.classes[0]
+      if (baseSection) {
+        const basePeriods = buildClassPeriods(baseSection, periods, cwBreaksTT)
+        const baseTimes   = calcTimes(basePeriods, config)
+        classPeriods.forEach(cp => {
+          const t = baseTimes.get(cp.id)
+          if (t) result.set(cp.id, t)
+        })
+      }
+
+      // ── Break column times: use each break's representative section ────
       cwBreaksTT.forEach(brk => {
         if (!teacherPeriods.some(p => p.id === brk.id)) return
-        // Find the first teacher section that has this break
         const repSec = brk.classes.length === 0
           ? tdata.classes[0]
           : tdata.classes.find(tc => brk.classes.includes(getSectionClassKey(tc)))
         if (!repSec) return
-        // Build that section's full period sequence and compute its times
         const secPeriods = buildClassPeriods(repSec, periods, cwBreaksTT)
         const secTimes   = calcTimes(secPeriods, config)
         const correct    = secTimes.get(brk.id)
@@ -1585,6 +1605,17 @@ export function TimetablePage() {
       const base = calcTimes(teacherPeriodsT, config)
       if (!cwBreaksTTT?.length) return base
       const result = new Map(base)
+      // Class period times: use first section's actual schedule (no accumulation of all breaks)
+      const baseSectionT = tdata.classes[0]
+      if (baseSectionT) {
+        const basePeriodsT = buildClassPeriods(baseSectionT, periods, cwBreaksTTT)
+        const baseTimesT   = calcTimes(basePeriodsT, config)
+        classPeriods.forEach(cp => {
+          const t = baseTimesT.get(cp.id)
+          if (t) result.set(cp.id, t)
+        })
+      }
+      // Break column times: representative section
       cwBreaksTTT.forEach(brk => {
         if (!teacherPeriodsT.some(p => p.id === brk.id)) return
         const repSec = brk.classes.length === 0
