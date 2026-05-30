@@ -60,6 +60,12 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 .rounded-xl  { border-radius: 0.75rem; }
 .rounded-2xl { border-radius: 1rem; }
 
+/* ── Animations ── */
+@keyframes pulse {
+  0%, 100% { opacity: 0.6; transform: translate(-50%, -50%) scale(1); }
+  50% { opacity: 0.9; transform: translate(-50%, -50%) scale(1.1); }
+}
+
 /* ══ Print / PDF styles ══════════════════════════════════════════════════
    Activated by window.print()
    Strategy: hide everything via visibility, show only .warm-tt content

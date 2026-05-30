@@ -448,7 +448,8 @@ function Block({
 
   const isDraggingThis = dragItem?.section === block.sectionName && dragItem?.day === dayKey && dragItem?.periodId === block.periodId
   const isDragOverThis = dragOverCell?.section === block.sectionName && dragOverCell?.day === dayKey && dragOverCell?.periodId === block.periodId
-  const isDroppable = !!dragItem && !isDraggingThis && !block.subject  // Show highlight on empty cells when dragging
+  // Droppable cells: any empty cell when dragging (can swap into empty slots)
+  const isDroppable = !!dragItem && !isDraggingThis && !block.subject
   const [hovered, setHovered] = useState(false)
 
   return (
@@ -465,16 +466,17 @@ function Block({
         position:"absolute" as const,
         left: left+1, width: Math.max(width-2, 2),
         top: compact?2:3, bottom: compact?2:3,
-        background: isDraggingThis ? "rgba(124,111,224,0.25)" : isDragOverThis ? "rgba(124,111,224,0.15)" : isDroppable ? "rgba(124,111,224,0.08)" : col.bg,
-        borderLeft: `3px solid ${col.accent}`,
+        background: isDraggingThis ? "rgba(124,111,224,0.3)" : isDragOverThis ? "rgba(124,111,224,0.2)" : isDroppable ? "#EDE9FF" : col.bg,
+        borderLeft: `3px solid ${isDraggingThis ? "#7C6FE0" : isDragOverThis ? "#7C6FE0" : isDroppable ? "#A5B4FC" : col.accent}`,
         borderRadius: "0 5px 5px 0",
         overflow:"hidden", cursor: editMode && !!onDragStart && !!block.subject ? "grab" : isDroppable ? "drop" : "pointer",
         padding: width<26?"1px 2px": compact?"2px 5px":"3px 7px",
         display:"flex", flexDirection:"column" as const, justifyContent:"center",
-        outline: isDragOverThis ? "2px solid #7C6FE0" : isDroppable ? "1.5px dashed #A5B4FC" : block.absent?"2px solid #F59E0B":block.isSub?"1.5px dashed #F59E0B":"none",
+        outline: isDragOverThis ? "2px solid #7C6FE0" : isDroppable ? "2px dashed #A5B4FC" : block.absent?"2px solid #F59E0B":block.isSub?"1.5px dashed #F59E0B":"none",
         userSelect:"none" as const,
-        boxShadow: isDraggingThis ? "0 4px 12px rgba(0,0,0,0.15)" : isDragOverThis ? "0 2px 8px rgba(124,111,224,0.2)" : "0 1px 3px rgba(0,0,0,0.06)",
-        transition: "all 0.15s ease",
+        boxShadow: isDraggingThis ? "0 8px 16px rgba(124,111,224,0.25)" : isDragOverThis ? "0 4px 12px rgba(124,111,224,0.25)" : isDroppable ? "inset 0 0 8px rgba(124,111,224,0.15)" : "0 1px 3px rgba(0,0,0,0.06)",
+        transition: "all 0.12s ease",
+        opacity: isDraggingThis ? 0.9 : 1,
       }}>
       {/* Subject name — in accent color */}
       {fsSub > 0 && (
@@ -527,6 +529,14 @@ function Block({
           }}
           title="Delete cell"
         >×</button>
+      )}
+      {/* Droppable indicator — show + symbol on empty droppable cells */}
+      {isDroppable && !block.subject && (
+        <div style={{
+          position:"absolute" as const, top:"50%", left:"50%", transform:"translate(-50%, -50%)",
+          fontSize:18, color:"#A5B4FC", fontWeight:300, opacity:0.6, pointerEvents:"none",
+          animation: "pulse 2s ease-in-out infinite",
+        }}>+</div>
       )}
     </div>
   )
