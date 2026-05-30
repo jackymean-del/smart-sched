@@ -622,21 +622,16 @@ function DropZone({
   if (width <= 0 || block.periodType !== "class") return null
 
   const isConflict = !!conflict
-  const hasFill    = !!block.subject  // filled cell: outline only. empty: fill + outline.
+  const hasFill    = !!block.subject
 
-  // Warm green (safe) / warm red (conflict)
-  const safeIdle    = "#D1FAE5"; const safeActive    = "#6EE7B7"; const safeBorder    = "#10B981"
-  const conflictIdle= "#FEE2E2"; const conflictActive= "#FECACA"; const conflictBorder= "#EF4444"
-
+  // RULE: filled cell → border outline only (no bg). empty cell → fill only (no border).
   const bgColor = hasFill
     ? "transparent"
-    : isConflict
-      ? (isOver ? conflictActive : conflictIdle)
-      : (isOver ? safeActive    : safeIdle)
+    : isConflict ? (isOver ? "#FEE2E2" : "#FEF2F2") : (isOver ? "#DCFCE7" : "#F0FDF4")
 
-  const border = isConflict
-    ? `2px solid ${conflictBorder}`
-    : `2px solid ${safeBorder}`
+  const border = hasFill
+    ? (isConflict ? `2px solid #EF4444` : `2px solid #10B981`)
+    : "1px solid #E8E4FF"   // empty cell: never change border, only fill
 
   return (
     <div
@@ -657,7 +652,7 @@ function DropZone({
         transition:"background 0.08s ease",
         cursor: isConflict ? "not-allowed" : "copy",
         overflow:"visible" as const,
-        boxShadow: isOver ? `0 0 0 2px ${isConflict ? conflictBorder : safeBorder}` : "none",
+        boxShadow: isOver ? `0 0 0 2px ${isConflict ? "#EF4444" : "#10B981"}` : "none",
       }}
     />
   )

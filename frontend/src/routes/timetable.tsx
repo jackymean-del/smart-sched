@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, useCallback } from "react"
+import React, { useState, useMemo, useEffect, useRef, useCallback } from "react"
 import { useTimetableStore } from "@/store/timetableStore"
 import { EditCellModal } from "@/components/modals/EditCellModal"
 import { CalendarView } from "@/components/CalendarView"
@@ -261,6 +261,29 @@ function isFullLunchColumn(
   })
 }
 
+// ── Drag highlight helpers ─────────────────────────────────────
+// RULE: blank cells → colour fill only (no border change)
+//       filled cells → colour border only (no background change)
+const DRAG_SAFE_FILL    = "#D1FAE5"  // blank safe
+const DRAG_CONFLICT_FILL= "#FEE2E2"  // blank conflict
+const DRAG_SAFE_BORDER  = "#10B981"  // filled safe  (2px solid)
+const DRAG_CONFLICT_BORDER = "#EF4444" // filled conflict (2px solid)
+
+function dragTdStyle(isTarget: boolean, hasConflict: boolean, hasFill: boolean): React.CSSProperties {
+  if (!isTarget) return { border:"1px solid #E8E4FF", padding:2 }
+  if (hasFill) {
+    // filled: outline only
+    return { border:`2px solid ${hasConflict ? DRAG_CONFLICT_BORDER : DRAG_SAFE_BORDER}`, padding:2, transition:"border 0.1s" }
+  } else {
+    // blank: fill only
+    return { border:"1px solid #E8E4FF", padding:2, background: hasConflict ? DRAG_CONFLICT_FILL : DRAG_SAFE_FILL, transition:"background 0.1s" }
+  }
+}
+
+function dragInnerStyle(isTarget: boolean, hasConflict: boolean): React.CSSProperties {
+  return { height:44, borderRadius:5, cursor: isTarget ? (hasConflict?"not-allowed":"copy") : "default" }
+}
+
 // ── Conflict warning modal (shared with Calendar view) ────────
 function ConflictModal({ message, onClose }:{ message:string; onClose:()=>void }) {
   return (
@@ -376,27 +399,12 @@ function SubjectCell({ subject, teacher, room, isClassTeacher, isSub, subTeacher
     onMouseEnter: () => setHovered(true),
     onMouseLeave: () => setHovered(false),
   }
-  // Warm drag state colors
-  const isConflict     = !!hasConflict
-  const safeFill       = "#D1FAE5"  // empty cell safe fill
-  const conflictFill   = "#FEE2E2"  // empty cell conflict fill
-  const safeOutline    = "#10B981"  // filled cell safe border
-  const conflictOutline= "#EF4444"  // filled cell conflict border
+  const isConflict = !!hasConflict
 
-  // ── Empty cell ────────────────────────────────────────────
+  // ── Empty cell — fill only, no outline ────────────────────
   if (!subject) return (
-    <td style={{
-      border: "1px solid #E8E4FF",   // never change border on empty cells
-      padding:2, position:"relative" as const,
-      background: isDropTarget        // fill only, no outline
-        ? (isConflict ? conflictFill : safeFill)
-        : undefined,
-      transition:"background 0.1s",
-    }} {...sharedTdProps}>
-      <div onClick={onClick} style={{
-        height:44, borderRadius:5,
-        cursor: isDropTarget ? (isConflict?"not-allowed":"copy") : "default",
-      }} />
+    <td style={{ ...dragTdStyle(!!isDropTarget, isConflict, false), position:"relative" as const }} {...sharedTdProps}>
+      <div onClick={onClick} style={dragInnerStyle(!!isDropTarget, isConflict)} />
     </td>
   )
   // ── Multi-option / parallel group block ──────────────────
@@ -425,19 +433,12 @@ function SubjectCell({ subject, teacher, room, isClassTeacher, isSub, subTeacher
       </td>
     )
   }
-  // ── Filled cell ───────────────────────────────────────────
+  // ── Filled cell — outline only, no background change ─────
   const effectiveTeacher = teacher || options?.[0]?.teacher
   const effectiveRoom    = room    || options?.[0]?.room
   const colorClass = getSubjectColor(subject)
   return (
-    <td style={{
-      // filled cell: solid 2px colour OUTLINE only, no background change
-      border: isDropTarget
-        ? `2px solid ${isConflict ? conflictOutline : safeOutline}`
-        : "1px solid #E8E4FF",
-      padding:2, position:"relative" as const,
-      transition:"border 0.1s",
-    }} {...sharedTdProps}>
+    <td style={{ ...dragTdStyle(!!isDropTarget, isConflict, true), position:"relative" as const }} {...sharedTdProps}>
       <div className={colorClass}
         draggable={isDraggable}
         onDragStart={isDraggable ? onDragStart : undefined}
@@ -472,15 +473,17 @@ function SubjectCell({ subject, teacher, room, isClassTeacher, isSub, subTeacher
 }
 
 // ── Reusable drag-enabled teacher-view cell ────────────────
-function TeacherCell({ colorClass, cell, showRoom, editMode, dragOver, isDropTarget, dragProps, onDragStart, onDelete }: {
+function TeacherCell({ colorClass, cell, showRoom, editMode, dragOver, isDropTarget, hasConflict, dragProps, onDragStart, onDelete }: {
   colorClass: string; cell: any; showRoom: boolean; editMode: boolean;
-  dragOver: boolean; isDropTarget: boolean; dragProps: any;
+  dragOver: boolean; isDropTarget: boolean; hasConflict?: boolean; dragProps: any;
   onDragStart?: (e: React.DragEvent) => void;
   onDelete?: () => void;
 }) {
   const [hovered, setHovered] = useState(false)
+  // filled cell (has subject): outline only. empty: fill only.
+  const hasFill = !!cell?.subject
   return (
-    <td style={{ border: dragOver?"2px dashed #7C6FE0":isDropTarget?"1.5px dashed #a5b4fc":"1px solid #E8E4FF", padding:2, position:"relative" as const, background: dragOver?"#EDE9FF":isDropTarget?"#F8F7FF":undefined }}
+    <td style={{ ...dragTdStyle(isDropTarget, !!hasConflict, hasFill), position:"relative" as const }}
       {...dragProps}
       onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
       <div className={colorClass}
@@ -1417,10 +1420,8 @@ export function TimetablePage() {
                       }
                       return (
                         <td key={p.id} {...ttDragProps}
-                          style={{ border: ttDragOver?"2px dashed #7C6FE0":ttIsTarget?"2px dashed #a5b4fc":"1px solid #E8E4FF", padding:2, background: ttDragOver?"#EDE9FF":ttIsTarget?"#F0EDFF":undefined }}>
-                          <div style={{ height:44, background: ttDragOver?"#EDE9FF":ttIsTarget?"#EDE9FF80":"#FAFAFE", borderRadius:5, display:"flex", alignItems:"center", justifyContent:"center", color: ttDragOver||ttIsTarget?"#7C6FE0":"#cbd5e1", fontSize:9, fontStyle:"italic" }}>
-                            {ttDragOver ? "Drop here" : ttIsTarget ? "↓" : "Free"}
-                          </div>
+                          style={{ ...dragTdStyle(ttIsTarget, !!checkSwapConflict(ttSecName,day,p.id), false), position:"relative" as const }}>
+                          <div style={dragInnerStyle(ttIsTarget, !!checkSwapConflict(ttSecName,day,p.id))} />
                         </td>
                       )
                     }
@@ -1428,6 +1429,7 @@ export function TimetablePage() {
                     return (
                       <TeacherCell key={p.id} colorClass={colorClass} cell={cell} showRoom={showRoom}
                         editMode={editMode} dragOver={ttDragOver} isDropTarget={ttIsTarget}
+                        hasConflict={!!checkSwapConflict(ttSecName,day,p.id)}
                         dragProps={ttDragProps}
                         onDragStart={editMode ? e => handleDragStart(e, {section:ttSecName, day, periodId:p.id}) : undefined}
                         onDelete={editMode ? () => {
@@ -1577,10 +1579,8 @@ export function TimetablePage() {
                         }
                         return (
                           <td key={day} {...ttTDragProps}
-                            style={{ border: ttTDragOver?"2px dashed #7C6FE0":ttTIsTarget?"2px dashed #a5b4fc":"1px solid #E8E4FF", padding:2, background: ttTDragOver?"#EDE9FF":ttTIsTarget?"#F0EDFF":undefined }}>
-                            <div style={{ height:42, borderRadius:4, display:"flex", alignItems:"center", justifyContent:"center", color: ttTDragOver||ttTIsTarget?"#7C6FE0":"#cbd5e1", fontSize:9, fontStyle:"italic" }}>
-                              {ttTDragOver ? "Drop here" : ttTIsTarget ? "↓" : "Free"}
-                            </div>
+                            style={{ ...dragTdStyle(ttTIsTarget, !!checkSwapConflict(ttTSecName,day,p.id), false), position:"relative" as const }}>
+                            <div style={dragInnerStyle(ttTIsTarget, !!checkSwapConflict(ttTSecName,day,p.id))} />
                           </td>
                         )
                       }
@@ -1588,6 +1588,7 @@ export function TimetablePage() {
                       return (
                         <TeacherCell key={day} colorClass={colorClass} cell={cell} showRoom={showRoom}
                           editMode={editMode} dragOver={ttTDragOver} isDropTarget={ttTIsTarget}
+                          hasConflict={!!checkSwapConflict(ttTSecName,day,p.id)}
                           dragProps={ttTDragProps}
                           onDragStart={editMode ? e => handleDragStart(e, {section:ttTSecName, day, periodId:p.id}) : undefined}
                           onDelete={editMode ? () => {
@@ -1662,16 +1663,14 @@ export function TimetablePage() {
                     } : {}
                     if (!hits.length) return (
                       <td key={p.id} {...subDragProps}
-                        style={{ border: subDragOver?"2px dashed #7C6FE0":subIsTarget?"2px dashed #a5b4fc":"1px solid #E8E4FF", padding:2, background: subDragOver?"#EDE9FF":subIsTarget?"#F0EDFF":undefined }}>
-                        <div style={{ height:44, background: subDragOver?"#EDE9FF":"#FAFAFE", borderRadius:4, display:"flex", alignItems:"center", justifyContent:"center", color: subDragOver||subIsTarget?"#7C6FE0":"#cbd5e1", fontSize:10 }}>
-                          {subDragOver ? "Drop here" : subIsTarget ? "↓" : "—"}
-                        </div>
+                        style={{ ...dragTdStyle(subIsTarget, !!checkSwapConflict(subSecName,day,p.id), false), position:"relative" as const }}>
+                        <div style={dragInnerStyle(subIsTarget, !!checkSwapConflict(subSecName,day,p.id))} />
                       </td>
                     )
                     const colorClass = getSubjectColor(subName)
                     return (
                       <td key={p.id} {...subDragProps}
-                        style={{ border: subDragOver?"2px dashed #7C6FE0":subIsTarget?"1.5px dashed #a5b4fc":"1px solid #E8E4FF", padding:2, background: subDragOver?"#EDE9FF":subIsTarget?"#F8F7FF":undefined }}>
+                        style={{ ...dragTdStyle(subIsTarget, !!checkSwapConflict(subSecName,day,p.id), true), position:"relative" as const }}>
                         <div className={colorClass}
                           draggable={editMode && !!subSecName}
                           onDragStart={editMode && subSecName ? e => handleDragStart(e, {section:subSecName, day, periodId:p.id}) : undefined}
@@ -1768,16 +1767,14 @@ export function TimetablePage() {
                       } : {}
                       if (!hits.length) return (
                         <td key={day} {...subTDragProps}
-                          style={{ border: subTDragOver?"2px dashed #7C6FE0":subTIsTarget?"2px dashed #a5b4fc":"1px solid #E8E4FF", padding:2, background: subTDragOver?"#EDE9FF":subTIsTarget?"#F0EDFF":undefined }}>
-                          <div style={{ height:38, borderRadius:4, display:"flex", alignItems:"center", justifyContent:"center", color: subTDragOver||subTIsTarget?"#7C6FE0":"#cbd5e1", fontSize:10 }}>
-                            {subTDragOver ? "Drop here" : subTIsTarget ? "↓" : "—"}
-                          </div>
+                          style={{ ...dragTdStyle(subTIsTarget, !!checkSwapConflict(subTSecName,day,p.id), false), position:"relative" as const }}>
+                          <div style={dragInnerStyle(subTIsTarget, !!checkSwapConflict(subTSecName,day,p.id))} />
                         </td>
                       )
                       const colorClass = getSubjectColor(subName)
                       return (
                         <td key={day} {...subTDragProps}
-                          style={{ border: subTDragOver?"2px dashed #7C6FE0":subTIsTarget?"1.5px dashed #a5b4fc":"1px solid #E8E4FF", padding:2, background: subTDragOver?"#EDE9FF":subTIsTarget?"#F8F7FF":undefined }}>
+                          style={{ ...dragTdStyle(subTIsTarget, !!checkSwapConflict(subTSecName,day,p.id), true), position:"relative" as const }}>
                           <div className={colorClass}
                             draggable={editMode && !!subTSecName}
                             onDragStart={editMode && subTSecName ? e => handleDragStart(e, {section:subTSecName, day, periodId:p.id}) : undefined}
@@ -1855,16 +1852,14 @@ export function TimetablePage() {
                     } : {}
                     if (!hit) return (
                       <td key={p.id} {...rmDragProps}
-                        style={{ border: rmDragOver?"2px dashed #7C6FE0":rmIsTarget?"2px dashed #a5b4fc":"1px solid #E8E4FF", padding:2, background: rmDragOver?"#EDE9FF":rmIsTarget?"#F0EDFF":undefined }}>
-                        <div style={{ height:44, borderRadius:4, display:"flex", alignItems:"center", justifyContent:"center", color: rmDragOver||rmIsTarget?"#7C6FE0":"#D8D2FF", fontSize:10 }}>
-                          {rmDragOver ? "Drop here" : rmIsTarget ? "↓" : "Free"}
-                        </div>
+                        style={{ ...dragTdStyle(rmIsTarget, !!checkSwapConflict(rmSecName,day,p.id), false), position:"relative" as const }}>
+                        <div style={dragInnerStyle(rmIsTarget, !!checkSwapConflict(rmSecName,day,p.id))} />
                       </td>
                     )
                     const colorClass = getSubjectColor(hit.cell.subject)
                     return (
                       <td key={p.id} {...rmDragProps}
-                        style={{ border: rmDragOver?"2px dashed #7C6FE0":rmIsTarget?"1.5px dashed #a5b4fc":"1px solid #E8E4FF", padding:2, background: rmDragOver?"#EDE9FF":rmIsTarget?"#F8F7FF":undefined }}>
+                        style={{ ...dragTdStyle(rmIsTarget, !!checkSwapConflict(rmSecName,day,p.id), true), position:"relative" as const }}>
                         <div className={colorClass}
                           draggable={editMode && !!rmSecName}
                           onDragStart={editMode && rmSecName ? e => handleDragStart(e, {section:rmSecName, day, periodId:p.id}) : undefined}
@@ -1954,16 +1949,14 @@ export function TimetablePage() {
                       } : {}
                       if (!hit) return (
                         <td key={day} {...rmTDragProps}
-                          style={{ border: rmTDragOver?"2px dashed #7C6FE0":rmTIsTarget?"2px dashed #a5b4fc":"1px solid #E8E4FF", padding:2, background: rmTDragOver?"#EDE9FF":rmTIsTarget?"#F0EDFF":undefined }}>
-                          <div style={{ height:38, borderRadius:4, display:"flex", alignItems:"center", justifyContent:"center", color: rmTDragOver||rmTIsTarget?"#7C6FE0":"#D8D2FF", fontSize:10 }}>
-                            {rmTDragOver ? "Drop here" : rmTIsTarget ? "↓" : "Free"}
-                          </div>
+                          style={{ ...dragTdStyle(rmTIsTarget, !!checkSwapConflict(rmTSecName,day,p.id), false), position:"relative" as const }}>
+                          <div style={dragInnerStyle(rmTIsTarget, !!checkSwapConflict(rmTSecName,day,p.id))} />
                         </td>
                       )
                       const colorClass = getSubjectColor(hit.cell.subject)
                       return (
                         <td key={day} {...rmTDragProps}
-                          style={{ border: rmTDragOver?"2px dashed #7C6FE0":rmTIsTarget?"1.5px dashed #a5b4fc":"1px solid #E8E4FF", padding:2, background: rmTDragOver?"#EDE9FF":rmTIsTarget?"#F8F7FF":undefined }}>
+                          style={{ ...dragTdStyle(rmTIsTarget, !!checkSwapConflict(rmTSecName,day,p.id), true), position:"relative" as const }}>
                           <div className={colorClass}
                             draggable={editMode && !!rmTSecName}
                             onDragStart={editMode && rmTSecName ? e => handleDragStart(e, {section:rmTSecName, day, periodId:p.id}) : undefined}
