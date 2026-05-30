@@ -412,6 +412,37 @@ function NameCell({ value, onSave }: { value: string; onSave: (v: string) => voi
   )
 }
 
+// ─── Short name cell (for timetable display) ──────────────────────────────────
+function ShortNameCell({ value, onSave }: { value?: string; onSave: (v: string) => void }) {
+  const [e, setE] = useState(false)
+  const [t, setT] = useState(value ?? '')
+  const ref = useRef<HTMLInputElement>(null)
+  useEffect(() => { if (e) ref.current?.focus() }, [e])
+  useEffect(() => { setT(value ?? '') }, [value])
+  function commit() { onSave(t.trim()); setE(false) }
+  const displayValue = t.trim() || '(auto)'
+  if (e) return (
+    <input ref={ref} value={t} onChange={ev => setT(ev.target.value)}
+      onBlur={commit}
+      onKeyDown={ev => { if (ev.key === 'Enter') commit(); if (ev.key === 'Escape') { setT(value ?? ''); setE(false) } }}
+      maxLength={6}
+      placeholder="e.g. MR"
+      style={{ ...fld, width: '60px', fontSize: 11, fontWeight: 500, padding: '3px 6px' }}
+    />
+  )
+  return (
+    <span onClick={() => setE(true)} title="Short name for calendar (e.g. MR, JD) • Click to edit"
+      style={{
+        cursor: 'text', fontSize: 10, fontWeight: 500, color: '#7C6FE0', padding: '2px 4px', borderRadius: 3,
+        display: 'inline-block', background: displayValue === '(auto)' ? 'transparent' : '#F0ECFE',
+        border: '0.5px dashed #D4CEFF'
+      }}
+      onMouseEnter={ev => (ev.currentTarget.style.background = '#F0ECFE')}
+      onMouseLeave={ev => (ev.currentTarget.style.background = displayValue === '(auto)' ? 'transparent' : '#F0ECFE')}
+    >{displayValue}</span>
+  )
+}
+
 // ─── Add teacher row ──────────────────────────────────────────────────────────
 function AddRow({ onAdd }: { onAdd: (t: StaffExt) => void }) {
   const [active, setActive] = useState(false)
@@ -420,7 +451,7 @@ function AddRow({ onAdd }: { onAdd: (t: StaffExt) => void }) {
   useEffect(() => { if (active) ref.current?.focus() }, [active])
   function commit() {
     if (!name.trim()) { setActive(false); return }
-    onAdd({ id: makeId(), name: name.trim(), role: 'Teacher', subjects: [], classes: [], isClassTeacher: '', maxPeriodsPerWeek: 30 } as unknown as StaffExt)
+    onAdd({ id: makeId(), name: name.trim(), shortName: '', role: 'Teacher', subjects: [], classes: [], isClassTeacher: '', maxPeriodsPerWeek: 30 } as unknown as StaffExt)
     setName(''); setActive(false)
   }
   if (!active) return (
@@ -490,9 +521,12 @@ function TeacherRow({ t, subjects, classOpts, classTeacherOpts, coClassTeacherOp
             <Avatar name={t.name} />
             <div style={{ minWidth: 0 }}>
               <NameCell value={t.name} onSave={v => onUpdate({ name: v })} />
-              {t.role && t.role !== 'Teacher' && (
-                <div style={{ fontSize: 10, color: '#9896B5', marginTop: 1, fontWeight: 600, letterSpacing: '0.02em' }}>{t.role}</div>
-              )}
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 3 }}>
+                <ShortNameCell value={t.shortName} onSave={v => onUpdate({ shortName: v })} />
+                {t.role && t.role !== 'Teacher' && (
+                  <div style={{ fontSize: 10, color: '#9896B5', fontWeight: 600, letterSpacing: '0.02em' }}>{t.role}</div>
+                )}
+              </div>
             </div>
           </div>
         </td>

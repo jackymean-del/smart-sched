@@ -1109,6 +1109,7 @@ export type Section = z.infer<typeof SectionSchema>
 export const StaffSchema = z.object({
   id: z.string(),
   name: z.string().min(1),
+  shortName: z.string().optional().default(''),  // Short name for timetable display (e.g. "MR" for "Mr. Raj")
   role: z.string(),
   subjects: z.array(z.string()),
   classes: z.array(z.string()),

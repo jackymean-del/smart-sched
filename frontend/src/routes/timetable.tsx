@@ -1908,12 +1908,32 @@ export function TimetablePage() {
         showRoom={showRoom}
         showTime={showTime}
         shortNames={shortNames}
+        editMode={editMode}
         blockedSlots={(store as any).blockedSlots ?? []}
         dynamicLearningGroups={(store as any).dynamicLearningGroups ?? []}
         rooms={(store as any).rooms ?? []}
         classwiseBreaks={(config as any).classwiseBreaks}
         onCellClick={(section, day, periodId) => {
           if (editMode) setEditTarget({ section, day, periodId })
+        }}
+        onCellEdit={(section, day, periodId) => {
+          setEditTarget({ section, day, periodId })
+        }}
+        onCellDelete={(section, day, periodId) => {
+          // Show confirmation dialog before deleting
+          const cellContent = classTT[section]?.[day]?.[periodId]
+          if (!cellContent?.subject) return
+
+          if (confirm(`Clear "${cellContent.subject}" from ${section} on ${day}?`)) {
+            const newTT = { ...classTT }
+            newTT[section] = { ...newTT[section] }
+            newTT[section][day] = { ...newTT[section][day] }
+            newTT[section][day][periodId] = {
+              subject: "", teacher: "", room: "",
+              subjectId: "", teacherId: "", roomId: "",
+            }
+            commitTT(newTT)
+          }
         }}
         onCellFill={(section, day, periodId, suggestedSubject) => {
           // Allow replacing occupied cells — only reject on teacher clash

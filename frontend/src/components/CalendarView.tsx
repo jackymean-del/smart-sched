@@ -26,7 +26,7 @@
  */
 
 import { useState, useMemo, useRef, useCallback } from "react"
-import type { Period, Section, Staff } from "@/types"
+import type { Period, Section, Staff, Subject } from "@/types"
 import type { ClassTimetable, TeacherSchedule } from "@/types"
 import type { BlockedSlot, DynamicLearningGroup } from "@/lib/schedulingEngine"
 
@@ -45,7 +45,7 @@ export interface CalendarViewProps {
   timeFormat?: "12h" | "24h"
   staff: Staff[]
   sections: Section[]
-  subjects: { id: string; name: string; category?: string }[]
+  subjects: Subject[]
   substitutions: Record<string, string>
   viewMode: "class" | "teacher" | "subject" | "room"
   selectedEntity: string
@@ -53,7 +53,10 @@ export interface CalendarViewProps {
   showRoom: boolean
   showTime?: boolean      // show start–end time inside blocks
   shortNames?: boolean    // abbreviate subject / teacher / room names
+  editMode?: boolean      // enable drag/drop and delete operations
   onCellClick?: (section: string, day: string, periodId: string) => void
+  onCellEdit?: (section: string, day: string, periodId: string) => void  // open edit modal
+  onCellDelete?: (section: string, day: string, periodId: string) => void // clear cell with confirmation
   onCellSwap?: (from: { section:string; day:string; periodId:string },
                 to:   { section:string; day:string; periodId:string }) => void
   onCellFill?: (section: string, day: string, periodId: string, suggestedSubject: string) => void
@@ -127,19 +130,43 @@ function breakStyle(type: Period["type"]): { bg:string; border:string; text:stri
 }
 
 // ─── Short-name helpers ──────────────────────────────────────
-function shortSubject(name: string): string {
+/**
+ * Fallback algorithmic short name generation (used when no stored shortName exists)
+ */
+function generateShortSubject(name: string): string {
   if (!name) return ""
   const words = name.trim().split(/\s+/)
   if (words.length >= 3) return words.map(w => w[0].toUpperCase()).join("") // "Physical Education" → "PE"
   if (words.length === 2) return `${words[0].slice(0,4)} ${words[1].slice(0,3)}`
   return name.slice(0, 8)
 }
-function shortPerson(name: string): string {
+function generateShortPerson(name: string): string {
   if (!name) return ""
   return name.split(/\s+/)[0].slice(0, 9)
 }
 function shortRoom(name: string): string {
   return name.slice(0, 9)
+}
+
+/**
+ * Smart short name lookup — uses stored shortName field if configured, falls back to generated
+ */
+function getStaffShortName(staffName: string, staff: Staff[]): string {
+  if (!staffName) return ""
+  const person = staff.find(s => s.name === staffName)
+  if (person?.shortName?.trim()) {
+    return person.shortName
+  }
+  return generateShortPerson(staffName)
+}
+
+function getSubjectShortName(subjectName: string, subjects: Subject[]): string {
+  if (!subjectName) return ""
+  const subject = subjects.find(s => s.name === subjectName)
+  if (subject?.shortName?.trim()) {
+    return subject.shortName
+  }
+  return generateShortSubject(subjectName)
 }
 
 // ─────────────────────────────────────────────
@@ -341,16 +368,27 @@ function DetailPanel({d,tf,onClose,onEdit}:{
 // Soft-accent style: light background + coloured left border + black text
 // ─────────────────────────────────────────────
 function Block({
-  block, left, width, rowH, compact,
+  block, left, width, rowH, compact, dayKey,
   showTeacherVal, showRoomVal, showTimeVal, shortNamesVal, viewMode,
-  onHover, onLeave, onClick,
+  staff, subjects, editMode, dragItem, dragOverCell,
+  onHover, onLeave, onClick, onEdit, onDelete, onDragStart, onDragOver, onDrop,
 }: {
-  block:TimeBlock; left:number; width:number; rowH:number; compact:boolean
+  block:TimeBlock; left:number; width:number; rowH:number; compact:boolean; dayKey:string
   showTeacherVal:boolean; showRoomVal:boolean; showTimeVal:boolean; shortNamesVal:boolean
   viewMode:CalendarViewProps["viewMode"]
+  staff: Staff[]
+  subjects: Subject[]
+  editMode: boolean
+  dragItem: {section:string;day:string;periodId:string}|null
+  dragOverCell: {section:string;day:string;periodId:string}|null
   onHover:(b:TimeBlock,e:React.MouseEvent)=>void
   onLeave:()=>void
   onClick:(b:TimeBlock)=>void
+  onEdit?: (section:string,day:string,periodId:string)=>void
+  onDelete?: (section:string,day:string,periodId:string)=>void
+  onDragStart?: (e:React.DragEvent,section:string,day:string,periodId:string)=>void
+  onDragOver?: (e:React.DragEvent,section:string,day:string,periodId:string)=>void
+  onDrop?: (e:React.DragEvent,section:string,day:string,periodId:string)=>void
 }) {
   if (width <= 0) return null
 
@@ -396,8 +434,8 @@ function Block({
 
   // ── Subject block — soft accent style ────────────────────────────────
   const col     = subjectColor(block.subject)
-  const subDisp = shortNamesVal ? shortSubject(block.subject) : block.subject
-  const tchDisp = block.teacher ? (shortNamesVal ? shortPerson(block.teacher) : block.teacher) : ""
+  const subDisp = shortNamesVal ? getSubjectShortName(block.subject, subjects) : block.subject
+  const tchDisp = block.teacher ? (shortNamesVal ? getStaffShortName(block.teacher, staff) : block.teacher) : ""
   const rmDisp  = block.room    ? (shortNamesVal ? shortRoom(block.room)      : block.room)    : ""
   const secDisp = block.sectionName ? (shortNamesVal ? shortRoom(block.sectionName) : block.sectionName) : ""
 
@@ -408,24 +446,34 @@ function Block({
   const fsSub    = compact ? (width<22?0:8) : (width<28?0:width<55?9.5:11)
   const fsMeta   = compact ? 7 : 9.5
 
+  const isDragging = dragItem?.section === block.sectionName && dragItem?.day === block.sectionName
+  const isDragOverThis = dragOverCell?.section === block.sectionName && dragOverCell?.day === block.sectionName && dragOverCell?.periodId === block.periodId
+  const [hovered, setHovered] = useState(false)
+
   return (
     <div
-      onMouseEnter={e=>onHover(block,e)}
-      onMouseLeave={onLeave}
+      draggable={editMode && !!onDragStart && !!block.subject}
+      onMouseEnter={e=>{setHovered(true); onHover(block,e)}}
+      onMouseLeave={()=>{setHovered(false); onLeave()}}
+      onDragStart={e=>onDragStart?.(e, block.sectionName, dayKey, block.periodId)}
+      onDragOver={e=>{e.preventDefault(); onDragOver?.(e, block.sectionName, dayKey, block.periodId)}}
+      onDrop={e=>{e.preventDefault(); e.stopPropagation(); onDrop?.(e, block.sectionName, dayKey, block.periodId)}}
+      onDoubleClick={()=>onEdit?.(block.sectionName, dayKey, block.periodId)}
       onClick={()=>onClick(block)}
       style={{
         position:"absolute" as const,
         left: left+1, width: Math.max(width-2, 2),
         top: compact?2:3, bottom: compact?2:3,
-        background: col.bg,
+        background: isDragging ? "rgba(124,111,224,0.2)" : isDragOverThis ? "rgba(124,111,224,0.1)" : col.bg,
         borderLeft: `3px solid ${col.accent}`,
         borderRadius: "0 5px 5px 0",
-        overflow:"hidden", cursor:"pointer",
+        overflow:"hidden", cursor: editMode && !!onDragStart && !!block.subject ? "grab" : "pointer",
         padding: width<26?"1px 2px": compact?"2px 5px":"3px 7px",
         display:"flex", flexDirection:"column" as const, justifyContent:"center",
-        outline: block.absent?"2px solid #F59E0B":block.isSub?"1.5px dashed #F59E0B":"none",
+        outline: isDragOverThis ? "2px solid #7C6FE0" : block.absent?"2px solid #F59E0B":block.isSub?"1.5px dashed #F59E0B":"none",
         userSelect:"none" as const,
-        boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+        boxShadow: isDragging ? "0 4px 12px rgba(0,0,0,0.15)" : "0 1px 3px rgba(0,0,0,0.06)",
+        transition: "all 0.2s ease",
       }}>
       {/* Subject name — in accent color */}
       {fsSub > 0 && (
@@ -466,6 +514,19 @@ function Block({
         <span style={{ position:"absolute" as const, top:3, right:4,
           width:5, height:5, borderRadius:"50%", background:"#F59E0B" }} />
       )}
+      {/* Delete button — shown on hover in edit mode */}
+      {editMode && hovered && onDelete && !!block.subject && (
+        <button
+          onClick={e=>{e.stopPropagation(); onDelete(block.sectionName, dayKey, block.periodId)}}
+          style={{
+            position:"absolute" as const, top:2, right:2, width:18, height:18,
+            borderRadius:"50%", background:"#ef4444", color:"#fff", border:"none",
+            fontSize:11, fontWeight:700, cursor:"pointer", display:"flex",
+            alignItems:"center", justifyContent:"center", lineHeight:1, zIndex:10,
+          }}
+          title="Delete cell"
+        >×</button>
+      )}
     </div>
   )
 }
@@ -475,9 +536,9 @@ function Block({
 // ─────────────────────────────────────────────
 export function CalendarView({
   classTT, periods, workDays, startTime, timeFormat="12h",
-  staff, sections, substitutions, viewMode, selectedEntity,
-  showTeacher, showRoom, showTime=false, shortNames=false,
-  onCellClick, absentHighlights, classwiseBreaks,
+  staff, sections, subjects, substitutions, viewMode, selectedEntity,
+  showTeacher, showRoom, showTime=false, shortNames=false, editMode=false,
+  onCellClick, onCellEdit, onCellDelete, absentHighlights, classwiseBreaks,
 }: CalendarViewProps) {
 
   // ── State ────────────────────────────────────────────────────────────
@@ -486,6 +547,8 @@ export function CalendarView({
   const [curDate,    setCurDate]    = useState(new Date())
   const [tooltip,    setTooltip]    = useState<{lines:string[];x:number;y:number}|null>(null)
   const [activeD,    setActiveD]    = useState<ActiveDetail|null>(null)
+  const [dragItem,   setDragItem]   = useState<{section:string;day:string;periodId:string}|null>(null)
+  const [dragOverCell, setDragOverCell] = useState<{section:string;day:string;periodId:string}|null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout>|null>(null)
 
   const dayStartMin = useMemo(()=>parseTime(startTime),[startTime])
@@ -746,13 +809,29 @@ export function CalendarView({
       {/* Blocks */}
       {blocks.map(b=>(
         <Block key={b.key} block={b}
+          dayKey={dayKey}
           left={(b.startMin-dayStartMin)*pxPerMin}
           width={(b.endMin-b.startMin)*pxPerMin}
           rowH={rowH} compact={compact}
           showTeacherVal={showTeacher} showRoomVal={showRoom}
           showTimeVal={showTime} shortNamesVal={shortNames}
           viewMode={viewMode}
+          staff={staff} subjects={subjects}
+          editMode={editMode}
+          dragItem={dragItem}
+          dragOverCell={dragOverCell}
           onHover={(bl,e)=>onHover(bl,e,dayKey)} onLeave={onLeave} onClick={bl=>onClick(bl,dayKey)}
+          onEdit={onCellEdit ? (sec,d,p)=>onCellEdit(sec,d,p) : undefined}
+          onDelete={onCellDelete ? (sec,d,p)=>onCellDelete(sec,d,p) : undefined}
+          onDragStart={(e,sec,d,p)=>{setDragItem({section:sec,day:d,periodId:p})}}
+          onDragOver={(e,sec,d,p)=>{setDragOverCell({section:sec,day:d,periodId:p})}}
+          onDrop={(e,sec,d,p)=>{
+            if (dragItem && onCellSwap && (dragItem.section !== sec || dragItem.day !== d || dragItem.periodId !== p)) {
+              onCellSwap(dragItem, {section: sec, day: d, periodId: p})
+            }
+            setDragItem(null)
+            setDragOverCell(null)
+          }}
         />
       ))}
     </div>
