@@ -716,8 +716,12 @@ export function CalendarView({
     setTooltip(null)
   },[])
 
-  // ── Month navigation ─────────────────────────────────────────────────
+  // ── Date navigation ──────────────────────────────────────────────────
   const navMonth=(dir:-1|1)=>{const d=new Date(curDate);d.setMonth(d.getMonth()+dir);setCurDate(d)}
+  const navWeek=(dir:-1|1)=>{const d=new Date(curDate);d.setDate(d.getDate()+dir*7);setCurDate(d)}
+  const getWeekStart=(d:Date)=>{const x=new Date(d);const dow=x.getDay()||7;x.setDate(x.getDate()-(dow-1));return x}
+  const getWeekEnd=(d:Date)=>{const s=getWeekStart(d);const e=new Date(s);e.setDate(e.getDate()+6);return e}
+  const fmtDate=(d:Date)=>`${d.getDate()} ${MONTH_NAMES[d.getMonth()].slice(0,3)}`
 
   // ── Shared track renderer (absolute-positioned blocks in a day cell) ──
   const renderTrack = (blocks:TimeBlock[], rowH:number, compact:boolean, dayKey:string) => (
@@ -839,10 +843,11 @@ export function CalendarView({
             {entityList.map((entity,ri)=>{
               const isAbsent=!!(absentHighlights?.some(h=>h.teacher===entity.id))
               const rowBg = ri%2===0?"#FFFFFF":"#F8FAFC"
+              const isLastInGroup = ri===entityList.length-1 || entityList[ri+1]?.group!==entity.group
               return (
                 <div key={entity.id} style={{
                   display:"flex", height:rowH, background:rowBg,
-                  borderBottom:"1px solid #CBD5E1",
+                  borderBottom: isLastInGroup ? "3px solid #64748b" : "1px solid #CBD5E1",
                 }}>
                   {/* Entity label (sticky left) */}
                   <div style={{
@@ -891,9 +896,7 @@ export function CalendarView({
         {/* Detail panel */}
         {panelOpen && activeD && (
           <DetailPanel d={activeD} tf={timeFormat} onClose={()=>setActiveD(null)}
-            onEdit={activeD.block.subject&&activeD.block.sectionName
-              ?()=>{onCellClick?.(activeD.block.sectionName,activeD.dayKey,activeD.block.periodId);setActiveD(null)}
-              :undefined} />
+            onEdit={undefined} />
         )}
       </div>
     )
@@ -968,14 +971,15 @@ export function CalendarView({
                   </div>
 
                   {/* Entity day-rows */}
-                  {grpEntities.map(entity=>
+                  {grpEntities.map((entity, ei)=>
                     workDays.map((day,di)=>{
                       const ri = di
                       const rowBg = ri%2===0?"#FFFFFF":"#F8FAFC"
+                      const isLastRow = ei===grpEntities.length-1 && di===workDays.length-1
                       return (
                         <div key={`${entity.id}-${day}`} style={{
                           display:"flex", height:rowH, background:rowBg,
-                          borderBottom:"1px solid #CBD5E1",
+                          borderBottom: isLastRow ? "3px solid #64748b" : "1px solid #CBD5E1",
                         }}>
                           {/* Entity label (first day row only) */}
                           <div style={{
@@ -1017,9 +1021,7 @@ export function CalendarView({
           </div>
           {panelOpen&&activeD&&(
             <DetailPanel d={activeD} tf={timeFormat} onClose={()=>setActiveD(null)}
-              onEdit={activeD.block.subject&&activeD.block.sectionName
-                ?()=>{onCellClick?.(activeD.block.sectionName,activeD.dayKey,activeD.block.periodId);setActiveD(null)}
-                :undefined} />
+              onEdit={undefined} />
           )}
         </div>
       )
@@ -1088,9 +1090,7 @@ export function CalendarView({
         </div>
         {panelOpen&&activeD&&(
           <DetailPanel d={activeD} tf={timeFormat} onClose={()=>setActiveD(null)}
-            onEdit={activeD.block.subject&&activeD.block.sectionName
-              ?()=>{onCellClick?.(activeD.block.sectionName,activeD.dayKey,activeD.block.periodId);setActiveD(null)}
-              :undefined} />
+            onEdit={undefined} />
         )}
       </div>
     )
@@ -1202,6 +1202,19 @@ export function CalendarView({
         </div>
 
         {/* Month nav */}
+        {calMode==="timeline"&&(
+          <>
+            <div style={{ display:"flex",alignItems:"center",gap:3 }}>
+              <button onClick={()=>navWeek(-1)} style={{ width:26,height:26,border:"1px solid #E5EBF5",borderRadius:5,background:"#fff",cursor:"pointer",fontSize:14,color:"#94A3B8",display:"flex",alignItems:"center",justifyContent:"center" }}>‹</button>
+              <button onClick={()=>setCurDate(new Date())} style={{ padding:"3px 10px",border:"1px solid #E5EBF5",borderRadius:5,background:"#fff",cursor:"pointer",fontSize:10,color:"#94A3B8" }}>Today</button>
+              <button onClick={()=>navWeek(1)}  style={{ width:26,height:26,border:"1px solid #E5EBF5",borderRadius:5,background:"#fff",cursor:"pointer",fontSize:14,color:"#94A3B8",display:"flex",alignItems:"center",justifyContent:"center" }}>›</button>
+            </div>
+            <div style={{ fontSize:12,fontWeight:600,color:"#374151" }}>
+              {fmtDate(getWeekStart(curDate))} – {fmtDate(getWeekEnd(curDate))}
+            </div>
+          </>
+        )}
+
         {calMode==="month"&&(
           <>
             <div style={{ display:"flex",alignItems:"center",gap:3 }}>
