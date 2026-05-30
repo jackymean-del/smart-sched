@@ -755,14 +755,16 @@ export function CalendarView({
         subject:"", teacher:"", room:"", isSub:false, isClassTeacher:false, absent:false,
       })
     })
-    // Teaching blocks
+    // Class periods: INCLUDE ALL (taught + free slots) so drop zones appear everywhere
     sections.forEach(sec=>{
       const ps=buildSecPeriods(sec.name,periods,classwiseBreaks)
       const tm=calcTimes(ps,dayStartMin)
       ps.forEach(p=>{
         if(p.type!=="class") return
         const cell=classTT[sec.name]?.[dayKey]?.[p.id]
-        if(cell?.teacher!==tName) return
+        const isTaught = cell?.teacher===tName
+        // Skip if another teacher teaches (not a free slot for this teacher)
+        if(!isTaught && cell?.teacher) return
         const t=tm.get(p.id)!
         const subKey=`${sec.name}|${dayKey}|${p.id}`
         const isSub=!!substitutions[subKey]
@@ -770,11 +772,11 @@ export function CalendarView({
           key:`${sec.name}|${p.id}|${dayKey}`, periodId:p.id,
           periodName:p.name, periodType:p.type,
           startMin:t.start, endMin:t.end, sectionName:sec.name,
-          subject:cell.subject??"",
-          teacher:isSub?substitutions[subKey]:(cell.teacher??""),
-          room:cell.room??"",
-          isSub, isClassTeacher:!!(cell.isClassTeacher),
-          absent:!!(absentHighlights?.some(h=>h.day===dayKey&&h.teacher===tName)),
+          subject:isTaught ? (cell.subject??"") : "",
+          teacher:isTaught ? (isSub?substitutions[subKey]:(cell.teacher??"")) : "",
+          room:isTaught ? (cell.room??"") : "",
+          isSub: !!(isTaught && isSub), isClassTeacher:!!(isTaught && cell.isClassTeacher),
+          absent:!!(isTaught && absentHighlights?.some(h=>h.day===dayKey&&h.teacher===tName)),
         })
       })
     })
@@ -793,13 +795,16 @@ export function CalendarView({
         subject:"", teacher:"", room:roomName, isSub:false, isClassTeacher:false, absent:false,
       })
     })
+    // Class periods: INCLUDE ALL (assigned to room + free slots) so drop zones appear everywhere
     sections.forEach(sec=>{
       const ps=buildSecPeriods(sec.name,periods,classwiseBreaks)
       const tm=calcTimes(ps,dayStartMin)
       ps.forEach(p=>{
         if(p.type!=="class") return
         const cell=classTT[sec.name]?.[dayKey]?.[p.id]
-        if(!cell?.subject||cell.room!==roomName) return
+        const isInThisRoom = cell?.subject && cell.room===roomName
+        // Skip if another room is using this slot (not a free slot for this room)
+        if(!isInThisRoom && cell?.subject && cell.room!==roomName) return
         const t=tm.get(p.id)!
         const subKey=`${sec.name}|${dayKey}|${p.id}`
         const isSub=!!substitutions[subKey]
@@ -807,10 +812,10 @@ export function CalendarView({
           key:`${sec.name}|${p.id}|${dayKey}`, periodId:p.id,
           periodName:p.name, periodType:p.type,
           startMin:t.start, endMin:t.end, sectionName:sec.name,
-          subject:cell.subject??"",
-          teacher:isSub?substitutions[subKey]:(cell.teacher??""),
+          subject:isInThisRoom ? (cell.subject??"") : "",
+          teacher:isInThisRoom ? (isSub?substitutions[subKey]:(cell.teacher??"")) : "",
           room:roomName,
-          isSub, isClassTeacher:!!(cell.isClassTeacher), absent:false,
+          isSub: !!(isInThisRoom && isSub), isClassTeacher:!!(isInThisRoom && cell.isClassTeacher), absent:false,
         })
       })
     })
@@ -829,13 +834,16 @@ export function CalendarView({
         subject:"", teacher:"", room:"", isSub:false, isClassTeacher:false, absent:false,
       })
     })
+    // Class periods: INCLUDE ALL (taught this subject + free slots) so drop zones appear everywhere
     sections.forEach(sec=>{
       const ps=buildSecPeriods(sec.name,periods,classwiseBreaks)
       const tm=calcTimes(ps,dayStartMin)
       ps.forEach(p=>{
         if(p.type!=="class") return
         const cell=classTT[sec.name]?.[dayKey]?.[p.id]
-        if(cell?.subject!==subjectName) return
+        const hasThisSubject = cell?.subject===subjectName
+        // Skip if another subject is teaching (not a free slot for this subject)
+        if(!hasThisSubject && cell?.subject) return
         const t=tm.get(p.id)!
         const subKey=`${sec.name}|${dayKey}|${p.id}`
         const isSub=!!substitutions[subKey]
@@ -843,10 +851,10 @@ export function CalendarView({
           key:`${sec.name}|${p.id}|${dayKey}`, periodId:p.id,
           periodName:p.name, periodType:p.type,
           startMin:t.start, endMin:t.end, sectionName:sec.name,
-          subject:subjectName,
-          teacher:isSub?substitutions[subKey]:(cell.teacher??""),
-          room:cell.room??"",
-          isSub, isClassTeacher:!!(cell.isClassTeacher), absent:false,
+          subject:hasThisSubject ? subjectName : "",
+          teacher:hasThisSubject ? (isSub?substitutions[subKey]:(cell.teacher??"")) : "",
+          room:hasThisSubject ? (cell.room??"") : "",
+          isSub: !!(hasThisSubject && isSub), isClassTeacher:!!(hasThisSubject && cell.isClassTeacher), absent:false,
         })
       })
     })
