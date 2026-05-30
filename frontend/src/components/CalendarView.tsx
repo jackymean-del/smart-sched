@@ -518,38 +518,111 @@ function Block({
 }
 
 // ─────────────────────────────────────────────
+// Conflict detection — checks teacher clashes after a swap
+// Returns null if safe, or a string describing the conflict
+// ─────────────────────────────────────────────
+function getSwapConflict(
+  classTT: ClassTimetable,
+  srcSection: string, srcDay: string, srcPeriodId: string,
+  tgtDay: string, tgtPeriodId: string,
+): string | null {
+  const srcCell = classTT[srcSection]?.[srcDay]?.[srcPeriodId]
+  const tgtCell = classTT[srcSection]?.[tgtDay]?.[tgtPeriodId]
+  const srcTeacher = srcCell?.teacher?.trim()
+  const tgtTeacher = tgtCell?.teacher?.trim()
+  const msgs: string[] = []
+
+  // After swap: srcTeacher will occupy (tgtDay, tgtPeriodId) → check for clash
+  if (srcTeacher) {
+    const clash = Object.entries(classTT).find(([sec, days]) =>
+      sec !== srcSection && days[tgtDay]?.[tgtPeriodId]?.teacher === srcTeacher
+    )
+    if (clash) msgs.push(`${srcTeacher} already in ${clash[0]}`)
+  }
+
+  // After swap: tgtTeacher will occupy (srcDay, srcPeriodId) → check for clash
+  if (tgtTeacher) {
+    const clash = Object.entries(classTT).find(([sec, days]) =>
+      sec !== srcSection && days[srcDay]?.[srcPeriodId]?.teacher === tgtTeacher
+    )
+    if (clash) msgs.push(`${tgtTeacher} already in ${clash[0]}`)
+  }
+
+  return msgs.length ? msgs.join('\n') : null
+}
+
+// ─────────────────────────────────────────────
 // Drop zone overlay — rendered on top of blocks ONLY during active drag
-// Handles highlighting + drop events without re-rendering Block components
+// Shows safe (purple) or conflict (red) state with reason tooltip
 // ─────────────────────────────────────────────
 function DropZone({
-  block, left, width, rowH, compact, dayKey, isOver,
+  block, left, width, rowH, compact, dayKey, isOver, conflict,
   onDragOver, onDragLeave, onDrop,
 }: {
   block:TimeBlock; left:number; width:number; rowH:number; compact:boolean; dayKey:string
   isOver:boolean
+  conflict: string | null  // null = safe, string = conflict reason
   onDragOver:(sec:string,day:string,pid:string)=>void
   onDragLeave:()=>void
   onDrop:(sec:string,day:string,pid:string)=>void
 }) {
   if (width <= 0 || block.periodType !== "class") return null
+
+  const isConflict = !!conflict
+  const [showTip, setShowTip] = useState(false)
+
+  // Colors
+  const bg     = isConflict
+    ? (isOver ? "rgba(239,68,68,0.18)"  : "rgba(239,68,68,0.08)")
+    : (isOver ? "rgba(99,102,241,0.22)" : "rgba(165,180,252,0.10)")
+  const border = isConflict
+    ? (isOver ? "2px solid #EF4444"     : "1.5px dashed #FCA5A5")
+    : (isOver ? "2px solid #6366F1"     : "1.5px dashed #818CF8")
+
   return (
     <div
       onDragOver={e=>{e.preventDefault(); e.stopPropagation(); onDragOver(block.sectionName, dayKey, block.periodId)}}
-      onDragEnter={e=>{e.preventDefault(); e.stopPropagation()}}
-      onDragLeave={onDragLeave}
-      onDrop={e=>{e.preventDefault(); e.stopPropagation(); onDrop(block.sectionName, dayKey, block.periodId)}}
+      onDragEnter={e=>{e.preventDefault(); e.stopPropagation(); setShowTip(true)}}
+      onDragLeave={()=>{ onDragLeave(); setShowTip(false) }}
+      onDrop={e=>{
+        e.preventDefault(); e.stopPropagation()
+        setShowTip(false)
+        if (!isConflict) onDrop(block.sectionName, dayKey, block.periodId)
+      }}
       style={{
         position:"absolute" as const,
         left:left+1, width:Math.max(width-2,2),
         top:compact?2:3, bottom:compact?2:3,
         borderRadius:"0 5px 5px 0",
-        zIndex:20,
-        background: isOver ? "rgba(99,102,241,0.22)" : "rgba(165,180,252,0.12)",
-        border: isOver ? "2px solid #6366F1" : "1.5px dashed #818CF8",
-        boxShadow: isOver ? "inset 0 0 0 1px #6366F1" : "none",
+        zIndex:20, background:bg, border,
         transition:"all 0.08s ease",
-        cursor:"copy",
-      }} />
+        cursor: isConflict ? "not-allowed" : "copy",
+        overflow:"visible" as const,
+      }}>
+      {/* Conflict / safe badge — shown when hovering */}
+      {isOver && (
+        <div style={{
+          position:"absolute" as const,
+          bottom:"calc(100% + 6px)", left:"50%", transform:"translateX(-50%)",
+          background: isConflict ? "#DC2626" : "#16A34A",
+          color:"#fff", borderRadius:6, padding:"4px 8px",
+          fontSize:10, fontWeight:600, whiteSpace:"pre" as const,
+          boxShadow:"0 2px 8px rgba(0,0,0,0.18)",
+          zIndex:50, pointerEvents:"none" as const,
+          minWidth:120, textAlign:"center" as const,
+          lineHeight:1.4,
+        }}>
+          {isConflict ? `⚠ Conflict\n${conflict}` : "✓ Safe to drop"}
+          {/* Caret */}
+          <div style={{
+            position:"absolute" as const, top:"100%", left:"50%",
+            transform:"translateX(-50%)",
+            border:"5px solid transparent",
+            borderTopColor: isConflict ? "#DC2626" : "#16A34A",
+          }} />
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -875,13 +948,18 @@ export function CalendarView({
         if (b.periodType!=="class") return null
         if (b.key === dragSrcKey) return null                  // skip source cell
         if (b.sectionName !== dragSrc.section) return null     // same section only
-        const bLeft  = (b.startMin-dayStartMin)*pxPerMin
-        const bWidth = (b.endMin-b.startMin)*pxPerMin
-        const isOver = dragOverKey === b.key
+        const bLeft   = (b.startMin-dayStartMin)*pxPerMin
+        const bWidth  = (b.endMin-b.startMin)*pxPerMin
+        const isOver  = dragOverKey === b.key
+        const conflict = getSwapConflict(
+          classTT,
+          dragSrc.section, dragSrc.day, dragSrc.periodId,
+          dayKey, b.periodId,
+        )
         return (
           <DropZone key={`dz-${b.key}`} block={b}
             dayKey={dayKey} left={bLeft} width={bWidth} rowH={rowH} compact={compact}
-            isOver={isOver}
+            isOver={isOver} conflict={conflict}
             onDragOver={(sec,d,p)=>{ setDragOverKey(b.key); setDragOverDst({section:sec,day:d,periodId:p}) }}
             onDragLeave={()=>{ if(dragOverKey===b.key){ setDragOverKey(null); setDragOverDst(null) } }}
             onDrop={(sec,d,p)=>{
