@@ -533,9 +533,10 @@ function Block({
       {/* Droppable indicator — show down arrow on droppable cells (like Traditional view) */}
       {isDroppable && (
         <div style={{
-          position:"absolute" as const, top:"50%", left:"50%",
+          position:"absolute" as const, top:"50%", left:"50%", transform:"translate(-50%, -50%)",
           fontSize:16, color:"#A5B4FC", fontWeight:400, pointerEvents:"none",
           animation: "dropArrow 1.2s ease-in-out infinite",
+          textAlign:"center" as const,
         }}>↓</div>
       )}
       {/* Drag handle icon — shown on draggable cells */}
