@@ -226,9 +226,17 @@ function rulerLabel(mins:number, fmt:"12h"|"24h"="12h"): string {
 // ─────────────────────────────────────────────
 type CwBreak={id:string;name:string;type:string;classes:string[];afterPeriod:number;duration:number}
 
+// MUST match getSectionClassKey() in routes/timetable.tsx exactly — the
+// classwiseBreaks[].classes arrays are keyed by THAT function. Any divergence
+// means per-section break filtering breaks and the calendar shows wrong
+// (non-staggered) break timing.
+//   "Nursery-A" → "nur" · "VI-A" → "vi" · "XI-Com-A" → "xi" · "I-A" → "i"
 function secKey(sn:string): string {
-  const n=sn.toLowerCase().replace(/[\s-]/g,"")
-  const m=n.match(/^([a-z]+)/); return m?m[1]:n.slice(0,6)
+  const norm = sn.toLowerCase().replace(/[\s-]/g, "")
+  if (norm.startsWith("nur")) return "nur"
+  if (norm.startsWith("lkg")) return "lkg"
+  if (norm.startsWith("ukg")) return "ukg"
+  return sn.split(/[\s-]/)[0].toLowerCase()
 }
 function buildSecPeriods(sn:string, all:Period[], cw?:CwBreak[]): Period[] {
   if (!cw?.length) return all
