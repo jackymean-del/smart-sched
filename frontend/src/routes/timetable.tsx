@@ -579,9 +579,9 @@ function mergeTeacherIdleColumns(
 // isTarget    → valid drop zone (green fill)
 // hasConflict → cannot drop (red fill)
 // isUnavailable → dragging but this slot is not a valid target (red outline, yellow bg)
-const LunchCell = React.memo(function LunchCell({ id, secName, isTarget, hasConflict, isUnavailable, dragProps }: {
+const LunchCell = React.memo(function LunchCell({ id, secName, isTarget, hasConflict, isUnavailable, dragOver, dragProps }: {
   id: string; secName?: string;
-  isTarget?: boolean; hasConflict?: boolean; isUnavailable?: boolean;
+  isTarget?: boolean; hasConflict?: boolean; isUnavailable?: boolean; dragOver?: boolean;
   dragProps?: { onDragOver:(e:React.DragEvent)=>void; onDrop:(e:React.DragEvent)=>void; onDragLeave:()=>void }
 }) {
   // Lunch cells are "filled" → always use outline, never fill, to stay consistent
@@ -599,7 +599,7 @@ const LunchCell = React.memo(function LunchCell({ id, secName, isTarget, hasConf
         cursor: isTarget ? "copy" : "default" }}>
       <div style={{ fontSize:9, fontStyle:"italic", color:"#D4920E", fontWeight:600, lineHeight:1.4 }}>Lunch Break</div>
       {secName && <div style={{ fontSize:9, color:"#D4920E", opacity:0.8, fontWeight:500 }}>{secName}</div>}
-      {isTarget && <DropIndicator hasConflict={!!hasConflict} />}
+      {isTarget && dragOver && <DropIndicator hasConflict={!!hasConflict} />}
     </td>
   )
 })
@@ -824,7 +824,7 @@ function SubjectCell({ subject, teacher, room, isClassTeacher, isSub, subTeacher
   if (!subject) return (
     <td style={{ ...dragTdStyle(!!isDropTarget, isConflict, false), position:"relative" as const }} {...sharedTdProps}>
       <div onClick={onClick} style={{ ...dragInnerStyle(!!isDropTarget, isConflict), position:"relative" as const }}>
-        {!!isDropTarget && <DropIndicator hasConflict={isConflict} />}
+        {!!isDropTarget && !!dragOver && <DropIndicator hasConflict={isConflict} />}
       </div>
     </td>
   )
@@ -2056,6 +2056,7 @@ export function TimetablePage() {
                       <LunchCell key={col.key} id={col.key} secName={compressClassNames(lunchSecs)}
                         isTarget={ttIsTarget} hasConflict={!!ttFreeConflict}
                         isUnavailable={isDragging && !ttIsTarget}
+                        dragOver={dragOverCell===ttCellKey}
                         dragProps={ttFreeDragProps} />
                     )
                     // Free / droppable (move-only)
@@ -2063,7 +2064,7 @@ export function TimetablePage() {
                       <td key={col.key} {...ttFreeDragProps}
                         style={{ ...dragTdStyle(ttIsTarget, !!ttFreeConflict, false, isSameTeacherDrag && !ttIsTarget), position:"relative" as const }}>
                         <div style={{ ...dragInnerStyle(ttIsTarget, !!ttFreeConflict), position:"relative" as const }}>
-                          {ttIsTarget && <DropIndicator hasConflict={!!ttFreeConflict} />}
+                          {ttIsTarget && dragOverCell===ttCellKey && <DropIndicator hasConflict={!!ttFreeConflict} />}
                         </div>
                       </td>
                     )
@@ -2223,13 +2224,14 @@ export function TimetablePage() {
                         <LunchCell key={col.key} id={ttTKey} secName={compressClassNames(lunchSecs)}
                           isTarget={ttTIsTarget} hasConflict={!!ttTFreeConflict}
                           isUnavailable={isDragging && !ttTIsTarget}
+                          dragOver={dragOverCell===ttTKey}
                           dragProps={ttTFreeDragProps} />
                       )
                       return (
                         <td key={col.key} {...ttTFreeDragProps}
                           style={{ ...dragTdStyle(ttTIsTarget, !!ttTFreeConflict, false, isSameTeacherDrag && !ttTIsTarget), position:"relative" as const }}>
                           <div style={{ ...dragInnerStyle(ttTIsTarget, !!ttTFreeConflict), position:"relative" as const }}>
-                            {ttTIsTarget && <DropIndicator hasConflict={!!ttTFreeConflict} />}
+                            {ttTIsTarget && dragOverCell===ttTKey && <DropIndicator hasConflict={!!ttTFreeConflict} />}
                           </div>
                         </td>
                       )
