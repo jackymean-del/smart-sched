@@ -763,6 +763,30 @@ export function CalendarView({
     return calcTimes(buildSecPeriods(repSec,periods,classwiseBreaks),dayStartMin)
   },[sections,periods,classwiseBreaks,dayStartMin])
 
+  // Distinct teaching slots across ALL class groups — mirrors the traditional
+  // teacher view's "unified time-slot column model". With staggered breaks a
+  // single Period N occurs at several wall-clock times (e.g. P5 @ 12:05 for
+  // VI-XII and P5 @ 12:35 for Nursery-V); each distinct (periodId, startMin)
+  // is its own slot so teacher/room free blocks land at the correct times.
+  const distinctTeachingSlots = useCallback((dayKey:string) => {
+    const slots = new Map<string,{periodId:string;periodName:string;startMin:number;endMin:number}>()
+    const seenGroups = new Set<string>()
+    sections.forEach(sec=>{
+      const k = secKey(sec.name)
+      if (seenGroups.has(k)) return
+      seenGroups.add(k)
+      const ps = buildSecPeriods(sec.name, periods, classwiseBreaks)
+      const tm = calcTimes(ps, dayStartMin)
+      ps.forEach(p=>{
+        if (p.type!=="class") return
+        const t = tm.get(p.id)!
+        const sk = `${p.id}@${t.start}`
+        if (!slots.has(sk)) slots.set(sk, {periodId:p.id, periodName:p.name, startMin:t.start, endMin:t.end})
+      })
+    })
+    return slots
+  },[sections,periods,classwiseBreaks,dayStartMin])
+
   // ── Block builders ───────────────────────────────────────────────────
   const buildClassBlocks = useCallback((secName:string, dayKey:string): TimeBlock[] => {
     const ps=buildSecPeriods(secName,periods,classwiseBreaks)
@@ -802,7 +826,9 @@ export function CalendarView({
       })
     })
     // ── Taught periods ── (only where this teacher actually teaches)
-    const taughtPeriodIds = new Set<string>()
+    // Key taught slots by periodId@startMin (NOT periodId) so staggered same-id
+    // periods at different times are tracked independently.
+    const taughtSlotKeys = new Set<string>()
     sections.forEach(sec=>{
       const ps=buildSecPeriods(sec.name,periods,classwiseBreaks)
       const tm=calcTimes(ps,dayStartMin)
@@ -810,8 +836,8 @@ export function CalendarView({
         if(p.type!=="class") return
         const cell=classTT[sec.name]?.[dayKey]?.[p.id]
         if(cell?.teacher!==tName || !cell?.subject) return
-        taughtPeriodIds.add(p.id)
         const t=tm.get(p.id)!
+        taughtSlotKeys.add(`${p.id}@${t.start}`)
         const subKey=`${sec.name}|${dayKey}|${p.id}`
         const isSub=!!substitutions[subKey]
         blocks.push({
@@ -826,23 +852,22 @@ export function CalendarView({
         })
       })
     })
-    // ── ONE virtual free block per truly-free period ──
-    // Set teacher:tName so the DropZone filter only shows these on THIS teacher's rows
-    periods.forEach(p=>{
-      if(p.type!=="class") return
-      if(taughtPeriodIds.has(p.id)) return     // teacher is busy here → skip
-      const t=gTm.get(p.id)!
+    // ── ONE virtual free block per truly-free DISTINCT slot ──
+    // Uses the unified slot model so free blocks land at correct staggered times.
+    // Set teacher:tName so the DropZone filter only shows these on THIS teacher's rows.
+    distinctTeachingSlots(dayKey).forEach((slot,sk)=>{
+      if(taughtSlotKeys.has(sk)) return     // teacher is busy in this slot → skip
       blocks.push({
-        key:`__free|${tName}|${p.id}|${dayKey}`, periodId:p.id,
-        periodName:p.name, periodType:"class",
-        startMin:t.start, endMin:t.end,
+        key:`__free|${tName}|${sk}|${dayKey}`, periodId:slot.periodId,
+        periodName:slot.periodName, periodType:"class",
+        startMin:slot.startMin, endMin:slot.endMin,
         sectionName:"",   // virtual — use dragSrc.section when dropped
         subject:"", teacher:tName, room:"",   // teacher stamped for filter
         isSub:false, isClassTeacher:false, absent:false,
       })
     })
     return blocks.sort((a,b)=>a.startMin-b.startMin)
-  },[classTT,periods,classwiseBreaks,sections,substitutions,absentHighlights,dayStartMin,isFullBreak,repSecTimes])
+  },[classTT,periods,classwiseBreaks,sections,substitutions,absentHighlights,dayStartMin,isFullBreak,repSecTimes,distinctTeachingSlots])
 
   const buildRoomBlocks = useCallback((roomName:string, dayKey:string): TimeBlock[] => {
     const blocks:TimeBlock[]=[]
@@ -860,7 +885,7 @@ export function CalendarView({
       })
     })
     // ── Occupied periods ── (only where this room is actually in use)
-    const occupiedPeriodIds = new Set<string>()
+    const occupiedSlotKeys = new Set<string>()
     sections.forEach(sec=>{
       const ps=buildSecPeriods(sec.name,periods,classwiseBreaks)
       const tm=calcTimes(ps,dayStartMin)
@@ -868,8 +893,8 @@ export function CalendarView({
         if(p.type!=="class") return
         const cell=classTT[sec.name]?.[dayKey]?.[p.id]
         if(!cell?.subject || cell.room!==roomName) return
-        occupiedPeriodIds.add(p.id)
         const t=tm.get(p.id)!
+        occupiedSlotKeys.add(`${p.id}@${t.start}`)
         const subKey=`${sec.name}|${dayKey}|${p.id}`
         const isSub=!!substitutions[subKey]
         blocks.push({
@@ -883,23 +908,21 @@ export function CalendarView({
         })
       })
     })
-    // ── ONE virtual free block per truly-free period ──
+    // ── ONE virtual free block per truly-free DISTINCT slot ──
     // Set room:roomName so the DropZone filter only shows these on THIS room's rows
-    periods.forEach(p=>{
-      if(p.type!=="class") return
-      if(occupiedPeriodIds.has(p.id)) return    // room in use → skip
-      const t=gTm.get(p.id)!
+    distinctTeachingSlots(dayKey).forEach((slot,sk)=>{
+      if(occupiedSlotKeys.has(sk)) return    // room in use in this slot → skip
       blocks.push({
-        key:`__free|${roomName}|${p.id}|${dayKey}`, periodId:p.id,
-        periodName:p.name, periodType:"class",
-        startMin:t.start, endMin:t.end,
+        key:`__free|${roomName}|${sk}|${dayKey}`, periodId:slot.periodId,
+        periodName:slot.periodName, periodType:"class",
+        startMin:slot.startMin, endMin:slot.endMin,
         sectionName:"",   // virtual — use dragSrc.section when dropped
         subject:"", teacher:"", room:roomName,  // room stamped for filter
         isSub:false, isClassTeacher:false, absent:false,
       })
     })
     return blocks.sort((a,b)=>a.startMin-b.startMin)
-  },[classTT,periods,classwiseBreaks,sections,substitutions,dayStartMin,isFullBreak,repSecTimes])
+  },[classTT,periods,classwiseBreaks,sections,substitutions,dayStartMin,isFullBreak,repSecTimes,distinctTeachingSlots])
 
   const buildSubjectBlocks = useCallback((subjectName:string, dayKey:string): TimeBlock[] => {
     const blocks:TimeBlock[]=[]
