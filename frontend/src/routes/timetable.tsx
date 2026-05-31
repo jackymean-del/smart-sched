@@ -1207,8 +1207,10 @@ export function TimetablePage() {
 
   // ── conflictWarning modal state ───────────────────────────
   const [conflictWarning, setConflictWarning] = useState<string|null>(null)
-  // ── inter-teacher swap insight modal state ────────────────
-  const [swapInsight, setSwapInsight] = useState<string|null>(null)
+  // ── inter-teacher swap insight banner state ───────────────
+  const [swapInsight, setSwapInsight]         = useState<string|null>(null)
+  const [swapInsightTeacher, setSwapInsightTeacher] = useState<string|null>(null)
+  const clearSwapInsight = () => { setSwapInsight(null); setSwapInsightTeacher(null) }
 
   // ── Global dragend listener — clears ALL drag state when drag ends for any reason ──
   // Prevents frozen state when user drops outside a target, presses Escape during drag,
@@ -1729,6 +1731,9 @@ export function TimetablePage() {
             </div>
           </div>
         </div>
+        {swapInsight && swapInsightTeacher === tn && (
+          <InsightBanner message={swapInsight} onClose={clearSwapInsight} />
+        )}
         <div style={{ overflowX:"auto" }}>
           <table style={{ borderCollapse:"collapse", fontSize:11, width:"100%" }}>
             <thead><tr>
@@ -1826,7 +1831,7 @@ export function TimetablePage() {
                             `${ttDestCell.teacher}'s ${ttDestCell.subject} for ${ttDropSec}: ` +
                             `${dstDay} (${dstPeriod}) ↔ ${srcDay} (${srcPeriod}). Both timetables updated.`
                           handleDrop(e, ttDropSec, day, col.periodId, tn, false)  // full swap
-                          setSwapInsight(insight)
+                          setSwapInsight(insight); setSwapInsightTeacher(tn)
                         } else {
                           handleDrop(e, ttDropSec, day, col.periodId, tn, true)   // move-only
                         }
@@ -1920,6 +1925,9 @@ export function TimetablePage() {
           <div style={{ fontSize:15, fontWeight:700, color:"#1e293b" }}>{tn} <span style={{ fontSize:11, fontWeight:400, color:"#4B5275" }}>— {st?.role}</span></div>
           <span style={{ fontSize:12, fontWeight:700, fontFamily:"monospace", color:loadColor }}>{total}/{max} periods · {pct}% loaded</span>
         </div>
+        {swapInsight && swapInsightTeacher === tn && (
+          <InsightBanner message={swapInsight} onClose={clearSwapInsight} />
+        )}
         <div style={{ overflowX:"auto" }}>
           <table style={{ borderCollapse:"collapse", fontSize:11, width:"100%" }}>
             <thead><tr>
@@ -1994,11 +2002,10 @@ export function TimetablePage() {
                             const srcDay = DAY_SHORT[dragItem.day] ?? dragItem.day
                             const dstDay = DAY_SHORT[day] ?? day
                             const insight =
-                              `${ttTDestCell.teacher} was teaching ${ttTDestCell.subject} for ${ttTDropSec} on ${dstDay} (${dstPeriod}).\n` +
-                              `That slot has been swapped to ${srcDay} (${srcPeriod}).\n\n` +
-                              `Both timetables have been updated automatically.`
+                              `${ttTDestCell.teacher}'s ${ttTDestCell.subject} for ${ttTDropSec}: ` +
+                              `${dstDay} (${dstPeriod}) ↔ ${srcDay} (${srcPeriod}). Both timetables updated.`
                             handleDrop(e, ttTDropSec, day, col.periodId, tn, false)
-                            setSwapInsight(insight)
+                            setSwapInsight(insight); setSwapInsightTeacher(tn)
                           } else {
                             handleDrop(e, ttTDropSec, day, col.periodId, tn, true)
                           }
@@ -2997,11 +3004,6 @@ export function TimetablePage() {
           }}
           onClick={() => { if (showExportMenu) setShowExportMenu(false) }}
         >
-
-          {/* ── Inter-teacher swap insight banner (non-blocking) ── */}
-          {swapInsight && mainMode === "traditional" && (
-            <InsightBanner message={swapInsight} onClose={() => setSwapInsight(null)} />
-          )}
 
           {/* ═══ Calendar mode ═══ */}
           {mainMode === "calendar" && renderCalendarView(selectedEntity)}
