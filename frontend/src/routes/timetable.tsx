@@ -531,14 +531,22 @@ function mergeTeacherIdleColumns(
 }
 
 // ── Shared lunch break cell — shows compressed class names (no icon) ──
-// Accepts optional drag-highlight props so it participates in drag/drop like free cells.
-function LunchCell({ id, secName, isTarget, hasConflict, dragProps }: {
+// isTarget    → valid drop zone (green fill)
+// hasConflict → cannot drop (red fill)
+// isUnavailable → dragging but this slot is not a valid target (red outline, yellow bg)
+function LunchCell({ id, secName, isTarget, hasConflict, isUnavailable, dragProps }: {
   id: string; secName?: string;
-  isTarget?: boolean; hasConflict?: boolean;
+  isTarget?: boolean; hasConflict?: boolean; isUnavailable?: boolean;
   dragProps?: { onDragOver:(e:React.DragEvent)=>void; onDrop:(e:React.DragEvent)=>void; onDragLeave:()=>void }
 }) {
-  const bg     = isTarget ? (hasConflict ? DRAG_CONFLICT_FILL : DRAG_SAFE_FILL)     : "#FFFBEB"
-  const border = isTarget ? (hasConflict ? `2px solid ${DRAG_CONFLICT_BORDER}` : `2px solid ${DRAG_SAFE_BORDER}`) : "1px solid #E8E4FF"
+  const bg = isTarget
+    ? (hasConflict ? DRAG_CONFLICT_FILL : DRAG_SAFE_FILL)
+    : "#FFFBEB"
+  const border = isTarget
+    ? (hasConflict ? `2px solid ${DRAG_CONFLICT_BORDER}` : `2px solid ${DRAG_SAFE_BORDER}`)
+    : isUnavailable
+      ? `2px solid ${DRAG_CONFLICT_BORDER}`   // red outline — slot not droppable during this drag
+      : "1px solid #E8E4FF"
   return (
     <td key={id} {...(isTarget ? dragProps : undefined)}
       style={{ background:bg, border, padding:"4px 6px", textAlign:"center" as const, verticalAlign:"middle" as const, cursor: isTarget ? "copy" : "default" }}>
@@ -1266,7 +1274,7 @@ export function TimetablePage() {
   }
   // forcedTeacher: when dropping in teacher-view, always assign to the viewed teacher
   // rather than letting pickBestTeacher pick a different (lower-workload) teacher.
-  const handleDrop = (e: React.DragEvent, section:string, day:string, periodId:string, forcedTeacher?: string) => {
+  const handleDrop = (e: React.DragEvent, section:string, day:string, periodId:string, forcedTeacher?: string, moveOnly?: boolean) => {
     e.preventDefault()
     setDragOverCell(null)
     // Pool drag takes priority — save directly without opening modal
@@ -1321,8 +1329,8 @@ export function TimetablePage() {
     newTT2[section][day] = { ...(newTT2[section][day] ?? {}) }
     newTT2[from.section] = { ...newTT2[from.section] }
     newTT2[from.section][from.day] = { ...(newTT2[from.section][from.day] ?? {}) }
-    // Swap the two cells (or move if target is empty)
-    if (toCell?.subject) {
+    // Swap the two cells (or move if target is empty / moveOnly)
+    if (toCell?.subject && !moveOnly) {
       newTT2[section][day][periodId] = fromCell
       newTT2[from.section][from.day][from.periodId] = toCell
     } else {
@@ -1645,6 +1653,13 @@ export function TimetablePage() {
     const ttCols = mergeTeacherIdleColumns(ttColsRaw, teacherSecNames, ttSchedules, classTT, tn, usedDays, config)
     // School-wide owning-class info (for the heading chip on split periods)
     const ttOwn = buildOwningInfo(sections.map(s=>s.name), classPeriods, cwBreaksTT, config)
+    // School-wide schedules — one entry per distinct class group key — for lunch detection.
+    // We need ALL sections (not just teacher's) so the lunch indicator shows every class on break.
+    const ttAllSchedules = new Map<string, Map<string, SlotMins>>()
+    sections.forEach(s => {
+      const k = getSectionClassKey(s.name)
+      if (!ttAllSchedules.has(k)) ttAllSchedules.set(k, sectionScheduleMins(s.name, classPeriods, cwBreaksTT, config))
+    })
 
     return (
       <div>
@@ -1733,6 +1748,16 @@ export function TimetablePage() {
                       },
                       onDragLeave: () => setDragOverCell(null),
                     }
+                    // Lunch-cell drop props: same as above but moveOnly — don't swap destination back
+                    const ttLunchDragProps = {
+                      ...ttDragProps,
+                      onDrop: (e: React.DragEvent) => {
+                        e.preventDefault()
+                        if (!ttDropSec || !dragItem) return
+                        if (ttConflict) { setDragItem(null); setDragOverCell(null); setConflictWarning(ttConflict); return }
+                        handleDrop(e, ttDropSec, day, col.periodId, tn, true)
+                      },
+                    }
                     // The teacher is teaching here → coloured cell
                     if (taughtCell) {
                       const colorClass = getSubjectColor(taughtCell.subject.split(" (")[0])
@@ -1751,15 +1776,17 @@ export function TimetablePage() {
                         />
                       )
                     }
-                    // Not teaching → is one of the teacher's classes on lunch in this slot?
-                    // For merged columns, check lunch across ALL original splits.
+                    // Not teaching → check which sections school-wide are on lunch in this slot.
+                    // Use ttAllSchedules (all class groups) so the indicator is complete, not just teacher's sections.
                     const lunchSrcs = col.mergedFrom ?? [col]
-                    const lunchSecs = teacherSecNames.filter(S =>
-                      lunchSrcs.some(src => resolveUniCell(S, src, ttSchedules, cwBreaksTT).kind === 'lunch')
+                    const lunchSecs = sections.map(s => s.name).filter(S =>
+                      lunchSrcs.some(src => resolveUniCell(S, src, ttAllSchedules, cwBreaksTT).kind === 'lunch')
                     )
                     if (lunchSecs.length) return (
                       <LunchCell key={col.key} id={col.key} secName={compressClassNames(lunchSecs)}
-                        isTarget={ttIsTarget} hasConflict={!!ttConflict} dragProps={ttDragProps} />
+                        isTarget={ttIsTarget} hasConflict={!!ttConflict}
+                        isUnavailable={isDragging && !ttIsTarget}
+                        dragProps={ttLunchDragProps} />
                     )
                     // Free / droppable
                     return (
@@ -1806,6 +1833,12 @@ export function TimetablePage() {
     // Merge split rows where this teacher has no teaching in any split
     const tttCols = mergeTeacherIdleColumns(tttColsRaw, teacherSecNames, tttSchedules, classTT, tn, usedDays, config)
     const tttOwn = buildOwningInfo(sections.map(s=>s.name), classPeriods, cwBreaksTTT, config)
+    // School-wide schedules for lunch detection (all class groups)
+    const tttAllSchedules = new Map<string, Map<string, SlotMins>>()
+    sections.forEach(s => {
+      const k = getSectionClassKey(s.name)
+      if (!tttAllSchedules.has(k)) tttAllSchedules.set(k, sectionScheduleMins(s.name, classPeriods, cwBreaksTTT, config))
+    })
 
     return (
       <div>
@@ -1868,6 +1901,15 @@ export function TimetablePage() {
                         },
                         onDragLeave: () => setDragOverCell(null),
                       }
+                      const ttTLunchDragProps = {
+                        ...ttTDragProps,
+                        onDrop: (e: React.DragEvent) => {
+                          e.preventDefault()
+                          if (!ttTDropSec || !dragItem) return
+                          if (ttTConflict) { setDragItem(null); setDragOverCell(null); setConflictWarning(ttTConflict); return }
+                          handleDrop(e, ttTDropSec, day, col.periodId, tn, true)
+                        },
+                      }
                       if (taughtCell) {
                         const colorClass = getSubjectColor(taughtCell.subject.split(" (")[0])
                         return (
@@ -1885,14 +1927,17 @@ export function TimetablePage() {
                           />
                         )
                       }
-                      // For merged columns, check lunch across ALL original splits
+                      // For merged columns, check lunch across ALL original splits.
+                      // Use tttAllSchedules (school-wide) so the indicator shows every class on break.
                       const lunchSrcsTT = col.mergedFrom ?? [col]
-                      const lunchSecs = teacherSecNames.filter(S =>
-                        lunchSrcsTT.some(src => resolveUniCell(S, src, tttSchedules, cwBreaksTTT).kind === 'lunch')
+                      const lunchSecs = sections.map(s => s.name).filter(S =>
+                        lunchSrcsTT.some(src => resolveUniCell(S, src, tttAllSchedules, cwBreaksTTT).kind === 'lunch')
                       )
                       if (lunchSecs.length) return (
                         <LunchCell key={col.key} id={ttTKey} secName={compressClassNames(lunchSecs)}
-                          isTarget={ttTIsTarget} hasConflict={!!ttTConflict} dragProps={ttTDragProps} />
+                          isTarget={ttTIsTarget} hasConflict={!!ttTConflict}
+                          isUnavailable={isDragging && !ttTIsTarget}
+                          dragProps={ttTLunchDragProps} />
                       )
                       return (
                         <td key={col.key} {...ttTDragProps}
