@@ -429,11 +429,17 @@ function Block({
   }
 
   // ── Empty period ─────────────────────────────────────────────────────
+  // pointerEvents:none is CRITICAL — virtual free/empty blocks (staggered)
+  // can overlap a real taught block (e.g. a free P6@12:45 overlaps a primary
+  // class's P5 that runs to 1:15). Without this, the transparent placeholder
+  // sits on top and steals the drag, making the taught block undraggable.
+  // Drops are handled by the separate DropZone overlay, not this placeholder.
   if (!block.subject) {
     return (
       <div style={{
         position:"absolute" as const, left:left+1, width:Math.max(width-2,1),
         top:compact?1:3, bottom:compact?1:3, background:"transparent",
+        pointerEvents:"none" as const,
       }} />
     )
   }
