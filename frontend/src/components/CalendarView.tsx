@@ -1003,12 +1003,27 @@ export function CalendarView({
   },[viewMode,selectedEntity,sections,staff,allRooms,classTT])
 
   // ── Time range (school day) ──────────────────────────────────────────
+  // The bare `periods` array does NOT include class-wise breaks (morning break,
+  // staggered lunches live in classwiseBreaks). Summing it alone ends the axis
+  // too early and cuts off the last periods. Compute the TRUE day end as the
+  // max end time across every class group's full bell schedule.
   const {dayEndMin, dayWidth: _dayWidth} = useMemo(()=>{
     const pxPerMin = PX_PER_MIN[zoom]
     let endMin = dayStartMin
-    periods.forEach(p=>{ endMin+=p.duration })
+    const seen = new Set<string>()
+    sections.forEach(sec=>{
+      const k = secKey(sec.name)
+      if (seen.has(k)) return
+      seen.add(k)
+      const ps = buildSecPeriods(sec.name, periods, classwiseBreaks)
+      let e = dayStartMin
+      ps.forEach(p=>{ e += p.duration })
+      if (e > endMin) endMin = e
+    })
+    // Fallback (no sections): bare period sum
+    if (endMin === dayStartMin) periods.forEach(p=>{ endMin += p.duration })
     return { dayEndMin: endMin, dayWidth: (endMin-dayStartMin)*pxPerMin }
-  },[periods,dayStartMin,zoom])
+  },[periods,dayStartMin,zoom,sections,classwiseBreaks])
 
   const pxPerMin = PX_PER_MIN[zoom]
   const dayWidth = (dayEndMin-dayStartMin)*pxPerMin
