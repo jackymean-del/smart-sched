@@ -1341,6 +1341,116 @@ export function CalendarView({
   }
 
   // ══════════════════════════════════════════════════════════════════════
+  // RENDER — Period Grid (clean P1..Pn columns, days as super-columns)
+  // Mirrors the traditional table but shows every workday side-by-side.
+  // Pure period columns → no time-axis width math → no staggered-break
+  // duration artefacts. Breaks are not cells; a thick divider separates days.
+  // ══════════════════════════════════════════════════════════════════════
+  const renderPeriodGrid = () => {
+    const teachingPeriods = periods.filter(p => p.type === "class")
+    const days = workDays
+    const rows = entityList   // already scoped by selectedEntity
+    const PCOL_W = 104
+    const periodShort = (name:string) => name.replace(/period\s*/i, "P").replace(/\s+/g, "")
+
+    return (
+      <div style={{ flex:1, overflow:"auto", background:"#fff" }}>
+        <table style={{ borderCollapse:"separate", borderSpacing:0, fontSize:11, tableLayout:"fixed" as const }}>
+          <thead>
+            {/* Day super-header */}
+            <tr>
+              <th rowSpan={2} style={{
+                position:"sticky" as const, left:0, top:0, zIndex:30,
+                width:ENTITY_W, minWidth:ENTITY_W, background:"#F8FAFC",
+                border:"1px solid #CBD5E1", fontSize:12, fontWeight:800, color:"#334155",
+              }}>{viewMode === "class" ? "Class" : viewMode === "teacher" ? "Teacher" : viewMode === "room" ? "Room" : "Subject"}</th>
+              {days.map((day, di) => (
+                <th key={day} colSpan={teachingPeriods.length} style={{
+                  position:"sticky" as const, top:0, zIndex:20,
+                  background:"#EEF2F8", color:"#1e293b", fontSize:13, fontWeight:800,
+                  padding:"6px 0", textAlign:"center" as const,
+                  borderTop:"1px solid #CBD5E1", borderBottom:"1px solid #CBD5E1",
+                  borderLeft: di===0 ? "1px solid #CBD5E1" : "3px solid #94A3B8",
+                  borderRight:"1px solid #CBD5E1",
+                }}>{DAY_FULL[day] ?? day}</th>
+              ))}
+            </tr>
+            {/* Period sub-header */}
+            <tr>
+              {days.map((day, di) => teachingPeriods.map((p, pi) => (
+                <th key={`${day}|${p.id}`} style={{
+                  position:"sticky" as const, top:34, zIndex:19,
+                  width:PCOL_W, minWidth:PCOL_W, background:"#F8FAFC",
+                  color:"#475569", fontSize:10.5, fontWeight:700, padding:"4px 0",
+                  textAlign:"center" as const,
+                  borderBottom:"1.5px solid #CBD5E1",
+                  borderLeft: (di>0 && pi===0) ? "3px solid #94A3B8" : "1px solid #E2E8F0",
+                  borderRight:"1px solid #E2E8F0",
+                }}>{periodShort(p.name)}</th>
+              )))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((ent, ri) => (
+              <tr key={ent.id}>
+                <td style={{
+                  position:"sticky" as const, left:0, zIndex:10,
+                  width:ENTITY_W, minWidth:ENTITY_W,
+                  background: ri%2===0 ? "#fff" : "#F8FAFC",
+                  border:"1px solid #E2E8F0", fontSize:11.5, fontWeight:700,
+                  color:"#1e293b", padding:"6px 10px", whiteSpace:"nowrap" as const,
+                }}>{ent.label}</td>
+                {days.map((day, di) => {
+                  // Index this entity's teaching blocks for the day once (avoids
+                  // calling the expensive getEntityBlocks per period cell).
+                  const dayBlocks = getEntityBlocks(ent.id, day)
+                  const byPid = new Map<string, typeof dayBlocks[0]>()
+                  dayBlocks.forEach(b => { if (b.periodType === "class" && b.subject) byPid.set(b.periodId, b) })
+                  return teachingPeriods.map((p, pi) => {
+                  const b = byPid.get(p.id) ?? null
+                  const leftBorder = (di>0 && pi===0) ? "3px solid #94A3B8" : "1px solid #E2E8F0"
+                  if (!b) {
+                    return <td key={`${day}|${p.id}`} style={{
+                      width:PCOL_W, minWidth:PCOL_W, height:48,
+                      background: ri%2===0 ? "#fff" : "#FCFDFE",
+                      borderLeft:leftBorder, borderRight:"1px solid #E2E8F0", borderBottom:"1px solid #E2E8F0",
+                    }} />
+                  }
+                  const col = subjectColor(b.subject)
+                  const subD = shortNames ? getSubjectShortName(b.subject, subjects) : b.subject
+                  const tchD = b.teacher ? (shortNames ? getStaffShortName(b.teacher, staff) : b.teacher) : ""
+                  const secD = b.sectionName
+                  return (
+                    <td key={`${day}|${p.id}`}
+                      onClick={()=>onClick(b, day)}
+                      style={{
+                        width:PCOL_W, minWidth:PCOL_W, height:48, padding:2,
+                        borderLeft:leftBorder, borderRight:"1px solid #E2E8F0", borderBottom:"1px solid #E2E8F0",
+                        cursor:"pointer",
+                      }}>
+                      <div style={{
+                        height:"100%", borderRadius:5, background:col.bg,
+                        borderLeft:`3px solid ${col.accent}`, padding:"3px 6px",
+                        display:"flex", flexDirection:"column" as const, justifyContent:"center", overflow:"hidden",
+                      }}>
+                        <div style={{ fontSize:10.5, fontWeight:700, color:col.accent, lineHeight:1.25,
+                          overflow:"hidden", textOverflow:"ellipsis" as const, whiteSpace:"nowrap" as const }}>{subD}</div>
+                        {viewMode!=="class" && secD && <div style={{ fontSize:9, fontWeight:700, color:"#374151", whiteSpace:"nowrap" as const, overflow:"hidden", textOverflow:"ellipsis" as const }}>{secD}</div>}
+                        {viewMode!=="teacher" && tchD && <div style={{ fontSize:9, color:"#555", whiteSpace:"nowrap" as const, overflow:"hidden", textOverflow:"ellipsis" as const }}>{b.isClassTeacher?"★ ":""}{tchD}</div>}
+                        {showRoom && b.room && viewMode!=="room" && <div style={{ fontSize:8.5, color:"#777", fontFamily:"monospace", whiteSpace:"nowrap" as const, overflow:"hidden", textOverflow:"ellipsis" as const }}>{shortNames?shortRoom(b.room):b.room}</div>}
+                      </div>
+                    </td>
+                  )
+                })})}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
   // RENDER — Matrix
   // Single entity → days as rows · ALL entities → entity groups with day sub-rows
   // ══════════════════════════════════════════════════════════════════════
@@ -1701,7 +1811,7 @@ export function CalendarView({
       <div style={{ flex:1,overflow:"hidden",display:"flex",flexDirection:"column" as const }}>
         {calMode==="month"   &&renderMonth()}
         {calMode==="timeline"&&renderWeekView(false)}
-        {calMode==="matrix"  &&renderMatrix()}
+        {calMode==="matrix"  &&renderPeriodGrid()}
       </div>
 
       {/* Global tooltip */}
