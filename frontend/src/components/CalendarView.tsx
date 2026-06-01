@@ -425,16 +425,17 @@ function Block({
     const bs = breakStyle(block.periodType)
     return (
       <div
-        onMouseEnter={e=>onHover(block,e)} onMouseLeave={onLeave}
         style={{
           position:"absolute" as const, left:left+1, width:Math.max(width-2,1),
           top:compact?2:3, bottom:compact?2:3, background:bs.bg,
           border:`1px solid ${bs.border}`, borderRadius:4,
-          // Below taught cards (zIndex 4) so a staggered break never covers /
-          // steals the grab of an overlapping teaching card.
           zIndex: 1,
+          // pointerEvents:none — break/lunch blocks are purely informational.
+          // Keeping them event-transparent guarantees they can NEVER intercept
+          // the drag/click of a taught card that overlaps them (staggered slots).
+          pointerEvents:"none" as const,
           display:"flex", flexDirection:"column" as const,
-          alignItems:"center", justifyContent:"center", overflow:"hidden", cursor:"pointer",
+          alignItems:"center", justifyContent:"center", overflow:"hidden", cursor:"default",
         }}>
         {width >= 22 && (
           <div style={{ fontSize:Math.min(compact?7:8.5, width/4), fontWeight:700, color:bs.text,
