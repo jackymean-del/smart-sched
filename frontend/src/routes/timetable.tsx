@@ -2125,7 +2125,7 @@ export function TimetablePage() {
                     if (lunchSecs.length) return (
                       <LunchCell key={col.key} id={col.key} secName={compressClassNames(lunchSecs)} time={colLunchTime(col) ?? undefined}
                         isTarget={ttIsTarget} hasConflict={!!ttFreeConflict}
-                        isUnavailable={isDragging && !ttIsTarget}
+                        isUnavailable={isSameTeacherDrag && !ttIsTarget}
                         dragOver={dragOverCell===ttCellKey}
                         dragProps={ttFreeDragProps} />
                     )
@@ -2294,7 +2294,7 @@ export function TimetablePage() {
                       if (lunchSecs.length) return (
                         <LunchCell key={col.key} id={ttTKey} secName={compressClassNames(lunchSecs)} time={colLunchTime(col) ?? undefined}
                           isTarget={ttTIsTarget} hasConflict={!!ttTFreeConflict}
-                          isUnavailable={isDragging && !ttTIsTarget}
+                          isUnavailable={isSameTeacherDrag && !ttTIsTarget}
                           dragOver={dragOverCell===ttTKey}
                           dragProps={ttTFreeDragProps} />
                       )
