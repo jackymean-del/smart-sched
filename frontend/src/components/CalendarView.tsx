@@ -721,6 +721,7 @@ export function CalendarView({
   // ── State ────────────────────────────────────────────────────────────
   const [calMode,    setCalMode]    = useState<CalMode>("matrix")
   const [zoom,       setZoom]       = useState<ZoomLevel>("60min")
+  const [showBreaks, setShowBreaks] = useState(true)   // toggle: show/hide Assembly + breaks
   const [curDate,    setCurDate]    = useState(new Date())
   const [tooltip,    setTooltip]    = useState<{lines:string[];x:number;y:number}|null>(null)
   const [activeD,    setActiveD]    = useState<ActiveDetail|null>(null)
@@ -1133,7 +1134,10 @@ export function CalendarView({
   const fmtDate=(d:Date)=>`${d.getDate()} ${MONTH_NAMES[d.getMonth()].slice(0,3)}`
 
   // ── Shared track renderer (absolute-positioned blocks in a day cell) ──
-  const renderTrack = (blocks:TimeBlock[], rowH:number, compact:boolean, dayKey:string) => (
+  const renderTrack = (allBlocks:TimeBlock[], rowH:number, compact:boolean, dayKey:string) => {
+    // Breaks toggle: when off, drop Assembly/break/lunch blocks — teaching only.
+    const blocks = showBreaks ? allBlocks : allBlocks.filter(b => b.periodType === "class")
+    return (
     <div style={{
       position:"relative" as const, width:dayWidth, height:rowH, flexShrink:0, overflow:"hidden",
     }}>
@@ -1234,7 +1238,7 @@ export function CalendarView({
         )
       })}
     </div>
-  )
+  )}
 
   // ── Shared time ruler within a day section ────────────────────────────
   const renderDayRuler = (dayKey:string, dayDate?:Date) => (
@@ -1402,7 +1406,8 @@ export function CalendarView({
   const renderPeriodGrid = () => {
     const days = workDays
     const rows = entityList   // already scoped by selectedEntity
-    const cols = matrixColumns  // teaching splits + Assembly + full-break columns
+    // Breaks toggle: when off, drop Assembly/break columns — teaching periods only.
+    const cols = showBreaks ? matrixColumns : matrixColumns.filter(c => c.type === "class")
     const PCOL_W = 104, BCOL_W = 58
     const periodShort = (name:string) => name.replace(/period\s*/i, "P").replace(/\s+/g, "")
     const fmtRange = (s:number,e:number) => `${fmtTime(s,timeFormat)}–${fmtTime(e,timeFormat)}`
@@ -1508,7 +1513,7 @@ export function CalendarView({
                       )
                     }
                     // ── Lunch overlay (class view): this class on a partial break here ──
-                    if (entClassKey) {
+                    if (entClassKey && showBreaks) {
                       const lunch = lunchOverlay(entClassKey, c.start, c.end)
                       if (lunch) return (
                         <td key={`${day}|${c.key}`} style={{ width:W, minWidth:W, height:48, textAlign:"center" as const, verticalAlign:"middle" as const,
@@ -1869,6 +1874,21 @@ export function CalendarView({
           }}>
             ⚠ {[...new Set(absentHighlights!.map(h=>h.teacher))].join(", ")} absent
           </div>
+        )}
+
+        {/* Show / hide breaks toggle (non-month views) */}
+        {calMode!=="month"&&(
+          <button onClick={()=>setShowBreaks(v=>!v)}
+            title={showBreaks ? "Hide Assembly & breaks — show teaching periods only" : "Show Assembly, short breaks & lunch"}
+            style={{
+              display:"flex", alignItems:"center", gap:5, padding:"4px 10px",
+              border:`1px solid ${showBreaks?"#7C6FE0":"#E5EBF5"}`, borderRadius:6,
+              background:showBreaks?"#EDE9FF":"#fff", color:showBreaks?"#4B5275":"#94A3B8",
+              fontSize:10.5, fontWeight:600, cursor:"pointer",
+            }}>
+            <span style={{ fontSize:12 }}>{showBreaks ? "☕" : "📚"}</span>
+            {showBreaks ? "Breaks: On" : "Breaks: Off"}
+          </button>
         )}
 
         {/* Zoom (non-month views) */}
