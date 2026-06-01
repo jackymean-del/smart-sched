@@ -1207,7 +1207,16 @@ export function CalendarView({
   // ── Shared track renderer (absolute-positioned blocks in a day cell) ──
   const renderTrack = (allBlocks:TimeBlock[], rowH:number, compact:boolean, dayKey:string) => {
     // Breaks toggle: when off, drop Assembly/break/lunch blocks — teaching only.
-    const blocks = showBreaks ? allBlocks : allBlocks.filter(b => b.periodType === "class")
+    const toggled = showBreaks ? allBlocks : allBlocks.filter(b => b.periodType === "class")
+    // SAFETY NET: never render a break/lunch block that overlaps a real taught
+    // card in this row. A staggered lunch (e.g. VI-X 12:45–1:15) can land behind
+    // a primary class's P5 card (12:35–1:15); dropping it guarantees the card is
+    // fully exposed and grabbable, independent of z-index / pointer-events.
+    const taughtSpans = toggled.filter(b => b.periodType === "class" && b.subject)
+    const blocks = toggled.filter(b =>
+      b.periodType === "class" ||
+      !taughtSpans.some(t => t.startMin < b.endMin && t.endMin > b.startMin)
+    )
     return (
     <div style={{
       position:"relative" as const, width:dayWidth, height:rowH, flexShrink:0, overflow:"hidden",
