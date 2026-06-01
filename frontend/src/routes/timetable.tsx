@@ -1075,6 +1075,15 @@ export function TimetablePage() {
     [sections, classPeriods, periods, cwBreaksGlobal, config.startTime]
   )
 
+  // Sections (school-wide) on a partial lunch break overlapping a unified column.
+  // Used by Room & Subject views to render "Lunch Break …" overlay cells, the
+  // same way the teacher view does.
+  const colLunchSecs = useCallback((col: UniCol): string[] =>
+    sections.map(s=>s.name).filter(S =>
+      resolveUniCell(S, col, allSectionSchedules, cwBreaksGlobal).kind === 'lunch'),
+    [sections, allSectionSchedules, cwBreaksGlobal]
+  )
+
   // Per-teacher unified columns + schedules — the most expensive computation.
   // Keyed by teacher name. Recomputes only when classTT / sections / periods change.
   const teacherTTCache = useMemo(() => {
@@ -2311,14 +2320,20 @@ export function TimetablePage() {
                       },
                       onDragLeave: clearDragOverCell,
                     }
-                    if (!hits.length) return (
-                      <td key={col.key} {...subDragProps}
-                        style={{ ...dragTdStyle(subIsTarget, !!subConflict, false), position:"relative" as const }}>
-                        <div style={{ ...dragInnerStyle(subIsTarget, !!subConflict), position:"relative" as const }}>
-                          {subIsTarget && dragOverCell===subCellKey && <DropIndicator hasConflict={!!subConflict} />}
-                        </div>
-                      </td>
-                    )
+                    if (!hits.length) {
+                      if (!subIsTarget) {
+                        const ls = colLunchSecs(col)
+                        if (ls.length) return <LunchCell key={col.key} id={col.key} secName={compressClassNames(ls)} />
+                      }
+                      return (
+                        <td key={col.key} {...subDragProps}
+                          style={{ ...dragTdStyle(subIsTarget, !!subConflict, false), position:"relative" as const }}>
+                          <div style={{ ...dragInnerStyle(subIsTarget, !!subConflict), position:"relative" as const }}>
+                            {subIsTarget && dragOverCell===subCellKey && <DropIndicator hasConflict={!!subConflict} />}
+                          </div>
+                        </td>
+                      )
+                    }
                     const subIsSrc = !!(dragItem?.section===subSecName && dragItem?.day===day && dragItem?.periodId===col.periodId)
                     const colorClass = getSubjectColor(subName)
                     return (
@@ -2408,14 +2423,20 @@ export function TimetablePage() {
                         },
                         onDragLeave: clearDragOverCell,
                       }
-                      if (!hits.length) return (
-                        <td key={col.key} {...subTDragProps}
-                          style={{ ...dragTdStyle(subTIsTarget, !!subTConflict, false), position:"relative" as const }}>
-                          <div style={{ ...dragInnerStyle(subTIsTarget, !!subTConflict), position:"relative" as const }}>
-                            {subTIsTarget && dragOverCell===subTKey && <DropIndicator hasConflict={!!subTConflict} />}
-                          </div>
-                        </td>
-                      )
+                      if (!hits.length) {
+                        if (!subTIsTarget) {
+                          const ls = colLunchSecs(col)
+                          if (ls.length) return <LunchCell key={col.key} id={subTKey} secName={compressClassNames(ls)} />
+                        }
+                        return (
+                          <td key={col.key} {...subTDragProps}
+                            style={{ ...dragTdStyle(subTIsTarget, !!subTConflict, false), position:"relative" as const }}>
+                            <div style={{ ...dragInnerStyle(subTIsTarget, !!subTConflict), position:"relative" as const }}>
+                              {subTIsTarget && dragOverCell===subTKey && <DropIndicator hasConflict={!!subTConflict} />}
+                            </div>
+                          </td>
+                        )
+                      }
                       const subTIsSrc = !!(dragItem?.section===subTSecName && dragItem?.day===day && dragItem?.periodId===col.periodId)
                       const colorClass = getSubjectColor(subName)
                       return (
@@ -2510,14 +2531,20 @@ export function TimetablePage() {
                       },
                       onDragLeave: clearDragOverCell,
                     }
-                    if (!hit) return (
-                      <td key={col.key} {...rmDragProps}
-                        style={{ ...dragTdStyle(rmIsTarget, !!rmConflict, false), position:"relative" as const }}>
-                        <div style={{ ...dragInnerStyle(rmIsTarget, !!rmConflict), position:"relative" as const }}>
-                          {rmIsTarget && dragOverCell===rmKey && <DropIndicator hasConflict={!!rmConflict} />}
-                        </div>
-                      </td>
-                    )
+                    if (!hit) {
+                      if (!rmIsTarget) {
+                        const ls = colLunchSecs(col)
+                        if (ls.length) return <LunchCell key={col.key} id={rmKey} secName={compressClassNames(ls)} />
+                      }
+                      return (
+                        <td key={col.key} {...rmDragProps}
+                          style={{ ...dragTdStyle(rmIsTarget, !!rmConflict, false), position:"relative" as const }}>
+                          <div style={{ ...dragInnerStyle(rmIsTarget, !!rmConflict), position:"relative" as const }}>
+                            {rmIsTarget && dragOverCell===rmKey && <DropIndicator hasConflict={!!rmConflict} />}
+                          </div>
+                        </td>
+                      )
+                    }
                     const rmIsSrc = !!(dragItem?.section===rmSecName && dragItem?.day===day && dragItem?.periodId===col.periodId)
                     const colorClass = getSubjectColor(hit.cell.subject)
                     return (
@@ -2603,14 +2630,20 @@ export function TimetablePage() {
                         },
                         onDragLeave: clearDragOverCell,
                       }
-                      if (!hit) return (
-                        <td key={col.key} {...rmTDragProps}
-                          style={{ ...dragTdStyle(rmTIsTarget, !!rmTConflict, false), position:"relative" as const }}>
-                          <div style={{ ...dragInnerStyle(rmTIsTarget, !!rmTConflict), position:"relative" as const }}>
-                            {rmTIsTarget && dragOverCell===rmTKey && <DropIndicator hasConflict={!!rmTConflict} />}
-                          </div>
-                        </td>
-                      )
+                      if (!hit) {
+                        if (!rmTIsTarget) {
+                          const ls = colLunchSecs(col)
+                          if (ls.length) return <LunchCell key={col.key} id={rmTKey} secName={compressClassNames(ls)} />
+                        }
+                        return (
+                          <td key={col.key} {...rmTDragProps}
+                            style={{ ...dragTdStyle(rmTIsTarget, !!rmTConflict, false), position:"relative" as const }}>
+                            <div style={{ ...dragInnerStyle(rmTIsTarget, !!rmTConflict), position:"relative" as const }}>
+                              {rmTIsTarget && dragOverCell===rmTKey && <DropIndicator hasConflict={!!rmTConflict} />}
+                            </div>
+                          </td>
+                        )
+                      }
                       const rmTIsSrc = !!(dragItem?.section===rmTSecName && dragItem?.day===day && dragItem?.periodId===col.periodId)
                       const colorClass = getSubjectColor(hit.cell.subject)
                       return (

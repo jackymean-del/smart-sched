@@ -269,6 +269,27 @@ interface TimeBlock {
 }
 
 // ─────────────────────────────────────────────
+// Class-key compression (matches getSectionClassKey scheme) → "VI to X" etc.
+// ─────────────────────────────────────────────
+const KEY_ORDER = ['nur','lkg','ukg','i','ii','iii','iv','v','vi','vii','viii','ix','x','xi','xii']
+const KEY_LABEL: Record<string,string> = {
+  nur:'Nursery', lkg:'LKG', ukg:'UKG', i:'I', ii:'II', iii:'III', iv:'IV', v:'V',
+  vi:'VI', vii:'VII', viii:'VIII', ix:'IX', x:'X', xi:'XI', xii:'XII',
+}
+function compressKeys(keys: string[]): string {
+  const idxs = [...new Set(keys)].map(k=>KEY_ORDER.indexOf(k)).filter(i=>i>=0).sort((a,b)=>a-b)
+  const out: string[] = []
+  let i = 0
+  while (i < idxs.length) {
+    let j = i
+    while (j+1 < idxs.length && idxs[j+1] === idxs[j]+1) j++
+    out.push(i===j ? KEY_LABEL[KEY_ORDER[idxs[i]]] : `${KEY_LABEL[KEY_ORDER[idxs[i]]]} to ${KEY_LABEL[KEY_ORDER[idxs[j]]]}`)
+    i = j + 1
+  }
+  return out.join(', ')
+}
+
+// ─────────────────────────────────────────────
 // Grade group helper
 // ─────────────────────────────────────────────
 function gradeGroup(name:string): string {
@@ -1412,13 +1433,30 @@ export function CalendarView({
     const periodShort = (name:string) => name.replace(/period\s*/i, "P").replace(/\s+/g, "")
     const fmtRange = (s:number,e:number) => `${fmtTime(s,timeFormat)}–${fmtTime(e,timeFormat)}`
 
-    // Lunch overlay detection: is this class group on a partial break overlapping [s,e)?
+    // Lunch overlay (class view): is THIS class group on a partial break overlapping [s,e)?
     const lunchOverlay = (classKey:string, s:number, e:number): { name:string; mins:number } | null => {
       const sm = groupSchedules.get(classKey); if (!sm) return null
       for (const [, slot] of sm) {
         if (slot.type!=="class" && slot.start < e && slot.end > s) return { name:slot.name, mins:slot.end-slot.start }
       }
       return null
+    }
+
+    // School-wide lunch overlay (teacher/room/subject views): which class GROUPS
+    // are on a partial (non-full) break overlapping this slot? Mirrors the
+    // traditional teacher view's "Lunch Break VI to X" cells.
+    const schoolLunchOverlay = (s:number, e:number): { name:string; label:string } | null => {
+      const onBreak: string[] = []
+      let brkName = "Lunch Break"
+      ;(classwiseBreaks ?? []).forEach(b => {
+        if (isFullBreak(b.id)) return                 // full breaks are their own columns
+        if ((b as any).type === "short-break") return // only lunch-type partial breaks
+        const repKey = b.classes.find(k => groupSchedules.has(k))
+        const slot = repKey ? groupSchedules.get(repKey)?.get(b.id) : undefined
+        if (slot && slot.start < e && slot.end > s) { onBreak.push(...b.classes); brkName = b.name }
+      })
+      if (!onBreak.length) return null
+      return { name: brkName, label: compressKeys(onBreak) }
     }
 
     return (
@@ -1521,6 +1559,18 @@ export function CalendarView({
                           borderLeft:leftBorder, borderRight:"1px solid #E2E8F0", borderBottom:"1px solid #E2E8F0" }}>
                           <div>{lunch.name}</div>
                           <div style={{ fontSize:7.5, opacity:0.8 }}>{lunch.mins}m</div>
+                        </td>
+                      )
+                    }
+                    // ── Lunch overlay (teacher/room/subject views): which class groups are on lunch here ──
+                    if (!entClassKey && showBreaks) {
+                      const ov = schoolLunchOverlay(c.start, c.end)
+                      if (ov) return (
+                        <td key={`${day}|${c.key}`} style={{ width:W, minWidth:W, height:48, textAlign:"center" as const, verticalAlign:"middle" as const,
+                          background:"#FFFBEB", color:"#D4920E", fontSize:8.5, fontStyle:"italic", fontWeight:600, lineHeight:1.3,
+                          borderLeft:leftBorder, borderRight:"1px solid #E2E8F0", borderBottom:"1px solid #E2E8F0" }}>
+                          <div>{ov.name}</div>
+                          <div style={{ fontSize:7.5, opacity:0.85, fontStyle:"normal" as const }}>{ov.label}</div>
                         </td>
                       )
                     }
