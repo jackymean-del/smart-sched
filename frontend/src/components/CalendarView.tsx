@@ -430,6 +430,9 @@ function Block({
           position:"absolute" as const, left:left+1, width:Math.max(width-2,1),
           top:compact?2:3, bottom:compact?2:3, background:bs.bg,
           border:`1px solid ${bs.border}`, borderRadius:4,
+          // Below taught cards (zIndex 4) so a staggered break never covers /
+          // steals the grab of an overlapping teaching card.
+          zIndex: 1,
           display:"flex", flexDirection:"column" as const,
           alignItems:"center", justifyContent:"center", overflow:"hidden", cursor:"pointer",
         }}>
@@ -510,6 +513,10 @@ function Block({
         position:"absolute" as const,
         left:left+1, width:Math.max(width-2,2),
         top:compact?2:3, bottom:compact?2:3,
+        // Sit ABOVE break/lunch blocks (zIndex 1) but BELOW the DropZone overlay
+        // (zIndex 20) — keeps the card grabbable when a staggered break overlaps
+        // it, while drop highlights still render on top.
+        zIndex: 4,
         background: col.bg,
         borderLeft: `3px solid ${col.accent}`,
         borderRadius:"0 5px 5px 0",
