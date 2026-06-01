@@ -986,7 +986,12 @@ export function CalendarView({
     // Uses the unified slot model so free blocks land at correct staggered times.
     // Set teacher:tName so the DropZone filter only shows these on THIS teacher's rows.
     distinctTeachingSlots(dayKey).forEach((slot,sk)=>{
-      if(taughtSlotKeys.has(sk)) return     // teacher is busy in this slot → skip
+      if(taughtSlotKeys.has(sk)) return     // teacher teaches exactly this slot → skip
+      // CRITICAL: also skip slots whose TIME overlaps a taught block. A staggered
+      // P6@12:45 slot overlaps a primary class's P5 card (12:35–1:15) — the teacher
+      // is actually busy then, so a free block there is wrong and (overlapping the
+      // real card) makes the card unselectable/undraggable.
+      if (blocks.some(b=>b.periodType==="class" && b.subject && b.startMin < slot.endMin && b.endMin > slot.startMin)) return
       blocks.push({
         key:`__free|${tName}|${sk}|${dayKey}`, periodId:slot.periodId,
         periodName:slot.periodName, periodType:"class",
@@ -1042,7 +1047,10 @@ export function CalendarView({
     // ── ONE virtual free block per truly-free DISTINCT slot ──
     // Set room:roomName so the DropZone filter only shows these on THIS room's rows
     distinctTeachingSlots(dayKey).forEach((slot,sk)=>{
-      if(occupiedSlotKeys.has(sk)) return    // room in use in this slot → skip
+      if(occupiedSlotKeys.has(sk)) return    // room used in exactly this slot → skip
+      // Skip slots whose TIME overlaps an occupied block (staggered) — avoids a
+      // spurious free block covering a real card and blocking its drag.
+      if (blocks.some(b=>b.periodType==="class" && b.subject && b.startMin < slot.endMin && b.endMin > slot.startMin)) return
       blocks.push({
         key:`__free|${roomName}|${sk}|${dayKey}`, periodId:slot.periodId,
         periodName:slot.periodName, periodType:"class",
