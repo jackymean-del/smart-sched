@@ -430,9 +430,6 @@ function Block({
           position:"absolute" as const, left:left+1, width:Math.max(width-2,1),
           top:compact?2:3, bottom:compact?2:3, background:bs.bg,
           border:`1px solid ${bs.border}`, borderRadius:4,
-          // Below draggable taught blocks (zIndex 4) so a staggered break never
-          // covers / steals the grab of an overlapping teaching card.
-          zIndex: 1,
           display:"flex", flexDirection:"column" as const,
           alignItems:"center", justifyContent:"center", overflow:"hidden", cursor:"pointer",
         }}>
@@ -513,9 +510,6 @@ function Block({
         position:"absolute" as const,
         left:left+1, width:Math.max(width-2,2),
         top:compact?2:3, bottom:compact?2:3,
-        // Draggable taught blocks must sit ABOVE break/lunch blocks so an
-        // overlapping (staggered) break can never steal the grab.
-        zIndex: 4,
         background: col.bg,
         borderLeft: `3px solid ${col.accent}`,
         borderRadius:"0 5px 5px 0",
@@ -1581,10 +1575,12 @@ export function CalendarView({
                     const b = bySlot.get(`${c.periodId}@${c.start}`) ?? null
                     // ── Drag/drop wiring (matrix) ──
                     const mKey = `${day}|${c.key}|${ent.id}`
+                    const isSrcCell = dragSrcKey === mKey
                     const tgtSection = b ? b.sectionName : (entClassKey ? ent.id : (dragSrc?.section ?? ""))
+                    const dragActive = editMode && !!dragSrc && !isSrcCell
                     const mIsOver = dragOverKey === mKey
-                    const mConflict = (editMode && dragSrc && tgtSection)
-                      ? getSwapConflict(classTT, dragSrc.section, dragSrc.day, dragSrc.periodId, day, c.periodId, tgtSection) : null
+                    const mConflict = (dragActive && tgtSection)
+                      ? getSwapConflict(classTT, dragSrc!.section, dragSrc!.day, dragSrc!.periodId, day, c.periodId, tgtSection) : null
                     const mDropProps = editMode ? {
                       onDragOver: (e:React.DragEvent) => { e.preventDefault(); if (dragOverKey!==mKey) setDragOverKey(mKey) },
                       onDragLeave: () => { if (dragOverKey===mKey) setDragOverKey(null) },
@@ -1597,18 +1593,32 @@ export function CalendarView({
                         setDragSrc(null); setDragSrcKey(null); setDragOverKey(null)
                       },
                     } : {}
-                    const overOutline = mIsOver ? `2.5px solid ${mConflict ? "#EF4444" : "#10B981"}` : undefined
+                    // Highlight: all valid drop targets get a soft tint during drag;
+                    // the hovered cell gets a strong fill + outline (+ badge below).
+                    const dropTint = dragActive
+                      ? (mConflict
+                          ? (mIsOver ? "#FECACA" : "#FEF2F2")
+                          : (mIsOver ? "#BBF7D0" : "#F0FDF4"))
+                      : null
+                    const overOutline = mIsOver && dragActive ? `2.5px solid ${mConflict ? "#EF4444" : "#10B981"}` : undefined
+                    const dropBadge = mIsOver && dragActive ? (
+                      <div style={{ position:"absolute" as const, top:"50%", left:"50%", transform:"translate(-50%,-50%)",
+                        width:24, height:24, borderRadius:"50%", background:mConflict?"#EF4444":"#10B981", color:"#fff",
+                        display:"flex", alignItems:"center", justifyContent:"center", fontSize:mConflict?11:17, fontWeight:900,
+                        pointerEvents:"none" as const, zIndex:6,
+                        boxShadow:`0 0 0 3px ${mConflict?"rgba(239,68,68,0.25)":"rgba(16,185,129,0.25)"}` }}>{mConflict?"✕":"+"}</div>
+                    ) : null
                     // ── Teaching cell ──
                     if (b) {
                       const col = subjectColor(b.subject)
                       const subD = shortNames ? getSubjectShortName(b.subject, subjects) : b.subject
                       const tchD = b.teacher ? (shortNames ? getStaffShortName(b.teacher, staff) : b.teacher) : ""
                       const secD = b.sectionName
-                      const mSrc = dragSrcKey === mKey
                       return (
                         <td key={`${day}|${c.key}`} onClick={()=>onClick(b, day)} {...mDropProps}
                           style={{ width:W, minWidth:W, height:48, padding:2, cursor: editMode ? "grab" : "pointer", position:"relative" as const,
                             ...(overOutline ? { outline:overOutline, outlineOffset:"-2px" } : {}),
+                            background: dropTint ?? undefined,
                             borderLeft:leftBorder, borderRight:"1px solid #E2E8F0", borderBottom:"1px solid #E2E8F0" }}>
                           <div
                             draggable={editMode && !b.isClassTeacher}
@@ -1616,12 +1626,14 @@ export function CalendarView({
                             onDragEnd={()=>{ setDragSrc(null); setDragSrcKey(null); setDragOverKey(null) }}
                             style={{ height:"100%", borderRadius:5, background:col.bg, borderLeft:`3px solid ${col.accent}`, padding:"3px 6px",
                             display:"flex", flexDirection:"column" as const, justifyContent:"center", overflow:"hidden",
-                            opacity: mSrc ? 0.3 : 1, cursor: editMode && !b.isClassTeacher ? "grab" : "pointer" }}>
+                            opacity: isSrcCell ? 0.25 : 1, filter: isSrcCell ? "grayscale(70%)" : undefined,
+                            cursor: editMode && !b.isClassTeacher ? "grab" : "pointer" }}>
                             <div style={{ fontSize:10.5, fontWeight:700, color:col.accent, lineHeight:1.25, overflow:"hidden", textOverflow:"ellipsis" as const, whiteSpace:"nowrap" as const }}>{subD}</div>
                             {viewMode!=="class" && secD && <div style={{ fontSize:9, fontWeight:700, color:"#374151", whiteSpace:"nowrap" as const, overflow:"hidden", textOverflow:"ellipsis" as const }}>{secD}</div>}
                             {viewMode!=="teacher" && tchD && <div style={{ fontSize:9, color:"#555", whiteSpace:"nowrap" as const, overflow:"hidden", textOverflow:"ellipsis" as const }}>{b.isClassTeacher?"★ ":""}{tchD}</div>}
                             {showRoom && b.room && viewMode!=="room" && <div style={{ fontSize:8.5, color:"#777", fontFamily:"monospace", whiteSpace:"nowrap" as const, overflow:"hidden", textOverflow:"ellipsis" as const }}>{shortNames?shortRoom(b.room):b.room}</div>}
                           </div>
+                          {dropBadge}
                         </td>
                       )
                     }
@@ -1652,8 +1664,9 @@ export function CalendarView({
                     // ── Empty (droppable) ──
                     return <td key={`${day}|${c.key}`} {...mDropProps}
                       style={{ width:W, minWidth:W, height:48, position:"relative" as const,
-                        background: mIsOver ? (mConflict ? "#FEE2E2" : "#DCFCE7") : (ri%2===0 ? "#fff" : "#FCFDFE"),
-                        borderLeft:leftBorder, borderRight:"1px solid #E2E8F0", borderBottom:"1px solid #E2E8F0" }} />
+                        ...(overOutline ? { outline:overOutline, outlineOffset:"-2px" } : {}),
+                        background: dropTint ?? (ri%2===0 ? "#fff" : "#FCFDFE"),
+                        borderLeft:leftBorder, borderRight:"1px solid #E2E8F0", borderBottom:"1px solid #E2E8F0" }}>{dropBadge}</td>
                   })
                 })}
               </tr>
