@@ -38,16 +38,15 @@ function dlgsToOptionalBlocks(
   if (!dlgs.length) return []
 
   const validPids  = new Set(classPeriods.map(p => p.id))
-  const fallbackPid = classPeriods[classPeriods.length - 1]?.id ?? 'p1'
-  const fallbackDay = workDays[workDays.length - 1] ?? 'MONDAY'
-
   const blockMap = new Map<string, OptionalBlock>()
 
   dlgs.forEach(dlg => {
-    // Normalise: day → UPPERCASE, periodId → lowercase
-    const day = (dlg.day || fallbackDay).toUpperCase()
-    const rawPid = (dlg.periodId || fallbackPid).toLowerCase()
-    const periodId = validPids.has(rawPid) ? rawPid : fallbackPid
+    // Groups no longer carry a pinned slot — leave day/periodId EMPTY so the
+    // engine schedules the block across its full period quota on free slots.
+    // (Any legacy day/periodId is still honoured as a starting hint if present.)
+    const day = (dlg.day || '').toUpperCase()
+    const rawPid = (dlg.periodId || '').toLowerCase()
+    const periodId = validPids.has(rawPid) ? rawPid : ''
 
     // DLGs sharing the same (sorted) sections → one OptionalBlock
     const secKey = [...(dlg.sectionNames ?? [])].sort().join('|')

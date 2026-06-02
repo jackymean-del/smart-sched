@@ -366,25 +366,13 @@ export function StepStudentGroups() {
   }, [findTeacherCandidates])
 
   /**
-   * Conflict map: a group has a teacher conflict if another group in the same
-   * day+period already has the same teacher assigned.
-   * Teacher is now stored on each group during generation (handleRegenerate),
-   * so we just scan grp.teacher + grp.day + grp.periodId.
+   * Groups no longer carry a fixed day/period — the timetable generator assigns
+   * periods and resolves all teacher/room conflicts during placement. So there
+   * is no slot-level conflict to flag at definition time.
    */
   const groupConflictMap = useMemo((): Record<string, boolean> => {
     const result: Record<string, boolean> = {}
-    const seen = new Map<string, string>() // "teacher::day::period" → first grp.id that claimed it
-    for (const grp of dynamicLearningGroups as any[]) {
-      const teacher = grp.teacher ?? ''
-      if (!teacher) { result[grp.id] = false; continue }
-      const key = `${teacher}::${grp.day ?? ''}::${grp.periodId ?? ''}`
-      if (seen.has(key)) {
-        result[grp.id] = true // duplicate teacher in same slot
-      } else {
-        seen.set(key, grp.id)
-        result[grp.id] = false
-      }
-    }
+    for (const grp of dynamicLearningGroups as any[]) result[grp.id] = false
     return result
   }, [dynamicLearningGroups])
 
@@ -726,7 +714,11 @@ export function StepStudentGroups() {
           room: room?.name ?? `Room ${101 + si + gIdx}`,
           roomCapacity: room?.capacity ?? 0,
           capacityWarning: (room?.capacity ?? 0) > 0 && totalStr > (room?.capacity ?? 0),
-          behavior: mode, day: OPTIONAL_DAY, periodId: slot,
+          // Period is NOT assigned here — the page only DEFINES the group
+          // (sections + subject + teacher + room + strength). The timetable
+          // generator decides how many periods/week the group runs and on which
+          // slots, per the subject's allocation + teacher/room availability.
+          behavior: mode,
         })
         gIdx++
       }
@@ -1182,7 +1174,7 @@ export function StepStudentGroups() {
 
       {/* ══ PANEL 4: AI-Generated Groups ══ */}
       <Section title="AI-Generated Groups" icon={<Sparkles size={15} color="#7C6FE0" />}
-        hint={dynamicLearningGroups.length > 0 ? `${dynamicLearningGroups.length} group${dynamicLearningGroups.length !== 1 ? 's' : ''} generated — teacher & room conflicts resolved by period spreading.` : 'Click "Generate groups" below.'}>
+        hint={dynamicLearningGroups.length > 0 ? `${dynamicLearningGroups.length} group${dynamicLearningGroups.length !== 1 ? 's' : ''} defined — periods are assigned by the timetable generator.` : 'Click "Generate groups" below.'}>
         {dynamicLearningGroups.length === 0 ? (
           <div style={{ padding: '32px 24px', textAlign: 'center', background: '#F8F7FF', borderRadius: 10, border: '1px dashed #D8D2FF' }}>
             <Sparkles size={28} color="#C4B5FD" style={{ marginBottom: 10 }} />
@@ -1192,18 +1184,13 @@ export function StepStudentGroups() {
         ) : (
           <>
             {(() => {
-              const usedPeriods = [...new Set((dynamicLearningGroups as any[]).map((g: any) => g.periodId).filter(Boolean))].sort()
               const anyConflict = Object.values(groupConflictMap).some(Boolean)
-              const day = (dynamicLearningGroups as any[])[0]?.day?.slice(0, 3) ?? 'Mon'
-              const periodStr = usedPeriods.length === 0 ? 'P6'
-                : usedPeriods.length === 1 ? `${day} ${usedPeriods[0]}`
-                : `${day} ${usedPeriods[0]}–${usedPeriods[usedPeriods.length - 1]}`
               const bg     = anyConflict ? '#FFF7ED' : '#EDE9FF'
               const border = anyConflict ? '#FED7AA' : '#C4B5FD'
               const color  = anyConflict ? '#92400E' : '#7C3AED'
-              const msg = usedPeriods.length <= 1
-                ? `All ${dynamicLearningGroups.length} groups share period ${periodStr} — parallel teaching, no clashes.`
-                : `${dynamicLearningGroups.length} groups span ${periodStr} to avoid teacher & room conflicts — each group runs in its assigned period.`
+              // Groups are DEFINED here (sections + subject + teacher + room).
+              // The timetable generator assigns the actual periods per week.
+              const msg = `${dynamicLearningGroups.length} group${dynamicLearningGroups.length !== 1 ? 's' : ''} defined — the generator will schedule each across its required periods/week.`
               return (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', marginBottom: 12, borderRadius: 8, background: bg, border: `1px solid ${border}`, fontSize: 11, color, fontWeight: 600 }}>
                   <Zap size={13} />{msg}
