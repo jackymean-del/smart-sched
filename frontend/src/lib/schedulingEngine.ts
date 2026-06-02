@@ -809,45 +809,66 @@ export function solveTimetable(input: SolverInput): SolverOutput {
       }
     }
 
-    // Place the multi-option cell in every section sharing this block,
-    // unless that section is off on the block's day (day-off rule).
-    block.sectionNames.forEach(secName => {
-      // Day-off check: don't place an optional block on a section's off-day
-      if (sectionOffDays.get(secName)?.has(block.day)) return
+    // ── Multi-slot placement (group spans the full syllabus, not one period) ─
+    // A group is NOT limited to its pinned slot: schedule it across as many
+    // periods/week as the subject quota requires, using the pinned slot first
+    // (when free) then additional FREE slots where the teacher, room and ALL
+    // sections are simultaneously available. This is what lets the engine — not
+    // the Student-Groups page — decide how many periods a group runs.
+    const optSubjects = block.options.map(o => o.subject).filter(Boolean)
+    const refSec = block.sectionNames[0]
+    const needed = Math.max(1, ...optSubjects.map(sub =>
+      targetPeriods[refSec]?.[sub] ?? subjects.find(s => s.name === sub)?.periodsPerWeek ?? 0))
+    const blockRoom = block.options[0]?.room ?? ''
 
-      if (!classTT[secName]) classTT[secName] = {}
-      if (!classTT[secName][block.day]) classTT[secName][block.day] = {}
-      classTT[secName][block.day][block.periodId] = {
-        subject: block.options.map(o => o.subject).filter(Boolean).join(' / '),
-        // teacher is left blank at the section level — real teacher info lives in
-        // the `options` array.  This prevents false double-booking conflicts when
-        // multiple sections share the same block (all got the same teacher field).
-        teacher: '',
-        room: block.options[0]?.room ?? '',
-        optionalBlockId: block.id,
-        options: block.options,
-      } as any
+    const slotOk = (day: string, pid: string): boolean => {
+      if (!block.sectionNames.every(sn => !sectionOffDays.get(sn)?.has(day) && !classTT[sn]?.[day]?.[pid])) return false
+      if (!block.options.every(o => !o.teacher || !teacherBusy[o.teacher]?.[day]?.has(pid))) return false
+      if (blockRoom && sections.some(s => classTT[s.name]?.[day]?.[pid]?.room === blockRoom)) return false
+      return true
+    }
+    const slots: Array<{ day: string; periodId: string }> = []
+    const seenSlot = new Set<string>()
+    if (block.day && block.periodId && slotOk(block.day, block.periodId)) {
+      slots.push({ day: block.day, periodId: block.periodId }); seenSlot.add(`${block.day}|${block.periodId}`)
+    }
+    for (const p of classPeriods) {
+      for (const day of workDays) {
+        if (slots.length >= needed) break
+        const key = `${day}|${p.id}`
+        if (seenSlot.has(key) || !slotOk(day, p.id)) continue
+        slots.push({ day, periodId: p.id }); seenSlot.add(key)
+      }
+      if (slots.length >= needed) break
+    }
 
-      // Reserve every option's teacher across this slot
-      block.options.forEach(opt => {
-        if (opt.teacher) {
-          ensureBusy(opt.teacher)
-          teacherBusy[opt.teacher][block.day].add(block.periodId)
-        }
+    const cellSubject = block.options.map(o => o.subject).filter(Boolean).join(' / ')
+    slots.forEach(({ day, periodId }) => {
+      block.sectionNames.forEach(secName => {
+        if (sectionOffDays.get(secName)?.has(day)) return
+        if (!classTT[secName]) classTT[secName] = {}
+        if (!classTT[secName][day]) classTT[secName][day] = {}
+        if (classTT[secName][day][periodId]) return
+        // teacher blank at section level — real teacher lives in options[]
+        classTT[secName][day][periodId] = {
+          subject: cellSubject, teacher: '', room: blockRoom,
+          optionalBlockId: block.id, options: block.options,
+        } as any
       })
-
-      // Count the block toward this section's subject quota AND cap the target to
-      // the block count, so Pass 2 never schedules the SAME subject again as an
-      // individual period. A parallel/group subject (e.g. Entrepreneurship for
-      // XI-Com-A + XI-Arts) is handled ENTIRELY by the block — the section must
-      // not also get standalone periods for it.
-      if (!subjectCount[secName]) subjectCount[secName] = {}
-      if (!targetPeriods[secName]) targetPeriods[secName] = {}
       block.options.forEach(opt => {
-        if (opt.subject) {
-          subjectCount[secName][opt.subject] = (subjectCount[secName][opt.subject] ?? 0) + 1
-          targetPeriods[secName][opt.subject] = subjectCount[secName][opt.subject]
-        }
+        if (opt.teacher) { ensureBusy(opt.teacher); teacherBusy[opt.teacher][day].add(periodId) }
+      })
+      // Count toward quota AND cap the target so Pass 2 never schedules the same
+      // subject again as an individual period for a block-covered section.
+      block.sectionNames.forEach(secName => {
+        if (!subjectCount[secName]) subjectCount[secName] = {}
+        if (!targetPeriods[secName]) targetPeriods[secName] = {}
+        block.options.forEach(opt => {
+          if (opt.subject) {
+            subjectCount[secName][opt.subject] = (subjectCount[secName][opt.subject] ?? 0) + 1
+            targetPeriods[secName][opt.subject] = subjectCount[secName][opt.subject]
+          }
+        })
       })
     })
   })
