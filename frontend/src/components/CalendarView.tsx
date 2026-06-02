@@ -64,6 +64,8 @@ export interface CalendarViewProps {
   blockedSlots?: BlockedSlot[]
   dynamicLearningGroups?: DynamicLearningGroup[]
   rooms?: Array<{ actualName?: string; generatedName?: string; name?: string; capacity?: number }>
+  // Per-section subject strengths — drives the parallel-block hover breakdown.
+  sectionStrengths?: Array<{ sectionName: string; subjectStrengths?: Record<string, number> }>
   classwiseBreaks?: Array<{
     id:string; name:string; type:string
     classes:string[]; afterPeriod:number; duration:number
@@ -762,6 +764,7 @@ export function CalendarView({
   staff, sections, subjects, substitutions, viewMode, selectedEntity,
   showTeacher, showRoom, showTime=false, shortNames=false, editMode=false,
   onCellClick, onCellEdit, onCellDelete, onCellSwap, absentHighlights, classwiseBreaks,
+  rooms, sectionStrengths,
 }: CalendarViewProps) {
 
   // ── State ────────────────────────────────────────────────────────────
@@ -1206,22 +1209,39 @@ export function CalendarView({
     return {ticks:t,minorTicks:mt}
   },[dayStartMin,dayEndMin,zoom])
 
+  // Parallel/group block strength breakdown, e.g. "XI-Com-A (25) + XI-Arts (15) = 40 · room cap 50"
+  const groupStrengthLine = useCallback((b:TimeBlock): string | null => {
+    const secs = (b.sectionName || "").split(", ").map(s=>s.trim()).filter(Boolean)
+    if (secs.length < 2 || !b.subject) return null   // only for multi-section group cards
+    const subj = b.subject.split(" / ")[0]
+    const parts:string[] = []; let total = 0
+    secs.forEach(s=>{
+      const rec = sectionStrengths?.find(x=>x.sectionName===s)
+      const n = rec?.subjectStrengths?.[subj] ?? rec?.subjectStrengths?.[b.subject] ?? 0
+      parts.push(`${s} (${n})`); total += n
+    })
+    const roomCap = rooms?.find(r=>(r.actualName||r.generatedName||r.name)===b.room)?.capacity
+    return `${parts.join(" + ")} = ${total}${roomCap?` · room cap ${roomCap}`:""}`
+  },[sectionStrengths,rooms])
+
   // ── Hover / click handlers ───────────────────────────────────────────
   const onHover = useCallback((b:TimeBlock,e:React.MouseEvent,dayKey:string)=>{
     if(timerRef.current) clearTimeout(timerRef.current)
     timerRef.current=setTimeout(()=>{
       const dur=b.endMin-b.startMin
+      const strengthLine = groupStrengthLine(b)
       const lines=[
         b.subject||b.periodName,
         `${fmtTime(b.startMin,timeFormat)} – ${fmtTime(b.endMin,timeFormat)}  (${dur}m)`,
         ...(b.teacher&&b.periodType==="class"?[b.teacher]:[]),
         ...(b.sectionName&&viewMode!=="class"?[b.sectionName]:[]),
+        ...(strengthLine?[strengthLine]:[]),
         ...(b.room&&viewMode!=="room"?[b.room]:[]),
         DAY_FULL[dayKey]??dayKey,
       ].filter(Boolean)
       setTooltip({lines,x:e.clientX,y:e.clientY})
     },220)
-  },[timeFormat,viewMode])
+  },[timeFormat,viewMode,groupStrengthLine])
 
   const onLeave = useCallback(()=>{
     if(timerRef.current) clearTimeout(timerRef.current)

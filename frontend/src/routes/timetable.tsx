@@ -2797,6 +2797,7 @@ export function TimetablePage() {
         blockedSlots={(store as any).blockedSlots ?? []}
         dynamicLearningGroups={(store as any).dynamicLearningGroups ?? []}
         rooms={(store as any).rooms ?? []}
+        sectionStrengths={(store as any).sectionStrengths ?? []}
         classwiseBreaks={(config as any).classwiseBreaks}
         onCellClick={(section, day, periodId) => {
           if (editMode) setEditTarget({ section, day, periodId })
