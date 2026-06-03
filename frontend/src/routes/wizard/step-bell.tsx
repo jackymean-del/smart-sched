@@ -245,8 +245,8 @@ function NumInput({ value, onChange, min, max, className, style }: NumInputProps
 }
 
 // ── Row factories ─────────────────────────────────────────────
-const mkAssembly  = (): BellRow => ({ id: 'assembly',  name: 'Assembly',  type: 'assembly',  duration: 15, classes: [...ALL_CLASS_KEYS] })
-const mkDispersal = (): BellRow => ({ id: makeId(),    name: 'Dispersal', type: 'dispersal', duration: 5,  classes: [...ALL_CLASS_KEYS] })
+const mkAssembly  = (): BellRow => ({ id: 'assembly',  name: 'Assembly',  type: 'assembly',  duration: 10, classes: [...ALL_CLASS_KEYS] })
+const mkDispersal = (): BellRow => ({ id: makeId(),    name: 'Dispersal', type: 'dispersal', duration: 10, classes: [...ALL_CLASS_KEYS] })
 const mkPeriod    = (n: number, dur: number): BellRow => ({
   id: `p${n}`, name: `Period ${n}`, type: 'teaching', duration: dur, classes: [...ALL_CLASS_KEYS],
 })
@@ -384,7 +384,7 @@ function loadSaved(): SavedBell | null {
  */
 function ClasswiseBreaksPanel({
   cwRows, setCwRows, use12h, startTime, periodDur, maxPeriods,
-  onGenerate, onClose,
+  onGenerate, onClose, assemblyDur = 10,
   classEntries = CLASSES, allClassKeys = ALL_CLASS_KEYS, classGroups = CLASS_GROUPS,
 }: {
   cwRows:      CwBreakRow[]
@@ -395,6 +395,7 @@ function ClasswiseBreaksPanel({
   maxPeriods:  number
   onGenerate:  () => void
   onClose:     () => void
+  assemblyDur?: number
   classEntries?: typeof CLASSES
   allClassKeys?: string[]
   classGroups?:  typeof CLASS_GROUPS
@@ -415,7 +416,7 @@ function ClasswiseBreaksPanel({
         b.classes.some(c => row.classes.includes(c))
       )
       .reduce((sum, b) => sum + b.duration, 0)
-    return addMins(startTime, 15 /* assembly */ + precedingBreakMins + row.afterPeriod * periodDur)
+    return addMins(startTime, assemblyDur + precedingBreakMins + row.afterPeriod * periodDur)
   }
 
   const updateBreak = (id: string, patch: Partial<CwBreakRow>) =>
@@ -755,13 +756,14 @@ const PICK_ROW: CSSProperties = { display: 'flex', alignItems: 'center', gap: 8,
 //  GapRow — always-visible strip between bell rows
 // ══════════════════════════════════════════════════════════════
 function GapRow({
-  afterIndex, rows, onInsertBreak, onInsertPeriod, onInsertSplit,
+  afterIndex, rows, onInsertBreak, onInsertPeriod, onInsertSplit, onInsertStaggered,
   allClassKeys = ALL_CLASS_KEYS,
 }: {
   afterIndex: number; rows: BellRow[]
   onInsertBreak: (afterIndex: number, name: string) => void
   onInsertPeriod: (afterIndex: number) => void
   onInsertSplit: (afterIndex: number) => void
+  onInsertStaggered?: (afterIndex: number) => void
   allClassKeys?: string[]
 }) {
   const [mode,      setMode]      = useState<'idle' | 'break'>('idle')
@@ -839,7 +841,7 @@ function GapRow({
           <>
             <span style={{ width: 1, height: 10, background: '#D1D5DB', flexShrink: 0 }} />
             <button className="gap-btn" onClick={() => onInsertSplit(afterIndex)}
-              title={`Auto-create two periods: one for classes NOT in "${aboveRow.name}", one for classes IN it`}
+              title={`One split: classes outside "${aboveRow.name}" teach concurrently; classes inside get a period right after`}
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 3,
                 padding: '2px 9px', borderRadius: 12,
@@ -847,8 +849,24 @@ function GapRow({
                 color: '#7C3AED', fontSize: 10, fontWeight: 600,
                 cursor: 'pointer', fontFamily: 'inherit',
               }}>
-              <Sparkles size={8} /> Split periods
+              <Sparkles size={8} /> Split
             </button>
+            {onInsertStaggered && (
+              <>
+                <span style={{ width: 1, height: 10, background: '#D1D5DB', flexShrink: 0 }} />
+                <button className="gap-btn" onClick={() => onInsertStaggered(afterIndex)}
+                  title={`Staggered break: each group gets the same break but at different times (e.g. XI lunch 12–12:30, XII lunch 11:30–12)`}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 3,
+                    padding: '2px 9px', borderRadius: 12,
+                    border: '1px solid #FDE68A', background: '#FFFBEB',
+                    color: '#D97706', fontSize: 10, fontWeight: 600,
+                    cursor: 'pointer', fontFamily: 'inherit',
+                  }}>
+                  <Coffee size={8} /> Staggered
+                </button>
+              </>
+            )}
           </>
         )}
       </div>
@@ -1315,16 +1333,24 @@ export function StepBell() {
 
   const handlePeriodDurChange = (d: number) => {
     const v = Math.max(10, d)
+    // Only update the DEFAULT — rows that still match the old default are also nudged,
+    // but rows the user individually edited (≠ old default) are preserved.
+    const oldDur = activePeriodDur
     if (varyByDay && activeDayTab) {
       setDayPeriodDurs(prev => ({ ...prev, [activeDayTab]: v }))
-      setDisplayRows(prev => prev.map(r => r.type === 'teaching' ? { ...r, duration: v } : r))
+      setDisplayRows(prev => prev.map(r => r.type === 'teaching' && r.duration === oldDur ? { ...r, duration: v } : r))
     } else if (isAdvanced) {
       updateActiveShift({ periodDur: v })
-      setDisplayRows(prev => prev.map(r => r.type === 'teaching' ? { ...r, duration: v } : r))
+      setDisplayRows(prev => prev.map(r => r.type === 'teaching' && r.duration === oldDur ? { ...r, duration: v } : r))
     } else {
       setPeriodDur(v)
-      setDisplayRows(prev => prev.map(r => r.type === 'teaching' ? { ...r, duration: v } : r))
+      setDisplayRows(prev => prev.map(r => r.type === 'teaching' && r.duration === oldDur ? { ...r, duration: v } : r))
     }
+  }
+
+  /** Explicitly force every teaching row to the current default duration. */
+  const applyDurToAll = () => {
+    setDisplayRows(prev => prev.map(r => r.type === 'teaching' ? { ...r, duration: activePeriodDur } : r))
   }
 
   const handleMaxPeriodsChange = (n: number) => {
@@ -1477,6 +1503,37 @@ export function StepBell() {
     setDisplayRows(prev => { const n = [...prev]; n.splice(afterIndex + 1, 0, newRow); return n })
   }
 
+  /**
+   * Staggered break: given an existing partial break at `afterIndex` (e.g. Lunch for XII),
+   * inserts three more rows to complete the full staggered pattern:
+   *   [existing] Lunch XII  (30 min)
+   *   [new +1]   Period N   (XI only)   — XI teaches while XII is on lunch
+   *   [new +2]   Lunch XI   (30 min)    — XI's lunch, XII continues
+   *   [new +3]   Period N   (XII only)  — XII teaches while XI is on lunch
+   * After row +3 both groups are back in sync.
+   */
+  const insertStaggeredBreak = (afterIndex: number) => {
+    const breakRow = displayRows[afterIndex]
+    if (!breakRow) return
+    const classesOnBreakA    = breakRow.classes                                       // e.g. ['xii']
+    const classesOnBreakB    = activeClassKeys.filter(k => !classesOnBreakA.includes(k)) // e.g. ['xi']
+    if (classesOnBreakA.length === 0 || classesOnBreakB.length === 0) return
+
+    const perCount  = displayRows.slice(0, afterIndex).filter(r => r.type === 'teaching').length
+    const pName     = `Period ${perCount + 1}`
+    const breakDur  = breakRow.duration   // reuse same duration for reverse break
+
+    const periodForB: BellRow  = { id: makeId(), name: pName,          type: 'teaching',  duration: breakDur,  classes: classesOnBreakB }
+    const reverseBreak: BellRow = { id: makeId(), name: breakRow.name, type: breakRow.type, duration: breakDur, classes: classesOnBreakB }
+    const periodForA: BellRow  = { id: makeId(), name: pName,          type: 'teaching',  duration: breakDur,  classes: classesOnBreakA }
+
+    setDisplayRows(prev => {
+      const next = [...prev]
+      next.splice(afterIndex + 1, 0, periodForB, reverseBreak, periodForA)
+      return next
+    })
+  }
+
   const insertPeriodAt = (afterIndex: number) => {
     const count  = displayRows.slice(0, afterIndex + 1).filter(r => r.type === 'teaching').length
     const newRow = { ...mkPeriod(count + 1, activePeriodDur), id: makeId(), classes: [...activeClassKeys] }
@@ -1522,8 +1579,9 @@ export function StepBell() {
   const handleAISuggest = () => {
     let curMins = toMins(activeStartTime)
     const result: BellRow[] = []
-    result.push({ id: makeId(), name: 'Assembly', type: 'assembly', duration: 15, classes: [...activeClassKeys] })
-    curMins += 15
+    const asmDur = displayRows.find(r => r.type === 'assembly')?.duration ?? 10
+    result.push({ id: makeId(), name: 'Assembly', type: 'assembly', duration: asmDur, classes: [...activeClassKeys] })
+    curMins += asmDur
     result.push({ id: makeId(), name: 'Morning Break', type: 'short-break', duration: 10, classes: [...activeClassKeys] })
     curMins += 10
     let lunchAdded = false
@@ -2503,6 +2561,7 @@ export function StepBell() {
                 maxPeriods={maxPeriods}
                 onGenerate={handleGenerateFromCw}
                 onClose={() => setShowCwPanel(false)}
+                assemblyDur={rows.find(r => r.type === 'assembly')?.duration ?? 10}
                 classEntries={activeClasses}
                 allClassKeys={activeClassKeys}
                 classGroups={activeClassGroups}
@@ -2710,10 +2769,10 @@ export function StepBell() {
 
                 <div style={{ width: 1, height: 20, background: '#DDD6FE', flexShrink: 0 }} />
 
-                {/* Period duration */}
+                {/* Period duration — default for new rows; individual rows keep their own durations */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <span style={{ fontSize: 11, color: '#9CA3AF' }}>Period</span>
-                  <NumInput className="b-dur" value={activePeriodDur} min={10} max={120}
+                  <span style={{ fontSize: 11, color: '#9CA3AF' }}>Default period</span>
+                  <NumInput className="b-dur" value={activePeriodDur} min={10} max={240}
                     onChange={handlePeriodDurChange}
                     style={{
                       border: dayPeriodDurs[activeDayTab] ? '1.5px solid #7C6FE0' : '1px solid #DDD6FE',
@@ -2721,6 +2780,11 @@ export function StepBell() {
                       fontWeight: dayPeriodDurs[activeDayTab] ? 700 : 400,
                     }} />
                   <span style={{ fontSize: 11, color: '#9CA3AF' }}>min</span>
+                  <button onClick={applyDurToAll}
+                    title="Set every period row to this duration"
+                    style={{ fontSize: 10, color: '#7C6FE0', background: 'none', border: '1px solid #DDD6FE', borderRadius: 4, cursor: 'pointer', padding: '1px 6px', fontFamily: 'inherit', fontWeight: 600 }}>
+                    Apply all
+                  </button>
                   {dayPeriodDurs[activeDayTab] && (
                     <button onClick={() => setDayPeriodDurs(prev => { const n = { ...prev }; delete n[activeDayTab]; return n })}
                       style={{ fontSize: 10, color: '#9CA3AF', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>reset</button>
@@ -2743,8 +2807,11 @@ export function StepBell() {
                 padding: '8px 14px', background: '#F9FAFB',
                 borderBottom: '1px solid #E5E7EB', borderRadius: '10px 10px 0 0',
               }}>
-                {['Bell', 'Start', 'End', 'Min', 'Type', 'Classes', ''].map((h, i) => (
-                  <div key={i} style={{ fontSize: 11, fontWeight: 600, color: '#6B7280' }}>{h}</div>
+                {['Bell', 'Start', 'End', 'Min ✎', 'Type', 'Classes', ''].map((h, i) => (
+                  <div key={i} title={i === 3 ? 'Each row\'s duration is independently editable — click the value to change it' : undefined}
+                    style={{ fontSize: 11, fontWeight: 600, color: i === 3 ? '#7C6FE0' : '#6B7280', cursor: i === 3 ? 'help' : undefined }}>
+                    {h}
+                  </div>
                 ))}
               </div>
 
@@ -2821,7 +2888,11 @@ export function StepBell() {
                           {fmt12(end, use12h)}
                         </div>
                         <NumInput className="b-dur" value={row.duration} min={5} max={240}
-                          onChange={d => updateRow(row.id, { duration: d })} />
+                          onChange={d => updateRow(row.id, { duration: d })}
+                          style={row.type === 'teaching' && row.duration !== activePeriodDur
+                            ? { border: '1.5px solid #7C6FE0', color: '#7C3AED', fontWeight: 700 }
+                            : undefined}
+                        />
                         <div style={{
                           padding: isBreak ? '4px 10px' : '3px 10px',
                           borderRadius: 20, display: 'inline-block',
@@ -2848,6 +2919,7 @@ export function StepBell() {
                           onInsertBreak={insertBreak}
                           onInsertPeriod={insertPeriodAt}
                           onInsertSplit={insertSplitPeriods}
+                          onInsertStaggered={insertStaggeredBreak}
                           allClassKeys={activeClassKeys}
                         />
                       )}
@@ -2871,7 +2943,10 @@ export function StepBell() {
                 }} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 14px', borderRadius: 7, border: '1px solid #E5E7EB', background: '#fff', fontSize: 12, fontWeight: 600, color: '#374151', cursor: 'pointer', fontFamily: 'inherit' }}>
                   <Plus size={12} /> Add period
                 </button>
-                <button onClick={() => setDisplayRows(buildRows(maxPeriods, periodDur))} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 14px', borderRadius: 7, border: '1px solid #E5E7EB', background: '#fff', fontSize: 12, fontWeight: 600, color: '#6B7280', cursor: 'pointer', fontFamily: 'inherit' }}>
+                <button
+                  title="Wipes custom row durations and rebuilds with the default period duration"
+                  onClick={() => setDisplayRows(buildRows(maxPeriods, periodDur).map(r => ({ ...r, classes: [...activeClassKeys] })))}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 14px', borderRadius: 7, border: '1px solid #E5E7EB', background: '#fff', fontSize: 12, fontWeight: 600, color: '#6B7280', cursor: 'pointer', fontFamily: 'inherit' }}>
                   Reset to default
                 </button>
               </div>
