@@ -1671,9 +1671,15 @@ export function StepBell() {
     // active stream class is absent from it — then the row immediately after it
     // starts at the SAME time (concurrent scheduling).  Classes not attending the
     // break continue straight into the next row without waiting for the break to end.
+    //
+    // IMPORTANT: the non-concurrent fallback MUST cascade from result[i-1] (the
+    // already-modified start), NOT from startTimes[i] (the unmodified sequential
+    // clock).  Without this, a concurrent row's earlier start doesn't propagate:
+    //   e.g. Period 3 moved to 11:30 AM (concurrent with Lunch 1) → Second Lunch
+    //   should be 11:30 + 30 = 12:00 PM, but startTimes would say 12:30 PM.
     const result: string[] = []
     for (let i = 0; i < displayRows.length; i++) {
-      if (i === 0) { result.push(startTimes[0] ?? activeStartTime); continue }
+      if (i === 0) { result.push(activeStartTime); continue }
 
       const prev      = displayRows[i - 1]
       const prevStart = result[i - 1]
@@ -1701,7 +1707,8 @@ export function StepBell() {
         }
       }
 
-      result.push(startTimes[i])
+      // Sequential: cascade from the modified prev start (not the raw startTimes clock)
+      result.push(addMins(prevStart, prev.duration))
     }
     return result
   }, [hasPartialBreaks, displayRows, activeStartTime, startTimes, cwClassKeys])
