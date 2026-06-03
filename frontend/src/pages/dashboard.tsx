@@ -51,6 +51,19 @@ const BOARD_SUBJECTS: Record<BoardKey, number> = {
   CBSE: 38, ICSE: 42, IB: 30, State: 35, Custom: 30,
 }
 
+// Compute approximate section count from grade range
+function computeApproxSections(from: string, to: string): number {
+  const fi = GRADES.indexOf(from)
+  const ti = GRADES.indexOf(to)
+  if (fi < 0 || ti < 0 || fi > ti) return 0
+  let total = 0
+  if (fi <= 2 && ti >= 0) total += Math.min(ti, 2) - fi + 1
+  if (fi <= 7 && ti >= 3) total += (Math.min(ti, 7) - Math.max(fi, 3) + 1) * 4
+  if (fi <= 12 && ti >= 8) total += (Math.min(ti, 12) - Math.max(fi, 8) + 1) * 4
+  if (fi <= 14 && ti >= 13) total += (Math.min(ti, 14) - Math.max(fi, 13) + 1) * 4
+  return total
+}
+
 // Auto-generate section tags from grade range
 function buildSectionTags(from: string, to: string, board: BoardKey): string[] {
   const fi = GRADES.indexOf(from)
@@ -174,6 +187,8 @@ interface TTEntry {
   startDate:      string
   endDate:        string
   createdAt:      number
+  fromGrade?:     string
+  toGrade?:       string
 }
 
 const WIZARD_STEP_LABELS: Record<number, string> = {
@@ -304,6 +319,12 @@ function CreateTimetableModal({
     [fromGrade, toGrade, board],
   )
 
+  // Auto-update classes count when grade range changes
+  useEffect(() => {
+    const n = computeApproxSections(fromGrade, toGrade)
+    if (n > 0) setClasses(n)
+  }, [fromGrade, toGrade])
+
   const fmt = (iso: string) => {
     const d = new Date(iso + 'T00:00:00')
     return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
@@ -323,6 +344,8 @@ function CreateTimetableModal({
       startDate,
       endDate,
       createdAt:      Date.now(),
+      fromGrade,
+      toGrade,
     }
     onOpenWizard(entry)
   }
@@ -653,7 +676,11 @@ export function DashboardPage() {
     setActiveTTId(entry.id)
     // New timetable: start fresh
     useTimetableStore.getState().resetWizard()
-    useTimetableStore.getState().setConfig({ timetableName: entry.name } as any)
+    useTimetableStore.getState().setConfig({
+      timetableName: entry.name,
+      fromGrade: entry.fromGrade ?? 'Nursery',
+      toGrade:   entry.toGrade   ?? 'Class XII',
+    } as any)
     useTimetableStore.getState().setStep(1)
     window.location.href = '/wizard'
   }

@@ -89,6 +89,22 @@ const CLASS_GROUPS = [
 
 const ALL_CLASS_KEYS = CLASSES.map(c => c.key)
 
+// Convert grade range (from dashboard modal) to a filtered CLASSES subset
+const GRADE_TO_KEY: Record<string, string> = {
+  'Nursery':'nur','LKG':'lkg','UKG':'ukg',
+  'Class I':'i','Class II':'ii','Class III':'iii','Class IV':'iv','Class V':'v',
+  'Class VI':'vi','Class VII':'vii','Class VIII':'viii','Class IX':'ix','Class X':'x',
+  'Class XI':'xi','Class XII':'xii',
+}
+const WIZARD_GRADES = ['Nursery','LKG','UKG','Class I','Class II','Class III','Class IV','Class V','Class VI','Class VII','Class VIII','Class IX','Class X','Class XI','Class XII']
+function classesFromGradeRange(from: string, to: string): typeof CLASSES {
+  const fi = WIZARD_GRADES.indexOf(from), ti = WIZARD_GRADES.indexOf(to)
+  if (fi < 0 || ti < 0 || fi > ti) return CLASSES
+  const keys = WIZARD_GRADES.slice(fi, ti + 1).map(g => GRADE_TO_KEY[g]).filter(Boolean)
+  const subset = CLASSES.filter(c => keys.includes(c.key))
+  return subset.length > 0 ? subset : CLASSES
+}
+
 // ── Type metadata ──────────────────────────────────────────────
 const TYPE_META: Record<RowType, { label: string; bg: string; fg: string; border: string; line: string }> = {
   assembly:     { label: 'Assembly',    bg: '#EDE9FF', fg: '#7C3AED', border: '#C4B5FD', line: '#7C3AED' },
@@ -349,6 +365,8 @@ interface SavedBell {
   shifts?:        ShiftConfig[]
   activeShiftId?: string
   shiftRows?:     Record<string, BellRow[]>  // shiftId → rows
+  // Custom class list (user can edit/add/delete)
+  customClasses?: Array<{ key: string; label: string; short: string; group: string }>
 }
 function loadSaved(): SavedBell | null {
   try { const s = localStorage.getItem(BELL_KEY); return s ? JSON.parse(s) as SavedBell : null }
@@ -367,6 +385,7 @@ function loadSaved(): SavedBell | null {
 function ClasswiseBreaksPanel({
   cwRows, setCwRows, use12h, startTime, periodDur, maxPeriods,
   onGenerate, onClose,
+  classEntries = CLASSES, allClassKeys = ALL_CLASS_KEYS, classGroups = CLASS_GROUPS,
 }: {
   cwRows:      CwBreakRow[]
   setCwRows:   React.Dispatch<React.SetStateAction<CwBreakRow[]>>
@@ -376,6 +395,9 @@ function ClasswiseBreaksPanel({
   maxPeriods:  number
   onGenerate:  () => void
   onClose:     () => void
+  classEntries?: typeof CLASSES
+  allClassKeys?: string[]
+  classGroups?:  typeof CLASS_GROUPS
 }) {
   const [openPicker, setOpenPicker] = useState<string | null>(null)
 
@@ -412,7 +434,7 @@ function ClasswiseBreaksPanel({
       id:          makeId(),
       name:        'Break',
       type:        'short-break',
-      classes:     [...ALL_CLASS_KEYS],
+      classes:     [...allClassKeys],
       afterPeriod: defaultAfter,
       duration:    10,
     }])
@@ -526,10 +548,13 @@ function ClasswiseBreaksPanel({
                   rowId={row.id}
                   openId={openPicker}
                   setOpenId={setOpenPicker}
+                  classEntries={classEntries}
+                  allClassKeys={allClassKeys}
+                  classGroups={classGroups}
                 />
-                {row.classes.length > 0 && row.classes.length < ALL_CLASS_KEYS.length && (
+                {row.classes.length > 0 && row.classes.length < allClassKeys.length && (
                   <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 4 }}>
-                    {row.classes.length} of {ALL_CLASS_KEYS.length} classes
+                    {row.classes.length} of {allClassKeys.length} classes
                   </div>
                 )}
               </div>
@@ -637,9 +662,13 @@ function ClasswiseBreaksPanel({
 // ── ClassPicker ───────────────────────────────────────────────
 function ClassPicker({
   classes, onChange, rowId, openId, setOpenId,
+  classEntries = CLASSES, allClassKeys = ALL_CLASS_KEYS, classGroups = CLASS_GROUPS,
 }: {
   classes: string[]; onChange: (c: string[]) => void
   rowId: string; openId: string | null; setOpenId: (id: string | null) => void
+  classEntries?: typeof CLASSES
+  allClassKeys?: string[]
+  classGroups?: typeof CLASS_GROUPS
 }) {
   const isOpen = openId === rowId
   const ref    = useRef<HTMLDivElement>(null)
@@ -649,15 +678,15 @@ function ClassPicker({
     document.addEventListener('mousedown', h)
     return () => document.removeEventListener('mousedown', h)
   }, [isOpen, setOpenId])
-  const isAll  = ALL_CLASS_KEYS.every(k => classes.includes(k))
+  const isAll  = allClassKeys.every(k => classes.includes(k))
   const isNone = classes.length === 0
   const label  = isAll ? 'All' : isNone ? '—'
-    : classes.length <= 3 ? classes.map(k => CLASSES.find(c => c.key === k)?.short ?? k).join(', ')
+    : classes.length <= 3 ? classes.map(k => classEntries.find(c => c.key === k)?.short ?? k).join(', ')
     : `${classes.length} classes`
   const toggleOne = (key: string, chk: boolean) =>
     onChange(chk ? [...classes, key] : classes.filter(c => c !== key))
   const toggleGroup = (group: string, chk: boolean) => {
-    const gk = CLASSES.filter(c => c.group === group).map(c => c.key)
+    const gk = classEntries.filter(c => c.group === group).map(c => c.key)
     onChange(chk ? [...new Set([...classes, ...gk])] : classes.filter(k => !gk.includes(k)))
   }
   return (
@@ -684,12 +713,13 @@ function ClassPicker({
           <label style={PICK_ROW}>
             <input type="checkbox" checked={isAll}
               ref={el => { if (el) el.indeterminate = !isAll && !isNone }}
-              onChange={e => onChange(e.target.checked ? [...ALL_CLASS_KEYS] : [])}
+              onChange={e => onChange(e.target.checked ? [...allClassKeys] : [])}
               style={{ accentColor: '#7C6FE0', flexShrink: 0 }} />
             <span style={{ fontSize: 12, fontWeight: 700, color: '#13111E' }}>All classes</span>
           </label>
-          {CLASS_GROUPS.map(gm => {
-            const gc    = CLASSES.filter(c => c.group === gm.group)
+          {classGroups.map(gm => {
+            const gc    = classEntries.filter(c => c.group === gm.group)
+            if (gc.length === 0) return null
             const gk    = gc.map(c => c.key)
             const allIn = gk.every(k => classes.includes(k))
             const anyIn = gk.some(k => classes.includes(k))
@@ -726,11 +756,13 @@ const PICK_ROW: CSSProperties = { display: 'flex', alignItems: 'center', gap: 8,
 // ══════════════════════════════════════════════════════════════
 function GapRow({
   afterIndex, rows, onInsertBreak, onInsertPeriod, onInsertSplit,
+  allClassKeys = ALL_CLASS_KEYS,
 }: {
   afterIndex: number; rows: BellRow[]
   onInsertBreak: (afterIndex: number, name: string) => void
   onInsertPeriod: (afterIndex: number) => void
   onInsertSplit: (afterIndex: number) => void
+  allClassKeys?: string[]
 }) {
   const [mode,      setMode]      = useState<'idle' | 'break'>('idle')
   const [breakName, setBreakName] = useState('')
@@ -738,7 +770,7 @@ function GapRow({
   const aboveRow = rows[afterIndex]
   const isPartialBreak = aboveRow
     && (aboveRow.type === 'short-break' || aboveRow.type === 'lunch')
-    && aboveRow.classes.length > 0 && aboveRow.classes.length < ALL_CLASS_KEYS.length
+    && aboveRow.classes.length > 0 && aboveRow.classes.length < allClassKeys.length
   useEffect(() => { if (mode === 'break') inputRef.current?.focus() }, [mode])
   const confirmBreak = () => {
     onInsertBreak(afterIndex, breakName.trim() || 'Break')
@@ -876,6 +908,25 @@ export function StepBell() {
   const { config, setConfig, setStep, setBreaks } = useTimetableStore()
   const [_saved] = useState<SavedBell | null>(loadSaved)
 
+  // Custom class list — initialized from saved state OR from the grade range set in the modal
+  const [customClasses, setCustomClasses] = useState<typeof CLASSES>(() => {
+    if (_saved?.customClasses?.length) return _saved.customClasses as typeof CLASSES
+    const from = (config as any).fromGrade as string | undefined
+    const to   = (config as any).toGrade   as string | undefined
+    if (from && to) return classesFromGradeRange(from, to)
+    return CLASSES
+  })
+  const [showManageClasses, setShowManageClasses] = useState(false)
+
+  const activeClasses    = customClasses
+  const activeClassKeys  = useMemo(() => customClasses.map(c => c.key), [customClasses])
+  const activeClassGroups = useMemo(() =>
+    CLASS_GROUPS.map(g => ({
+      ...g,
+      desc: customClasses.filter(c => c.group === g.group).map(c => c.short).join(', ') || g.desc,
+    })).filter(g => customClasses.some(c => c.group === g.group)),
+  [customClasses])
+
   const [shiftName,  setShiftName]  = useState<string>(  () => _saved?.shiftName ?? 'Main Shift')
   const [startTime,  setStartTime]  = useState<string>(  () => _saved?.startTime ?? (config.startTime ?? '09:00'))
   const [use12h,     setUse12h]     = useState<boolean>( () => _saved?.use12h ?? true)
@@ -919,6 +970,14 @@ export function StepBell() {
   // ── Multi-shift (Advanced mode) ──────────────────────────────
   const [shifts, setShifts] = useState<ShiftConfig[]>(() => {
     if (_saved?.shifts?.length) return _saved.shifts
+    const initKeys = _saved?.customClasses?.length
+      ? (_saved.customClasses as Array<{key: string}>).map(c => c.key)
+      : (() => {
+          const from = (config as any).fromGrade as string | undefined
+          const to   = (config as any).toGrade   as string | undefined
+          if (from && to) return classesFromGradeRange(from, to).map(c => c.key)
+          return [...ALL_CLASS_KEYS]
+        })()
     return [{
       id:         'shift-main',
       name:       _saved?.shiftName  ?? 'Main Shift',
@@ -926,7 +985,7 @@ export function StepBell() {
       periodDur:  _saved?.periodDur  ?? (config.defaultSessionDuration ?? 40),
       maxPeriods: _saved?.maxPeriods ?? (config.periodsPerDay ?? 8),
       use12h:     _saved?.use12h     ?? true,
-      classes:    [...ALL_CLASS_KEYS],
+      classes:    initKeys,
     }]
   })
   const [activeShiftId, setActiveShiftId] = useState<string>(() => _saved?.activeShiftId ?? 'shift-main')
@@ -943,12 +1002,12 @@ export function StepBell() {
       shiftName, startTime, use12h, periodDur, maxPeriods, workDays, rows,
       cycleWeeks, useDayNames, cycleStartDate, fixedDuration, rotationDays,
       weekWorkDays, dayStartTimes, dayPeriodDurs, dayOffRules, cwRows, varyByDay, dayRows,
-      scheduleMode, shifts, activeShiftId, shiftRows,
+      scheduleMode, shifts, activeShiftId, shiftRows, customClasses,
     } satisfies SavedBell))
   }, [shiftName, startTime, use12h, periodDur, maxPeriods, workDays, rows,
       cycleWeeks, useDayNames, cycleStartDate, fixedDuration, rotationDays,
       weekWorkDays, dayStartTimes, dayPeriodDurs, dayOffRules, cwRows, varyByDay, dayRows,
-      scheduleMode, shifts, activeShiftId, shiftRows])
+      scheduleMode, shifts, activeShiftId, shiftRows, customClasses])
 
   // ── Day keys ─────────────────────────────────────────────────
   // • day-names mode  → rotation day shorts (D1, D2, …)
@@ -1127,8 +1186,8 @@ export function StepBell() {
   const hasPartialBreaks = useMemo(() =>
     displayRows.some(r =>
       (r.type === 'short-break' || r.type === 'lunch') &&
-      r.classes.length > 0 && r.classes.length < ALL_CLASS_KEYS.length,
-    ), [displayRows])
+      r.classes.length > 0 && r.classes.length < activeClassKeys.length,
+    ), [displayRows, activeClassKeys])
 
   /**
    * Per-row display start times for the bell grid.
@@ -1156,7 +1215,7 @@ export function StepBell() {
       return cache.get(key)!
     }
     return displayRows.map((row, i) => {
-      const repKey = row.classes[0] ?? ALL_CLASS_KEYS[0]
+      const repKey = row.classes[0] ?? activeClassKeys[0] ?? ALL_CLASS_KEYS[0]
       return getFiltered(repKey)[i]
     })
   }, [hasPartialBreaks, displayRows, activeStartTime, startTimes])
@@ -1174,8 +1233,8 @@ export function StepBell() {
 
   // ── Timeline data: per-group filtered if partial breaks exist ─
   const groupTimelineData = useMemo(() => {
-    return CLASS_GROUPS.map(gm => {
-      const groupKeys = CLASSES.filter(c => c.group === gm.group).map(c => c.key)
+    return activeClassGroups.map(gm => {
+      const groupKeys = activeClasses.filter(c => c.group === gm.group).map(c => c.key)
       const repKey    = groupKeys[0]
       const fStarts   = hasPartialBreaks
         ? computeStartsFiltered(activeStartTime, displayRows, repKey)
@@ -1207,7 +1266,7 @@ export function StepBell() {
             id:          r.id,
             name:        r.name,
             type:        r.type as 'short-break' | 'lunch',
-            classes:     r.classes.length > 0 ? r.classes : [...ALL_CLASS_KEYS],
+            classes:     r.classes.length > 0 ? r.classes : [...activeClassKeys],
             afterPeriod,
             duration:    r.duration,
           }
@@ -1218,7 +1277,7 @@ export function StepBell() {
           id:          makeId(),
           name:        'Lunch Break',
           type:        'lunch',
-          classes:     [...ALL_CLASS_KEYS],
+          classes:     [...activeClassKeys],
           afterPeriod: Math.max(1, Math.floor(maxPeriods / 2)),
           duration:    30,
         }])
@@ -1347,7 +1406,7 @@ export function StepBell() {
               periodDur: shifts[0]?.periodDur ?? periodDur,
               maxPeriods: shifts[0]?.maxPeriods ?? maxPeriods,
               use12h: shifts[0]?.use12h ?? use12h,
-              classes: [...ALL_CLASS_KEYS],
+              classes: [...activeClassKeys],
             }])
             setActiveShiftId('shift-main')
             setShiftRows({})
@@ -1369,7 +1428,7 @@ export function StepBell() {
           periodDur,
           maxPeriods,
           use12h,
-          classes:    [...ALL_CLASS_KEYS],
+          classes:    [...activeClassKeys],
         }
         setShifts([bootstrapped])
         setActiveShiftId('shift-main')
@@ -1414,14 +1473,13 @@ export function StepBell() {
 
   const insertBreak = (afterIndex: number, name: string) => {
     const type: RowType = /lunch/i.test(name) ? 'lunch' : 'short-break'
-    const newRow: BellRow = { id: makeId(), name, type, duration: type === 'lunch' ? 30 : 10, classes: [...ALL_CLASS_KEYS] }
+    const newRow: BellRow = { id: makeId(), name, type, duration: type === 'lunch' ? 30 : 10, classes: [...activeClassKeys] }
     setDisplayRows(prev => { const n = [...prev]; n.splice(afterIndex + 1, 0, newRow); return n })
   }
 
   const insertPeriodAt = (afterIndex: number) => {
     const count  = displayRows.slice(0, afterIndex + 1).filter(r => r.type === 'teaching').length
-    const newRow = mkPeriod(count + 1, activePeriodDur)
-    newRow.id    = makeId()
+    const newRow = { ...mkPeriod(count + 1, activePeriodDur), id: makeId(), classes: [...activeClassKeys] }
     setDisplayRows(prev => { const n = [...prev]; n.splice(afterIndex + 1, 0, newRow); return n })
   }
 
@@ -1445,7 +1503,7 @@ export function StepBell() {
     const breakRow = displayRows[afterIndex]
     if (!breakRow) return
     const classesInBreak    = breakRow.classes
-    const classesNotInBreak = ALL_CLASS_KEYS.filter(k => !classesInBreak.includes(k))
+    const classesNotInBreak = activeClassKeys.filter(k => !classesInBreak.includes(k))
     if (classesNotInBreak.length === 0 || classesInBreak.length === 0) return
 
     const periodsBeforeBreak = displayRows.slice(0, afterIndex).filter(r => r.type === 'teaching').length
@@ -1464,33 +1522,33 @@ export function StepBell() {
   const handleAISuggest = () => {
     let curMins = toMins(activeStartTime)
     const result: BellRow[] = []
-    result.push({ id: makeId(), name: 'Assembly', type: 'assembly', duration: 15, classes: [...ALL_CLASS_KEYS] })
+    result.push({ id: makeId(), name: 'Assembly', type: 'assembly', duration: 15, classes: [...activeClassKeys] })
     curMins += 15
-    result.push({ id: makeId(), name: 'Morning Break', type: 'short-break', duration: 10, classes: [...ALL_CLASS_KEYS] })
+    result.push({ id: makeId(), name: 'Morning Break', type: 'short-break', duration: 10, classes: [...activeClassKeys] })
     curMins += 10
     let lunchAdded = false
     for (let i = 0; i < maxPeriods; i++) {
-      result.push(mkPeriod(i + 1, periodDur))
+      result.push({ ...mkPeriod(i + 1, periodDur), classes: [...activeClassKeys] })
       curMins += periodDur
       if (!lunchAdded && curMins >= 720) {
-        result.push({ id: makeId(), name: 'Lunch Break', type: 'lunch', duration: 30, classes: [...ALL_CLASS_KEYS] })
+        result.push({ id: makeId(), name: 'Lunch Break', type: 'lunch', duration: 30, classes: [...activeClassKeys] })
         curMins += 30; lunchAdded = true
       }
     }
     if (!lunchAdded && maxPeriods > 0)
-      result.splice(2 + Math.ceil(maxPeriods / 2), 0, { id: makeId(), name: 'Lunch Break', type: 'lunch', duration: 30, classes: [...ALL_CLASS_KEYS] })
-    result.push({ id: makeId(), name: 'Afternoon Break', type: 'short-break', duration: 10, classes: [...ALL_CLASS_KEYS] })
-    result.push({ id: makeId(), name: 'Dispersal', type: 'dispersal', duration: 5, classes: [...ALL_CLASS_KEYS] })
+      result.splice(2 + Math.ceil(maxPeriods / 2), 0, { id: makeId(), name: 'Lunch Break', type: 'lunch', duration: 30, classes: [...activeClassKeys] })
+    result.push({ id: makeId(), name: 'Afternoon Break', type: 'short-break', duration: 10, classes: [...activeClassKeys] })
+    result.push({ id: makeId(), name: 'Dispersal', type: 'dispersal', duration: 5, classes: [...activeClassKeys] })
     setDisplayRows(result)
   }
 
   const capacity = useMemo(() => {
     const tRows = displayRows.filter(r => r.type === 'teaching')
-    return CLASS_GROUPS.map(gm => {
-      const gk = CLASSES.filter(c => c.group === gm.group).map(c => c.key)
+    return activeClassGroups.map(gm => {
+      const gk = activeClasses.filter(c => c.group === gm.group).map(c => c.key)
       return { label: gm.group, desc: gm.desc, color: gm.color, count: tRows.filter(r => gk.some(k => r.classes.includes(k))).length * workDays.length }
     })
-  }, [displayRows, workDays.length])
+  }, [displayRows, workDays.length, activeClasses, activeClassGroups])
 
   const handleNext = () => {
     // Flush bell state to localStorage synchronously before unmounting.
@@ -1503,7 +1561,7 @@ export function StepBell() {
         shiftName, startTime, use12h, periodDur, maxPeriods, workDays, rows,
         cycleWeeks, useDayNames, cycleStartDate, fixedDuration, rotationDays,
         weekWorkDays, dayStartTimes, dayPeriodDurs, dayOffRules, cwRows, varyByDay, dayRows,
-        scheduleMode, shifts, activeShiftId, shiftRows,
+        scheduleMode, shifts, activeShiftId, shiftRows, customClasses,
       } satisfies SavedBell))
     } catch { /* localStorage might be full */ }
     setConfig({
@@ -1603,6 +1661,104 @@ export function StepBell() {
                 ? 'One bell for all grades · supports multi-week cycles & day-name rotations'
                 : 'Independent bell timings per class group · each shift has its own schedule'}
             </span>
+          </div>
+
+          {/* ─── MANAGE CLASSES ─── */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ background: '#fff', borderRadius: 10, border: '1px solid #E5E7EB', overflow: 'hidden' }}>
+              {/* Header */}
+              <div
+                onClick={() => setShowManageClasses(v => !v)}
+                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', background: '#FAFAFA', borderBottom: showManageClasses ? '1px solid #F3F4F6' : 'none', cursor: 'pointer', userSelect: 'none' }}
+              >
+                <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="4" height="4" rx="1" fill="#7C6FE0"/><rect x="1" y="9" width="4" height="4" rx="1" fill="#7C6FE0"/><rect x="9" y="1" width="4" height="4" rx="1" fill="#7C6FE0"/><rect x="9" y="9" width="4" height="4" rx="1" fill="#E5E7EB"/></svg>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>Classes</span>
+                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', flex: 1, marginLeft: 4 }}>
+                  {!showManageClasses && activeClassGroups.map(g => {
+                    const cnt = activeClasses.filter(c => c.group === g.group).length
+                    return (
+                      <span key={g.group} style={{ fontSize: 10, padding: '1px 8px', borderRadius: 10, background: g.bg, color: g.color, fontWeight: 600, border: `1px solid ${g.color}22` }}>
+                        {g.group} ({cnt})
+                      </span>
+                    )
+                  })}
+                </div>
+                <button
+                  onClick={e => { e.stopPropagation(); setShowManageClasses(v => !v) }}
+                  style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, fontFamily: 'inherit', padding: '2px 6px', borderRadius: 5 }}
+                >
+                  {showManageClasses ? 'Done' : 'Edit'}
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d={showManageClasses ? 'M2 6.5l3-3 3 3' : 'M2 3.5l3 3 3-3'} stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                </button>
+              </div>
+
+              {showManageClasses && (
+                <div style={{ padding: '12px 16px' }}>
+                  {/* Class rows */}
+                  {activeClasses.map((cls, idx) => {
+                    const grp = CLASS_GROUPS.find(g => g.group === cls.group) ?? CLASS_GROUPS[0]
+                    return (
+                      <div key={cls.key} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, padding: '5px 8px', borderRadius: 7, background: '#FAFAFA', border: '1px solid #F3F4F6' }}>
+                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: grp.color, flexShrink: 0, display: 'inline-block' }} />
+                        {/* Label */}
+                        <input
+                          value={cls.label}
+                          onChange={e => setCustomClasses(prev => prev.map((c, i) => i === idx ? { ...c, label: e.target.value } : c))}
+                          placeholder="Class name"
+                          style={{ flex: 1, minWidth: 60, padding: '3px 7px', border: '1px solid #E5E7EB', borderRadius: 5, fontSize: 12, fontFamily: 'inherit', outline: 'none', background: '#fff' }}
+                        />
+                        {/* Short name */}
+                        <input
+                          value={cls.short}
+                          onChange={e => setCustomClasses(prev => prev.map((c, i) => i === idx ? { ...c, short: e.target.value } : c))}
+                          placeholder="Short"
+                          style={{ width: 48, padding: '3px 7px', border: '1px solid #E5E7EB', borderRadius: 5, fontSize: 12, fontFamily: 'inherit', outline: 'none', background: '#fff', textAlign: 'center' }}
+                        />
+                        {/* Group */}
+                        <select
+                          value={cls.group}
+                          onChange={e => setCustomClasses(prev => prev.map((c, i) => i === idx ? { ...c, group: e.target.value } : c))}
+                          style={{ padding: '3px 6px', border: '1px solid #E5E7EB', borderRadius: 5, fontSize: 11, fontFamily: 'inherit', outline: 'none', background: '#fff', color: grp.color, fontWeight: 600 }}
+                        >
+                          {CLASS_GROUPS.map(g => <option key={g.group} value={g.group}>{g.group}</option>)}
+                        </select>
+                        {/* Delete */}
+                        <button
+                          onClick={() => {
+                            if (activeClasses.length <= 1) return
+                            setCustomClasses(prev => prev.filter((_, i) => i !== idx))
+                          }}
+                          title="Remove class"
+                          style={{ background: 'none', border: 'none', cursor: activeClasses.length > 1 ? 'pointer' : 'not-allowed', color: activeClasses.length > 1 ? '#FCA5A5' : '#E5E7EB', padding: 3, display: 'flex', flexShrink: 0 }}
+                        >
+                          <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M2 2l10 10M12 2L2 12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
+                        </button>
+                      </div>
+                    )
+                  })}
+
+                  {/* Add class row */}
+                  <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                    <button
+                      onClick={() => {
+                        const newKey = 'cls-' + Date.now().toString(36)
+                        setCustomClasses(prev => [...prev, { key: newKey, label: 'New Class', short: 'New', group: CLASS_GROUPS[CLASS_GROUPS.length - 1].group }])
+                      }}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 7, border: '1.5px dashed #D1D5DB', background: '#fff', fontSize: 12, fontWeight: 600, color: '#6B7280', cursor: 'pointer', fontFamily: 'inherit' }}
+                    >
+                      <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M5.5 1v9M1 5.5h9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+                      Add class
+                    </button>
+                    <button
+                      onClick={() => setCustomClasses(CLASSES)}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 7, border: '1px solid #E5E7EB', background: '#fff', fontSize: 12, fontWeight: 600, color: '#9CA3AF', cursor: 'pointer', fontFamily: 'inherit' }}
+                    >
+                      Reset to defaults
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* ─── SCHEDULE RHYTHM ─── */}
@@ -1941,13 +2097,16 @@ export function StepBell() {
                           rowId={`dor-${rule.id}`}
                           openId={openPicker}
                           setOpenId={setOpenPicker}
+                          classEntries={activeClasses}
+                          allClassKeys={activeClassKeys}
+                          classGroups={activeClassGroups}
                         />
 
                         {/* Inline class chips for quick glance */}
-                        {rule.classes.length > 0 && rule.classes.length < ALL_CLASS_KEYS.length && (
+                        {rule.classes.length > 0 && rule.classes.length < activeClassKeys.length && (
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
                             {rule.classes.slice(0, 6).map(k => {
-                              const cls = CLASSES.find(c => c.key === k)
+                              const cls = activeClasses.find(c => c.key === k)
                               return (
                                 <span key={k} style={{
                                   padding: '1px 7px', borderRadius: 10, fontSize: 10, fontWeight: 700,
@@ -2098,18 +2257,18 @@ export function StepBell() {
                   <span style={{ fontSize: 12, color: '#6B7280', flexShrink: 0 }}>Assigned to:</span>
                   {/* All toggle */}
                   <button onClick={() => {
-                    const allOn = ALL_CLASS_KEYS.every(k => activeShift.classes.includes(k))
-                    updateActiveShift({ classes: allOn ? [] : [...ALL_CLASS_KEYS] })
+                    const allOn = activeClassKeys.every(k => activeShift.classes.includes(k))
+                    updateActiveShift({ classes: allOn ? [] : [...activeClassKeys] })
                   }} style={{
                     padding: '3px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700,
-                    border: ALL_CLASS_KEYS.every(k => activeShift.classes.includes(k)) ? '1.5px solid #374151' : '1px solid #E5E7EB',
-                    background: ALL_CLASS_KEYS.every(k => activeShift.classes.includes(k)) ? '#374151' : '#fff',
-                    color: ALL_CLASS_KEYS.every(k => activeShift.classes.includes(k)) ? '#fff' : '#9CA3AF',
+                    border: activeClassKeys.every(k => activeShift.classes.includes(k)) ? '1.5px solid #374151' : '1px solid #E5E7EB',
+                    background: activeClassKeys.every(k => activeShift.classes.includes(k)) ? '#374151' : '#fff',
+                    color: activeClassKeys.every(k => activeShift.classes.includes(k)) ? '#fff' : '#9CA3AF',
                     cursor: 'pointer', fontFamily: 'inherit', transition: 'all .12s',
                   }}>All</button>
                   {/* Group toggles */}
-                  {CLASS_GROUPS.map(gm => {
-                    const gkeys   = CLASSES.filter(c => c.group === gm.group).map(c => c.key)
+                  {activeClassGroups.map(gm => {
+                    const gkeys   = activeClasses.filter(c => c.group === gm.group).map(c => c.key)
                     const on      = gkeys.every(k => activeShift.classes.includes(k))
                     const partial = !on && gkeys.some(k => activeShift.classes.includes(k))
                     const takenOwners = [...new Set(gkeys.map(k => classOwnedBy[k]).filter((v): v is string => !!v))]
@@ -2253,7 +2412,8 @@ export function StepBell() {
                         <span style={{ fontSize: 11, color: '#9CA3AF', flexShrink: 0 }}>off for</span>
                         <ClassPicker classes={rule.classes}
                           onChange={cls => setDayOffRules(prev => prev.map(r => r.id === rule.id ? { ...r, classes: cls } : r))}
-                          rowId={`dor2-${rule.id}`} openId={openPicker} setOpenId={setOpenPicker} />
+                          rowId={`dor2-${rule.id}`} openId={openPicker} setOpenId={setOpenPicker}
+                          classEntries={activeClasses} allClassKeys={activeClassKeys} classGroups={activeClassGroups} />
                         <button onClick={() => setDayOffRules(prev => prev.filter(r => r.id !== rule.id))}
                           style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: '#FCA5A5', padding: 3, display: 'flex', flexShrink: 0 }}>
                           <Trash2 size={13} />
@@ -2343,6 +2503,9 @@ export function StepBell() {
                 maxPeriods={maxPeriods}
                 onGenerate={handleGenerateFromCw}
                 onClose={() => setShowCwPanel(false)}
+                classEntries={activeClasses}
+                allClassKeys={activeClassKeys}
+                classGroups={activeClassGroups}
               />
             )}
 
@@ -2671,7 +2834,8 @@ export function StepBell() {
                           {tm.label}
                         </div>
                         <ClassPicker classes={row.classes} onChange={cls => updateRow(row.id, { classes: cls })}
-                          rowId={row.id} openId={openPicker} setOpenId={setOpenPicker} />
+                          rowId={row.id} openId={openPicker} setOpenId={setOpenPicker}
+                          classEntries={activeClasses} allClassKeys={activeClassKeys} classGroups={activeClassGroups} />
                         <button className="b-del" onClick={() => deleteRow(row.id)} style={{
                           background: 'none', border: 'none', cursor: 'pointer', color: '#FCA5A5',
                           display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 3, opacity: 0,
@@ -2684,6 +2848,7 @@ export function StepBell() {
                           onInsertBreak={insertBreak}
                           onInsertPeriod={insertPeriodAt}
                           onInsertSplit={insertSplitPeriods}
+                          allClassKeys={activeClassKeys}
                         />
                       )}
                     </div>
@@ -2701,7 +2866,7 @@ export function StepBell() {
                 </button>
                 <button onClick={() => {
                   const count = displayRows.filter(r => r.type === 'teaching').length
-                  const nr    = mkPeriod(count + 1, periodDur); nr.id = makeId()
+                  const nr    = { ...mkPeriod(count + 1, periodDur), id: makeId(), classes: [...activeClassKeys] }
                   setDisplayRows(prev => { const n = [...prev]; const di = n.findIndex(r => r.type === 'dispersal'); n.splice(di >= 0 ? di : n.length, 0, nr); return n })
                 }} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 14px', borderRadius: 7, border: '1px solid #E5E7EB', background: '#fff', fontSize: 12, fontWeight: 600, color: '#374151', cursor: 'pointer', fontFamily: 'inherit' }}>
                   <Plus size={12} /> Add period
@@ -2747,9 +2912,9 @@ export function StepBell() {
             <div style={{ background: '#fff', borderRadius: 10, border: '1px solid #E5E7EB', overflow: 'hidden', marginBottom: 14 }}>
               {masterTimelineData.map(({ row, start }, idx) => {
                 const tm  = TYPE_META[row.type]
-                const grp = row.classes.length === ALL_CLASS_KEYS.length ? 'All'
+                const grp = activeClassKeys.every(k => row.classes.includes(k)) ? 'All'
                   : row.classes.length === 0 ? '—'
-                  : row.classes.length <= 4 ? row.classes.map(k => CLASSES.find(c => c.key === k)?.short ?? k).join(', ')
+                  : row.classes.length <= 4 ? row.classes.map(k => activeClasses.find(c => c.key === k)?.short ?? k).join(', ')
                   : `${row.classes.length} classes`
                 return (
                   <div key={row.id + idx} style={{
