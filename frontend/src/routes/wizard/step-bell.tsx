@@ -1819,7 +1819,7 @@ export function StepBell() {
                       {customGroups.map((grp, gi) => {
                         const classCount = customClasses.filter(c => c.group === grp.group).length
                         return (
-                          <div key={grp.group + gi} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, padding: '7px 10px', borderRadius: 8, background: grp.bg, border: `1px solid ${grp.color}22` }}>
+                          <div key={gi} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, padding: '7px 10px', borderRadius: 8, background: grp.bg, border: `1px solid ${grp.color}22` }}>
                             {/* Colour swatch picker */}
                             <div style={{ position: 'relative', flexShrink: 0 }}>
                               <div style={{ width: 18, height: 18, borderRadius: '50%', background: grp.color, cursor: 'pointer', border: '2px solid #fff', boxShadow: '0 0 0 1.5px ' + grp.color }}
@@ -1846,10 +1846,15 @@ export function StepBell() {
                             <input
                               value={grp.group}
                               onChange={e => {
+                                // Only update the group name — do NOT also update customClasses here
+                                // or the key change causes a remount and loses focus.
                                 const newName = e.target.value
-                                const oldName = grp.group
                                 setCustomGroups(prev => prev.map((g, i) => i === gi ? { ...g, group: newName } : g))
-                                // Rename references in customClasses too
+                              }}
+                              onBlur={e => {
+                                // Sync the rename into class references once the user finishes typing
+                                const newName = e.target.value
+                                const oldName = customGroups[gi]?.group ?? newName
                                 setCustomClasses(prev => prev.map(c => c.group === oldName ? { ...c, group: newName } : c))
                               }}
                               placeholder="Group name"
