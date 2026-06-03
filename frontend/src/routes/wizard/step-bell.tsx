@@ -1674,14 +1674,39 @@ export function StepBell() {
       return cache.get(key)!
     }
     return displayRows.map((row, i) => {
-      // Use the first class key as the "representative" for this row's filtered clock.
-      // When composite keys are present, always resolve to the base class key so that
-      // computeStartsFiltered can match rows that still hold simple keys (and vice-versa).
-      const first  = row.classes[0] ?? activeClassKeys[0] ?? ALL_CLASS_KEYS[0]
-      const repKey = isCompositeKey(first) ? baseClassKey(first) : first
-      return getFiltered(repKey)[i]
+      // Find the EARLIEST filtered start across all class keys in this row.
+      //
+      // A row that applies to "All" classes may begin at different clock positions
+      // for different class groups (e.g. Spark skips the preceding Dispersal and
+      // starts Period 6 at 2:30 PM, while Science/Commerce start it at 2:40 PM).
+      // The displayed start should be the FIRST time the bell rings for this row
+      // (i.e. the minimum across all relevant filtered clocks).
+      //
+      // For each simple key we also probe its composite stream variants so that
+      // "All" rows correctly pick up the stream that has the earliest clock.
+      const keys = row.classes.length > 0 ? row.classes : [activeClassKeys[0] ?? ALL_CLASS_KEYS[0]]
+      const seen = new Set<string>()
+      let minMins = Infinity
+      let minTime = ''
+
+      const probe = (k: string) => {
+        if (seen.has(k)) return; seen.add(k)
+        const t = getFiltered(k)[i]
+        const m = toMins(t)
+        if (m < minMins) { minMins = m; minTime = t }
+      }
+
+      for (const k of keys) {
+        probe(k)
+        // For simple keys also probe composite stream variants so that, e.g.,
+        // xi::Spark (which skips a Dispersal that xi::Science attends) is considered.
+        if (!isCompositeKey(k)) {
+          for (const v of cwClassKeys.filter(x => x.startsWith(`${k}${STREAM_SEP}`))) probe(v)
+        }
+      }
+      return minTime || activeStartTime
     })
-  }, [hasPartialBreaks, displayRows, activeStartTime, startTimes])
+  }, [hasPartialBreaks, displayRows, activeStartTime, startTimes, cwClassKeys])
 
   /**
    * School end time = start of the last row (using filtered clock) + its duration.
