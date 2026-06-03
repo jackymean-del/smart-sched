@@ -55,7 +55,7 @@ interface BellRow {
 interface CwBreakRow {
   id:          string
   name:        string
-  type:        'short-break' | 'lunch'
+  type:        RowType
   classes:     string[]  // which class-section keys have this break
   afterPeriod: number    // insert break after this period (0 = after Assembly, 1 = after Period 1, …)
   duration:    number    // minutes
@@ -577,9 +577,15 @@ function ClasswiseBreaksPanel({
     setCwRows(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r))
 
   const updateName = (id: string, name: string) => {
-    const type: 'short-break' | 'lunch' = /lunch/i.test(name) ? 'lunch' : 'short-break'
+    const type: RowType =
+      /lunch/i.test(name)               ? 'lunch'
+      : /assembl/i.test(name)           ? 'assembly'
+      : /dispersal|dismiss/i.test(name) ? 'dispersal'
+      : 'short-break'
     setCwRows(prev => prev.map(r => r.id === id ? { ...r, name, type } : r))
   }
+  const updateType = (id: string, type: RowType) =>
+    setCwRows(prev => prev.map(r => r.id === id ? { ...r, type } : r))
 
   const deleteRow = (id: string) => setCwRows(prev => prev.filter(r => r.id !== id))
 
@@ -684,16 +690,23 @@ function ClasswiseBreaksPanel({
                     marginBottom: 5,
                   }}
                 />
-                <span style={{
-                  display: 'inline-block',
-                  padding: '1px 8px', borderRadius: 10,
-                  background: TYPE_META[row.type].bg,
-                  color: TYPE_META[row.type].fg,
-                  border: `1px solid ${TYPE_META[row.type].border}`,
-                  fontSize: 10, fontWeight: 600,
-                }}>
-                  {TYPE_META[row.type].label}
-                </span>
+                <select
+                  value={row.type}
+                  onChange={e => updateType(row.id, e.target.value as RowType)}
+                  style={{
+                    padding: '1px 8px', borderRadius: 10,
+                    background: TYPE_META[row.type].bg,
+                    color: TYPE_META[row.type].fg,
+                    border: `1px solid ${TYPE_META[row.type].border}`,
+                    fontSize: 10, fontWeight: 600,
+                    cursor: 'pointer', fontFamily: 'inherit', outline: 'none',
+                    appearance: 'none', WebkitAppearance: 'none',
+                  }}
+                >
+                  {(Object.keys(TYPE_META) as RowType[]).map(t => (
+                    <option key={t} value={t}>{TYPE_META[t].label}</option>
+                  ))}
+                </select>
               </div>
 
               {/* Class-section picker */}
@@ -1857,8 +1870,13 @@ export function StepBell() {
   const deleteRow = (id: string) => setDisplayRows(prev => prev.filter(x => x.id !== id))
 
   const insertBreak = (afterIndex: number, name: string) => {
-    const type: RowType = /lunch/i.test(name) ? 'lunch' : 'short-break'
-    const newRow: BellRow = { id: makeId(), name, type, duration: type === 'lunch' ? 30 : 10, classes: [...activeClassKeys] }
+    const type: RowType =
+      /lunch/i.test(name)             ? 'lunch'
+      : /assembl/i.test(name)         ? 'assembly'
+      : /dispersal|dismiss/i.test(name) ? 'dispersal'
+      : 'short-break'
+    const defaultDur: Record<RowType, number> = { assembly: 10, teaching: 40, 'short-break': 10, lunch: 30, dispersal: 10 }
+    const newRow: BellRow = { id: makeId(), name, type, duration: defaultDur[type], classes: [...activeClassKeys] }
     setDisplayRows(prev => { const n = [...prev]; n.splice(afterIndex + 1, 0, newRow); return n })
   }
 
@@ -3524,17 +3542,25 @@ export function StepBell() {
                             ? { border: '1.5px solid #7C6FE0', color: '#7C3AED', fontWeight: 700 }
                             : undefined}
                         />
-                        <div style={{
-                          padding: isBreak ? '4px 10px' : '3px 10px',
-                          borderRadius: 20, display: 'inline-block',
-                          background: tm.bg, color: tm.fg,
-                          border: `1.5px solid ${tm.border}`,
-                          fontSize: isBreak ? 12 : 11,
-                          fontWeight: 700, whiteSpace: 'nowrap',
-                          boxShadow: isBreak ? `0 0 0 2px ${tm.bg}` : 'none',
-                        }}>
-                          {tm.label}
-                        </div>
+                        <select
+                          value={row.type}
+                          onChange={e => updateRow(row.id, { type: e.target.value as RowType })}
+                          style={{
+                            padding: isBreak ? '4px 10px' : '3px 10px',
+                            borderRadius: 20,
+                            background: tm.bg, color: tm.fg,
+                            border: `1.5px solid ${tm.border}`,
+                            fontSize: isBreak ? 12 : 11,
+                            fontWeight: 700, whiteSpace: 'nowrap',
+                            boxShadow: isBreak ? `0 0 0 2px ${tm.bg}` : 'none',
+                            cursor: 'pointer', fontFamily: 'inherit', outline: 'none',
+                            appearance: 'none', WebkitAppearance: 'none',
+                          }}
+                        >
+                          {(Object.keys(TYPE_META) as RowType[]).map(t => (
+                            <option key={t} value={t}>{TYPE_META[t].label}</option>
+                          ))}
+                        </select>
                         <ClassPicker classes={row.classes} onChange={cls => updateRow(row.id, { classes: cls })}
                           rowId={row.id} openId={openPicker} setOpenId={setOpenPicker}
                           classEntries={activeClasses} allClassKeys={cwClassKeys} classGroups={activeClassGroups} streamDefs={customStreams} classStreamMap={classStreamMap} />
