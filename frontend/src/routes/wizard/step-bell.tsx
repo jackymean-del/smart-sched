@@ -316,6 +316,58 @@ function buildRows(count: number, dur: number): BellRow[] {
   return [mkAssembly(), ...Array.from({ length: count }, (_, i) => mkPeriod(i + 1, dur)), mkDispersal()]
 }
 
+// ── Automatic bell timing generator ──────────────────────────
+/**
+ * Given a school start/end time + desired period count & duration, produce
+ * a sensible BellRow[] without manual configuration.
+ *
+ * Strategy:
+ *   1. Assembly (10 min)
+ *   2. Distribute periods with natural break slots:
+ *      – Short Break (15 min) after the ~3rd period (mid-morning)
+ *      – Lunch Break (30 min) after roughly half the periods (if school > 4 h)
+ *   3. Any leftover time is absorbed into slightly longer periods.
+ *   4. Dispersal (10 min)
+ */
+function autoGenerateBellRows(
+  startTime:  string,
+  endTime:    string,
+  maxPeriods: number,
+  periodDur:  number,
+  allKeys:    string[],
+): BellRow[] {
+  const totalMins = toMins(endTime) - toMins(startTime)
+  if (totalMins <= 0) return buildRows(maxPeriods, periodDur)
+
+  const asmDur  = 10
+  const dispDur = 10
+  const schoolMins = totalMins - asmDur - dispDur   // time available for teaching + breaks
+
+  // Decide breaks based on total school duration
+  const hasLunch       = totalMins > 4 * 60
+  const hasShortBreak  = totalMins > 2 * 60
+  const lunchDur  = hasLunch      ? 30 : 0
+  const sbDur     = hasShortBreak ? 15 : 0
+  const breakMins = lunchDur + sbDur
+
+  // Compute actual period duration so all periods fit within remaining time
+  const teachMins   = Math.max(schoolMins - breakMins, maxPeriods * 10)
+  const actualDur   = Math.max(10, Math.floor(teachMins / maxPeriods))
+
+  // Break insertion points (after which period index, 1-based)
+  const lunchAfter = hasLunch ? Math.ceil(maxPeriods / 2) : -1
+  const sbAfter    = hasShortBreak ? Math.max(1, Math.ceil(maxPeriods * 0.3)) : -1
+
+  const rows: BellRow[] = [mkAssembly()]
+  for (let i = 1; i <= maxPeriods; i++) {
+    rows.push(mkPeriod(i, actualDur))
+    if (i === sbAfter  && hasShortBreak) rows.push({ id: makeId(), name: 'Short Break', type: 'short-break', duration: sbDur,   classes: [...allKeys] })
+    if (i === lunchAfter && hasLunch)    rows.push({ id: makeId(), name: 'Lunch Break',  type: 'lunch',       duration: lunchDur, classes: [...allKeys] })
+  }
+  rows.push(mkDispersal())
+  return rows
+}
+
 // ── Class-wise bell generation ────────────────────────────────
 /**
  * Build a merged BellRow[] from class-wise break configs.
@@ -499,6 +551,9 @@ interface SavedBell {
   customStreams?: Array<{ stream: string; color: string; bg: string; group: string }>
   // Maps class key → stream names (multi-stream supported)
   classStreamMap?: Record<string, string[]>
+  // Automatic bell timing mode
+  autoBellMode?: boolean
+  schoolEndTime?: string   // HH:MM end-of-school time used for auto-generation
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -908,11 +963,24 @@ function ClassPicker({
     document.addEventListener('mousedown', h)
     return () => document.removeEventListener('mousedown', h)
   }, [isOpen, setOpenId])
-  // allClassKeys may contain composite stream keys (e.g. "xi::Science").
-  // Existing rows may still hold simple keys ('xi'). A simple key is treated as
-  // "all composite variants of that class are selected" for isAll/anyIn checks.
-  const keySelected = (k: string) =>
-    classes.includes(k) || (isCompositeKey(k) && classes.includes(baseClassKey(k)))
+  // allClassKeys may contain composite stream keys ("xi::Science").
+  // Existing rows may hold simple keys ('xi'). keySelected treats a simple key
+  // as covering all composite variants of that class (for visual checked-state only).
+  const hasComposites = allClassKeys.some(isCompositeKey)
+  const keySelected   = (k: string) =>
+    classes.includes(k) || (hasComposites && isCompositeKey(k) && classes.includes(baseClassKey(k)))
+
+  // Before any mutation: expand plain base keys to composite variants so that
+  // stream-level operations work on a consistent, fully-expanded key list.
+  const normalizeClasses = (cls: string[]): string[] => {
+    if (!hasComposites) return cls
+    return cls.flatMap(k => {
+      if (isCompositeKey(k)) return [k]
+      const variants = allClassKeys.filter(v => v.startsWith(`${k}${STREAM_SEP}`))
+      return variants.length > 0 ? variants : allClassKeys.includes(k) ? [k] : []
+    })
+  }
+
   const activeSelected = allClassKeys.filter(keySelected)
   const isAll  = allClassKeys.length > 0 && allClassKeys.every(keySelected)
   const isNone = activeSelected.length === 0
@@ -921,17 +989,10 @@ function ClassPicker({
       ? activeSelected.map(k => resolveShort(k, classEntries)).join(', ')
       : `${activeSelected.length} classes`
 
-  // When toggling a composite key, first expand any plain base key in classes
-  // to its composite variants so stream-level changes don't get lost.
+  // Toggle a single key. Always normalises first so plain base keys are
+  // expanded to their composite variants before the specific stream is toggled.
   const toggleOne = (key: string, chk: boolean) => {
-    let cur = classes
-    if (isCompositeKey(key)) {
-      const base     = baseClassKey(key)
-      const variants = allClassKeys.filter(k => k.startsWith(`${base}${STREAM_SEP}`))
-      if (cur.includes(base) && variants.length > 0) {
-        cur = [...cur.filter(k => k !== base), ...variants]
-      }
-    }
+    const cur = normalizeClasses(classes)
     onChange(chk ? [...new Set([...cur, key])] : cur.filter(c => c !== key))
   }
 
@@ -985,10 +1046,13 @@ function ClassPicker({
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 12px 3px', marginTop: 4, borderTop: '1px solid #F3F4F6', background: gm.bg }}>
                   <input type="checkbox" checked={allIn}
                     ref={el => { if (el) el.indeterminate = !allIn && anyIn }}
-                    onChange={() => onChange(allIn
-                      ? classes.filter(k => !gk.includes(k))
-                      : [...new Set([...classes, ...gk])]
-                    )}
+                    onChange={() => {
+                      const norm = normalizeClasses(classes)
+                      onChange(allIn
+                        ? norm.filter(k => !gk.includes(k))
+                        : [...new Set([...norm, ...gk])]
+                      )
+                    }}
                     style={{ accentColor: gm.color, flexShrink: 0 }} />
                   <span style={{ fontSize: 11, fontWeight: 700, color: gm.color, letterSpacing: '0.04em' }}>{gm.group.toUpperCase()}</span>
                   <span style={{ fontSize: 10, color: '#9CA3AF', marginLeft: 'auto' }}>{gm.desc}</span>
@@ -1008,17 +1072,20 @@ function ClassPicker({
                         <div style={{ ...PICK_ROW, paddingLeft: 28 }}>
                           <input type="checkbox" checked={allStreamsIn}
                             ref={el => { if (el) el.indeterminate = !allStreamsIn && anyStreamIn }}
-                            onChange={() => onChange(allStreamsIn
-                              ? classes.filter(k => !compositeKeys.includes(k))
-                              : [...new Set([...classes, ...compositeKeys])]
-                            )}
+                            onChange={() => {
+                              const norm = normalizeClasses(classes)
+                              onChange(allStreamsIn
+                                ? norm.filter(k => !compositeKeys.includes(k))
+                                : [...new Set([...norm, ...compositeKeys])]
+                              )
+                            }}
                             style={{ accentColor: gm.color, flexShrink: 0, cursor: 'pointer' }} />
                           <span style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>{cls.label}</span>
                         </div>
                         {compositeKeys.map(ck => {
                           const stream  = ck.split(STREAM_SEP)[1]
                           const sd      = groupStreams.find(x => x.stream === stream)
-                          const checked = classes.includes(ck)
+                          const checked = keySelected(ck)
                           return (
                             <label key={ck} style={{ ...PICK_ROW, paddingLeft: 44 }}>
                               <input type="checkbox" checked={checked}
@@ -1290,6 +1357,8 @@ export function StepBell() {
       .filter(g => customClasses.some(c => c.group === g.group)),
   [customClasses, customGroups])
 
+  const [autoBellMode,  setAutoBellMode]  = useState<boolean>(() => _saved?.autoBellMode  ?? false)
+  const [schoolEndTime, setSchoolEndTime] = useState<string>( () => _saved?.schoolEndTime ?? '15:30')
   const [shiftName,  setShiftName]  = useState<string>(  () => _saved?.shiftName ?? 'Main Shift')
   const [startTime,  setStartTime]  = useState<string>(  () => _saved?.startTime ?? (config.startTime ?? '09:00'))
   const [use12h,     setUse12h]     = useState<boolean>( () => _saved?.use12h ?? true)
@@ -1382,13 +1451,13 @@ export function StepBell() {
       cycleWeeks, useDayNames, cycleStartDate, fixedDuration, rotationDays,
       weekWorkDays, dayStartTimes, dayPeriodDurs, dayOffRules, cwRows, varyByDay, dayRows,
       scheduleMode, shifts, activeShiftId, shiftRows, customClasses, customGroups,
-      customStreams, classStreamMap,
+      customStreams, classStreamMap, autoBellMode, schoolEndTime,
     } satisfies SavedBell))
   }, [shiftName, startTime, use12h, periodDur, maxPeriods, workDays, rows,
       cycleWeeks, useDayNames, cycleStartDate, fixedDuration, rotationDays,
       weekWorkDays, dayStartTimes, dayPeriodDurs, dayOffRules, cwRows, varyByDay, dayRows,
       scheduleMode, shifts, activeShiftId, shiftRows, customClasses, customGroups,
-      customStreams, classStreamMap])
+      customStreams, classStreamMap, autoBellMode, schoolEndTime])
 
   // ── Day keys ─────────────────────────────────────────────────
   // • day-names mode  → rotation day shorts (D1, D2, …)
@@ -1997,7 +2066,7 @@ export function StepBell() {
         cycleWeeks, useDayNames, cycleStartDate, fixedDuration, rotationDays,
         weekWorkDays, dayStartTimes, dayPeriodDurs, dayOffRules, cwRows, varyByDay, dayRows,
         scheduleMode, shifts, activeShiftId, shiftRows, customClasses, customGroups,
-        customStreams, classStreamMap,
+        customStreams, classStreamMap, autoBellMode, schoolEndTime,
       } satisfies SavedBell))
     } catch { /* localStorage might be full */ }
     setConfig({
@@ -3134,8 +3203,101 @@ export function StepBell() {
           </div>
           )}
 
+          {/* ─── AUTOMATIC BELL TIMING CARD ─── */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{
+              background: autoBellMode ? '#F0FDF4' : '#F8F7FF',
+              border: `1.5px solid ${autoBellMode ? '#86EFAC' : '#C4B5FD'}`,
+              borderRadius: 10, padding: '14px 18px',
+              display: 'flex', alignItems: 'flex-start', gap: 14,
+            }}>
+              {/* Toggle */}
+              <div style={{ flexShrink: 0, marginTop: 2 }}>
+                <button
+                  onClick={() => {
+                    const next = !autoBellMode
+                    setAutoBellMode(next)
+                    if (next) {
+                      // Generate a best-effort schedule immediately so user sees a preview
+                      const generated = autoGenerateBellRows(startTime, schoolEndTime, maxPeriods, periodDur, activeClassKeys)
+                      setRows(generated)
+                    }
+                  }}
+                  style={{
+                    width: 40, height: 22, borderRadius: 11,
+                    background: autoBellMode ? '#22C55E' : '#D1D5DB',
+                    border: 'none', cursor: 'pointer', position: 'relative',
+                    transition: 'background .15s',
+                  }}
+                >
+                  <span style={{
+                    position: 'absolute', top: 3,
+                    left: autoBellMode ? 21 : 3,
+                    width: 16, height: 16, borderRadius: '50%',
+                    background: '#fff', transition: 'left .15s',
+                    boxShadow: '0 1px 3px rgba(0,0,0,.2)',
+                  }} />
+                </button>
+              </div>
+              {/* Text */}
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                  <Sparkles size={13} color={autoBellMode ? '#16A34A' : '#7C3AED'} />
+                  <span style={{ fontSize: 13, fontWeight: 700, color: autoBellMode ? '#15803D' : '#7C3AED' }}>
+                    Automatic bell timing
+                  </span>
+                  {autoBellMode && (
+                    <span style={{ fontSize: 10, fontWeight: 700, background: '#DCFCE7', color: '#16A34A', border: '1px solid #86EFAC', borderRadius: 8, padding: '1px 8px' }}>
+                      ON
+                    </span>
+                  )}
+                </div>
+                <p style={{ fontSize: 11, color: '#6B7280', margin: '0 0 10px', lineHeight: 1.5 }}>
+                  {autoBellMode
+                    ? 'Bell timing will be auto-generated based on your school hours. You can customise it anytime from Step 1.'
+                    : 'Skip manual bell configuration. Enter your school end time below — the system will generate an optimised schedule with periods and breaks automatically.'}
+                </p>
+                {/* End time + regenerate when in auto mode */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: '#374151' }}>School ends at</span>
+                    <input type="time" value={schoolEndTime}
+                      onChange={e => {
+                        setSchoolEndTime(e.target.value)
+                        if (autoBellMode) {
+                          setRows(autoGenerateBellRows(startTime, e.target.value, maxPeriods, periodDur, activeClassKeys))
+                        }
+                      }}
+                      style={{
+                        padding: '4px 8px', borderRadius: 6,
+                        border: `1px solid ${autoBellMode ? '#86EFAC' : '#C4B5FD'}`,
+                        fontSize: 12, fontFamily: 'inherit', outline: 'none',
+                        background: autoBellMode ? '#F0FDF4' : '#F8F7FF',
+                        color: autoBellMode ? '#15803D' : '#7C3AED', fontWeight: 700,
+                      }}
+                    />
+                  </div>
+                  {autoBellMode && (
+                    <button
+                      onClick={() => setRows(autoGenerateBellRows(startTime, schoolEndTime, maxPeriods, periodDur, activeClassKeys))}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 5,
+                        padding: '4px 12px', borderRadius: 6,
+                        border: '1px solid #86EFAC', background: '#DCFCE7',
+                        fontSize: 11, fontWeight: 600, color: '#16A34A',
+                        cursor: 'pointer', fontFamily: 'inherit',
+                      }}
+                    >
+                      <Sparkles size={10} /> Regenerate
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* ─── BELL TIMING GRID ─── */}
-          <div>
+          <div style={{ opacity: autoBellMode ? 0.55 : 1, pointerEvents: autoBellMode ? 'none' : 'auto', transition: 'opacity .2s' }}>
             {/* In Advanced mode: shift selector mini-tabs above the grid */}
             {isAdvanced && shifts.length > 1 && (
               <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 10 }}>
