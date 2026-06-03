@@ -875,10 +875,11 @@ function ClassPicker({
           borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.13)',
           zIndex: 400, width: 200, maxHeight: 340, overflowY: 'auto', padding: '6px 0',
         }}>
+          {/* "All classes" — all selected → clear; partial/none → select all */}
           <label style={PICK_ROW}>
             <input type="checkbox" checked={isAll}
               ref={el => { if (el) el.indeterminate = !isAll && !isNone }}
-              onChange={e => onChange(e.target.checked ? [...allClassKeys] : [])}
+              onChange={() => onChange(isAll ? [] : [...allClassKeys])}
               style={{ accentColor: '#7C6FE0', flexShrink: 0 }} />
             <span style={{ fontSize: 12, fontWeight: 700, color: '#13111E' }}>All classes</span>
           </label>
@@ -888,77 +889,64 @@ function ClassPicker({
             const gk    = gc.map(c => c.key)
             const allIn = gk.every(k => classes.includes(k))
             const anyIn = gk.some(k => classes.includes(k))
-            // Streams scoped to this group (if any)
             const groupStreams = streamDefs?.filter(s => s.group === gm.group) ?? []
             const hasStreams   = groupStreams.length > 0 && !!classStreamMap
+            // Only show stream chips that select a strict subset of the group's classes.
+            // If a chip covers every class in the group it's identical to the group checkbox.
+            const usefulStreams = hasStreams
+              ? groupStreams.filter(sd => {
+                  const sk = gc.filter(c => (classStreamMap![c.key] ?? []).includes(sd.stream)).map(c => c.key)
+                  return sk.length > 0 && sk.length < gc.length
+                })
+              : []
             return (
               <div key={gm.group}>
+                {/* Group header — all in group → clear; partial/none → add all */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 12px 3px', marginTop: 4, borderTop: '1px solid #F3F4F6', background: gm.bg }}>
                   <input type="checkbox" checked={allIn}
                     ref={el => { if (el) el.indeterminate = !allIn && anyIn }}
-                    onChange={e => toggleGroup(gm.group, e.target.checked)}
+                    onChange={() => onChange(allIn
+                      ? classes.filter(k => !gk.includes(k))
+                      : [...new Set([...classes, ...gk])]
+                    )}
                     style={{ accentColor: gm.color, flexShrink: 0 }} />
                   <span style={{ fontSize: 11, fontWeight: 700, color: gm.color, letterSpacing: '0.04em' }}>{gm.group.toUpperCase()}</span>
                   <span style={{ fontSize: 10, color: '#9CA3AF', marginLeft: 'auto' }}>{gm.desc}</span>
                 </div>
-                {hasStreams ? (
-                  <>
-                    {/* Stream quick-select chips — each class appears ONCE below; chips let you
-                        bulk-toggle a stream's classes without duplicating class rows. */}
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, padding: '4px 12px 2px 20px', borderBottom: '1px solid #F3F4F6' }}>
-                      {groupStreams.map(sd => {
-                        const sk   = gc.filter(c => (classStreamMap![c.key] ?? []).includes(sd.stream)).map(c => c.key)
-                        if (sk.length === 0) return null
-                        const sAll = sk.every(k => classes.includes(k))
-                        const sAny = sk.some(k => classes.includes(k))
-                        return (
-                          <button key={sd.stream}
-                            onClick={() => {
-                              const next = sAll
-                                ? classes.filter(k => !sk.includes(k))
-                                : [...new Set([...classes, ...sk])]
-                              onChange(next)
-                            }}
-                            style={{
-                              padding: '2px 8px', borderRadius: 10, fontSize: 10, fontWeight: 700,
-                              cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
-                              border: sAll ? `1.5px solid ${sd.color}` : sAny ? `1px dashed ${sd.color}` : '1px solid #E5E7EB',
-                              background: sAll ? sd.bg : '#fff',
-                              color: sAll || sAny ? sd.color : '#9CA3AF',
-                            }}
-                          >{sd.stream}</button>
-                        )
-                      })}
-                    </div>
-                    {/* Each class appears exactly once — no duplication across streams */}
-                    {gc.map(cls => (
-                      <label key={cls.key} style={{ ...PICK_ROW, paddingLeft: 28 }}>
-                        <input type="checkbox" checked={classes.includes(cls.key)}
-                          onChange={e => toggleOne(cls.key, e.target.checked)}
-                          style={{ accentColor: gm.color, flexShrink: 0 }} />
-                        <span style={{ fontSize: 12, color: '#374151' }}>
-                          {cls.label}
-                          {/* Show stream badge(s) inline */}
-                          {(classStreamMap![cls.key] ?? []).map(s => {
-                            const sd = groupStreams.find(x => x.stream === s)
-                            return sd ? (
-                              <span key={s} style={{ marginLeft: 5, fontSize: 9, fontWeight: 700, color: sd.color, background: sd.bg, padding: '1px 5px', borderRadius: 8 }}>{s}</span>
-                            ) : null
-                          })}
-                        </span>
-                      </label>
-                    ))}
-                  </>
-                ) : (
-                  gc.map(cls => (
-                    <label key={cls.key} style={{ ...PICK_ROW, paddingLeft: 28 }}>
-                      <input type="checkbox" checked={classes.includes(cls.key)}
-                        onChange={e => toggleOne(cls.key, e.target.checked)}
-                        style={{ accentColor: gm.color, flexShrink: 0 }} />
-                      <span style={{ fontSize: 12, color: '#374151' }}>{cls.label}</span>
-                    </label>
-                  ))
+
+                {/* Stream chips — only shown when they select a strict subset */}
+                {usefulStreams.length > 0 && (
+                  <div style={{ display: 'flex', gap: 4, padding: '4px 12px 4px 28px', flexWrap: 'wrap', borderBottom: '1px solid #F3F4F6' }}>
+                    {usefulStreams.map(sd => {
+                      const sk   = gc.filter(c => (classStreamMap![c.key] ?? []).includes(sd.stream)).map(c => c.key)
+                      const sAll = sk.every(k => classes.includes(k))
+                      const sAny = sk.some(k => classes.includes(k))
+                      return (
+                        <button key={sd.stream} onClick={() =>
+                          onChange(sAll
+                            ? classes.filter(k => !sk.includes(k))
+                            : [...new Set([...classes, ...sk])])
+                        } style={{
+                          padding: '2px 8px', borderRadius: 9, fontSize: 10, fontWeight: 700,
+                          cursor: 'pointer', fontFamily: 'inherit',
+                          border: sAll ? `1.5px solid ${sd.color}` : sAny ? `1px dashed ${sd.color}` : '1px solid #E5E7EB',
+                          background: sAll ? sd.bg : '#fff',
+                          color: sAll || sAny ? sd.color : '#9CA3AF',
+                        }}>{sd.stream}</button>
+                      )
+                    })}
+                  </div>
                 )}
+
+                {/* Class rows — one per class, no stream badges */}
+                {gc.map(cls => (
+                  <label key={cls.key} style={{ ...PICK_ROW, paddingLeft: 28 }}>
+                    <input type="checkbox" checked={classes.includes(cls.key)}
+                      onChange={e => toggleOne(cls.key, e.target.checked)}
+                      style={{ accentColor: gm.color, flexShrink: 0 }} />
+                    <span style={{ fontSize: 12, color: '#374151' }}>{cls.label}</span>
+                  </label>
+                ))}
               </div>
             )
           })}
