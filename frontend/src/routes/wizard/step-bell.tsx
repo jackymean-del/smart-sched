@@ -89,6 +89,39 @@ const CLASS_GROUPS = [
 
 const ALL_CLASS_KEYS = CLASSES.map(c => c.key)
 
+// ── Standard class progression for smart "Add class" ──────────
+const STANDARD_CLASS_SEQ = [
+  { label: 'Nursery',   short: 'Nur'  }, { label: 'LKG',       short: 'LKG'  },
+  { label: 'UKG',       short: 'UKG'  }, { label: 'Class I',   short: 'I'    },
+  { label: 'Class II',  short: 'II'   }, { label: 'Class III', short: 'III'  },
+  { label: 'Class IV',  short: 'IV'   }, { label: 'Class V',   short: 'V'    },
+  { label: 'Class VI',  short: 'VI'   }, { label: 'Class VII', short: 'VII'  },
+  { label: 'Class VIII',short: 'VIII' }, { label: 'Class IX',  short: 'IX'   },
+  { label: 'Class X',   short: 'X'    }, { label: 'Class XI',  short: 'XI'   },
+  { label: 'Class XII', short: 'XII'  },
+]
+
+/** Derive a short name from a label when it matches a standard grade pattern. */
+function deriveShort(label: string): string | null {
+  const s = label.trim()
+  // "Class XI" or "Grade XI" → "XI"
+  const m = s.match(/^(?:Class|Grade)\s+(.+)$/i)
+  if (m) return m[1].trim().slice(0, 6)
+  const KNOWN: Record<string, string> = {
+    nursery: 'Nur', lkg: 'LKG', ukg: 'UKG', 'pre-kg': 'PreKG', pp1: 'PP1', pp2: 'PP2',
+  }
+  return KNOWN[s.toLowerCase()] ?? null
+}
+
+/** Given the last class in the list, predict the next standard class. */
+function predictNext(lastLabel: string, lastGroup: string) {
+  const idx = STANDARD_CLASS_SEQ.findIndex(c => c.label.toLowerCase() === lastLabel.trim().toLowerCase())
+  if (idx >= 0 && idx < STANDARD_CLASS_SEQ.length - 1) {
+    return { ...STANDARD_CLASS_SEQ[idx + 1], group: lastGroup }
+  }
+  return { label: 'New Class', short: 'New', group: lastGroup }
+}
+
 // Colour palette for custom groups — [ink, paper]
 const GROUP_PALETTE: Array<[string, string]> = [
   ['#7C3AED','#F5F3FF'], ['#1D4ED8','#EFF6FF'], ['#059669','#F0FDF4'],
@@ -399,8 +432,8 @@ interface SavedBell {
   customGroups?: Array<{ group: string; color: string; bg: string }>
   // Streams (Science / Commerce / Arts …)
   customStreams?: Array<{ stream: string; color: string; bg: string; group: string }>
-  // Maps class key → stream name
-  classStreamMap?: Record<string, string>
+  // Maps class key → stream names (multi-stream supported)
+  classStreamMap?: Record<string, string[]>
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -708,7 +741,7 @@ function ClassPicker({
   classGroups?: typeof CLASS_GROUPS
   /** Optional stream sub-grouping inside each class group */
   streamDefs?: Array<{ stream: string; color: string; bg: string; group: string }>
-  classStreamMap?: Record<string, string>
+  classStreamMap?: Record<string, string[]>
 }) {
   const isOpen = openId === rowId
   const ref    = useRef<HTMLDivElement>(null)
@@ -782,7 +815,7 @@ function ClassPicker({
                 {hasStreams ? (
                   <>
                     {groupStreams.map(sd => {
-                      const sc  = gc.filter(c => classStreamMap![c.key] === sd.stream)
+                      const sc  = gc.filter(c => (classStreamMap![c.key] ?? []).includes(sd.stream))
                       if (sc.length === 0) return null
                       const sk    = sc.map(c => c.key)
                       const sAll  = sk.every(k => classes.includes(k))
@@ -813,7 +846,7 @@ function ClassPicker({
                       )
                     })}
                     {/* Classes with no stream assigned */}
-                    {gc.filter(c => !classStreamMap![c.key]).map(cls => (
+                    {gc.filter(c => !(classStreamMap![c.key]?.length)).map(cls => (
                       <label key={cls.key} style={{ ...PICK_ROW, paddingLeft: 28 }}>
                         <input type="checkbox" checked={classes.includes(cls.key)}
                           onChange={e => toggleOne(cls.key, e.target.checked)}
@@ -1040,9 +1073,15 @@ export function StepBell() {
   const [customStreams, setCustomStreams] = useState<StreamDef[]>(() =>
     (_saved?.customStreams ?? []) as StreamDef[]
   )
-  const [classStreamMap, setClassStreamMap] = useState<Record<string, string>>(
-    () => _saved?.classStreamMap ?? {}
-  )
+  const [classStreamMap, setClassStreamMap] = useState<Record<string, string[]>>(() => {
+    const raw = _saved?.classStreamMap ?? {}
+    // Migrate old single-string format (Record<string,string>) to array format
+    const migrated: Record<string, string[]> = {}
+    for (const [k, v] of Object.entries(raw)) {
+      migrated[k] = Array.isArray(v) ? v : v ? [v as unknown as string] : []
+    }
+    return migrated
+  })
 
   const activeClasses    = customClasses
   const activeClassKeys  = useMemo(() => customClasses.map(c => c.key), [customClasses])
@@ -2010,7 +2049,7 @@ export function StepBell() {
                       )}
 
                       {customStreams.map((sd, si) => {
-                        const classCount = Object.values(classStreamMap).filter(s => s === sd.stream).length
+                        const classCount = Object.values(classStreamMap).filter(arr => arr.includes(sd.stream)).length
                         return (
                           <div key={si} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, padding: '7px 10px', borderRadius: 8, background: sd.bg, border: `1px solid ${sd.color}22` }}>
                             {/* Colour swatch */}
@@ -2039,10 +2078,11 @@ export function StepBell() {
                                 const newName = e.target.value.trim()
                                 const oldName = customStreams[si]?.stream ?? newName
                                 if (newName !== oldName) {
-                                  // Update classStreamMap references
+                                  // Update classStreamMap references (rename stream in every array)
                                   setClassStreamMap(prev => {
-                                    const next: Record<string,string> = {}
-                                    for (const [k, v] of Object.entries(prev)) next[k] = v === oldName ? newName : v
+                                    const next: Record<string,string[]> = {}
+                                    for (const [k, v] of Object.entries(prev))
+                                      next[k] = v.map(s => s === oldName ? newName : s)
                                     return next
                                   })
                                 }
@@ -2067,10 +2107,13 @@ export function StepBell() {
                             <button
                               onClick={() => {
                                 setCustomStreams(prev => prev.filter((_, i) => i !== si))
-                                // Clear assignments for this stream
+                                // Remove this stream from every class's stream array
                                 setClassStreamMap(prev => {
-                                  const next: Record<string,string> = {}
-                                  for (const [k, v] of Object.entries(prev)) if (v !== sd.stream) next[k] = v
+                                  const next: Record<string,string[]> = {}
+                                  for (const [k, v] of Object.entries(prev)) {
+                                    const filtered = v.filter(s => s !== sd.stream)
+                                    if (filtered.length) next[k] = filtered
+                                  }
                                   return next
                                 })
                               }}
@@ -2110,59 +2153,99 @@ export function StepBell() {
                   {manageTab === 'classes' && (
                     <div>
                       {activeClasses.map((cls, idx) => {
-                        const grp = customGroups.find(g => g.group === cls.group) ?? customGroups[0] ?? CLASS_GROUPS[0]
+                        const grp      = customGroups.find(g => g.group === cls.group) ?? customGroups[0] ?? CLASS_GROUPS[0]
+                        const selStreams = classStreamMap[cls.key] ?? []
+                        const groupStreamsForClass = customStreams.filter(s => s.group === cls.group)
+
                         return (
-                          <div key={cls.key} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, padding: '5px 8px', borderRadius: 7, background: '#FAFAFA', border: '1px solid #F3F4F6' }}>
+                          <div key={cls.key} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, padding: '5px 8px', borderRadius: 7, background: '#FAFAFA', border: '1px solid #F3F4F6' }}>
                             <span style={{ width: 8, height: 8, borderRadius: '50%', background: grp.color, flexShrink: 0, display: 'inline-block' }} />
-                            {/* Label */}
+
+                            {/* Label — auto-fills short when standard pattern is typed */}
                             <input
                               value={cls.label}
-                              onChange={e => setCustomClasses(prev => prev.map((c, i) => i === idx ? { ...c, label: e.target.value } : c))}
+                              onChange={e => {
+                                const label = e.target.value
+                                const auto  = deriveShort(label)
+                                setCustomClasses(prev => prev.map((c, i) =>
+                                  i === idx ? { ...c, label, short: auto ?? c.short } : c
+                                ))
+                              }}
                               placeholder="Class name"
                               style={{ flex: 1, minWidth: 60, padding: '3px 7px', border: '1px solid #E5E7EB', borderRadius: 5, fontSize: 12, fontFamily: 'inherit', outline: 'none', background: '#fff' }}
                             />
+
                             {/* Short name */}
                             <input
                               value={cls.short}
                               onChange={e => setCustomClasses(prev => prev.map((c, i) => i === idx ? { ...c, short: e.target.value } : c))}
                               placeholder="Short"
-                              style={{ width: 48, padding: '3px 7px', border: '1px solid #E5E7EB', borderRadius: 5, fontSize: 12, fontFamily: 'inherit', outline: 'none', background: '#fff', textAlign: 'center' }}
+                              style={{ width: 44, padding: '3px 6px', border: '1px solid #E5E7EB', borderRadius: 5, fontSize: 12, fontFamily: 'inherit', outline: 'none', background: '#fff', textAlign: 'center' }}
                             />
-                            {/* Group selector — driven by customGroups */}
+
+                            {/* ── Stream multi-picker (FIRST) ── */}
+                            {groupStreamsForClass.length > 0 && (() => {
+                              const label = selStreams.length === 0 ? 'Stream'
+                                : selStreams.length === 1
+                                  ? selStreams[0]
+                                  : `${selStreams.length} streams`
+                              const labelColor = selStreams.length === 1
+                                ? (customStreams.find(s => s.stream === selStreams[0])?.color ?? '#9CA3AF')
+                                : selStreams.length > 1 ? '#7C6FE0' : '#9CA3AF'
+                              return (
+                                <div style={{ position: 'relative', flexShrink: 0 }}>
+                                  <button
+                                    onClick={e => {
+                                      e.stopPropagation()
+                                      const el = (e.currentTarget as HTMLElement).nextSibling as HTMLElement | null
+                                      if (el) el.style.display = el.style.display === 'block' ? 'none' : 'block'
+                                    }}
+                                    style={{ padding: '3px 8px', borderRadius: 5, border: '1px solid #E5E7EB', background: '#fff', fontSize: 11, fontWeight: selStreams.length ? 600 : 400, color: labelColor, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 3, whiteSpace: 'nowrap' }}
+                                  >
+                                    {label}
+                                    <svg width="7" height="7" viewBox="0 0 8 8" fill="none"><path d="M1 2.5l3 3 3-3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                  </button>
+                                  {/* Dropdown */}
+                                  <div style={{ display: 'none', position: 'absolute', left: 0, top: '100%', zIndex: 600, background: '#fff', border: '1px solid #E5E7EB', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,.1)', padding: '4px 0', minWidth: 140 }}>
+                                    {groupStreamsForClass.map(sd => {
+                                      const checked = selStreams.includes(sd.stream)
+                                      return (
+                                        <label key={sd.stream} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 12px', cursor: 'pointer' }}>
+                                          <input type="checkbox" checked={checked}
+                                            onChange={e => {
+                                              const next = e.target.checked
+                                                ? [...selStreams, sd.stream]
+                                                : selStreams.filter(s => s !== sd.stream)
+                                              setClassStreamMap(prev => ({ ...prev, [cls.key]: next }))
+                                            }}
+                                            style={{ accentColor: sd.color, flexShrink: 0 }} />
+                                          <span style={{ fontSize: 12, color: sd.color, fontWeight: 600 }}>{sd.stream}</span>
+                                        </label>
+                                      )
+                                    })}
+                                    {selStreams.length > 0 && (
+                                      <button onClick={() => setClassStreamMap(prev => { const n={...prev}; delete n[cls.key]; return n })}
+                                        style={{ display: 'block', width: '100%', textAlign: 'left', padding: '4px 12px', background: 'none', border: 'none', fontSize: 10, color: '#9CA3AF', cursor: 'pointer', fontFamily: 'inherit', borderTop: '1px solid #F3F4F6', marginTop: 3 }}>
+                                        Clear
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              )
+                            })()}
+
+                            {/* Group selector (SECOND) */}
                             <select
                               value={cls.group}
                               onChange={e => setCustomClasses(prev => prev.map((c, i) => i === idx ? { ...c, group: e.target.value } : c))}
-                              style={{ padding: '3px 6px', border: '1px solid #E5E7EB', borderRadius: 5, fontSize: 11, fontFamily: 'inherit', outline: 'none', background: '#fff', color: grp.color, fontWeight: 600 }}
+                              style={{ padding: '3px 6px', border: '1px solid #E5E7EB', borderRadius: 5, fontSize: 11, fontFamily: 'inherit', outline: 'none', background: '#fff', color: grp.color, fontWeight: 600, flexShrink: 0 }}
                             >
                               {customGroups.map(g => <option key={g.group} value={g.group}>{g.group}</option>)}
                             </select>
-                            {/* Stream selector — only when streams exist for this class's group */}
-                            {customStreams.filter(s => s.group === cls.group).length > 0 && (
-                              <select
-                                value={classStreamMap[cls.key] ?? ''}
-                                onChange={e => {
-                                  const val = e.target.value
-                                  setClassStreamMap(prev => {
-                                    const next = { ...prev }
-                                    if (val) next[cls.key] = val; else delete next[cls.key]
-                                    return next
-                                  })
-                                }}
-                                style={{ padding: '3px 6px', border: '1px solid #E5E7EB', borderRadius: 5, fontSize: 11, fontFamily: 'inherit', outline: 'none', background: '#fff', color: customStreams.find(s => s.stream === classStreamMap[cls.key])?.color ?? '#9CA3AF', fontWeight: classStreamMap[cls.key] ? 600 : 400 }}
-                                title="Assign to a stream"
-                              >
-                                <option value="">No stream</option>
-                                {customStreams.filter(s => s.group === cls.group).map(s => (
-                                  <option key={s.stream} value={s.stream}>{s.stream}</option>
-                                ))}
-                              </select>
-                            )}
+
                             {/* Delete */}
                             <button
-                              onClick={() => {
-                                if (activeClasses.length <= 1) return
-                                setCustomClasses(prev => prev.filter((_, i) => i !== idx))
-                              }}
+                              onClick={() => { if (activeClasses.length > 1) setCustomClasses(prev => prev.filter((_, i) => i !== idx)) }}
                               title="Remove class"
                               style={{ background: 'none', border: 'none', cursor: activeClasses.length > 1 ? 'pointer' : 'not-allowed', color: activeClasses.length > 1 ? '#FCA5A5' : '#E5E7EB', padding: 3, display: 'flex', flexShrink: 0 }}
                             >
@@ -2172,13 +2255,14 @@ export function StepBell() {
                         )
                       })}
 
-                      {/* Add class row */}
+                      {/* Add class row — predicts next standard class */}
                       <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
                         <button
                           onClick={() => {
-                            const newKey = 'cls-' + Date.now().toString(36)
-                            const lastGroup = customGroups[customGroups.length - 1]?.group ?? CLASS_GROUPS[CLASS_GROUPS.length - 1].group
-                            setCustomClasses(prev => [...prev, { key: newKey, label: 'New Class', short: 'New', group: lastGroup }])
+                            const last    = activeClasses[activeClasses.length - 1]
+                            const newKey  = 'cls-' + Date.now().toString(36)
+                            const next    = last ? predictNext(last.label, last.group) : { label: 'New Class', short: 'New', group: customGroups[customGroups.length - 1]?.group ?? CLASS_GROUPS[CLASS_GROUPS.length - 1].group }
+                            setCustomClasses(prev => [...prev, { key: newKey, ...next }])
                           }}
                           style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 7, border: '1.5px dashed #D1D5DB', background: '#fff', fontSize: 12, fontWeight: 600, color: '#6B7280', cursor: 'pointer', fontFamily: 'inherit' }}
                         >

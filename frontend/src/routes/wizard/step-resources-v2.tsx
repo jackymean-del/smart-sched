@@ -83,20 +83,31 @@ function buildDefaultSections(): Section[] {
  */
 function buildSectionsFromDefs(
   classDefs: Array<{ key: string; label: string; short: string; group: string }>,
-  streamMap: Record<string, string> = {},
+  streamMap: Record<string, string | string[]> = {},
   sectionsPerClass = 3,
 ): Section[] {
   const out: Section[] = []
   const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
   for (const cls of classDefs) {
     // Derive a clean grade name: "Class XI" → "XI", "Nursery" → "Nursery"
-    const grade  = cls.label.startsWith('Class ') ? cls.label.slice(6) : cls.label
-    const stream = streamMap[cls.key]
-    const code   = stream ? stream.replace(/\s+/g, '').slice(0, 3) : ''
-    for (let i = 0; i < sectionsPerClass; i++) {
-      const sec  = LETTERS[i] ?? String(i + 1)
-      const name = code ? `${grade}-${code}-${sec}` : `${grade}-${sec}`
-      out.push({ id: makeId(), name, grade, room: `Room ${100 + out.length + 1}`, classTeacher: '' } as Section)
+    const grade   = cls.label.startsWith('Class ') ? cls.label.slice(6) : cls.label
+    const raw     = streamMap[cls.key]
+    // Normalise to array (handles both old string format and new string[] format)
+    const streams = raw ? (Array.isArray(raw) ? raw : [raw]) : []
+    if (streams.length > 0) {
+      // Create sectionsPerClass sections PER stream
+      for (const stream of streams) {
+        const code = stream.replace(/\s+/g, '').slice(0, 3)
+        for (let i = 0; i < sectionsPerClass; i++) {
+          const sec  = LETTERS[i] ?? String(i + 1)
+          out.push({ id: makeId(), name: `${grade}-${code}-${sec}`, grade, room: `Room ${100 + out.length + 1}`, classTeacher: '' } as Section)
+        }
+      }
+    } else {
+      for (let i = 0; i < sectionsPerClass; i++) {
+        const sec = LETTERS[i] ?? String(i + 1)
+        out.push({ id: makeId(), name: `${grade}-${sec}`, grade, room: `Room ${100 + out.length + 1}`, classTeacher: '' } as Section)
+      }
     }
   }
   return out
@@ -440,7 +451,7 @@ export function StepResourcesV2() {
   const configuredClassDefs = (config as any).configuredClassDefs as
     Array<{ key: string; label: string; short: string; group: string }> | undefined
   const configuredStreamMap = (config as any).configuredClassStreamMap as
-    Record<string, string> | undefined
+    Record<string, string | string[]> | undefined
 
   /** Build sections using Step-1 classes when available, otherwise fall back to default. */
   const buildSections = (perClass = 3) =>
