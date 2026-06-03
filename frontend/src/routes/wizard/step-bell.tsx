@@ -930,15 +930,40 @@ function ClassPicker({
                   </div>
                 )}
 
-                {/* Class rows — one per class, no stream badges */}
-                {gc.map(cls => (
-                  <label key={cls.key} style={{ ...PICK_ROW, paddingLeft: 28 }}>
-                    <input type="checkbox" checked={classes.includes(cls.key)}
-                      onChange={e => toggleOne(cls.key, e.target.checked)}
-                      style={{ accentColor: gm.color, flexShrink: 0 }} />
-                    <span style={{ fontSize: 12, color: '#374151' }}>{cls.label}</span>
-                  </label>
-                ))}
+                {/* Class rows — one per class, with per-class stream chips */}
+                {gc.map(cls => {
+                  const isChecked   = classes.includes(cls.key)
+                  const clsStreams   = hasStreams
+                    ? (classStreamMap![cls.key] ?? [])
+                        .map(s => groupStreams.find(x => x.stream === s))
+                        .filter(Boolean) as typeof groupStreams
+                    : []
+                  return (
+                    <div key={cls.key}>
+                      <label style={{ ...PICK_ROW, paddingLeft: 28 }}>
+                        <input type="checkbox" checked={isChecked}
+                          onChange={e => toggleOne(cls.key, e.target.checked)}
+                          style={{ accentColor: gm.color, flexShrink: 0 }} />
+                        <span style={{ fontSize: 12, color: '#374151' }}>{cls.label}</span>
+                      </label>
+                      {clsStreams.length > 0 && (
+                        <div style={{ display: 'flex', gap: 3, paddingLeft: 44, paddingBottom: 5, flexWrap: 'wrap' }}>
+                          {clsStreams.map(sd => (
+                            <button key={sd.stream}
+                              onClick={() => toggleOne(cls.key, !isChecked)}
+                              style={{
+                                padding: '1px 7px', borderRadius: 8, fontSize: 9, fontWeight: 700,
+                                cursor: 'pointer', fontFamily: 'inherit',
+                                border: isChecked ? `1.5px solid ${sd.color}` : '1px solid #E5E7EB',
+                                background: isChecked ? sd.bg : '#F9FAFB',
+                                color: isChecked ? sd.color : '#9CA3AF',
+                              }}>{sd.stream}</button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             )
           })}
