@@ -1987,25 +1987,46 @@ export function StepBell() {
   // Inline time editing state — tracks which row + field is being edited
   const [editingTime, setEditingTime] = useState<{ rowId: string; field: 'start' | 'end' } | null>(null)
 
+  // Per-type minimum durations enforced during inline time edits
+  const ROW_TYPE_MIN_DUR: Record<RowType, number> = {
+    assembly: 10, dispersal: 10, 'short-break': 5, lunch: 15, teaching: 5,
+  }
+
   /**
    * Commit a new start time for row[i].
-   * Strategy: absorb the delta into the PREVIOUS row's duration.
-   * If it's the very first row, adjust the global start time instead.
+   *
+   * Strategy:
+   *  • newMins ≤ prevStart  → user wants concurrent scheduling (same start as
+   *    the previous row).  Don't touch the previous row's duration — concurrent
+   *    display is driven by the class-assignment partial-break rule.
+   *  • prevStart < newMins  → shrink/stretch the previous row's duration so that
+   *    prev.end == newMins.  Respects a per-type minimum (Dispersal/Assembly ≥ 10 min).
+   *  • First row             → shift the global shift start time.
    */
   const commitStartTime = (rowId: string, newVal: string, starts: string[]) => {
     if (!newVal) { setEditingTime(null); return }
-    const rows = displayRows
-    const i    = rows.findIndex(r => r.id === rowId)
+    const rows    = displayRows
+    const i       = rows.findIndex(r => r.id === rowId)
     if (i < 0) { setEditingTime(null); return }
-    const delta = toMins(newVal) - toMins(starts[i])
-    if (delta !== 0) {
-      if (i === 0) {
-        // First row — shift global start time
-        setStartTime(newVal)
-      } else {
-        const prev     = rows[i - 1]
-        const newDur   = Math.max(5, prev.duration + delta)
-        updateRow(prev.id, { duration: newDur })
+    const newMins = toMins(newVal)
+
+    if (i === 0) {
+      setStartTime(newVal)
+    } else {
+      const prev      = rows[i - 1]
+      const prevStart = toMins(starts[i - 1])   // prev row's displayed start
+
+      if (newMins <= prevStart) {
+        // ≤ prev start → concurrent request — leave prev duration unchanged.
+        // Set Dispersal/break classes to partial to activate the concurrent rule.
+        setEditingTime(null)
+        return
+      }
+
+      const newPrevDur = newMins - prevStart
+      const minDur     = ROW_TYPE_MIN_DUR[prev.type] ?? 5
+      if (Math.max(minDur, newPrevDur) !== prev.duration) {
+        updateRow(prev.id, { duration: Math.max(minDur, newPrevDur) })
       }
     }
     setEditingTime(null)
@@ -2013,10 +2034,12 @@ export function StepBell() {
 
   /**
    * Commit a new end time for a row — adjusts that row's duration.
+   * Respects the per-type minimum duration.
    */
-  const commitEndTime = (rowId: string, newVal: string, start: string) => {
+  const commitEndTime = (rowId: string, newVal: string, start: string, rowType: RowType) => {
     if (!newVal) { setEditingTime(null); return }
-    const newDur = Math.max(5, toMins(newVal) - toMins(start))
+    const minDur = ROW_TYPE_MIN_DUR[rowType] ?? 5
+    const newDur = Math.max(minDur, toMins(newVal) - toMins(start))
     updateRow(rowId, { duration: newDur })
     setEditingTime(null)
   }
@@ -3799,7 +3822,7 @@ export function StepBell() {
                         {/* ── End time — click to edit ── */}
                         {editingTime?.rowId === row.id && editingTime.field === 'end' ? (
                           <input type="time" defaultValue={end} autoFocus
-                            onBlur={e  => commitEndTime(row.id, e.target.value, start)}
+                            onBlur={e  => commitEndTime(row.id, e.target.value, start, row.type)}
                             onKeyDown={e => {
                               if (e.key === 'Enter')  e.currentTarget.blur()
                               if (e.key === 'Escape') setEditingTime(null)
