@@ -303,69 +303,96 @@ function buildRows(count: number, dur: number): BellRow[] {
 /**
  * Build a merged BellRow[] from class-wise break configs.
  *
- * Each CwBreakRow specifies "after which period" — no absolute clock times.
- * For every individual class key:
- *   1. Collect its breaks sorted by afterPeriod.
- *   2. Walk periods 1…maxPeriods in order; after each period, flush any breaks
- *      whose afterPeriod equals the period just emitted.
+ * For every configured class key:
+ *   1. Pre-compute each of its breaks' absolute start time (handles afterPeriod,
+ *      afterBreakId chains, and customStartTime).
+ *   2. Walk periods sequentially; insert breaks when their absolute start time
+ *      has been reached by the advancing clock for that class.
  *
- * Because time is built up sequentially, the absolute startMins of every event
- * is computed exactly — no user input of clock times needed.
+ * Then merge per-class sequences:
+ *   • Rows identical across classes → one merged row (all classes).
+ *   • Rows that differ (e.g. Lunch at different clock times for XI vs XII) →
+ *     separate rows with the correct class subset.
  *
- * Then merge all 15 per-class sequences:
- *   • Events identical across classes (same type + name + startMins + duration)
- *     become ONE merged row.
- *   • Events that differ (e.g. Period 4 at 11:15 for I-XII vs Period 4 at 11:45
- *     for Nur-UKG who had a break first) become SEPARATE rows with the correct
- *     subset of classes.
+ * @param activeClsKeys  Only generate rows for these class keys (not all 15).
+ * @param asmDur         Actual assembly duration in minutes.
  */
 function buildBellRowsFromCw(
-  startTimeStr: string,
-  periodDur:    number,
-  maxPeriods:   number,
-  cwBrks:       CwBreakRow[],
+  startTimeStr:  string,
+  periodDur:     number,
+  maxPeriods:    number,
+  cwBrks:        CwBreakRow[],
+  activeClsKeys: string[] = ALL_CLASS_KEYS,
+  asmDur:        number   = 10,
 ): BellRow[] {
   type Ev = { type: RowType; name: string; startMins: number; duration: number }
+  const startMins = toMins(startTimeStr)
+
+  // ── Pre-compute absolute start time for every break ───────────────────────
+  // Handles: afterPeriod, afterBreakId chains, customStartTime
+  const breakAbsStart = (brk: CwBreakRow, visited = new Set<string>()): number => {
+    if (brk.customStartTime) return toMins(brk.customStartTime)
+    if (brk.afterBreakId && !visited.has(brk.id)) {
+      const ref = cwBrks.find(b => b.id === brk.afterBreakId)
+      if (ref) {
+        const v2 = new Set(visited); v2.add(brk.id)
+        return breakAbsStart(ref, v2) + ref.duration
+      }
+    }
+    // afterPeriod: startMins + assembly + (breaks shared with this class before it) + afterPeriod * periodDur
+    const precedingMins = cwBrks
+      .filter(b =>
+        b.id !== brk.id &&
+        b.afterPeriod < brk.afterPeriod &&
+        b.classes.some(c => brk.classes.includes(c))
+      )
+      .reduce((sum, b) => sum + b.duration, 0)
+    return startMins + asmDur + precedingMins + brk.afterPeriod * periodDur
+  }
+
+  const breakAbsMap = new Map<string, number>(cwBrks.map(b => [b.id, breakAbsStart(b)]))
+
+  // ── Build per-class event sequences ──────────────────────────────────────
   const classEvs: Array<{ key: string; evs: Ev[] }> = []
 
-  for (const cls of CLASSES) {
+  for (const clsKey of activeClsKeys) {
     const evs: Ev[] = []
-    let cur = toMins(startTimeStr)
+    let cur = startMins
 
-    evs.push({ type: 'assembly', name: 'Assembly', startMins: cur, duration: 15 })
-    cur += 15
+    evs.push({ type: 'assembly', name: 'Assembly', startMins: cur, duration: asmDur })
+    cur += asmDur
 
-    // This class's breaks sorted by afterPeriod
+    // Breaks for this class, sorted by their absolute start time
     const myBreaks = cwBrks
-      .filter(b => b.classes.includes(cls.key))
-      .map(b => ({ type: b.type as RowType, name: b.name, afterPeriod: b.afterPeriod, duration: b.duration }))
-      .sort((a, b) => a.afterPeriod - b.afterPeriod)
+      .filter(b => b.classes.includes(clsKey))
+      .map(b => ({ type: b.type as RowType, name: b.name, duration: b.duration, absStart: breakAbsMap.get(b.id)! }))
+      .sort((a, b) => a.absStart - b.absStart)
 
-    // Flush breaks that come BEFORE any teaching period (afterPeriod === 0)
     let bi = 0
-    while (bi < myBreaks.length && myBreaks[bi].afterPeriod === 0) {
+
+    // Flush pre-period breaks (absStart already reached before P1)
+    while (bi < myBreaks.length && myBreaks[bi].absStart <= cur) {
       evs.push({ type: myBreaks[bi].type, name: myBreaks[bi].name, startMins: cur, duration: myBreaks[bi].duration })
-      cur += myBreaks[bi].duration
-      bi++
+      cur += myBreaks[bi].duration; bi++
     }
 
     for (let pNum = 1; pNum <= maxPeriods; pNum++) {
       evs.push({ type: 'teaching', name: `Period ${pNum}`, startMins: cur, duration: periodDur })
       cur += periodDur
 
-      // Flush any breaks whose afterPeriod === pNum
-      while (bi < myBreaks.length && myBreaks[bi].afterPeriod === pNum) {
+      // Flush any breaks whose target start time is now reached
+      while (bi < myBreaks.length && myBreaks[bi].absStart <= cur) {
+        // Snap break start to cur (sequential; avoids gaps)
         evs.push({ type: myBreaks[bi].type, name: myBreaks[bi].name, startMins: cur, duration: myBreaks[bi].duration })
-        cur += myBreaks[bi].duration
-        bi++
+        cur += myBreaks[bi].duration; bi++
       }
     }
 
-    evs.push({ type: 'dispersal', name: 'Dispersal', startMins: cur, duration: 5 })
-    classEvs.push({ key: cls.key, evs })
+    evs.push({ type: 'dispersal', name: 'Dispersal', startMins: cur, duration: asmDur })
+    classEvs.push({ key: clsKey, evs })
   }
 
-  // Merge: events with same type|name|startMins|duration share one row
+  // ── Merge identical events across classes ─────────────────────────────────
   const merged = new Map<string, { type: RowType; name: string; startMins: number; duration: number; classes: string[] }>()
   for (const { key, evs } of classEvs) {
     for (const ev of evs) {
@@ -376,17 +403,12 @@ function buildBellRowsFromCw(
   }
 
   const typeOrd: Record<RowType, number> = { assembly: 0, 'short-break': 1, lunch: 1, teaching: 2, dispersal: 3 }
-  const sorted = [...merged.values()].sort((a, b) =>
-    a.startMins !== b.startMins ? a.startMins - b.startMins : typeOrd[a.type] - typeOrd[b.type],
-  )
-
-  return sorted.map(r => ({
-    id:       makeId(),
-    name:     r.name,
-    type:     r.type,
-    duration: r.duration,
-    classes:  [...new Set(r.classes)],
-  }))
+  return [...merged.values()]
+    .sort((a, b) => a.startMins !== b.startMins ? a.startMins - b.startMins : typeOrd[a.type] - typeOrd[b.type])
+    .map(r => ({
+      id: makeId(), name: r.name, type: r.type,
+      duration: r.duration, classes: [...new Set(r.classes)],
+    }))
 }
 
 // ── Persistence ───────────────────────────────────────────────
@@ -1547,7 +1569,8 @@ export function StepBell() {
   }
 
   const handleGenerateFromCw = () => {
-    const newRows = buildBellRowsFromCw(activeStartTime, activePeriodDur, activeMaxPeriods, cwRows)
+    const asmDur  = rows.find(r => r.type === 'assembly')?.duration ?? 10
+    const newRows = buildBellRowsFromCw(activeStartTime, activePeriodDur, activeMaxPeriods, cwRows, activeClassKeys, asmDur)
     setDisplayRows(newRows)
     setShowCwPanel(false)
   }
