@@ -246,17 +246,26 @@ function computeStarts(startTime: string, rows: BellRow[]): string[] {
  * The clock only advances for rows that include this class.
  * Rows the class is NOT part of contribute zero duration to its timeline.
  *
- * This produces accurate "concurrent" start times for class groups that
- * have different breaks (e.g. I–XII have Period 4 at 12:05 while Nur–UKG
- * are still having lunch; in I–XII's filtered view the lunch is skipped
- * so Period 4 correctly shows 12:05).
+ * Handles composite stream keys (e.g. "xi::Science") transparently:
+ *   • A simple row key ('xi') matches any composite query ('xi::Science') because
+ *     the simple key implicitly covers all streams of that class.
+ *   • A composite row key ('xi::Science') matches a simple query ('xi') for the same reason.
+ *   • Two different composite keys ('xi::Science' vs 'xi::Commerce') do NOT match.
  */
 function computeStartsFiltered(startTime: string, rows: BellRow[], classKey: string): string[] {
   const acc: string[] = []
   let cur = startTime
+  const queryBase = isCompositeKey(classKey) ? baseClassKey(classKey) : classKey
   for (const r of rows) {
     acc.push(cur)
-    if (r.classes.includes(classKey)) cur = addMins(cur, r.duration)
+    const rowIncludes = r.classes.some(k => {
+      if (k === classKey) return true                                   // exact match
+      const kBase = isCompositeKey(k) ? baseClassKey(k) : k
+      if (!isCompositeKey(k)) return k === queryBase                   // simple row key ↔ composite query
+      if (!isCompositeKey(classKey)) return kBase === classKey         // composite row key ↔ simple query
+      return false                                                      // composite ↔ different composite
+    })
+    if (rowIncludes) cur = addMins(cur, r.duration)
   }
   return acc
 }
@@ -1665,7 +1674,11 @@ export function StepBell() {
       return cache.get(key)!
     }
     return displayRows.map((row, i) => {
-      const repKey = row.classes[0] ?? activeClassKeys[0] ?? ALL_CLASS_KEYS[0]
+      // Use the first class key as the "representative" for this row's filtered clock.
+      // When composite keys are present, always resolve to the base class key so that
+      // computeStartsFiltered can match rows that still hold simple keys (and vice-versa).
+      const first  = row.classes[0] ?? activeClassKeys[0] ?? ALL_CLASS_KEYS[0]
+      const repKey = isCompositeKey(first) ? baseClassKey(first) : first
       return getFiltered(repKey)[i]
     })
   }, [hasPartialBreaks, displayRows, activeStartTime, startTimes])
@@ -1692,7 +1705,10 @@ export function StepBell() {
 
       const data = displayRows
         .map((row, i) => ({ row, start: fStarts[i] }))
-        .filter(({ row }) => row.classes.some(k => groupKeys.includes(k)))
+        .filter(({ row }) => row.classes.some(k => {
+          const kBase = isCompositeKey(k) ? baseClassKey(k) : k
+          return groupKeys.includes(k) || groupKeys.includes(kBase)
+        }))
 
       return { gm, data }
     })
