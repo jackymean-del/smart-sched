@@ -903,44 +903,49 @@ function ClassPicker({
                 </div>
                 {hasStreams ? (
                   <>
-                    {groupStreams.map(sd => {
-                      const sc  = gc.filter(c => (classStreamMap![c.key] ?? []).includes(sd.stream))
-                      if (sc.length === 0) return null
-                      const sk    = sc.map(c => c.key)
-                      const sAll  = sk.every(k => classes.includes(k))
-                      const sAny  = sk.some(k => classes.includes(k))
-                      return (
-                        <div key={sd.stream}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 12px 2px 20px', background: sd.bg + 'CC' }}>
-                            <input type="checkbox" checked={sAll}
-                              ref={el => { if (el) el.indeterminate = !sAll && sAny }}
-                              onChange={e => {
-                                const next = e.target.checked
-                                  ? [...new Set([...classes, ...sk])]
-                                  : classes.filter(k => !sk.includes(k))
-                                onChange(next)
-                              }}
-                              style={{ accentColor: sd.color, flexShrink: 0 }} />
-                            <span style={{ fontSize: 10, fontWeight: 700, color: sd.color, letterSpacing: '0.04em' }}>{sd.stream}</span>
-                          </div>
-                          {sc.map(cls => (
-                            <label key={cls.key} style={{ ...PICK_ROW, paddingLeft: 36 }}>
-                              <input type="checkbox" checked={classes.includes(cls.key)}
-                                onChange={e => toggleOne(cls.key, e.target.checked)}
-                                style={{ accentColor: sd.color, flexShrink: 0 }} />
-                              <span style={{ fontSize: 12, color: '#374151' }}>{cls.label}</span>
-                            </label>
-                          ))}
-                        </div>
-                      )
-                    })}
-                    {/* Classes with no stream assigned */}
-                    {gc.filter(c => !(classStreamMap![c.key]?.length)).map(cls => (
+                    {/* Stream quick-select chips — each class appears ONCE below; chips let you
+                        bulk-toggle a stream's classes without duplicating class rows. */}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, padding: '4px 12px 2px 20px', borderBottom: '1px solid #F3F4F6' }}>
+                      {groupStreams.map(sd => {
+                        const sk   = gc.filter(c => (classStreamMap![c.key] ?? []).includes(sd.stream)).map(c => c.key)
+                        if (sk.length === 0) return null
+                        const sAll = sk.every(k => classes.includes(k))
+                        const sAny = sk.some(k => classes.includes(k))
+                        return (
+                          <button key={sd.stream}
+                            onClick={() => {
+                              const next = sAll
+                                ? classes.filter(k => !sk.includes(k))
+                                : [...new Set([...classes, ...sk])]
+                              onChange(next)
+                            }}
+                            style={{
+                              padding: '2px 8px', borderRadius: 10, fontSize: 10, fontWeight: 700,
+                              cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+                              border: sAll ? `1.5px solid ${sd.color}` : sAny ? `1px dashed ${sd.color}` : '1px solid #E5E7EB',
+                              background: sAll ? sd.bg : '#fff',
+                              color: sAll || sAny ? sd.color : '#9CA3AF',
+                            }}
+                          >{sd.stream}</button>
+                        )
+                      })}
+                    </div>
+                    {/* Each class appears exactly once — no duplication across streams */}
+                    {gc.map(cls => (
                       <label key={cls.key} style={{ ...PICK_ROW, paddingLeft: 28 }}>
                         <input type="checkbox" checked={classes.includes(cls.key)}
                           onChange={e => toggleOne(cls.key, e.target.checked)}
                           style={{ accentColor: gm.color, flexShrink: 0 }} />
-                        <span style={{ fontSize: 12, color: '#374151' }}>{cls.label}</span>
+                        <span style={{ fontSize: 12, color: '#374151' }}>
+                          {cls.label}
+                          {/* Show stream badge(s) inline */}
+                          {(classStreamMap![cls.key] ?? []).map(s => {
+                            const sd = groupStreams.find(x => x.stream === s)
+                            return sd ? (
+                              <span key={s} style={{ marginLeft: 5, fontSize: 9, fontWeight: 700, color: sd.color, background: sd.bg, padding: '1px 5px', borderRadius: 8 }}>{s}</span>
+                            ) : null
+                          })}
+                        </span>
                       </label>
                     ))}
                   </>
