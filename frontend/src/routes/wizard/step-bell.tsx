@@ -263,6 +263,23 @@ function computeStartsFiltered(startTime: string, rows: BellRow[], classKey: str
 
 function makeId() { return Math.random().toString(36).slice(2, 8) }
 
+// ── Stream-composite key helpers ──────────────────────────────
+// Class keys for stream-expanded scheduling use the format "classKey::StreamName"
+// (e.g. "xi::Science"). Simple class keys contain no "::".
+const STREAM_SEP = '::'
+const isCompositeKey = (k: string) => k.includes(STREAM_SEP)
+const baseClassKey   = (k: string) => k.split(STREAM_SEP)[0]
+
+/** Resolve a class key (simple or composite) to a human-readable short label. */
+function resolveShort(k: string, entries: typeof CLASSES = CLASSES): string {
+  if (isCompositeKey(k)) {
+    const [base, stream] = k.split(STREAM_SEP)
+    const cls = entries.find(c => c.key === base)
+    return `${cls?.short ?? base}·${stream}`
+  }
+  return entries.find(c => c.key === k)?.short ?? k
+}
+
 // ── NumInput ──────────────────────────────────────────────────
 interface NumInputProps {
   value: number; onChange: (n: number) => void
@@ -407,7 +424,10 @@ function buildBellRowsFromCw(
     .sort((a, b) => a.startMins !== b.startMins ? a.startMins - b.startMins : typeOrd[a.type] - typeOrd[b.type])
     .map(r => ({
       id: makeId(), name: r.name, type: r.type,
-      duration: r.duration, classes: [...new Set(r.classes)],
+      duration: r.duration,
+      // Strip composite stream keys (xi::Science → xi) so the main bell grid
+      // always works with simple class keys. Duplicates are deduplicated.
+      classes: [...new Set(r.classes.map(k => isCompositeKey(k) ? baseClassKey(k) : k))],
     }))
 }
 
@@ -527,10 +547,10 @@ function ClasswiseBreaksPanel({
     return `p:${row.afterPeriod}`
   }
 
-  /** Short label for a set of class keys. */
+  /** Short label for a set of class keys (handles composite stream keys). */
   const clsLabel = (keys: string[]) => {
     if (!keys.length) return '—'
-    const shorts = keys.map(k => classEntries.find(c => c.key === k)?.short ?? k)
+    const shorts = keys.map(k => resolveShort(k, classEntries))
     return shorts.length <= 3 ? shorts.join(', ') : `${shorts.length} classes`
   }
 
@@ -840,20 +860,18 @@ function ClassPicker({
     document.addEventListener('mousedown', h)
     return () => document.removeEventListener('mousedown', h)
   }, [isOpen, setOpenId])
-  // Only consider classes that are currently active (ignore stale keys from old configs)
+  // allClassKeys may contain composite stream keys (e.g. "xi::Science") when
+  // the caller (ClasswiseBreaksPanel) passes cwClassKeys for stream-level selection.
   const activeSelected = classes.filter(k => allClassKeys.includes(k))
   const isAll  = allClassKeys.length > 0 && allClassKeys.every(k => classes.includes(k))
   const isNone = activeSelected.length === 0
   const label  = isAll ? 'All' : isNone ? '—'
     : activeSelected.length <= 3
-      ? activeSelected.map(k => classEntries.find(c => c.key === k)?.short ?? k).join(', ')
+      ? activeSelected.map(k => resolveShort(k, classEntries)).join(', ')
       : `${activeSelected.length} classes`
   const toggleOne = (key: string, chk: boolean) =>
     onChange(chk ? [...classes, key] : classes.filter(c => c !== key))
-  const toggleGroup = (group: string, chk: boolean) => {
-    const gk = classEntries.filter(c => c.group === group).map(c => c.key)
-    onChange(chk ? [...new Set([...classes, ...gk])] : classes.filter(k => !gk.includes(k)))
-  }
+
   return (
     <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
       <button onClick={() => setOpenId(isOpen ? null : rowId)} style={{
@@ -861,7 +879,7 @@ function ClassPicker({
         background: isAll ? '#F0EDFF' : isNone ? '#FFF' : '#F9FAFB',
         fontSize: 11, fontWeight: 600, color: isAll ? '#7C3AED' : '#374151',
         cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'inherit',
-        display: 'flex', alignItems: 'center', gap: 4, maxWidth: 110, overflow: 'hidden',
+        display: 'flex', alignItems: 'center', gap: 4, maxWidth: 120, overflow: 'hidden',
       }}>
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>
         <svg width="8" height="8" viewBox="0 0 8 8" fill="none" style={{ flexShrink: 0 }}>
@@ -873,9 +891,9 @@ function ClassPicker({
           position: 'absolute', right: 0, top: 'calc(100% + 4px)',
           background: '#fff', border: '1px solid #E5E7EB',
           borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.13)',
-          zIndex: 400, width: 200, maxHeight: 340, overflowY: 'auto', padding: '6px 0',
+          zIndex: 400, width: 220, maxHeight: 400, overflowY: 'auto', padding: '6px 0',
         }}>
-          {/* "All classes" — all selected → clear; partial/none → select all */}
+          {/* All classes */}
           <label style={PICK_ROW}>
             <input type="checkbox" checked={isAll}
               ref={el => { if (el) el.indeterminate = !isAll && !isNone }}
@@ -883,17 +901,24 @@ function ClassPicker({
               style={{ accentColor: '#7C6FE0', flexShrink: 0 }} />
             <span style={{ fontSize: 12, fontWeight: 700, color: '#13111E' }}>All classes</span>
           </label>
+
           {classGroups.map(gm => {
-            const gc    = classEntries.filter(c => c.group === gm.group)
+            const gc = classEntries.filter(c => c.group === gm.group)
             if (gc.length === 0) return null
-            const gk    = gc.map(c => c.key)
+            const groupStreams = streamDefs?.filter(s => s.group === gm.group) ?? []
+
+            // Effective group keys — composite stream keys take precedence over simple keys
+            const gk = allClassKeys.filter(k =>
+              gc.some(c => k === c.key || k.startsWith(`${c.key}${STREAM_SEP}`))
+            )
+            if (gk.length === 0) return null
+
             const allIn = gk.every(k => classes.includes(k))
             const anyIn = gk.some(k => classes.includes(k))
-            const groupStreams = streamDefs?.filter(s => s.group === gm.group) ?? []
-            const hasStreams   = groupStreams.length > 0 && !!classStreamMap
+
             return (
               <div key={gm.group}>
-                {/* Group header — all in group → clear; partial/none → add all */}
+                {/* Group header */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 12px 3px', marginTop: 4, borderTop: '1px solid #F3F4F6', background: gm.bg }}>
                   <input type="checkbox" checked={allIn}
                     ref={el => { if (el) el.indeterminate = !allIn && anyIn }}
@@ -906,62 +931,57 @@ function ClassPicker({
                   <span style={{ fontSize: 10, color: '#9CA3AF', marginLeft: 'auto' }}>{gm.desc}</span>
                 </div>
 
-                {/* Stream chips — quick-select by stream */}
-                {hasStreams && (
-                  <div style={{ display: 'flex', gap: 4, padding: '4px 12px 4px 28px', flexWrap: 'wrap', borderBottom: '1px solid #F3F4F6' }}>
-                    {groupStreams.map(sd => {
-                      const sk   = gc.filter(c => (classStreamMap![c.key] ?? []).includes(sd.stream)).map(c => c.key)
-                      const sAll = sk.every(k => classes.includes(k))
-                      const sAny = sk.some(k => classes.includes(k))
-                      return (
-                        <button key={sd.stream} onClick={() =>
-                          onChange(sAll
-                            ? classes.filter(k => !sk.includes(k))
-                            : [...new Set([...classes, ...sk])])
-                        } style={{
-                          padding: '2px 8px', borderRadius: 9, fontSize: 10, fontWeight: 700,
-                          cursor: 'pointer', fontFamily: 'inherit',
-                          border: sAll ? `1.5px solid ${sd.color}` : sAny ? `1px dashed ${sd.color}` : '1px solid #E5E7EB',
-                          background: sAll ? sd.bg : '#fff',
-                          color: sAll || sAny ? sd.color : '#9CA3AF',
-                        }}>{sd.stream}</button>
-                      )
-                    })}
-                  </div>
-                )}
-
-                {/* Class rows — one per class, with per-class stream chips */}
+                {/* Per-class rows — expanded into per-stream sub-checkboxes when composite keys exist */}
                 {gc.map(cls => {
-                  const isChecked   = classes.includes(cls.key)
-                  const clsStreams   = hasStreams
-                    ? (classStreamMap![cls.key] ?? [])
-                        .map(s => groupStreams.find(x => x.stream === s))
-                        .filter(Boolean) as typeof groupStreams
-                    : []
-                  return (
-                    <div key={cls.key}>
-                      <label style={{ ...PICK_ROW, paddingLeft: 28 }}>
-                        <input type="checkbox" checked={isChecked}
-                          onChange={e => toggleOne(cls.key, e.target.checked)}
-                          style={{ accentColor: gm.color, flexShrink: 0 }} />
-                        <span style={{ fontSize: 12, color: '#374151' }}>{cls.label}</span>
-                      </label>
-                      {clsStreams.length > 0 && (
-                        <div style={{ display: 'flex', gap: 3, paddingLeft: 44, paddingBottom: 5, flexWrap: 'wrap' }}>
-                          {clsStreams.map(sd => (
-                            <button key={sd.stream}
-                              onClick={() => toggleOne(cls.key, !isChecked)}
-                              style={{
-                                padding: '1px 7px', borderRadius: 8, fontSize: 9, fontWeight: 700,
-                                cursor: 'pointer', fontFamily: 'inherit',
-                                border: isChecked ? `1.5px solid ${sd.color}` : '1px solid #E5E7EB',
-                                background: isChecked ? sd.bg : '#F9FAFB',
-                                color: isChecked ? sd.color : '#9CA3AF',
-                              }}>{sd.stream}</button>
-                          ))}
+                  const compositeKeys = allClassKeys.filter(k => k.startsWith(`${cls.key}${STREAM_SEP}`))
+
+                  if (compositeKeys.length > 0) {
+                    // Stream-expanded: each stream is independently selectable
+                    const allStreamsIn = compositeKeys.every(k => classes.includes(k))
+                    const anyStreamIn  = compositeKeys.some(k => classes.includes(k))
+                    return (
+                      <div key={cls.key}>
+                        <div style={{ ...PICK_ROW, paddingLeft: 28 }}>
+                          <input type="checkbox" checked={allStreamsIn}
+                            ref={el => { if (el) el.indeterminate = !allStreamsIn && anyStreamIn }}
+                            onChange={() => onChange(allStreamsIn
+                              ? classes.filter(k => !compositeKeys.includes(k))
+                              : [...new Set([...classes, ...compositeKeys])]
+                            )}
+                            style={{ accentColor: gm.color, flexShrink: 0, cursor: 'pointer' }} />
+                          <span style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>{cls.label}</span>
                         </div>
-                      )}
-                    </div>
+                        {compositeKeys.map(ck => {
+                          const stream  = ck.split(STREAM_SEP)[1]
+                          const sd      = groupStreams.find(x => x.stream === stream)
+                          const checked = classes.includes(ck)
+                          return (
+                            <label key={ck} style={{ ...PICK_ROW, paddingLeft: 44 }}>
+                              <input type="checkbox" checked={checked}
+                                onChange={e => toggleOne(ck, e.target.checked)}
+                                style={{ accentColor: sd?.color ?? gm.color, flexShrink: 0 }} />
+                              <span style={{
+                                padding: '1px 9px', borderRadius: 8, fontSize: 10, fontWeight: 700,
+                                border: checked ? `1.5px solid ${sd?.color ?? gm.color}` : '1px solid #E5E7EB',
+                                background: checked ? (sd?.bg ?? gm.bg) : '#F9FAFB',
+                                color: checked ? (sd?.color ?? gm.color) : '#9CA3AF',
+                              }}>{stream}</span>
+                            </label>
+                          )
+                        })}
+                      </div>
+                    )
+                  }
+
+                  // Simple class row (no stream expansion)
+                  if (!allClassKeys.includes(cls.key)) return null
+                  return (
+                    <label key={cls.key} style={{ ...PICK_ROW, paddingLeft: 28 }}>
+                      <input type="checkbox" checked={classes.includes(cls.key)}
+                        onChange={e => toggleOne(cls.key, e.target.checked)}
+                        style={{ accentColor: gm.color, flexShrink: 0 }} />
+                      <span style={{ fontSize: 12, color: '#374151' }}>{cls.label}</span>
+                    </label>
                   )
                 })}
               </div>
@@ -1117,9 +1137,8 @@ function LiveBellTimeline({
       </div>
       {data.map(({ row, start }, idx) => {
         const tm  = TYPE_META[row.type]
-        const grp = row.classes.length === ALL_CLASS_KEYS.length ? 'All'
-          : row.classes.length === 0 ? '—'
-          : row.classes.length <= 4 ? row.classes.map(k => CLASSES.find(c => c.key === k)?.short ?? k).join(', ')
+        const grp = row.classes.length === 0 ? '—'
+          : row.classes.length <= 4 ? row.classes.map(k => resolveShort(k)).join(', ')
           : `${row.classes.length} classes`
         return (
           <div key={row.id + idx} style={{
@@ -1184,6 +1203,19 @@ export function StepBell() {
 
   const activeClasses    = customClasses
   const activeClassKeys  = useMemo(() => customClasses.map(c => c.key), [customClasses])
+
+  // Composite class keys for the class-wise breaks panel.
+  // Classes that have streams are expanded to "classKey::StreamName" so each
+  // stream can be selected independently as a scheduling unit.
+  const cwClassKeys = useMemo(() => {
+    if (!customStreams.length) return activeClassKeys
+    return customClasses.flatMap(cls => {
+      const grpStreams = customStreams.filter(s => s.group === cls.group)
+      const streams    = (classStreamMap[cls.key] ?? []).filter(s => grpStreams.some(x => x.stream === s))
+      return streams.length > 0 ? streams.map(s => `${cls.key}${STREAM_SEP}${s}`) : [cls.key]
+    })
+  }, [customClasses, activeClassKeys, customStreams, classStreamMap])
+
   // Groups that have at least one class assigned — used in pickers, timelines, capacity
   const activeClassGroups = useMemo(() =>
     customGroups
@@ -1274,7 +1306,8 @@ export function StepBell() {
         })()
     return (_saved?.cwRows ?? []).map(r => ({
       ...r,
-      classes: r.classes.filter(k => initKeys.includes(k)),
+      // Preserve composite stream keys (xi::Science) if their base class is still active
+      classes: r.classes.filter(k => initKeys.includes(k) || initKeys.includes(baseClassKey(k))),
     }))
   })
 
@@ -1572,7 +1605,7 @@ export function StepBell() {
       // Panel already has rows — sanitise stale class keys every time it opens
       setCwRows(prev => prev.map(r => ({
         ...r,
-        classes: r.classes.filter(k => activeClassKeys.includes(k)),
+        classes: r.classes.filter(k => cwClassKeys.includes(k) || activeClassKeys.includes(k)),
       })))
     }
     setShowCwPanel(true)
@@ -1580,7 +1613,7 @@ export function StepBell() {
 
   const handleGenerateFromCw = () => {
     const asmDur  = rows.find(r => r.type === 'assembly')?.duration ?? 10
-    const newRows = buildBellRowsFromCw(activeStartTime, activePeriodDur, activeMaxPeriods, cwRows, activeClassKeys, asmDur)
+    const newRows = buildBellRowsFromCw(activeStartTime, activePeriodDur, activeMaxPeriods, cwRows, cwClassKeys, asmDur)
     setDisplayRows(newRows)
     setShowCwPanel(false)
   }
@@ -3108,7 +3141,7 @@ export function StepBell() {
                 onClose={() => setShowCwPanel(false)}
                 assemblyDur={rows.find(r => r.type === 'assembly')?.duration ?? 10}
                 classEntries={activeClasses}
-                allClassKeys={activeClassKeys}
+                allClassKeys={cwClassKeys}
                 classGroups={activeClassGroups}
                 streamDefs={customStreams}
                 classStreamMap={classStreamMap}
