@@ -89,6 +89,14 @@ const CLASS_GROUPS = [
 
 const ALL_CLASS_KEYS = CLASSES.map(c => c.key)
 
+// Colour palette for custom groups — [ink, paper]
+const GROUP_PALETTE: Array<[string, string]> = [
+  ['#7C3AED','#F5F3FF'], ['#1D4ED8','#EFF6FF'], ['#059669','#F0FDF4'],
+  ['#D97706','#FFFBEB'], ['#DC2626','#FFF1F2'], ['#0891B2','#ECFEFF'],
+  ['#7C3AED','#FDF4FF'], ['#65A30D','#F7FEE7'], ['#9333EA','#FAF5FF'],
+  ['#374151','#F9FAFB'],
+]
+
 // Convert grade range (from dashboard modal) to a filtered CLASSES subset
 const GRADE_TO_KEY: Record<string, string> = {
   'Nursery':'nur','LKG':'lkg','UKG':'ukg',
@@ -367,6 +375,8 @@ interface SavedBell {
   shiftRows?:     Record<string, BellRow[]>  // shiftId → rows
   // Custom class list (user can edit/add/delete)
   customClasses?: Array<{ key: string; label: string; short: string; group: string }>
+  // Custom group definitions (name + colours)
+  customGroups?: Array<{ group: string; color: string; bg: string }>
 }
 function loadSaved(): SavedBell | null {
   try { const s = localStorage.getItem(BELL_KEY); return s ? JSON.parse(s) as SavedBell : null }
@@ -938,15 +948,25 @@ export function StepBell() {
     return CLASSES
   })
   const [showManageClasses, setShowManageClasses] = useState(false)
+  const [manageTab, setManageTab] = useState<'groups' | 'classes'>('classes')
+
+  // Custom group definitions — initialized from saved state or defaults
+  const [customGroups, setCustomGroups] = useState<typeof CLASS_GROUPS>(() => {
+    if (_saved?.customGroups?.length) return _saved.customGroups as typeof CLASS_GROUPS
+    return CLASS_GROUPS
+  })
 
   const activeClasses    = customClasses
   const activeClassKeys  = useMemo(() => customClasses.map(c => c.key), [customClasses])
+  // Groups that have at least one class assigned — used in pickers, timelines, capacity
   const activeClassGroups = useMemo(() =>
-    CLASS_GROUPS.map(g => ({
-      ...g,
-      desc: customClasses.filter(c => c.group === g.group).map(c => c.short).join(', ') || g.desc,
-    })).filter(g => customClasses.some(c => c.group === g.group)),
-  [customClasses])
+    customGroups
+      .map(g => ({
+        ...g,
+        desc: customClasses.filter(c => c.group === g.group).map(c => c.short).join(', ') || g.group,
+      }))
+      .filter(g => customClasses.some(c => c.group === g.group)),
+  [customClasses, customGroups])
 
   const [shiftName,  setShiftName]  = useState<string>(  () => _saved?.shiftName ?? 'Main Shift')
   const [startTime,  setStartTime]  = useState<string>(  () => _saved?.startTime ?? (config.startTime ?? '09:00'))
@@ -1038,12 +1058,12 @@ export function StepBell() {
       shiftName, startTime, use12h, periodDur, maxPeriods, workDays, rows,
       cycleWeeks, useDayNames, cycleStartDate, fixedDuration, rotationDays,
       weekWorkDays, dayStartTimes, dayPeriodDurs, dayOffRules, cwRows, varyByDay, dayRows,
-      scheduleMode, shifts, activeShiftId, shiftRows, customClasses,
+      scheduleMode, shifts, activeShiftId, shiftRows, customClasses, customGroups,
     } satisfies SavedBell))
   }, [shiftName, startTime, use12h, periodDur, maxPeriods, workDays, rows,
       cycleWeeks, useDayNames, cycleStartDate, fixedDuration, rotationDays,
       weekWorkDays, dayStartTimes, dayPeriodDurs, dayOffRules, cwRows, varyByDay, dayRows,
-      scheduleMode, shifts, activeShiftId, shiftRows, customClasses])
+      scheduleMode, shifts, activeShiftId, shiftRows, customClasses, customGroups])
 
   // ── Day keys ─────────────────────────────────────────────────
   // • day-names mode  → rotation day shorts (D1, D2, …)
@@ -1645,7 +1665,7 @@ export function StepBell() {
         shiftName, startTime, use12h, periodDur, maxPeriods, workDays, rows,
         cycleWeeks, useDayNames, cycleStartDate, fixedDuration, rotationDays,
         weekWorkDays, dayStartTimes, dayPeriodDurs, dayOffRules, cwRows, varyByDay, dayRows,
-        scheduleMode, shifts, activeShiftId, shiftRows, customClasses,
+        scheduleMode, shifts, activeShiftId, shiftRows, customClasses, customGroups,
       } satisfies SavedBell))
     } catch { /* localStorage might be full */ }
     setConfig({
@@ -1777,69 +1797,173 @@ export function StepBell() {
               </div>
 
               {showManageClasses && (
-                <div style={{ padding: '12px 16px' }}>
-                  {/* Class rows */}
-                  {activeClasses.map((cls, idx) => {
-                    const grp = CLASS_GROUPS.find(g => g.group === cls.group) ?? CLASS_GROUPS[0]
-                    return (
-                      <div key={cls.key} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, padding: '5px 8px', borderRadius: 7, background: '#FAFAFA', border: '1px solid #F3F4F6' }}>
-                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: grp.color, flexShrink: 0, display: 'inline-block' }} />
-                        {/* Label */}
-                        <input
-                          value={cls.label}
-                          onChange={e => setCustomClasses(prev => prev.map((c, i) => i === idx ? { ...c, label: e.target.value } : c))}
-                          placeholder="Class name"
-                          style={{ flex: 1, minWidth: 60, padding: '3px 7px', border: '1px solid #E5E7EB', borderRadius: 5, fontSize: 12, fontFamily: 'inherit', outline: 'none', background: '#fff' }}
-                        />
-                        {/* Short name */}
-                        <input
-                          value={cls.short}
-                          onChange={e => setCustomClasses(prev => prev.map((c, i) => i === idx ? { ...c, short: e.target.value } : c))}
-                          placeholder="Short"
-                          style={{ width: 48, padding: '3px 7px', border: '1px solid #E5E7EB', borderRadius: 5, fontSize: 12, fontFamily: 'inherit', outline: 'none', background: '#fff', textAlign: 'center' }}
-                        />
-                        {/* Group */}
-                        <select
-                          value={cls.group}
-                          onChange={e => setCustomClasses(prev => prev.map((c, i) => i === idx ? { ...c, group: e.target.value } : c))}
-                          style={{ padding: '3px 6px', border: '1px solid #E5E7EB', borderRadius: 5, fontSize: 11, fontFamily: 'inherit', outline: 'none', background: '#fff', color: grp.color, fontWeight: 600 }}
-                        >
-                          {CLASS_GROUPS.map(g => <option key={g.group} value={g.group}>{g.group}</option>)}
-                        </select>
-                        {/* Delete */}
+                <div style={{ padding: '0 16px 14px' }}>
+
+                  {/* ── Tab bar ── */}
+                  <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid #F3F4F6', marginBottom: 12 }}>
+                    {(['groups','classes'] as const).map(tab => (
+                      <button key={tab} onClick={() => setManageTab(tab)} style={{
+                        padding: '8px 16px', background: 'none', border: 'none',
+                        fontSize: 12, fontWeight: manageTab === tab ? 700 : 500,
+                        color: manageTab === tab ? '#7C6FE0' : '#9CA3AF',
+                        borderBottom: manageTab === tab ? '2px solid #7C6FE0' : '2px solid transparent',
+                        cursor: 'pointer', fontFamily: 'inherit', transition: 'color .12s',
+                        textTransform: 'capitalize',
+                      }}>{tab}</button>
+                    ))}
+                  </div>
+
+                  {/* ══ GROUPS tab ══ */}
+                  {manageTab === 'groups' && (
+                    <div>
+                      {customGroups.map((grp, gi) => {
+                        const classCount = customClasses.filter(c => c.group === grp.group).length
+                        return (
+                          <div key={grp.group + gi} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, padding: '7px 10px', borderRadius: 8, background: grp.bg, border: `1px solid ${grp.color}22` }}>
+                            {/* Colour swatch picker */}
+                            <div style={{ position: 'relative', flexShrink: 0 }}>
+                              <div style={{ width: 18, height: 18, borderRadius: '50%', background: grp.color, cursor: 'pointer', border: '2px solid #fff', boxShadow: '0 0 0 1.5px ' + grp.color }}
+                                onClick={e => {
+                                  e.stopPropagation()
+                                  // Toggle a tiny swatch picker below this dot
+                                  const el = e.currentTarget.nextSibling as HTMLElement | null
+                                  if (el) el.style.display = el.style.display === 'grid' ? 'none' : 'grid'
+                                }}
+                              />
+                              {/* Swatch palette popup */}
+                              <div style={{ display: 'none', position: 'absolute', top: 24, left: 0, zIndex: 500, background: '#fff', border: '1px solid #E5E7EB', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,.12)', padding: 6, gridTemplateColumns: 'repeat(5,18px)', gap: 4 }}>
+                                {GROUP_PALETTE.map(([c, b]) => (
+                                  <div key={c+b} onClick={() => {
+                                    setCustomGroups(prev => prev.map((g, i) => i === gi ? { ...g, color: c, bg: b } : g))
+                                    const el = document.activeElement as HTMLElement | null
+                                    el?.blur()
+                                  }}
+                                  style={{ width: 18, height: 18, borderRadius: '50%', background: c, cursor: 'pointer', border: grp.color === c ? '2px solid #374151' : '2px solid transparent' }} />
+                                ))}
+                              </div>
+                            </div>
+                            {/* Group name */}
+                            <input
+                              value={grp.group}
+                              onChange={e => {
+                                const newName = e.target.value
+                                const oldName = grp.group
+                                setCustomGroups(prev => prev.map((g, i) => i === gi ? { ...g, group: newName } : g))
+                                // Rename references in customClasses too
+                                setCustomClasses(prev => prev.map(c => c.group === oldName ? { ...c, group: newName } : c))
+                              }}
+                              placeholder="Group name"
+                              style={{ flex: 1, padding: '3px 8px', border: '1px solid #E5E7EB', borderRadius: 5, fontSize: 12, fontFamily: 'inherit', outline: 'none', background: '#fff', fontWeight: 600, color: grp.color }}
+                            />
+                            {/* Class count badge */}
+                            <span style={{ fontSize: 10, padding: '1px 7px', borderRadius: 10, background: grp.color + '20', color: grp.color, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                              {classCount} {classCount === 1 ? 'class' : 'classes'}
+                            </span>
+                            {/* Delete */}
+                            <button
+                              onClick={() => {
+                                if (classCount > 0) { alert(`Move or delete the ${classCount} class${classCount>1?'es':''} in "${grp.group}" first.`); return }
+                                setCustomGroups(prev => prev.filter((_, i) => i !== gi))
+                              }}
+                              title={classCount > 0 ? `Cannot delete — ${classCount} class${classCount>1?'es':''} still assigned` : 'Delete group'}
+                              style={{ background: 'none', border: 'none', cursor: classCount > 0 ? 'not-allowed' : 'pointer', color: classCount > 0 ? '#E5E7EB' : '#FCA5A5', padding: 3, display: 'flex', flexShrink: 0 }}
+                            >
+                              <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M2 2l10 10M12 2L2 12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
+                            </button>
+                          </div>
+                        )
+                      })}
+
+                      {/* Add group */}
+                      <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
                         <button
                           onClick={() => {
-                            if (activeClasses.length <= 1) return
-                            setCustomClasses(prev => prev.filter((_, i) => i !== idx))
+                            const idx = customGroups.length % GROUP_PALETTE.length
+                            const [color, bg] = GROUP_PALETTE[idx]
+                            setCustomGroups(prev => [...prev, { group: 'New Group', color, bg }])
                           }}
-                          title="Remove class"
-                          style={{ background: 'none', border: 'none', cursor: activeClasses.length > 1 ? 'pointer' : 'not-allowed', color: activeClasses.length > 1 ? '#FCA5A5' : '#E5E7EB', padding: 3, display: 'flex', flexShrink: 0 }}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 7, border: '1.5px dashed #D1D5DB', background: '#fff', fontSize: 12, fontWeight: 600, color: '#6B7280', cursor: 'pointer', fontFamily: 'inherit' }}
                         >
-                          <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M2 2l10 10M12 2L2 12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
+                          <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M5.5 1v9M1 5.5h9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+                          Add group
+                        </button>
+                        <button
+                          onClick={() => { setCustomGroups(CLASS_GROUPS); setCustomClasses(CLASSES) }}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 7, border: '1px solid #E5E7EB', background: '#fff', fontSize: 12, fontWeight: 600, color: '#9CA3AF', cursor: 'pointer', fontFamily: 'inherit' }}
+                        >
+                          Reset to defaults
                         </button>
                       </div>
-                    )
-                  })}
+                    </div>
+                  )}
 
-                  {/* Add class row */}
-                  <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-                    <button
-                      onClick={() => {
-                        const newKey = 'cls-' + Date.now().toString(36)
-                        setCustomClasses(prev => [...prev, { key: newKey, label: 'New Class', short: 'New', group: CLASS_GROUPS[CLASS_GROUPS.length - 1].group }])
-                      }}
-                      style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 7, border: '1.5px dashed #D1D5DB', background: '#fff', fontSize: 12, fontWeight: 600, color: '#6B7280', cursor: 'pointer', fontFamily: 'inherit' }}
-                    >
-                      <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M5.5 1v9M1 5.5h9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
-                      Add class
-                    </button>
-                    <button
-                      onClick={() => setCustomClasses(CLASSES)}
-                      style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 7, border: '1px solid #E5E7EB', background: '#fff', fontSize: 12, fontWeight: 600, color: '#9CA3AF', cursor: 'pointer', fontFamily: 'inherit' }}
-                    >
-                      Reset to defaults
-                    </button>
-                  </div>
+                  {/* ══ CLASSES tab ══ */}
+                  {manageTab === 'classes' && (
+                    <div>
+                      {activeClasses.map((cls, idx) => {
+                        const grp = customGroups.find(g => g.group === cls.group) ?? customGroups[0] ?? CLASS_GROUPS[0]
+                        return (
+                          <div key={cls.key} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, padding: '5px 8px', borderRadius: 7, background: '#FAFAFA', border: '1px solid #F3F4F6' }}>
+                            <span style={{ width: 8, height: 8, borderRadius: '50%', background: grp.color, flexShrink: 0, display: 'inline-block' }} />
+                            {/* Label */}
+                            <input
+                              value={cls.label}
+                              onChange={e => setCustomClasses(prev => prev.map((c, i) => i === idx ? { ...c, label: e.target.value } : c))}
+                              placeholder="Class name"
+                              style={{ flex: 1, minWidth: 60, padding: '3px 7px', border: '1px solid #E5E7EB', borderRadius: 5, fontSize: 12, fontFamily: 'inherit', outline: 'none', background: '#fff' }}
+                            />
+                            {/* Short name */}
+                            <input
+                              value={cls.short}
+                              onChange={e => setCustomClasses(prev => prev.map((c, i) => i === idx ? { ...c, short: e.target.value } : c))}
+                              placeholder="Short"
+                              style={{ width: 48, padding: '3px 7px', border: '1px solid #E5E7EB', borderRadius: 5, fontSize: 12, fontFamily: 'inherit', outline: 'none', background: '#fff', textAlign: 'center' }}
+                            />
+                            {/* Group selector — driven by customGroups */}
+                            <select
+                              value={cls.group}
+                              onChange={e => setCustomClasses(prev => prev.map((c, i) => i === idx ? { ...c, group: e.target.value } : c))}
+                              style={{ padding: '3px 6px', border: '1px solid #E5E7EB', borderRadius: 5, fontSize: 11, fontFamily: 'inherit', outline: 'none', background: '#fff', color: grp.color, fontWeight: 600 }}
+                            >
+                              {customGroups.map(g => <option key={g.group} value={g.group}>{g.group}</option>)}
+                            </select>
+                            {/* Delete */}
+                            <button
+                              onClick={() => {
+                                if (activeClasses.length <= 1) return
+                                setCustomClasses(prev => prev.filter((_, i) => i !== idx))
+                              }}
+                              title="Remove class"
+                              style={{ background: 'none', border: 'none', cursor: activeClasses.length > 1 ? 'pointer' : 'not-allowed', color: activeClasses.length > 1 ? '#FCA5A5' : '#E5E7EB', padding: 3, display: 'flex', flexShrink: 0 }}
+                            >
+                              <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M2 2l10 10M12 2L2 12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
+                            </button>
+                          </div>
+                        )
+                      })}
+
+                      {/* Add class row */}
+                      <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                        <button
+                          onClick={() => {
+                            const newKey = 'cls-' + Date.now().toString(36)
+                            const lastGroup = customGroups[customGroups.length - 1]?.group ?? CLASS_GROUPS[CLASS_GROUPS.length - 1].group
+                            setCustomClasses(prev => [...prev, { key: newKey, label: 'New Class', short: 'New', group: lastGroup }])
+                          }}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 7, border: '1.5px dashed #D1D5DB', background: '#fff', fontSize: 12, fontWeight: 600, color: '#6B7280', cursor: 'pointer', fontFamily: 'inherit' }}
+                        >
+                          <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M5.5 1v9M1 5.5h9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+                          Add class
+                        </button>
+                        <button
+                          onClick={() => { setCustomClasses(CLASSES); setCustomGroups(CLASS_GROUPS) }}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 7, border: '1px solid #E5E7EB', background: '#fff', fontSize: 12, fontWeight: 600, color: '#9CA3AF', cursor: 'pointer', fontFamily: 'inherit' }}
+                        >
+                          Reset to defaults
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
