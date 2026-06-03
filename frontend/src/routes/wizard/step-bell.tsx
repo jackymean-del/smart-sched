@@ -394,12 +394,31 @@ function buildBellRowsFromCw(
     }
 
     for (let pNum = 1; pNum <= maxPeriods; pNum++) {
-      evs.push({ type: 'teaching', name: `Period ${pNum}`, startMins: cur, duration: periodDur })
-      cur += periodDur
+      let remaining = periodDur
 
-      // Flush any breaks whose target start time is now reached
+      // Split the period at any break whose absStart falls WITHIN this period's window.
+      // Without this, a break with customStartTime = 12:00 that lands during Period 3
+      // would be incorrectly deferred to after the full period ends.
+      while (bi < myBreaks.length && myBreaks[bi].absStart < cur + remaining) {
+        const breakStart  = Math.max(myBreaks[bi].absStart, cur)
+        const prePortion  = breakStart - cur
+        if (prePortion > 0) {
+          evs.push({ type: 'teaching', name: `Period ${pNum}`, startMins: cur, duration: prePortion })
+          cur       += prePortion
+          remaining -= prePortion
+        }
+        evs.push({ type: myBreaks[bi].type, name: myBreaks[bi].name, startMins: cur, duration: myBreaks[bi].duration })
+        cur += myBreaks[bi].duration; bi++
+      }
+
+      // Remaining teaching time for this period
+      if (remaining > 0) {
+        evs.push({ type: 'teaching', name: `Period ${pNum}`, startMins: cur, duration: remaining })
+        cur += remaining
+      }
+
+      // Flush breaks that land exactly at the period boundary
       while (bi < myBreaks.length && myBreaks[bi].absStart <= cur) {
-        // Snap break start to cur (sequential; avoids gaps)
         evs.push({ type: myBreaks[bi].type, name: myBreaks[bi].name, startMins: cur, duration: myBreaks[bi].duration })
         cur += myBreaks[bi].duration; bi++
       }
@@ -725,18 +744,34 @@ function ClasswiseBreaksPanel({
                   {basePeriodOptions.map(o => (
                     <option key={o.value} value={o.value}>{o.label}</option>
                   ))}
-                  {/* "After break X" options — other breaks that could be chained */}
-                  {cwRows.filter(b => b.id !== row.id && b.classes.length > 0).length > 0 && (
-                    <option disabled value="">── After another break ──</option>
-                  )}
-                  {cwRows
-                    .filter(b => b.id !== row.id && b.classes.length > 0)
-                    .map(b => (
-                      <option key={`b:${b.id}`} value={`b:${b.id}`}>
-                        After {b.name} ({clsLabel(b.classes)})
-                      </option>
-                    ))
-                  }
+                  {/* Chain options: "After previous break" shortcut + all other breaks */}
+                  {(() => {
+                    const rowIdx   = cwRows.findIndex(r => r.id === row.id)
+                    const prevBrk  = cwRows.slice(0, rowIdx).reverse().find(b => b.classes.length > 0)
+                    const otherBrks = cwRows.filter(b => b.id !== row.id && b.classes.length > 0 && b.id !== prevBrk?.id)
+                    return (
+                      <>
+                        {prevBrk && (
+                          <>
+                            <option disabled value="">── Chain to break ──</option>
+                            <option value={`b:${prevBrk.id}`}>
+                              After previous break ({prevBrk.name})
+                            </option>
+                          </>
+                        )}
+                        {otherBrks.length > 0 && (
+                          <>
+                            <option disabled value="">── After another break ──</option>
+                            {otherBrks.map(b => (
+                              <option key={`b:${b.id}`} value={`b:${b.id}`}>
+                                After {b.name} ({clsLabel(b.classes)})
+                              </option>
+                            ))}
+                          </>
+                        )}
+                      </>
+                    )
+                  })()}
                   <option disabled value="">────────────────</option>
                   <option value="custom">Custom time…</option>
                 </select>
@@ -860,17 +895,32 @@ function ClassPicker({
     document.addEventListener('mousedown', h)
     return () => document.removeEventListener('mousedown', h)
   }, [isOpen, setOpenId])
-  // allClassKeys may contain composite stream keys (e.g. "xi::Science") when
-  // the caller (ClasswiseBreaksPanel) passes cwClassKeys for stream-level selection.
-  const activeSelected = classes.filter(k => allClassKeys.includes(k))
-  const isAll  = allClassKeys.length > 0 && allClassKeys.every(k => classes.includes(k))
+  // allClassKeys may contain composite stream keys (e.g. "xi::Science").
+  // Existing rows may still hold simple keys ('xi'). A simple key is treated as
+  // "all composite variants of that class are selected" for isAll/anyIn checks.
+  const keySelected = (k: string) =>
+    classes.includes(k) || (isCompositeKey(k) && classes.includes(baseClassKey(k)))
+  const activeSelected = allClassKeys.filter(keySelected)
+  const isAll  = allClassKeys.length > 0 && allClassKeys.every(keySelected)
   const isNone = activeSelected.length === 0
   const label  = isAll ? 'All' : isNone ? '—'
     : activeSelected.length <= 3
       ? activeSelected.map(k => resolveShort(k, classEntries)).join(', ')
       : `${activeSelected.length} classes`
-  const toggleOne = (key: string, chk: boolean) =>
-    onChange(chk ? [...classes, key] : classes.filter(c => c !== key))
+
+  // When toggling a composite key, first expand any plain base key in classes
+  // to its composite variants so stream-level changes don't get lost.
+  const toggleOne = (key: string, chk: boolean) => {
+    let cur = classes
+    if (isCompositeKey(key)) {
+      const base     = baseClassKey(key)
+      const variants = allClassKeys.filter(k => k.startsWith(`${base}${STREAM_SEP}`))
+      if (cur.includes(base) && variants.length > 0) {
+        cur = [...cur.filter(k => k !== base), ...variants]
+      }
+    }
+    onChange(chk ? [...new Set([...cur, key])] : cur.filter(c => c !== key))
+  }
 
   return (
     <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
@@ -913,8 +963,8 @@ function ClassPicker({
             )
             if (gk.length === 0) return null
 
-            const allIn = gk.every(k => classes.includes(k))
-            const anyIn = gk.some(k => classes.includes(k))
+            const allIn = gk.every(keySelected)
+            const anyIn = gk.some(keySelected)
 
             return (
               <div key={gm.group}>
@@ -936,9 +986,10 @@ function ClassPicker({
                   const compositeKeys = allClassKeys.filter(k => k.startsWith(`${cls.key}${STREAM_SEP}`))
 
                   if (compositeKeys.length > 0) {
-                    // Stream-expanded: each stream is independently selectable
-                    const allStreamsIn = compositeKeys.every(k => classes.includes(k))
-                    const anyStreamIn  = compositeKeys.some(k => classes.includes(k))
+                    // Stream-expanded: each stream is independently selectable.
+                    // keySelected also covers simple base keys (e.g. 'xi' counts as all xi streams selected).
+                    const allStreamsIn = compositeKeys.every(keySelected)
+                    const anyStreamIn  = compositeKeys.some(keySelected)
                     return (
                       <div key={cls.key}>
                         <div style={{ ...PICK_ROW, paddingLeft: 28 }}>
@@ -3486,7 +3537,7 @@ export function StepBell() {
                         </div>
                         <ClassPicker classes={row.classes} onChange={cls => updateRow(row.id, { classes: cls })}
                           rowId={row.id} openId={openPicker} setOpenId={setOpenPicker}
-                          classEntries={activeClasses} allClassKeys={activeClassKeys} classGroups={activeClassGroups} streamDefs={customStreams} classStreamMap={classStreamMap} />
+                          classEntries={activeClasses} allClassKeys={cwClassKeys} classGroups={activeClassGroups} streamDefs={customStreams} classStreamMap={classStreamMap} />
                         <button className="b-del" onClick={() => deleteRow(row.id)} style={{
                           background: 'none', border: 'none', cursor: 'pointer', color: '#FCA5A5',
                           display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 3, opacity: 0,
