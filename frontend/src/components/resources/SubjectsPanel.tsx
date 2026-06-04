@@ -330,11 +330,17 @@ function SectionSubRow({
   const cat     = cfg?.category ?? sub.category ?? 'Compulsory'
   const hasLab  = cfg?.requiresLab !== undefined ? cfg.requiresLab : (sub.requiresLab ?? false)
   const isHours = unit === 'hours_week' || unit === 'hours_month'
-  const [editFocused, setEditFocused] = useState(false)
-  const [editText,    setEditText]    = useState('')
+  const [editFocused,   setEditFocused]   = useState(false)
+  const [editText,      setEditText]      = useState('')
+  const [maxDayFocused, setMaxDayFocused] = useState(false)
+  const [maxDayText,    setMaxDayText]    = useState(String(maxDay))
   const displayVal  = toDisplayValue(slots, unit, sessionMins)
   const editableHr  = toEditableHours(slots, unit, sessionMins)
-  const inputValue  = isHours ? (editFocused ? editText : String(displayVal)) : (displayVal as number)
+  // Always use local editText when focused so user can freely clear + retype
+  const inputValue  = editFocused ? editText : String(displayVal)
+
+  // Keep maxDayText in sync when external value changes
+  useEffect(() => { if (!maxDayFocused) setMaxDayText(String(maxDay)) }, [maxDay, maxDayFocused])
 
   // Warm yellow tint — all section rows share the same warm base
   const rowBg = index % 2 === 0 ? '#FFFBEB' : '#FFF6D8'
@@ -359,21 +365,32 @@ function SectionSubRow({
       </td>
       <td style={{ padding: '2px 8px' }}>
         <input
-          type={isHours ? 'text' : 'number'} inputMode={isHours ? 'decimal' : 'numeric'}
-          value={inputValue} min={isHours ? undefined : 1} max={isHours ? undefined : 200}
+          type="text" inputMode="decimal"
+          value={inputValue}
           data-grade-input className="rp-inp rp-num"
-          onChange={e => { if (isHours) setEditText(e.target.value); else { const ns = fromDisplayValue(+e.target.value, unit, sessionMins); if (ns >= 1) onUpdateSlots(ns) } }}
-          onFocus={() => { if (isHours) { setEditFocused(true); setEditText(String(editableHr)) } }}
-          onBlur={() => { if (!isHours) return; const p = parseFloat(editText); if (!isNaN(p) && p > 0) { const ns = fromDisplayValue(p, unit, sessionMins); if (ns >= 1) onUpdateSlots(ns) } setEditFocused(false) }}
-          onKeyDown={e => { e.stopPropagation(); gradeTableKeyNav(e); if (isHours && e.key === 'Enter') e.currentTarget.blur() }}
+          onChange={e => setEditText(e.target.value)}
+          onFocus={() => {
+            setEditFocused(true)
+            setEditText(isHours ? String(editableHr) : String(displayVal))
+          }}
+          onBlur={() => {
+            const p = parseFloat(editText)
+            if (!isNaN(p) && p > 0) { const ns = fromDisplayValue(p, unit, sessionMins); if (ns >= 1) onUpdateSlots(ns) }
+            setEditFocused(false)
+          }}
+          onKeyDown={e => { e.stopPropagation(); gradeTableKeyNav(e); if (e.key === 'Enter') e.currentTarget.blur() }}
           style={{ ...secInp, border: '1px solid #C4BDFF', background: '#F5F2FF', color: P_D, fontWeight: 800, fontSize: 12 }}
         />
       </td>
       <td style={{ padding: '2px 8px' }}>
-        <input type="number" min={1} max={8} value={maxDay}
-          onChange={e => { const v = +e.target.value; if (v >= 1) onUpdateMaxDay(v) }}
+        <input
+          type="text" inputMode="numeric"
+          value={maxDayFocused ? maxDayText : String(maxDay)}
           className="rp-inp rp-num" data-grade-input
-          onKeyDown={e => { e.stopPropagation(); gradeTableKeyNav(e) }}
+          onChange={e => setMaxDayText(e.target.value)}
+          onFocus={() => { setMaxDayFocused(true); setMaxDayText(String(maxDay)) }}
+          onBlur={() => { const v = parseInt(maxDayText); if (!isNaN(v) && v >= 1) onUpdateMaxDay(v); setMaxDayFocused(false) }}
+          onKeyDown={e => { e.stopPropagation(); gradeTableKeyNav(e); if (e.key === 'Enter') e.currentTarget.blur() }}
           style={secInp}
         />
       </td>
@@ -417,27 +434,29 @@ function GradeSlotRow({
   onAddCategory:            (cat: string) => void
 }) {
   const [expandedSections, setExpandedSections] = useState(false)
-  const [editFocused, setEditFocused] = useState(false)
-  const [editText,    setEditText]    = useState('')
+  const [editFocused,   setEditFocused]   = useState(false)
+  const [editText,      setEditText]      = useState('')
+  const [maxDayFocused, setMaxDayFocused] = useState(false)
+  const [maxDayText,    setMaxDayText]    = useState('')
   const isHours = unit === 'hours_week' || unit === 'hours_month'
 
   const slots      = getClassSlots(sub, sections[0])
   const maxDay     = (sub.classConfigs ?? []).find(c => c.sectionName === sections[0])?.maxPeriodsPerDay ?? sub.maxPeriodsPerDay ?? 2
   const displayVal = toDisplayValue(slots, unit, sessionMins)
   const editableHr = toEditableHours(slots, unit, sessionMins)
-  const inputValue = isHours ? (editFocused ? editText : String(displayVal)) : (displayVal as number)
+  // Always use local editText when focused so clearing + retyping works
+  const inputValue = editFocused ? editText : String(displayVal)
 
-  function handleFocus() { if (!isHours) return; setEditFocused(true); setEditText(String(editableHr)) }
+  // Keep maxDayText synced when external value changes
+  useEffect(() => { if (!maxDayFocused) setMaxDayText(String(maxDay)) }, [maxDay, maxDayFocused])
+
+  function handleFocus() { setEditFocused(true); setEditText(isHours ? String(editableHr) : String(displayVal)) }
   function handleBlur() {
-    if (!isHours) return
     const p = parseFloat(editText)
     if (!isNaN(p) && p > 0) { const ns = fromDisplayValue(p, unit, sessionMins); if (ns >= 1) onUpdateGradeSlots(sections, ns) }
     setEditFocused(false)
   }
-  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
-    if (isHours) setEditText(e.target.value)
-    else { const ns = fromDisplayValue(+e.target.value, unit, sessionMins); if (ns >= 1) onUpdateGradeSlots(sections, ns) }
-  }
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>) { setEditText(e.target.value) }
 
   const fldS: React.CSSProperties = {
     width: '100%', padding: '2px 5px', border: '1px solid #E4E0FF', borderRadius: 4,
@@ -475,14 +494,14 @@ function GradeSlotRow({
         {/* Slots/Wk */}
         <td style={{ padding: '3px 8px' }}>
           <input
-            type={isHours ? 'text' : 'number'} inputMode={isHours ? 'decimal' : 'numeric'}
-            value={inputValue} min={isHours ? undefined : 1} max={isHours ? undefined : 200} step={isHours ? undefined : 1}
+            type="text" inputMode="decimal"
+            value={inputValue}
             data-grade-input className="rp-inp rp-num"
             onChange={handleChange} onFocus={handleFocus} onBlur={handleBlur}
             onKeyDown={e => {
               e.stopPropagation()
               gradeTableKeyNav(e)
-              if (isHours && e.key === 'Enter') e.currentTarget.blur()
+              if (e.key === 'Enter') e.currentTarget.blur()
             }}
             style={{
               width: '100%', padding: '3px 6px', border: '1.5px solid #C4BDFF', borderRadius: 5,
@@ -495,10 +514,14 @@ function GradeSlotRow({
 
         {/* Max/day — applies to all sections of this grade */}
         <td style={{ padding: '3px 8px' }}>
-          <input type="number" min={1} max={8} value={maxDay}
-            onChange={e => { const v = +e.target.value; if (v >= 1) sections.forEach(sn => onUpdateSectionMaxDay(sn, v)) }}
+          <input
+            type="text" inputMode="numeric"
+            value={maxDayFocused ? maxDayText : String(maxDay)}
             className="rp-inp rp-num" data-grade-input
-            onKeyDown={e => { e.stopPropagation(); gradeTableKeyNav(e) }}
+            onChange={e => setMaxDayText(e.target.value)}
+            onFocus={() => { setMaxDayFocused(true); setMaxDayText(String(maxDay)) }}
+            onBlur={() => { const v = parseInt(maxDayText); if (!isNaN(v) && v >= 1) sections.forEach(sn => onUpdateSectionMaxDay(sn, v)); setMaxDayFocused(false) }}
+            onKeyDown={e => { e.stopPropagation(); gradeTableKeyNav(e); if (e.key === 'Enter') e.currentTarget.blur() }}
             style={{ ...fldS, textAlign: 'center' as const, fontSize: 12 }}
           />
         </td>
