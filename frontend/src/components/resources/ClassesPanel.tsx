@@ -77,6 +77,7 @@ const STREAM_EXPANSIONS: Record<string, string> = {
   math:  'Mathematics',
   it:    'IT',
   lang:  'Languages',
+  spa:   'Spark',
 }
 
 // ─── BulkCreate popover ────────────────────────────────────────────────────────
