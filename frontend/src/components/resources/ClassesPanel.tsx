@@ -406,6 +406,92 @@ function SectionRow({ sec, onUpdate, onDelete, onScopeClick, existingStreams, in
   )
 }
 
+// ─── Streams bar — shows all active streams as renameable chips ───────────────
+function StreamsBar({ streams, onRename }: {
+  streams: string[]           // current unique stream names
+  onRename: (oldName: string, newName: string) => void
+}) {
+  const [editing, setEditing] = useState<string | null>(null)  // which stream is open
+  if (streams.length === 0) return null
+
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6,
+      padding: '8px 12px',
+      background: 'linear-gradient(90deg, #F0EDFF 0%, #F7F5FF 100%)',
+      borderBottom: '1px solid #E4E0FF',
+      flexShrink: 0,
+    }}>
+      <span style={{ fontSize: 11, fontWeight: 700, color: '#9590BF', textTransform: 'uppercase', letterSpacing: '0.06em', marginRight: 2 }}>
+        Streams
+      </span>
+      {streams.map(s => (
+        <StreamChipEditor key={s} name={s} isOpen={editing === s}
+          onOpen={() => setEditing(s)}
+          onClose={() => setEditing(null)}
+          onRename={newName => { onRename(s, newName); setEditing(null) }}
+        />
+      ))}
+      <span style={{ fontSize: 11, color: '#ADA8CC', marginLeft: 4 }}>
+        · click a stream to rename
+      </span>
+    </div>
+  )
+}
+
+function StreamChipEditor({ name, isOpen, onOpen, onClose, onRename }: {
+  name: string
+  isOpen: boolean
+  onOpen: () => void
+  onClose: () => void
+  onRename: (v: string) => void
+}) {
+  const [val, setVal] = useState(name)
+  const ref = useRef<HTMLInputElement>(null)
+  useEffect(() => { if (isOpen) { setVal(name); ref.current?.focus(); ref.current?.select() } }, [isOpen, name])
+
+  if (isOpen) return (
+    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+      <input
+        ref={ref}
+        value={val}
+        onChange={e => setVal(e.target.value)}
+        onBlur={() => { if (val.trim()) onRename(val.trim()); else onClose() }}
+        onKeyDown={e => {
+          if (e.key === 'Enter') { e.preventDefault(); if (val.trim()) onRename(val.trim()); else onClose() }
+          if (e.key === 'Escape') { e.preventDefault(); onClose() }
+        }}
+        style={{
+          fontSize: 12, fontWeight: 600, color: P_D,
+          border: `1.5px solid ${P}`, borderRadius: 20,
+          padding: '3px 12px', outline: 'none',
+          background: '#fff', fontFamily: 'inherit', width: 160,
+          boxShadow: `0 0 0 3px ${P_B}`,
+        }}
+      />
+      <button onClick={() => { if (val.trim()) onRename(val.trim()) }}
+        style={{ background: P, color: '#fff', border: 'none', borderRadius: 6, padding: '3px 8px', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+        ✓
+      </button>
+    </div>
+  )
+
+  return (
+    <button onClick={onOpen} style={{
+      fontSize: 11.5, fontWeight: 600, color: P_D,
+      background: '#EDE9FF', border: `1px solid ${P_B}`,
+      borderRadius: 20, padding: '3px 11px',
+      cursor: 'pointer', fontFamily: 'inherit',
+      transition: 'all 0.12s',
+    }}
+      onMouseEnter={e => { e.currentTarget.style.background = P_L; e.currentTarget.style.borderColor = P }}
+      onMouseLeave={e => { e.currentTarget.style.background = '#EDE9FF'; e.currentTarget.style.borderColor = P_B }}
+    >
+      ✏ {name}
+    </button>
+  )
+}
+
 // ─── Inline stream name editor (used inside stream header row) ────────────────
 function StreamNameInput({ initial, onCommit, onCancel }: {
   initial: string
@@ -500,7 +586,7 @@ export function ClassesPanel({ sections, setSections, onScopeClick }: {
     })
   }
 
-  // Rename a stream: update sec.stream on every section in that grade+stream group
+  // Rename within one grade (used by inline header edit)
   function renameStream(grade: string, oldStream: string, newName: string) {
     const trimmed = newName.trim()
     if (!trimmed || trimmed === oldStream) { setEditingStreamKey(null); return }
@@ -511,8 +597,22 @@ export function ClassesPanel({ sections, setSections, onScopeClick }: {
       const st = sec.stream ?? getStreamFromName(s.name, g) ?? ''
       if (g === grade && st === oldStream) return { ...s, stream: trimmed } as Section
       return s
-    }))
+    }) as Section[])
     setEditingStreamKey(null)
+  }
+
+  // Rename across ALL grades (used by the StreamsBar at the top)
+  function renameStreamGlobal(oldStream: string, newName: string) {
+    const trimmed = newName.trim()
+    if (!trimmed || trimmed === oldStream) return
+    undoHistory.push(sections)
+    setSections(sections.map(s => {
+      const sec = s as SectionExt
+      const g = sec.grade ?? getGrade(s.name)
+      const st = sec.stream ?? getStreamFromName(s.name, g) ?? ''
+      if (st === oldStream) return { ...s, stream: trimmed } as Section
+      return s
+    }) as Section[])
   }
 
   // grouped: grade → stream ('' if none) → sections
@@ -657,6 +757,11 @@ export function ClassesPanel({ sections, setSections, onScopeClick }: {
           onImport={handleImport}
           onClose={() => setImportOpen(false)}
         />
+      )}
+
+      {/* Streams bar — rename abbreviated stream names to full names */}
+      {existingStreams.length > 0 && (
+        <StreamsBar streams={existingStreams} onRename={renameStreamGlobal} />
       )}
 
       {/* Table */}
