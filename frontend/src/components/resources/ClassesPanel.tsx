@@ -35,6 +35,17 @@ function getGrade(name: string): string {
   return t
 }
 
+// Returns the stream token between grade and section, or null if none.
+// e.g. "XI-Sci-A" with grade "XI" → "Sci"; "IX-A" with grade "IX" → null
+function getStream(name: string, grade: string): string | null {
+  const t = name.trim()
+  const prefix = grade + '-'
+  const withoutGrade = t.startsWith(prefix) ? t.slice(prefix.length) : t
+  const parts = withoutGrade.split('-')
+  if (parts.length >= 2) return parts.slice(0, -1).join('-')
+  return null
+}
+
 const GRADE_ORDER = ['Nursery','LKG','UKG','I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII']
 function gradeKey(g: string) { const i = GRADE_ORDER.indexOf(g); return i >= 0 ? i : 100 + g.charCodeAt(0) }
 
@@ -279,25 +290,51 @@ export function ClassesPanel({ sections, setSections, onScopeClick }: {
   }
 
   const [sortAZ, setSortAZ] = useState(false)
+  const [collapsedGrades, setCollapsedGrades] = useState<Set<string>>(new Set())
+  const [collapsedStreams, setCollapsedStreams] = useState<Set<string>>(new Set())
 
+  function toggleGrade(grade: string) {
+    setCollapsedGrades(prev => {
+      const next = new Set(prev)
+      if (next.has(grade)) next.delete(grade); else next.add(grade)
+      return next
+    })
+  }
+  function toggleStream(grade: string, stream: string) {
+    const key = `${grade}:${stream}`
+    setCollapsedStreams(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key); else next.add(key)
+      return next
+    })
+  }
+
+  // grouped: grade → stream ('' if none) → sections
   const grouped = useMemo(() => {
     const q = search.toLowerCase()
     const filtered = sections.filter(s => !q || s.name.toLowerCase().includes(q))
-    const map = new Map<string, SectionExt[]>()
+    const map = new Map<string, Map<string, SectionExt[]>>()
     filtered.forEach(s => {
-      const g = (s as SectionExt).grade ?? getGrade(s.name)
-      if (!map.has(g)) map.set(g, [])
-      map.get(g)!.push(s as SectionExt)
+      const sec = s as SectionExt
+      const grade = sec.grade ?? getGrade(s.name)
+      const stream = getStream(s.name, grade) ?? ''
+      if (!map.has(grade)) map.set(grade, new Map())
+      const sm = map.get(grade)!
+      if (!sm.has(stream)) sm.set(stream, [])
+      sm.get(stream)!.push(sec)
     })
     const sorted = new Map([...map.entries()].sort((a, b) => gradeKey(a[0]) - gradeKey(b[0])))
     if (sortAZ) {
-      sorted.forEach((vals, key) => sorted.set(key, [...vals].sort((a, b) => a.name.localeCompare(b.name))))
+      sorted.forEach(sm => {
+        sm.forEach((secs, stream) => sm.set(stream, [...secs].sort((a, b) => a.name.localeCompare(b.name))))
+      })
     }
     return sorted
   }, [sections, search, sortAZ])
 
   const filteredCount = useMemo(() =>
-    Array.from(grouped.values()).reduce((a, b) => a + b.length, 0),
+    Array.from(grouped.values()).reduce((a, sm) =>
+      a + Array.from(sm.values()).reduce((b, secs) => b + secs.length, 0), 0),
     [grouped]
   )
 
@@ -438,34 +475,81 @@ export function ClassesPanel({ sections, setSections, onScopeClick }: {
               </tr>
             </thead>
             <tbody>
-              {Array.from(grouped.entries()).map(([grade, secs]) => (
-                <React.Fragment key={grade}>
-                  <tr>
-                    <td colSpan={3} style={{
-                      padding: '3px 10px',
-                      fontSize: 9.5, fontWeight: 800, letterSpacing: '0.07em', textTransform: 'uppercase',
-                      color: P_D, background: 'linear-gradient(90deg, #EDE9FF 0%, #F7F5FF 60%, #FAFAFE 100%)',
-                      borderBottom: '1px solid #E4E0FF', borderTop: '1.5px solid #E4E0FF',
-                    }}>
-                      Grade {grade}
-                      <span style={{ color: '#B0ABCC', fontWeight: 500, fontSize: 9.5, textTransform: 'none', marginLeft: 6 }}>
-                        · {secs.length} section{secs.length !== 1 ? 's' : ''}
-                      </span>
-                    </td>
-                  </tr>
-                  {secs.map(sec => (
-                    <SectionRow
-                      key={sec.id}
-                      sec={sec}
-                      onUpdate={p => update(sec.id, p)}
-                      onDelete={() => remove(sec.id)}
-                      onScopeClick={onScopeClick
-                        ? (s, rect) => onScopeClick(s as Section, rect)
-                        : undefined}
-                    />
-                  ))}
-                </React.Fragment>
-              ))}
+              {Array.from(grouped.entries()).map(([grade, streamMap]) => {
+                const hasStreams = Array.from(streamMap.keys()).some(k => k !== '')
+                const totalSecs = Array.from(streamMap.values()).reduce((a, s) => a + s.length, 0)
+                const gradeCollapsed = collapsedGrades.has(grade)
+                return (
+                  <React.Fragment key={grade}>
+                    {/* ── Grade row ── */}
+                    <tr
+                      onClick={() => toggleGrade(grade)}
+                      style={{ cursor: 'pointer', userSelect: 'none' }}
+                    >
+                      <td colSpan={3} style={{
+                        padding: '4px 10px',
+                        fontSize: 9.5, fontWeight: 800, letterSpacing: '0.07em', textTransform: 'uppercase',
+                        color: P_D, background: 'linear-gradient(90deg, #EDE9FF 0%, #F7F5FF 60%, #FAFAFE 100%)',
+                        borderBottom: '1px solid #E4E0FF', borderTop: '1.5px solid #E4E0FF',
+                      }}>
+                        <span style={{ display: 'inline-block', width: 12, fontSize: 8, color: P, marginRight: 5, transition: 'transform 0.15s', transform: gradeCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)' }}>▼</span>
+                        Grade {grade}
+                        <span style={{ color: '#B0ABCC', fontWeight: 500, fontSize: 9.5, textTransform: 'none', marginLeft: 6 }}>
+                          · {totalSecs} section{totalSecs !== 1 ? 's' : ''}
+                          {hasStreams && <> · {streamMap.size} stream{streamMap.size !== 1 ? 's' : ''}</>}
+                        </span>
+                      </td>
+                    </tr>
+
+                    {!gradeCollapsed && Array.from(streamMap.entries()).map(([stream, secs]) => {
+                      if (!hasStreams) {
+                        // No streams for this grade — render sections directly
+                        return secs.map(sec => (
+                          <SectionRow
+                            key={sec.id} sec={sec}
+                            onUpdate={p => update(sec.id, p)}
+                            onDelete={() => remove(sec.id)}
+                            onScopeClick={onScopeClick ? (s, rect) => onScopeClick(s as Section, rect) : undefined}
+                          />
+                        ))
+                      }
+
+                      const streamKey = `${grade}:${stream}`
+                      const streamCollapsed = collapsedStreams.has(streamKey)
+                      return (
+                        <React.Fragment key={stream}>
+                          {/* ── Stream row ── */}
+                          <tr
+                            onClick={() => toggleStream(grade, stream)}
+                            style={{ cursor: 'pointer', userSelect: 'none' }}
+                          >
+                            <td colSpan={3} style={{
+                              padding: '3px 10px 3px 26px',
+                              fontSize: 9, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase',
+                              color: '#8B87AD', background: '#F4F2FF',
+                              borderBottom: '1px solid #EAE6FF',
+                            }}>
+                              <span style={{ display: 'inline-block', width: 10, fontSize: 7, color: '#A8A3CC', marginRight: 5, transition: 'transform 0.15s', transform: streamCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)' }}>▼</span>
+                              {stream}
+                              <span style={{ color: '#C0BBDD', fontWeight: 500, fontSize: 9, textTransform: 'none', marginLeft: 5 }}>
+                                · {secs.length} class{secs.length !== 1 ? 'es' : ''}
+                              </span>
+                            </td>
+                          </tr>
+                          {!streamCollapsed && secs.map(sec => (
+                            <SectionRow
+                              key={sec.id} sec={sec}
+                              onUpdate={p => update(sec.id, p)}
+                              onDelete={() => remove(sec.id)}
+                              onScopeClick={onScopeClick ? (s, rect) => onScopeClick(s as Section, rect) : undefined}
+                            />
+                          ))}
+                        </React.Fragment>
+                      )
+                    })}
+                  </React.Fragment>
+                )
+              })}
               {grouped.size === 0 && search && (
                 <tr>
                   <td colSpan={3} style={{ ...TD, textAlign: 'center', color: '#C4C0DC', padding: '18px 10px' }}>
