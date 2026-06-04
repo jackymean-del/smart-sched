@@ -177,18 +177,20 @@ const STATUS_META = {
 type TTStatus = 'active' | 'draft' | 'archived'
 
 interface TTEntry {
-  id:             string
-  name:           string
-  status:         TTStatus
-  wizardStep:     number    // 0 = just named, 1–5 = wizard step reached
-  approxClasses:  number
-  approxTeachers: number
-  board:          string
-  startDate:      string
-  endDate:        string
-  createdAt:      number
-  fromGrade?:     string
-  toGrade?:       string
+  id:              string
+  name:            string
+  status:          TTStatus
+  wizardStep:      number    // 0 = just named, 1–5 = wizard step reached
+  approxClasses:   number
+  approxTeachers:  number
+  approxSubjects?: number
+  approxRooms?:    number
+  board:           string
+  startDate:       string
+  endDate:         string
+  createdAt:       number
+  fromGrade?:      string
+  toGrade?:        string
 }
 
 const WIZARD_STEP_LABELS: Record<number, string> = {
@@ -334,16 +336,18 @@ function CreateTimetableModal({
 
   const handleOpen = () => {
     const entry: TTEntry = {
-      id:             Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-      name:           name.trim() || 'Untitled Timetable',
-      status:         'draft',
-      wizardStep:     0,
-      approxClasses:  classes,
-      approxTeachers: teachers,
+      id:              Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      name:            name.trim() || 'Untitled Timetable',
+      status:          'draft',
+      wizardStep:      0,
+      approxClasses:   classes,
+      approxTeachers:  teachers,
+      approxSubjects:  subjects,
+      approxRooms:     rooms,
       board,
       startDate,
       endDate,
-      createdAt:      Date.now(),
+      createdAt:       Date.now(),
       fromGrade,
       toGrade,
     }
@@ -634,16 +638,22 @@ function EditTimetableModal({
   onClose: () => void
   onSave: (updated: TTEntry) => void
 }) {
+  const BOARDS: BoardKey[] = ['CBSE', 'ICSE', 'IB', 'State', 'Custom']
+
   const [name,      setName]      = useState(tt.name)
   const [startDate, setStartDate] = useState(tt.startDate)
   const [endDate,   setEndDate]   = useState(tt.endDate)
   const [board,     setBoard]     = useState<BoardKey>((tt.board as BoardKey) ?? 'CBSE')
-  const [fromGrade, setFromGrade] = useState(tt.fromGrade ?? 'Nursery')
-  const [toGrade,   setToGrade]   = useState(tt.toGrade ?? 'Class XII')
+  // Use '' as the "not yet set" sentinel — shows a blank "— select —" option
+  const [fromGrade, setFromGrade] = useState(tt.fromGrade ?? '')
+  const [toGrade,   setToGrade]   = useState(tt.toGrade   ?? '')
   const [classes,   setClasses]   = useState(tt.approxClasses)
+  const [subjects,  setSubjects]  = useState(tt.approxSubjects  ?? BOARD_SUBJECTS[(tt.board as BoardKey) ?? 'CBSE'])
   const [teachers,  setTeachers]  = useState(tt.approxTeachers)
+  const [rooms,     setRooms]     = useState(tt.approxRooms ?? 60)
 
-  const BOARDS: BoardKey[] = ['CBSE', 'ICSE', 'IB', 'State', 'Custom']
+  // Keep subjects in sync when board changes
+  const handleBoard = (b: BoardKey) => { setBoard(b); setSubjects(BOARD_SUBJECTS[b]) }
 
   const fmt = (iso: string) => {
     const d = new Date(iso + 'T00:00:00')
@@ -653,15 +663,33 @@ function EditTimetableModal({
   const handleSave = () => {
     onSave({
       ...tt,
-      name:           name.trim() || tt.name,
+      name:            name.trim() || tt.name,
       startDate,
       endDate,
       board,
-      fromGrade,
-      toGrade,
-      approxClasses:  classes,
-      approxTeachers: teachers,
+      fromGrade:       fromGrade  || undefined,
+      toGrade:         toGrade    || undefined,
+      approxClasses:   classes,
+      approxSubjects:  subjects,
+      approxTeachers:  teachers,
+      approxRooms:     rooms,
     })
+  }
+
+  const selectStyle: React.CSSProperties = {
+    width: '100%', padding: '9px 12px',
+    border: '1px solid #D1D5DB', borderRadius: 7,
+    fontSize: 14, fontFamily: 'inherit', color: '#13111E',
+    background: '#fff', outline: 'none', cursor: 'pointer',
+    appearance: 'auto',
+  }
+  const numInp: React.CSSProperties = {
+    width: '100%', padding: '8px 10px',
+    border: '1px solid #E5E7EB', borderRadius: 7,
+    fontSize: 20, fontWeight: 700,
+    fontFamily: 'DM Mono, monospace',
+    textAlign: 'center', color: '#13111E',
+    background: '#fff', outline: 'none', boxSizing: 'border-box',
   }
 
   return (
@@ -689,9 +717,7 @@ function EditTimetableModal({
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
               <Pencil size={16} color="#7C6FE0" />
-              <h2 style={{ fontSize: 17, fontWeight: 700, color: '#13111E', margin: 0 }}>
-                Edit timetable
-              </h2>
+              <h2 style={{ fontSize: 17, fontWeight: 700, color: '#13111E', margin: 0 }}>Edit timetable</h2>
             </div>
             <p style={{ fontSize: 13, color: '#6B7280', margin: 0 }}>
               Update the basic setup for <strong>{tt.name}</strong>
@@ -700,28 +726,21 @@ function EditTimetableModal({
           <button onClick={onClose} style={{
             width: 28, height: 28, borderRadius: 6, border: 'none',
             background: 'none', cursor: 'pointer', color: '#9CA3AF',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            flexShrink: 0, marginLeft: 12,
-          }}>
-            <X size={16} />
-          </button>
+            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: 12,
+          }}><X size={16} /></button>
         </div>
 
         {/* Name */}
         <div style={{ marginBottom: 16 }}>
           <label style={lbl}>Timetable name <span style={{ color: '#EF4444' }}>*</span></label>
           <input
-            className="ct-input"
-            type="text"
-            value={name}
-            onChange={e => setName(e.target.value)}
-            placeholder="e.g. AY 2025–26 · Main Timetable"
-            autoFocus
+            type="text" value={name} onChange={e => setName(e.target.value)}
+            placeholder="e.g. AY 2025–26 · Main Timetable" autoFocus
             style={{
-              width: '100%', padding: '9px 12px',
-              border: '1px solid #D1D5DB', borderRadius: 7,
+              width: '100%', padding: '9px 12px', border: '1px solid #D1D5DB', borderRadius: 7,
               fontSize: 14, fontFamily: 'inherit', color: '#13111E',
               background: '#fff', outline: 'none', boxSizing: 'border-box',
+              transition: 'border-color 0.15s, box-shadow 0.15s',
             }}
             onFocus={e => { e.currentTarget.style.borderColor = '#7C6FE0'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(124,111,224,0.12)' }}
             onBlur={e => { e.currentTarget.style.borderColor = '#D1D5DB'; e.currentTarget.style.boxShadow = 'none' }}
@@ -736,17 +755,10 @@ function EditTimetableModal({
           ] as const).map(f => (
             <div key={f.label}>
               <label style={lbl}>{f.label} <span style={{ color: '#EF4444' }}>*</span></label>
-              <input
-                type="date" value={f.val}
-                onChange={e => f.set(e.target.value)}
-                style={{
-                  width: '100%', padding: '9px 12px',
-                  border: '1px solid #D1D5DB', borderRadius: 7,
-                  fontSize: 14, fontFamily: 'inherit', color: '#13111E',
-                  background: '#fff', outline: 'none', boxSizing: 'border-box',
-                }}
-                onFocus={e => { e.currentTarget.style.borderColor = '#7C6FE0' }}
-                onBlur={e => { e.currentTarget.style.borderColor = '#D1D5DB' }}
+              <input type="date" value={f.val} onChange={e => f.set(e.target.value)}
+                style={{ width: '100%', padding: '9px 12px', border: '1px solid #D1D5DB', borderRadius: 7, fontSize: 14, fontFamily: 'inherit', color: '#13111E', background: '#fff', outline: 'none', boxSizing: 'border-box' }}
+                onFocus={e => (e.currentTarget.style.borderColor = '#7C6FE0')}
+                onBlur={e => (e.currentTarget.style.borderColor = '#D1D5DB')}
               />
               <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 4 }}>{fmt(f.val)}</div>
             </div>
@@ -758,17 +770,13 @@ function EditTimetableModal({
           <label style={lbl}>Board <span style={{ color: '#EF4444' }}>*</span></label>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             {BOARDS.map(b => (
-              <button key={b} onClick={() => setBoard(b)} style={{
-                padding: '6px 14px', borderRadius: 6,
-                fontSize: 13, fontWeight: 500, cursor: 'pointer',
-                fontFamily: 'inherit',
+              <button key={b} onClick={() => handleBoard(b)} style={{
+                padding: '6px 14px', borderRadius: 6, fontSize: 13, fontWeight: 500,
+                cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.13s',
                 background: board === b ? '#059669' : '#fff',
-                color:      board === b ? '#fff' : '#374151',
+                color:      board === b ? '#fff'    : '#374151',
                 border:     board === b ? '1.5px solid #059669' : '1.5px solid #D1D5DB',
-                transition: 'all 0.13s',
-              }}>
-                {b}
-              </button>
+              }}>{b}</button>
             ))}
           </div>
         </div>
@@ -783,47 +791,41 @@ function EditTimetableModal({
             ] as const).map(f => (
               <div key={f.label}>
                 <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 4 }}>{f.label}</div>
-                <select value={f.val} onChange={e => f.set(e.target.value)} style={{
-                  width: '100%', padding: '9px 12px',
-                  border: '1px solid #D1D5DB', borderRadius: 7,
-                  fontSize: 14, fontFamily: 'inherit', color: '#13111E',
-                  background: '#fff', outline: 'none', cursor: 'pointer',
-                }}>
+                <select value={f.val} onChange={e => f.set(e.target.value)} style={selectStyle}>
+                  <option value="">— select —</option>
                   {GRADES.map(g => <option key={g} value={g}>{g}</option>)}
                 </select>
               </div>
             ))}
           </div>
+          {(!fromGrade || !toGrade) && (
+            <p style={{ fontSize: 11.5, color: '#F59E0B', marginTop: 6, fontWeight: 500 }}>
+              ⚠ Please set both grade boundaries.
+            </p>
+          )}
         </div>
 
-        {/* Approximate counts */}
+        {/* Approximate counts — all 4 */}
         <div style={{ marginBottom: 20 }}>
           <label style={{ ...lbl, marginBottom: 8 }}>
             Approximate counts
-            <span style={{ fontSize: 12, fontWeight: 400, color: '#9CA3AF', marginLeft: 6 }}>
-              (used as AI targets)
-            </span>
+            <span style={{ fontSize: 12, fontWeight: 400, color: '#9CA3AF', marginLeft: 6 }}>(AI targets)</span>
           </label>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
             {([
               { label: 'Classes',  value: classes,  set: setClasses  },
+              { label: 'Subjects', value: subjects, set: setSubjects },
               { label: 'Teachers', value: teachers, set: setTeachers },
+              { label: 'Rooms',    value: rooms,    set: setRooms    },
             ] as const).map(f => (
               <div key={f.label} style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: 12, color: '#6B7280', marginBottom: 5 }}>{f.label}</div>
                 <input
                   type="number" min={1} value={f.value}
                   onChange={e => f.set(Number(e.target.value))}
-                  style={{
-                    width: '100%', padding: '8px 10px',
-                    border: '1px solid #E5E7EB', borderRadius: 7,
-                    fontSize: 20, fontWeight: 700,
-                    fontFamily: 'DM Mono, monospace',
-                    textAlign: 'center', color: '#13111E',
-                    background: '#fff', outline: 'none', boxSizing: 'border-box',
-                  }}
-                  onFocus={e => { e.currentTarget.style.borderColor = '#7C6FE0' }}
-                  onBlur={e => { e.currentTarget.style.borderColor = '#E5E7EB' }}
+                  style={numInp}
+                  onFocus={e => (e.currentTarget.style.borderColor = '#7C6FE0')}
+                  onBlur={e => (e.currentTarget.style.borderColor = '#E5E7EB')}
                 />
               </div>
             ))}
@@ -831,34 +833,24 @@ function EditTimetableModal({
         </div>
 
         {/* Footer */}
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
-          gap: 10, paddingTop: 16, borderTop: '1px solid #F3F4F6',
-        }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10, paddingTop: 16, borderTop: '1px solid #F3F4F6' }}>
           <button onClick={onClose} style={{
-            padding: '9px 20px', borderRadius: 8,
-            border: '1.5px solid #D1D5DB', background: '#fff',
-            fontSize: 14, fontWeight: 600, color: '#374151',
+            padding: '9px 20px', borderRadius: 8, border: '1.5px solid #D1D5DB',
+            background: '#fff', fontSize: 14, fontWeight: 600, color: '#374151',
             cursor: 'pointer', fontFamily: 'inherit',
           }}
             onMouseEnter={e => { e.currentTarget.style.background = '#F9FAFB'; e.currentTarget.style.borderColor = '#9CA3AF' }}
             onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#D1D5DB' }}
-          >
-            Cancel
-          </button>
+          >Cancel</button>
           <button onClick={handleSave} style={{
-            padding: '9px 22px', borderRadius: 8,
-            border: 'none', background: '#7C6FE0',
-            fontSize: 14, fontWeight: 700, color: '#fff',
-            cursor: 'pointer', fontFamily: 'inherit',
+            padding: '9px 22px', borderRadius: 8, border: 'none', background: '#7C6FE0',
+            fontSize: 14, fontWeight: 700, color: '#fff', cursor: 'pointer', fontFamily: 'inherit',
             display: 'inline-flex', alignItems: 'center', gap: 7,
             boxShadow: '0 2px 10px rgba(124,111,224,0.3)',
           }}
             onMouseEnter={e => (e.currentTarget.style.background = '#6358C4')}
             onMouseLeave={e => (e.currentTarget.style.background = '#7C6FE0')}
-          >
-            Save changes
-          </button>
+          >Save changes</button>
         </div>
 
       </div>
