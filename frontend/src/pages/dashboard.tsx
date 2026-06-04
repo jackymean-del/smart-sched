@@ -19,7 +19,7 @@ import {
   LifeBuoy, BookOpen, Video,
   Bell, Plus, Sparkles, MoreHorizontal,
   ChevronRight, ArrowRight, ChevronLeft,
-  Zap, X, Trash2,
+  Zap, X, Trash2, Pencil,
 } from 'lucide-react'
 
 // ── helpers ────────────────────────────────────────────────────
@@ -193,8 +193,8 @@ interface TTEntry {
 
 const WIZARD_STEP_LABELS: Record<number, string> = {
   0: 'Named',
-  1: 'Shift & timing',
-  2: 'Resources',
+  1: 'Resources',
+  2: 'Shift & timing',
   3: 'Allocation',
   4: 'Student groups',
   5: 'Complete',
@@ -625,6 +625,248 @@ const lbl: React.CSSProperties = {
 }
 
 // ══════════════════════════════════════════════════════════════
+//  EditTimetableModal — edit step-0 metadata of an existing TT
+// ══════════════════════════════════════════════════════════════
+function EditTimetableModal({
+  tt, onClose, onSave,
+}: {
+  tt: TTEntry
+  onClose: () => void
+  onSave: (updated: TTEntry) => void
+}) {
+  const [name,      setName]      = useState(tt.name)
+  const [startDate, setStartDate] = useState(tt.startDate)
+  const [endDate,   setEndDate]   = useState(tt.endDate)
+  const [board,     setBoard]     = useState<BoardKey>((tt.board as BoardKey) ?? 'CBSE')
+  const [fromGrade, setFromGrade] = useState(tt.fromGrade ?? 'Nursery')
+  const [toGrade,   setToGrade]   = useState(tt.toGrade ?? 'Class XII')
+  const [classes,   setClasses]   = useState(tt.approxClasses)
+  const [teachers,  setTeachers]  = useState(tt.approxTeachers)
+
+  const BOARDS: BoardKey[] = ['CBSE', 'ICSE', 'IB', 'State', 'Custom']
+
+  const fmt = (iso: string) => {
+    const d = new Date(iso + 'T00:00:00')
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+  }
+
+  const handleSave = () => {
+    onSave({
+      ...tt,
+      name:           name.trim() || tt.name,
+      startDate,
+      endDate,
+      board,
+      fromGrade,
+      toGrade,
+      approxClasses:  classes,
+      approxTeachers: teachers,
+    })
+  }
+
+  return (
+    <div
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 1000,
+        background: 'rgba(0,0,0,0.45)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: 16,
+        fontFamily: "'Inter', -apple-system, sans-serif",
+      }}
+    >
+      <div style={{
+        background: '#fff', borderRadius: 14,
+        border: '1px solid #E5E7EB',
+        boxShadow: '0 20px 60px rgba(0,0,0,0.18)',
+        width: '100%', maxWidth: 520,
+        maxHeight: '92vh', overflowY: 'auto',
+        padding: '28px 28px 24px',
+      }}>
+
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20 }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <Pencil size={16} color="#7C6FE0" />
+              <h2 style={{ fontSize: 17, fontWeight: 700, color: '#13111E', margin: 0 }}>
+                Edit timetable
+              </h2>
+            </div>
+            <p style={{ fontSize: 13, color: '#6B7280', margin: 0 }}>
+              Update the basic setup for <strong>{tt.name}</strong>
+            </p>
+          </div>
+          <button onClick={onClose} style={{
+            width: 28, height: 28, borderRadius: 6, border: 'none',
+            background: 'none', cursor: 'pointer', color: '#9CA3AF',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            flexShrink: 0, marginLeft: 12,
+          }}>
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Name */}
+        <div style={{ marginBottom: 16 }}>
+          <label style={lbl}>Timetable name <span style={{ color: '#EF4444' }}>*</span></label>
+          <input
+            className="ct-input"
+            type="text"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            placeholder="e.g. AY 2025–26 · Main Timetable"
+            autoFocus
+            style={{
+              width: '100%', padding: '9px 12px',
+              border: '1px solid #D1D5DB', borderRadius: 7,
+              fontSize: 14, fontFamily: 'inherit', color: '#13111E',
+              background: '#fff', outline: 'none', boxSizing: 'border-box',
+            }}
+            onFocus={e => { e.currentTarget.style.borderColor = '#7C6FE0'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(124,111,224,0.12)' }}
+            onBlur={e => { e.currentTarget.style.borderColor = '#D1D5DB'; e.currentTarget.style.boxShadow = 'none' }}
+          />
+        </div>
+
+        {/* Dates */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 16 }}>
+          {([
+            { label: 'Start date', val: startDate, set: setStartDate },
+            { label: 'End date',   val: endDate,   set: setEndDate   },
+          ] as const).map(f => (
+            <div key={f.label}>
+              <label style={lbl}>{f.label} <span style={{ color: '#EF4444' }}>*</span></label>
+              <input
+                type="date" value={f.val}
+                onChange={e => f.set(e.target.value)}
+                style={{
+                  width: '100%', padding: '9px 12px',
+                  border: '1px solid #D1D5DB', borderRadius: 7,
+                  fontSize: 14, fontFamily: 'inherit', color: '#13111E',
+                  background: '#fff', outline: 'none', boxSizing: 'border-box',
+                }}
+                onFocus={e => { e.currentTarget.style.borderColor = '#7C6FE0' }}
+                onBlur={e => { e.currentTarget.style.borderColor = '#D1D5DB' }}
+              />
+              <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 4 }}>{fmt(f.val)}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Board */}
+        <div style={{ marginBottom: 16 }}>
+          <label style={lbl}>Board <span style={{ color: '#EF4444' }}>*</span></label>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {BOARDS.map(b => (
+              <button key={b} onClick={() => setBoard(b)} style={{
+                padding: '6px 14px', borderRadius: 6,
+                fontSize: 13, fontWeight: 500, cursor: 'pointer',
+                fontFamily: 'inherit',
+                background: board === b ? '#059669' : '#fff',
+                color:      board === b ? '#fff' : '#374151',
+                border:     board === b ? '1.5px solid #059669' : '1.5px solid #D1D5DB',
+                transition: 'all 0.13s',
+              }}>
+                {b}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Class range */}
+        <div style={{ marginBottom: 16 }}>
+          <label style={lbl}>Class range <span style={{ color: '#EF4444' }}>*</span></label>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            {([
+              { label: 'From', val: fromGrade, set: setFromGrade },
+              { label: 'To',   val: toGrade,   set: setToGrade   },
+            ] as const).map(f => (
+              <div key={f.label}>
+                <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 4 }}>{f.label}</div>
+                <select value={f.val} onChange={e => f.set(e.target.value)} style={{
+                  width: '100%', padding: '9px 12px',
+                  border: '1px solid #D1D5DB', borderRadius: 7,
+                  fontSize: 14, fontFamily: 'inherit', color: '#13111E',
+                  background: '#fff', outline: 'none', cursor: 'pointer',
+                }}>
+                  {GRADES.map(g => <option key={g} value={g}>{g}</option>)}
+                </select>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Approximate counts */}
+        <div style={{ marginBottom: 20 }}>
+          <label style={{ ...lbl, marginBottom: 8 }}>
+            Approximate counts
+            <span style={{ fontSize: 12, fontWeight: 400, color: '#9CA3AF', marginLeft: 6 }}>
+              (used as AI targets)
+            </span>
+          </label>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            {([
+              { label: 'Classes',  value: classes,  set: setClasses  },
+              { label: 'Teachers', value: teachers, set: setTeachers },
+            ] as const).map(f => (
+              <div key={f.label} style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 12, color: '#6B7280', marginBottom: 5 }}>{f.label}</div>
+                <input
+                  type="number" min={1} value={f.value}
+                  onChange={e => f.set(Number(e.target.value))}
+                  style={{
+                    width: '100%', padding: '8px 10px',
+                    border: '1px solid #E5E7EB', borderRadius: 7,
+                    fontSize: 20, fontWeight: 700,
+                    fontFamily: 'DM Mono, monospace',
+                    textAlign: 'center', color: '#13111E',
+                    background: '#fff', outline: 'none', boxSizing: 'border-box',
+                  }}
+                  onFocus={e => { e.currentTarget.style.borderColor = '#7C6FE0' }}
+                  onBlur={e => { e.currentTarget.style.borderColor = '#E5E7EB' }}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
+          gap: 10, paddingTop: 16, borderTop: '1px solid #F3F4F6',
+        }}>
+          <button onClick={onClose} style={{
+            padding: '9px 20px', borderRadius: 8,
+            border: '1.5px solid #D1D5DB', background: '#fff',
+            fontSize: 14, fontWeight: 600, color: '#374151',
+            cursor: 'pointer', fontFamily: 'inherit',
+          }}
+            onMouseEnter={e => { e.currentTarget.style.background = '#F9FAFB'; e.currentTarget.style.borderColor = '#9CA3AF' }}
+            onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#D1D5DB' }}
+          >
+            Cancel
+          </button>
+          <button onClick={handleSave} style={{
+            padding: '9px 22px', borderRadius: 8,
+            border: 'none', background: '#7C6FE0',
+            fontSize: 14, fontWeight: 700, color: '#fff',
+            cursor: 'pointer', fontFamily: 'inherit',
+            display: 'inline-flex', alignItems: 'center', gap: 7,
+            boxShadow: '0 2px 10px rgba(124,111,224,0.3)',
+          }}
+            onMouseEnter={e => (e.currentTarget.style.background = '#6358C4')}
+            onMouseLeave={e => (e.currentTarget.style.background = '#7C6FE0')}
+          >
+            Save changes
+          </button>
+        </div>
+
+      </div>
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════
 //  DashboardPage
 // ══════════════════════════════════════════════════════════════
 export function DashboardPage() {
@@ -638,6 +880,7 @@ export function DashboardPage() {
   const [showCreate,    setShowCreate]    = useState(false)
   const [ttList,        setTTList]        = useState<TTEntry[]>(loadTTList)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+  const [editingTT,     setEditingTT]     = useState<TTEntry | null>(null)
 
   // On dashboard load: auto-save a snapshot of the current timetable so that
   // if the user navigated away from the wizard (sidebar / back button), their
@@ -732,6 +975,17 @@ export function DashboardPage() {
     saveTTList(next)
     if (getActiveTTId() === id) setActiveTTId(null)
     setConfirmDelete(null)
+  }
+
+  const handleSaveEdit = (updated: TTEntry) => {
+    const next = ttList.map(t => t.id === updated.id ? updated : t)
+    setTTList(next)
+    saveTTList(next)
+    // If this is the active timetable, sync the name into the store too
+    if (getActiveTTId() === updated.id) {
+      useTimetableStore.setState({ config: { ...useTimetableStore.getState().config, name: updated.name } } as any)
+    }
+    setEditingTT(null)
   }
 
   if (!user) { window.location.href = '/login'; return null }
@@ -1223,6 +1477,22 @@ export function DashboardPage() {
                       </TtBtn>
                     )}
 
+                    {/* Edit button — all rows */}
+                    <button
+                      onClick={() => setEditingTT(tt)}
+                      title="Edit timetable settings"
+                      style={{
+                        width: 28, height: 28, borderRadius: 6, flexShrink: 0,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        background: 'transparent', border: '1px solid transparent',
+                        cursor: 'pointer', color: '#D1D5DB', transition: 'all 0.13s',
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.color = '#7C6FE0'; e.currentTarget.style.borderColor = '#C4B5FD'; e.currentTarget.style.background = '#F5F3FF' }}
+                      onMouseLeave={e => { e.currentTarget.style.color = '#D1D5DB'; e.currentTarget.style.borderColor = 'transparent'; e.currentTarget.style.background = 'transparent' }}
+                    >
+                      <Pencil size={13} />
+                    </button>
+
                     {/* Delete button — all rows */}
                     <button
                       onClick={() => setConfirmDelete(confirmDelete === tt.id ? null : tt.id)}
@@ -1284,6 +1554,15 @@ export function DashboardPage() {
         <CreateTimetableModal
           onClose={() => setShowCreate(false)}
           onOpenWizard={handleTTCreated}
+        />
+      )}
+
+      {/* ══ Edit Timetable Modal ══ */}
+      {editingTT && (
+        <EditTimetableModal
+          tt={editingTT}
+          onClose={() => setEditingTT(null)}
+          onSave={handleSaveEdit}
         />
       )}
     </div>
