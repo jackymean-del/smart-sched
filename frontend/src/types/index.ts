@@ -1096,6 +1096,7 @@ export const SectionSchema = z.object({
   name: z.string().min(1),
   room: z.string(),
   grade: z.string(),
+  stream: z.string().optional(),         // full stream name, e.g. "Science", "Spark"
   classTeacher: z.string().optional().default(''),
   shiftId: z.string().optional(),
   scope: ScopeMatrixSchema.optional(),   // schedU Scope System

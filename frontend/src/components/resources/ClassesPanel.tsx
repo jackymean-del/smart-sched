@@ -16,7 +16,7 @@ import {
   ResourceGlobalStyles, useUndoHistory,
 } from './shared'
 
-type SectionExt = Section & { strength?: number }
+type SectionExt = Section & { strength?: number; stream?: string }
 
 function makeId() { return Math.random().toString(36).slice(2, 9) }
 
@@ -27,17 +27,28 @@ const inp: React.CSSProperties = {
   boxSizing: 'border-box' as const, width: '100%',
 }
 
+const GRADE_ORDER = ['Nursery','LKG','UKG','I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII']
+function gradeKey(g: string) { const i = GRADE_ORDER.indexOf(g); return i >= 0 ? i : 100 + g.charCodeAt(0) }
+
+// Detect grade from a class name. Checks if the first dash-segment is a
+// known grade label or a numeric grade; everything else is stream + section.
 function getGrade(name: string): string {
   const t = name.trim()
+  const parts = t.split('-')
+  if (parts.length >= 2) {
+    const first = parts[0]
+    if (GRADE_ORDER.includes(first) || /^\d+$/.test(first)) return first
+  }
+  // Fallback: remove section suffix then strip old-style stream abbreviations
   const idx = t.lastIndexOf('-')
   if (idx > 0 && t.slice(idx + 1).length <= 3)
     return t.slice(0, idx).replace(/-(sci|com|arts?|hum|gen|pcm|pcb)$/i, '').trim()
   return t
 }
 
-// Returns the stream token between grade and section, or null if none.
-// e.g. "XI-Sci-A" with grade "XI" → "Sci"; "IX-A" with grade "IX" → null
-function getStream(name: string, grade: string): string | null {
+// Returns the stream token embedded in an old-style name like "XI-Sci-A".
+// Used ONLY as a fallback for legacy data that has no explicit stream field.
+function getStreamFromName(name: string, grade: string): string | null {
   const t = name.trim()
   const prefix = grade + '-'
   const withoutGrade = t.startsWith(prefix) ? t.slice(prefix.length) : t
@@ -46,19 +57,18 @@ function getStream(name: string, grade: string): string | null {
   return null
 }
 
-
-const GRADE_ORDER = ['Nursery','LKG','UKG','I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII']
-function gradeKey(g: string) { const i = GRADE_ORDER.indexOf(g); return i >= 0 ? i : 100 + g.charCodeAt(0) }
-
 // ─── BulkCreate popover ────────────────────────────────────────────────────────
-function BulkCreatePopover({ onClose, onCreate }: {
+function BulkCreatePopover({ onClose, onCreate, existingStreams }: {
   onClose: () => void
   onCreate: (sections: SectionExt[]) => void
+  existingStreams: string[]
 }) {
-  const [grade, setGrade] = useState('')
-  const [secs, setSecs]   = useState('A, B, C, D')
-  const [str, setStr]     = useState(40)
+  const [grade,  setGrade]  = useState('')
+  const [stream, setStream] = useState('')
+  const [secs,   setSecs]   = useState('A, B, C, D')
+  const [str,    setStr]    = useState(40)
   const ref = useRef<HTMLDivElement>(null)
+  const streamId = useRef('bulk-stream-list-' + makeId()).current
 
   useEffect(() => {
     const h = (e: MouseEvent) => {
@@ -68,65 +78,106 @@ function BulkCreatePopover({ onClose, onCreate }: {
     return () => document.removeEventListener('mousedown', h)
   }, [onClose])
 
-  const tokens  = secs.split(',').map(s => s.trim().toUpperCase()).filter(Boolean)
-  const preview = grade.trim() ? tokens.map(s => `${grade.trim()}-${s}`) : []
-  const canCreate = grade.trim() !== '' && tokens.length > 0
+  const g = grade.trim()
+  const s = stream.trim()
+  const tokens  = secs.split(',').map(t => t.trim().toUpperCase()).filter(Boolean)
+  const preview = g ? tokens.map(t => `${g}-${t}`) : []
+  const canCreate = g !== '' && tokens.length > 0
 
   function create() {
     if (!canCreate) return
-    onCreate(tokens.map(s => ({
-      id: makeId(), name: `${grade.trim()}-${s}`, grade: grade.trim(),
+    onCreate(tokens.map(t => ({
+      id: makeId(),
+      name: `${g}-${t}`,
+      grade: g,
+      stream: s || undefined,
       room: '', classTeacher: '', strength: str,
     } as SectionExt)))
     onClose()
   }
 
+  const label: React.CSSProperties = {
+    display: 'flex', flexDirection: 'column', gap: 5,
+    fontSize: 11, color: '#6B6891', fontWeight: 600,
+  }
+
   return (
     <div ref={ref} style={{
-      position: 'absolute', top: 'calc(100% + 6px)', right: 0, width: 304,
+      position: 'absolute', top: 'calc(100% + 6px)', right: 0, width: 320,
       background: '#fff', border: '1px solid #DDD8FF',
-      borderRadius: 10, boxShadow: '0 8px 28px rgba(90,80,180,0.18)',
-      zIndex: 300, padding: '16px',
+      borderRadius: 12, boxShadow: '0 10px 32px rgba(90,80,180,0.18)',
+      zIndex: 300, padding: '18px',
     }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-        <span style={{ fontSize: 12.5, fontWeight: 700, color: '#111028' }}>Bulk Create Sections</span>
-        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#C0BBD8', padding: 2, lineHeight: 1 }}>
-          <X size={13} />
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: '#111028' }}>Bulk Create Classes</span>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#C0BBD8', padding: 2 }}>
+          <X size={14} />
         </button>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 10.5, color: '#6B6891', fontWeight: 600 }}>
-          Grade *
-          <input value={grade} onChange={e => setGrade(e.target.value)} placeholder="e.g. IX" style={inp} autoFocus />
+
+      {/* Fields */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <label style={label}>
+            Grade *
+            <input value={grade} onChange={e => setGrade(e.target.value)}
+              placeholder="e.g. XI" style={inp} autoFocus />
+          </label>
+          <label style={label}>
+            Strength
+            <input type="number" value={str} onChange={e => setStr(+e.target.value)}
+              min={1} max={999} style={{ ...inp, textAlign: 'center' }} />
+          </label>
+        </div>
+
+        <label style={label}>
+          Stream <span style={{ fontWeight: 400, color: '#AAA6C8' }}>(optional)</span>
+          <input
+            value={stream} onChange={e => setStream(e.target.value)}
+            placeholder="e.g. Science, Commerce, Spark…"
+            list={streamId}
+            style={inp}
+          />
+          <datalist id={streamId}>
+            {existingStreams.map(s => <option key={s} value={s} />)}
+          </datalist>
+          {stream.trim() && (
+            <span style={{ fontSize: 10.5, color: '#9590BF', marginTop: 1 }}>
+              Classes will be grouped under <strong>{stream.trim()}</strong>
+            </span>
+          )}
         </label>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 10.5, color: '#6B6891', fontWeight: 600 }}>
-          Strength
-          <input type="number" value={str} onChange={e => setStr(+e.target.value)} min={1} max={999}
-            style={{ ...inp, textAlign: 'center' }} />
-        </label>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 10.5, color: '#6B6891', fontWeight: 600, gridColumn: 'span 2' }}>
-          Sections (comma-separated)
-          <input value={secs} onChange={e => setSecs(e.target.value)} placeholder="A, B, C, D" style={inp} />
+
+        <label style={label}>
+          Sections <span style={{ fontWeight: 400, color: '#AAA6C8' }}>(comma-separated)</span>
+          <input value={secs} onChange={e => setSecs(e.target.value)}
+            placeholder="A, B, C, D" style={inp} />
         </label>
       </div>
+
+      {/* Preview */}
       {preview.length > 0 && (
-        <div style={{ marginBottom: 12 }}>
-          <div style={{ fontSize: 9, color: '#B0ABCC', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700 }}>Preview</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+        <div style={{ marginBottom: 14, padding: '10px 12px', background: '#F7F5FF', borderRadius: 8, border: '1px solid #E8E4FF' }}>
+          <div style={{ fontSize: 10, color: '#B0ABCC', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700 }}>
+            Preview · {preview.length} class{preview.length !== 1 ? 'es' : ''}
+            {s && <span style={{ fontWeight: 500, textTransform: 'none', marginLeft: 4 }}>in <strong>{s}</strong></span>}
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
             {preview.map(p => (
-              <span key={p} style={{ background: P_L, color: P, borderRadius: 4, padding: '2px 7px', fontSize: 10.5, fontWeight: 600, border: `1px solid ${P_B}` }}>{p}</span>
+              <span key={p} style={{ background: P_L, color: P, borderRadius: 5, padding: '3px 9px', fontSize: 11, fontWeight: 600, border: `1px solid ${P_B}` }}>{p}</span>
             ))}
           </div>
         </div>
       )}
+
       <button
-        onClick={create}
-        disabled={!canCreate}
+        onClick={create} disabled={!canCreate}
         style={{
-          width: '100%', padding: '8px', borderRadius: 6,
+          width: '100%', padding: '9px', borderRadius: 7,
           background: canCreate ? P : '#E8E4FF',
           color: canCreate ? '#fff' : '#B4ADDD',
-          border: 'none', fontSize: 12.5, fontWeight: 700,
+          border: 'none', fontSize: 13, fontWeight: 700,
           cursor: canCreate ? 'pointer' : 'not-allowed',
           fontFamily: 'inherit',
           boxShadow: canCreate ? '0 2px 8px rgba(124,111,224,0.28)' : 'none',
@@ -142,17 +193,27 @@ function BulkCreatePopover({ onClose, onCreate }: {
 }
 
 // ─── Add row ──────────────────────────────────────────────────────────────────
-function AddRow({ onAdd }: { onAdd: (s: SectionExt) => void }) {
-  const [active, setActive] = useState(false)
-  const [name, setName]     = useState('')
-  const [str, setStr]       = useState(40)
-  const nameRef = useRef<HTMLInputElement>(null)
+function AddRow({ onAdd, existingStreams }: {
+  onAdd: (s: SectionExt) => void
+  existingStreams: string[]
+}) {
+  const [active,  setActive]  = useState(false)
+  const [name,    setName]    = useState('')
+  const [stream,  setStream]  = useState('')
+  const [str,     setStr]     = useState(40)
+  const nameRef   = useRef<HTMLInputElement>(null)
+  const streamListId = useRef('add-stream-list-' + makeId()).current
   useEffect(() => { if (active) nameRef.current?.focus() }, [active])
 
   function commit() {
     if (!name.trim()) { setActive(false); return }
-    onAdd({ id: makeId(), name: name.trim(), grade: getGrade(name.trim()), room: '', classTeacher: '', strength: str } as SectionExt)
-    setName(''); setStr(40); setActive(false)
+    onAdd({
+      id: makeId(), name: name.trim(),
+      grade: getGrade(name.trim()),
+      stream: stream.trim() || undefined,
+      room: '', classTeacher: '', strength: str,
+    } as SectionExt)
+    setName(''); setStream(''); setStr(40); setActive(false)
   }
 
   if (!active) return (
@@ -169,12 +230,23 @@ function AddRow({ onAdd }: { onAdd: (s: SectionExt) => void }) {
   )
 
   return (
-    <tr style={{ background: '#FAFAFE' }}>
+    <tr style={{ background: '#F9F7FF' }}>
       <td style={TD}>
-        <input ref={nameRef} value={name} onChange={e => setName(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setActive(false) }}
-          placeholder="e.g. 10-A" style={inp}
-        />
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <input ref={nameRef} value={name} onChange={e => setName(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setActive(false) }}
+            placeholder="e.g. XI-A" style={{ ...inp, flex: 1 }}
+          />
+          <input
+            value={stream} onChange={e => setStream(e.target.value)}
+            placeholder="Stream (opt.)"
+            list={streamListId}
+            style={{ ...inp, width: 120, fontSize: 11.5, color: '#7C6FE0' }}
+          />
+          <datalist id={streamListId}>
+            {existingStreams.map(s => <option key={s} value={s} />)}
+          </datalist>
+        </div>
       </td>
       <td style={TD}>
         <input type="number" value={str} onChange={e => setStr(+e.target.value)} min={1} max={999}
@@ -189,18 +261,34 @@ function AddRow({ onAdd }: { onAdd: (s: SectionExt) => void }) {
 }
 
 // ─── Section row ──────────────────────────────────────────────────────────────
-function SectionRow({ sec, onUpdate, onDelete, onScopeClick }: {
+function SectionRow({ sec, onUpdate, onDelete, onScopeClick, existingStreams }: {
   sec: SectionExt
   onUpdate: (p: Partial<SectionExt>) => void
   onDelete: () => void
   onScopeClick?: (sec: SectionExt, rect: DOMRect) => void
+  existingStreams: string[]
 }) {
-  const [editing, setEditing] = useState(false)
-  const [tmp, setTmp] = useState(sec.name)
-  const ref = useRef<HTMLInputElement>(null)
-  useEffect(() => { if (editing) ref.current?.focus() }, [editing])
-  useEffect(() => { setTmp(sec.name) }, [sec.name])
-  function commit() { onUpdate({ name: tmp.trim() || sec.name, grade: getGrade(tmp.trim() || sec.name) }); setEditing(false) }
+  const [editingName,   setEditingName]   = useState(false)
+  const [editingStream, setEditingStream] = useState(false)
+  const [tmpName,   setTmpName]   = useState(sec.name)
+  const [tmpStream, setTmpStream] = useState(sec.stream ?? '')
+  const nameRef   = useRef<HTMLInputElement>(null)
+  const streamRef = useRef<HTMLInputElement>(null)
+  const streamListId = useRef('row-stream-' + sec.id).current
+
+  useEffect(() => { if (editingName)   nameRef.current?.focus()   }, [editingName])
+  useEffect(() => { if (editingStream) streamRef.current?.focus() }, [editingStream])
+  useEffect(() => { setTmpName(sec.name) },      [sec.name])
+  useEffect(() => { setTmpStream(sec.stream ?? '') }, [sec.stream])
+
+  function commitName() {
+    onUpdate({ name: tmpName.trim() || sec.name, grade: getGrade(tmpName.trim() || sec.name) })
+    setEditingName(false)
+  }
+  function commitStream() {
+    onUpdate({ stream: tmpStream.trim() || undefined })
+    setEditingStream(false)
+  }
 
   return (
     <tr
@@ -208,21 +296,71 @@ function SectionRow({ sec, onUpdate, onDelete, onScopeClick }: {
       onMouseEnter={e => (e.currentTarget.style.background = '#F6F4FF')}
       onMouseLeave={e => (e.currentTarget.style.background = '')}
     >
-      {/* Class name */}
+      {/* Class name + stream pill */}
       <td style={TD}>
-        {editing ? (
-          <input ref={ref} value={tmp} onChange={e => setTmp(e.target.value)}
-            onBlur={commit}
-            onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setTmp(sec.name); setEditing(false) } }}
-            style={{ ...inp, fontWeight: 600 }}
-          />
-        ) : (
-          <span onClick={() => setEditing(true)} title="Click to edit"
-            style={{ cursor: 'text', fontWeight: 600, fontSize: 12.5, color: '#111028', padding: '2px 5px', borderRadius: 4, display: 'inline-block' }}
-            onMouseEnter={e => (e.currentTarget.style.background = '#EDE9FF')}
-            onMouseLeave={e => (e.currentTarget.style.background = '')}
-          >{sec.name}</span>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+          {editingName ? (
+            <input ref={nameRef} value={tmpName} onChange={e => setTmpName(e.target.value)}
+              onBlur={commitName}
+              onKeyDown={e => { if (e.key === 'Enter') commitName(); if (e.key === 'Escape') { setTmpName(sec.name); setEditingName(false) } }}
+              style={{ ...inp, fontWeight: 600, maxWidth: 160 }}
+            />
+          ) : (
+            <span onClick={() => setEditingName(true)} title="Click to edit name"
+              style={{ cursor: 'text', fontWeight: 600, fontSize: 12.5, color: '#111028', padding: '2px 5px', borderRadius: 4, display: 'inline-block' }}
+              onMouseEnter={e => (e.currentTarget.style.background = '#EDE9FF')}
+              onMouseLeave={e => (e.currentTarget.style.background = '')}
+            >{sec.name}</span>
+          )}
+
+          {/* Stream pill — always visible, click to edit */}
+          {editingStream ? (
+            <div style={{ position: 'relative' }}>
+              <input
+                ref={streamRef}
+                value={tmpStream}
+                onChange={e => setTmpStream(e.target.value)}
+                onBlur={commitStream}
+                onKeyDown={e => { if (e.key === 'Enter') commitStream(); if (e.key === 'Escape') { setTmpStream(sec.stream ?? ''); setEditingStream(false) } }}
+                list={streamListId}
+                placeholder="Stream name…"
+                style={{ ...inp, fontSize: 11, width: 130, padding: '3px 7px' }}
+              />
+              <datalist id={streamListId}>
+                {existingStreams.map(s => <option key={s} value={s} />)}
+              </datalist>
+            </div>
+          ) : sec.stream ? (
+            <span
+              onClick={() => setEditingStream(true)}
+              title="Click to change stream"
+              style={{
+                fontSize: 10.5, fontWeight: 600, color: P,
+                background: '#EDEAFF', border: `1px solid ${P_B}`,
+                borderRadius: 20, padding: '2px 9px',
+                cursor: 'pointer', whiteSpace: 'nowrap',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = P_L; e.currentTarget.style.borderColor = P }}
+              onMouseLeave={e => { e.currentTarget.style.background = '#EDEAFF'; e.currentTarget.style.borderColor = P_B }}
+            >
+              {sec.stream}
+            </span>
+          ) : (
+            <span
+              onClick={() => setEditingStream(true)}
+              title="Assign to a stream"
+              style={{
+                fontSize: 10.5, fontWeight: 500, color: '#B0ABCC',
+                border: '1px dashed #D4CEEE', borderRadius: 20,
+                padding: '2px 8px', cursor: 'pointer', whiteSpace: 'nowrap',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.color = P; e.currentTarget.style.borderColor = P_B }}
+              onMouseLeave={e => { e.currentTarget.style.color = '#B0ABCC'; e.currentTarget.style.borderColor = '#D4CEEE' }}
+            >
+              + stream
+            </span>
+          )}
+        </div>
       </td>
 
       {/* Strength */}
@@ -291,8 +429,18 @@ export function ClassesPanel({ sections, setSections, onScopeClick }: {
   }
 
   const [sortAZ, setSortAZ] = useState(false)
-  const [collapsedGrades, setCollapsedGrades] = useState<Set<string>>(new Set())
-  const [collapsedStreams, setCollapsedStreams] = useState<Set<string>>(new Set())
+  const [collapsedGrades,  setCollapsedGrades]  = useState<Set<string>>(new Set())
+  const [collapsedStreams,  setCollapsedStreams]  = useState<Set<string>>(new Set())
+
+  // All unique stream names in use — used for autocomplete everywhere
+  const existingStreams = useMemo(() =>
+    [...new Set(
+      sections
+        .map(s => (s as SectionExt).stream ?? getStreamFromName(s.name, (s as SectionExt).grade ?? getGrade(s.name)))
+        .filter((s): s is string => Boolean(s))
+    )].sort(),
+    [sections]
+  )
 
   function toggleGrade(grade: string) {
     setCollapsedGrades(prev => {
@@ -318,7 +466,8 @@ export function ClassesPanel({ sections, setSections, onScopeClick }: {
     filtered.forEach(s => {
       const sec = s as SectionExt
       const grade = sec.grade ?? getGrade(s.name)
-      const stream = getStream(s.name, grade) ?? ''
+      // Prefer explicit stream field; fall back to name-parsing for legacy data
+      const stream = sec.stream ?? getStreamFromName(s.name, grade) ?? ''
       if (!map.has(grade)) map.set(grade, new Map())
       const sm = map.get(grade)!
       if (!sm.has(stream)) sm.set(stream, [])
@@ -433,7 +582,7 @@ export function ClassesPanel({ sections, setSections, onScopeClick }: {
             >
               <Layers size={13} /> Bulk Create
             </button>
-            {showBulk && <BulkCreatePopover onClose={() => setShowBulk(false)} onCreate={bulkAdd} />}
+            {showBulk && <BulkCreatePopover onClose={() => setShowBulk(false)} onCreate={bulkAdd} existingStreams={existingStreams} />}
           </div>
         </div>
       </div>
@@ -529,6 +678,7 @@ export function ClassesPanel({ sections, setSections, onScopeClick }: {
                             onUpdate={p => update(sec.id, p)}
                             onDelete={() => remove(sec.id)}
                             onScopeClick={onScopeClick ? (s, rect) => onScopeClick(s as Section, rect) : undefined}
+                            existingStreams={existingStreams}
                           />
                         ))
                       }
@@ -569,6 +719,7 @@ export function ClassesPanel({ sections, setSections, onScopeClick }: {
                               onUpdate={p => update(sec.id, p)}
                               onDelete={() => remove(sec.id)}
                               onScopeClick={onScopeClick ? (s, rect) => onScopeClick(s as Section, rect) : undefined}
+                              existingStreams={existingStreams}
                             />
                           ))}
                         </React.Fragment>
@@ -584,7 +735,7 @@ export function ClassesPanel({ sections, setSections, onScopeClick }: {
                   </td>
                 </tr>
               )}
-              <AddRow onAdd={add} />
+              <AddRow onAdd={add} existingStreams={existingStreams} />
             </tbody>
           </table>
         )}
