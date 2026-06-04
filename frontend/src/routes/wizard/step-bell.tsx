@@ -1304,7 +1304,7 @@ function LiveBellTimeline({
 //  Main component
 // ══════════════════════════════════════════════════════════════
 export function StepBell() {
-  const { config, setConfig, setStep, setBreaks } = useTimetableStore()
+  const { config, setConfig, setStep, setBreaks, sections: storeSections } = useTimetableStore()
   // Scoped to this timetable — computed once on mount so saves never bleed into another TT
   const bellKey = useRef(getBellKey()).current
   const [_saved] = useState<SavedBell | null>(loadSaved)
@@ -1355,6 +1355,22 @@ export function StepBell() {
       return streams.length > 0 ? streams.map(s => `${cls.key}${STREAM_SEP}${s}`) : [cls.key]
     })
   }, [customClasses, activeClassKeys, customStreams, classStreamMap])
+
+  // Grades derived from the Resources step sections (Step 1 data)
+  const GRADE_SORT = ['Nursery','LKG','UKG','I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII']
+  const { uniqueGrades, sectionsPerGrade } = useMemo(() => {
+    const map = new Map<string, number>()
+    ;(storeSections ?? []).forEach((s: any) => {
+      const g: string = s.grade || s.name?.split('-')[0] || 'Unknown'
+      map.set(g, (map.get(g) ?? 0) + 1)
+    })
+    const sorted = [...map.keys()].sort((a, b) => {
+      const ai = GRADE_SORT.indexOf(a.replace(/^class\s+/i, '').trim())
+      const bi = GRADE_SORT.indexOf(b.replace(/^class\s+/i, '').trim())
+      return (ai < 0 ? 100 : ai) - (bi < 0 ? 100 : bi)
+    })
+    return { uniqueGrades: sorted, sectionsPerGrade: Object.fromEntries(map) }
+  }, [storeSections])
 
   // Groups that have at least one class assigned — used in pickers, timelines, capacity
   const activeClassGroups = useMemo(() =>
@@ -2277,363 +2293,64 @@ export function StepBell() {
             </span>
           </div>
 
-          {/* ─── MANAGE CLASSES ─── */}
+          {/* ─── ASSIGN CLASSES TO SHIFTS ─── */}
           <div style={{ marginBottom: 16 }}>
             <div style={{ background: '#fff', borderRadius: 10, border: '1px solid #E5E7EB', overflow: 'hidden' }}>
               {/* Header */}
-              <div
-                onClick={() => setShowManageClasses(v => !v)}
-                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', background: '#FAFAFA', borderBottom: showManageClasses ? '1px solid #F3F4F6' : 'none', cursor: 'pointer', userSelect: 'none' }}
-              >
-                <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="4" height="4" rx="1" fill="#7C6FE0"/><rect x="1" y="9" width="4" height="4" rx="1" fill="#7C6FE0"/><rect x="9" y="1" width="4" height="4" rx="1" fill="#7C6FE0"/><rect x="9" y="9" width="4" height="4" rx="1" fill="#E5E7EB"/></svg>
-                <span style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>Classes</span>
-                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', flex: 1, marginLeft: 4 }}>
-                  {!showManageClasses && activeClassGroups.map(g => {
-                    const cnt = activeClasses.filter(c => c.group === g.group).length
-                    return (
-                      <span key={g.group} style={{ fontSize: 10, padding: '1px 8px', borderRadius: 10, background: g.bg, color: g.color, fontWeight: 600, border: `1px solid ${g.color}22` }}>
-                        {g.group} ({cnt})
-                      </span>
-                    )
-                  })}
-                </div>
-                <button
-                  onClick={e => { e.stopPropagation(); setShowManageClasses(v => !v) }}
-                  style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, fontFamily: 'inherit', padding: '2px 6px', borderRadius: 5 }}
-                >
-                  {showManageClasses ? 'Done' : 'Edit'}
-                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d={showManageClasses ? 'M2 6.5l3-3 3 3' : 'M2 3.5l3 3 3-3'} stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', background: '#FAFAFA', borderBottom: '1px solid #F3F4F6' }}>
+                <svg width='13' height='13' viewBox='0 0 14 14' fill='none'><rect x='1' y='1' width='4' height='4' rx='1' fill='#7C6FE0'/><rect x='1' y='9' width='4' height='4' rx='1' fill='#7C6FE0'/><rect x='9' y='1' width='4' height='4' rx='1' fill='#7C6FE0'/><rect x='9' y='9' width='4' height='4' rx='1' fill='#E5E7EB'/></svg>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>Class Shift Assignment</span>
+                {isAdvanced && <span style={{ fontSize: 11, color: '#9CA3AF', marginLeft: 4 }}>· Assign each grade to a shift</span>}
               </div>
 
-              {showManageClasses && (
-                <div style={{ padding: '0 16px 14px' }}>
-
-                  {/* ── Tab bar ── */}
-                  <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid #F3F4F6', marginBottom: 12 }}>
-                    {(['groups','streams','classes'] as const).map(tab => (
-                      <button key={tab} onClick={() => setManageTab(tab)} style={{
-                        padding: '8px 16px', background: 'none', border: 'none',
-                        fontSize: 12, fontWeight: manageTab === tab ? 700 : 500,
-                        color: manageTab === tab ? '#7C6FE0' : '#9CA3AF',
-                        borderBottom: manageTab === tab ? '2px solid #7C6FE0' : '2px solid transparent',
-                        cursor: 'pointer', fontFamily: 'inherit', transition: 'color .12s',
-                        textTransform: 'capitalize',
-                      }}>{tab}</button>
-                    ))}
+              {!isAdvanced ? (
+                <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 16 }}>✓</span>
+                  <span style={{ fontSize: 12, color: '#6B7280' }}>
+                    All grades follow a single bell schedule in Standard mode.
+                    Switch to <strong>Advanced</strong> to assign different shifts per grade.
+                  </span>
+                </div>
+              ) : uniqueGrades.length === 0 ? (
+                <div style={{ padding: '12px 16px' }}>
+                  <span style={{ fontSize: 12, color: '#9CA3AF' }}>
+                    No classes defined yet — complete Step 1 Resources first.
+                  </span>
+                </div>
+              ) : (
+                <div style={{ padding: '10px 16px 14px' }}>
+                  <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 10 }}>
+                    Select which shift each grade belongs to. Grades not assigned default to the first shift.
                   </div>
-
-                  {/* ══ GROUPS tab ══ */}
-                  {manageTab === 'groups' && (
-                    <div>
-                      {customGroups.map((grp, gi) => {
-                        const classCount = customClasses.filter(c => c.group === grp.group).length
-                        return (
-                          <div key={gi} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, padding: '7px 10px', borderRadius: 8, background: grp.bg, border: `1px solid ${grp.color}22` }}>
-                            {/* Colour swatch picker */}
-                            <div style={{ position: 'relative', flexShrink: 0 }}>
-                              <div style={{ width: 18, height: 18, borderRadius: '50%', background: grp.color, cursor: 'pointer', border: '2px solid #fff', boxShadow: '0 0 0 1.5px ' + grp.color }}
-                                onClick={e => {
-                                  e.stopPropagation()
-                                  // Toggle a tiny swatch picker below this dot
-                                  const el = e.currentTarget.nextSibling as HTMLElement | null
-                                  if (el) el.style.display = el.style.display === 'grid' ? 'none' : 'grid'
-                                }}
-                              />
-                              {/* Swatch palette popup */}
-                              <div style={{ display: 'none', position: 'absolute', top: 24, left: 0, zIndex: 500, background: '#fff', border: '1px solid #E5E7EB', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,.12)', padding: 6, gridTemplateColumns: 'repeat(5,18px)', gap: 4 }}>
-                                {GROUP_PALETTE.map(([c, b]) => (
-                                  <div key={c+b} onClick={() => {
-                                    setCustomGroups(prev => prev.map((g, i) => i === gi ? { ...g, color: c, bg: b } : g))
-                                    const el = document.activeElement as HTMLElement | null
-                                    el?.blur()
-                                  }}
-                                  style={{ width: 18, height: 18, borderRadius: '50%', background: c, cursor: 'pointer', border: grp.color === c ? '2px solid #374151' : '2px solid transparent' }} />
-                                ))}
-                              </div>
-                            </div>
-                            {/* Group name */}
-                            <input
-                              value={grp.group}
-                              onChange={e => {
-                                // Only update the group name — do NOT also update customClasses here
-                                // or the key change causes a remount and loses focus.
-                                const newName = e.target.value
-                                setCustomGroups(prev => prev.map((g, i) => i === gi ? { ...g, group: newName } : g))
-                              }}
-                              onBlur={e => {
-                                // Sync the rename into class references once the user finishes typing
-                                const newName = e.target.value
-                                const oldName = customGroups[gi]?.group ?? newName
-                                setCustomClasses(prev => prev.map(c => c.group === oldName ? { ...c, group: newName } : c))
-                              }}
-                              placeholder="Group name"
-                              style={{ flex: 1, padding: '3px 8px', border: '1px solid #E5E7EB', borderRadius: 5, fontSize: 12, fontFamily: 'inherit', outline: 'none', background: '#fff', fontWeight: 600, color: grp.color }}
-                            />
-                            {/* Class count badge */}
-                            <span style={{ fontSize: 10, padding: '1px 7px', borderRadius: 10, background: grp.color + '20', color: grp.color, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0 }}>
-                              {classCount} {classCount === 1 ? 'class' : 'classes'}
-                            </span>
-                            {/* Delete */}
-                            <button
-                              onClick={() => {
-                                if (classCount > 0) { alert(`Move or delete the ${classCount} class${classCount>1?'es':''} in "${grp.group}" first.`); return }
-                                setCustomGroups(prev => prev.filter((_, i) => i !== gi))
-                              }}
-                              title={classCount > 0 ? `Cannot delete — ${classCount} class${classCount>1?'es':''} still assigned` : 'Delete group'}
-                              style={{ background: 'none', border: 'none', cursor: classCount > 0 ? 'not-allowed' : 'pointer', color: classCount > 0 ? '#E5E7EB' : '#FCA5A5', padding: 3, display: 'flex', flexShrink: 0 }}
-                            >
-                              <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M2 2l10 10M12 2L2 12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
-                            </button>
-                          </div>
-                        )
-                      })}
-
-                      {/* Add group */}
-                      <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-                        <button
-                          onClick={() => {
-                            const idx = customGroups.length % GROUP_PALETTE.length
-                            const [color, bg] = GROUP_PALETTE[idx]
-                            setCustomGroups(prev => [...prev, { group: 'New Group', color, bg, desc: '' }])
+                  {uniqueGrades.map(grade => {
+                    const gradeKey = grade.toLowerCase().replace(/^classs+/i, '').trim()
+                    const assignedShiftId = shifts.find(s => s.classes?.includes(gradeKey))?.id ?? shifts[0]?.id ?? ''
+                    const sectionCount = sectionsPerGrade[grade] ?? 0
+                    const gradeLabel = /^(Nursery|LKG|UKG)$/i.test(grade) ? grade : ('Grade ' + grade.replace(/^classs+/i, ''))
+                    return (
+                      <div key={grade} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, padding: '7px 10px', borderRadius: 8, background: '#FAFAFA', border: '1px solid #F3F4F6' }}>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: '#111028', minWidth: 100 }}>
+                          {gradeLabel}
+                        </span>
+                        <span style={{ fontSize: 11, color: '#9CA3AF', flex: 1 }}>
+                          {sectionCount} section{sectionCount !== 1 ? 's' : ''}
+                        </span>
+                        <select
+                          value={assignedShiftId}
+                          onChange={e => {
+                            const newId = e.target.value
+                            setShifts(prev => prev.map(s => {
+                              if (s.id === newId) return s.classes?.includes(gradeKey) ? s : { ...s, classes: [...(s.classes ?? []), gradeKey] }
+                              return { ...s, classes: (s.classes ?? []).filter(k => k !== gradeKey) }
+                            }))
                           }}
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 7, border: '1.5px dashed #D1D5DB', background: '#fff', fontSize: 12, fontWeight: 600, color: '#6B7280', cursor: 'pointer', fontFamily: 'inherit' }}
+                          style={{ padding: '5px 10px', border: '1px solid #E5E7EB', borderRadius: 7, fontSize: 12, fontFamily: 'inherit', color: '#374151', background: '#fff', outline: 'none', cursor: 'pointer' }}
                         >
-                          <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M5.5 1v9M1 5.5h9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
-                          Add group
-                        </button>
-                        <button
-                          onClick={() => { setCustomGroups(CLASS_GROUPS); setCustomClasses(CLASSES) }}
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 7, border: '1px solid #E5E7EB', background: '#fff', fontSize: 12, fontWeight: 600, color: '#9CA3AF', cursor: 'pointer', fontFamily: 'inherit' }}
-                        >
-                          Reset to defaults
-                        </button>
+                          {shifts.map(s => <option key={s.id} value={s.id}>{s.name || 'Shift ' + s.id}</option>)}
+                        </select>
                       </div>
-                    </div>
-                  )}
-
-                  {/* ══ STREAMS tab ══ */}
-                  {manageTab === 'streams' && (
-                    <div>
-                      <p style={{ fontSize: 11, color: '#9CA3AF', margin: '0 0 10px', lineHeight: 1.5 }}>
-                        Streams (e.g. Science, Commerce, Arts) are sub-groups within a group. Create streams here, then assign classes to them in the <strong>Classes</strong> tab.
-                      </p>
-
-                      {customStreams.length === 0 && (
-                        <div style={{ fontSize: 12, color: '#C4B5FD', textAlign: 'center', padding: '16px 0', border: '1.5px dashed #DDD6FE', borderRadius: 8, marginBottom: 10 }}>
-                          No streams yet — click "+ Add stream" below
-                        </div>
-                      )}
-
-                      {customStreams.map((sd, si) => {
-                        const classCount = Object.values(classStreamMap).filter(arr => arr.includes(sd.stream)).length
-                        return (
-                          <div key={si} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, padding: '7px 10px', borderRadius: 8, background: sd.bg, border: `1px solid ${sd.color}22` }}>
-                            {/* Colour swatch */}
-                            <div style={{ position: 'relative', flexShrink: 0 }}>
-                              <div style={{ width: 18, height: 18, borderRadius: '50%', background: sd.color, cursor: 'pointer', border: '2px solid #fff', boxShadow: '0 0 0 1.5px ' + sd.color }}
-                                onClick={e => {
-                                  e.stopPropagation()
-                                  const el = e.currentTarget.nextSibling as HTMLElement | null
-                                  if (el) el.style.display = el.style.display === 'grid' ? 'none' : 'grid'
-                                }}
-                              />
-                              <div style={{ display: 'none', position: 'absolute', top: 24, left: 0, zIndex: 500, background: '#fff', border: '1px solid #E5E7EB', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,.12)', padding: 6, gridTemplateColumns: 'repeat(5,18px)', gap: 4 }}>
-                                {GROUP_PALETTE.map(([c, b]) => (
-                                  <div key={c+b} onClick={() => setCustomStreams(prev => prev.map((s, i) => i === si ? { ...s, color: c, bg: b } : s))}
-                                    style={{ width: 18, height: 18, borderRadius: '50%', background: c, cursor: 'pointer', border: sd.color === c ? '2px solid #374151' : '2px solid transparent' }} />
-                                ))}
-                              </div>
-                            </div>
-                            {/* Stream name */}
-                            <input
-                              value={sd.stream}
-                              onChange={e => {
-                                setCustomStreams(prev => prev.map((s, i) => i === si ? { ...s, stream: e.target.value } : s))
-                              }}
-                              onBlur={e => {
-                                const newName = e.target.value.trim()
-                                const oldName = customStreams[si]?.stream ?? newName
-                                if (newName !== oldName) {
-                                  // Update classStreamMap references (rename stream in every array)
-                                  setClassStreamMap(prev => {
-                                    const next: Record<string,string[]> = {}
-                                    for (const [k, v] of Object.entries(prev))
-                                      next[k] = v.map(s => s === oldName ? newName : s)
-                                    return next
-                                  })
-                                }
-                              }}
-                              placeholder="Stream name"
-                              style={{ flex: 1, padding: '3px 8px', border: '1px solid #E5E7EB', borderRadius: 5, fontSize: 12, fontFamily: 'inherit', outline: 'none', background: '#fff', fontWeight: 600, color: sd.color }}
-                            />
-                            {/* Group scope */}
-                            <select
-                              value={sd.group}
-                              onChange={e => setCustomStreams(prev => prev.map((s, i) => i === si ? { ...s, group: e.target.value } : s))}
-                              style={{ padding: '3px 6px', border: '1px solid #E5E7EB', borderRadius: 5, fontSize: 11, fontFamily: 'inherit', outline: 'none', background: '#fff', color: '#6B7280', flexShrink: 0 }}
-                              title="Which class group this stream belongs to"
-                            >
-                              {customGroups.map(g => <option key={g.group} value={g.group}>{g.group}</option>)}
-                            </select>
-                            {/* Class count */}
-                            <span style={{ fontSize: 10, padding: '1px 7px', borderRadius: 10, background: sd.color + '20', color: sd.color, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0 }}>
-                              {classCount} {classCount === 1 ? 'class' : 'classes'}
-                            </span>
-                            {/* Delete */}
-                            <button
-                              onClick={() => {
-                                setCustomStreams(prev => prev.filter((_, i) => i !== si))
-                                // Remove this stream from every class's stream array
-                                setClassStreamMap(prev => {
-                                  const next: Record<string,string[]> = {}
-                                  for (const [k, v] of Object.entries(prev)) {
-                                    const filtered = v.filter(s => s !== sd.stream)
-                                    if (filtered.length) next[k] = filtered
-                                  }
-                                  return next
-                                })
-                              }}
-                              title="Delete stream"
-                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#FCA5A5', padding: 3, display: 'flex', flexShrink: 0 }}
-                            >
-                              <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M2 2l10 10M12 2L2 12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
-                            </button>
-                          </div>
-                        )
-                      })}
-
-                      <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-                        <button
-                          onClick={() => {
-                            const idx   = customStreams.length % GROUP_PALETTE.length
-                            const [color, bg] = GROUP_PALETTE[idx]
-                            const grp   = customGroups[customGroups.length - 1]?.group ?? ''
-                            setCustomStreams(prev => [...prev, { stream: 'New Stream', color, bg, group: grp, desc: '' } as any])
-                          }}
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 7, border: '1.5px dashed #D1D5DB', background: '#fff', fontSize: 12, fontWeight: 600, color: '#6B7280', cursor: 'pointer', fontFamily: 'inherit' }}
-                        >
-                          <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M5.5 1v9M1 5.5h9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
-                          Add stream
-                        </button>
-                        <button
-                          onClick={() => { setCustomStreams([]); setClassStreamMap({}) }}
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 7, border: '1px solid #E5E7EB', background: '#fff', fontSize: 12, fontWeight: 600, color: '#9CA3AF', cursor: 'pointer', fontFamily: 'inherit' }}
-                        >
-                          Clear all streams
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* ══ CLASSES tab ══ */}
-                  {manageTab === 'classes' && (
-                    <div>
-                      {activeClasses.map((cls, idx) => {
-                        const grp      = customGroups.find(g => g.group === cls.group) ?? customGroups[0] ?? CLASS_GROUPS[0]
-                        const selStreams = classStreamMap[cls.key] ?? []
-                        const groupStreamsForClass = customStreams.filter(s => s.group === cls.group)
-
-                        return (
-                          <div key={cls.key} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, padding: '5px 8px', borderRadius: 7, background: '#FAFAFA', border: '1px solid #F3F4F6', flexWrap: 'nowrap' }}>
-                            <span style={{ width: 8, height: 8, borderRadius: '50%', background: grp.color, flexShrink: 0, display: 'inline-block' }} />
-
-                            {/* Label — fixed width, auto-fills short */}
-                            <input
-                              value={cls.label}
-                              onChange={e => {
-                                const label = e.target.value
-                                const auto  = deriveShort(label)
-                                setCustomClasses(prev => prev.map((c, i) =>
-                                  i === idx ? { ...c, label, short: auto ?? c.short } : c
-                                ))
-                              }}
-                              placeholder="Class name"
-                              style={{ width: 120, flexShrink: 0, padding: '3px 7px', border: '1px solid #E5E7EB', borderRadius: 5, fontSize: 12, fontFamily: 'inherit', outline: 'none', background: '#fff' }}
-                            />
-
-                            {/* Short name */}
-                            <input
-                              value={cls.short}
-                              onChange={e => setCustomClasses(prev => prev.map((c, i) => i === idx ? { ...c, short: e.target.value } : c))}
-                              placeholder="–"
-                              style={{ width: 36, flexShrink: 0, padding: '3px 5px', border: '1px solid #E5E7EB', borderRadius: 5, fontSize: 12, fontFamily: 'inherit', outline: 'none', background: '#fff', textAlign: 'center' }}
-                            />
-
-                            {/* ── Stream chips (inline toggle, FIRST) ── */}
-                            {groupStreamsForClass.length > 0 && (
-                              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', flex: 1 }}>
-                                {groupStreamsForClass.map(sd => {
-                                  const on = selStreams.includes(sd.stream)
-                                  return (
-                                    <button
-                                      key={sd.stream}
-                                      onClick={() => {
-                                        const next = on
-                                          ? selStreams.filter(s => s !== sd.stream)
-                                          : [...selStreams, sd.stream]
-                                        setClassStreamMap(prev => ({ ...prev, [cls.key]: next }))
-                                      }}
-                                      style={{
-                                        padding: '2px 9px', borderRadius: 12, fontSize: 11, fontWeight: 600,
-                                        cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
-                                        border: on ? `1.5px solid ${sd.color}` : '1px solid #E5E7EB',
-                                        background: on ? sd.bg : '#fff',
-                                        color: on ? sd.color : '#9CA3AF',
-                                        transition: 'all .12s',
-                                      }}
-                                    >{sd.stream}</button>
-                                  )
-                                })}
-                              </div>
-                            )}
-                            {/* spacer when no streams */}
-                            {groupStreamsForClass.length === 0 && <div style={{ flex: 1 }} />}
-
-                            {/* Group selector */}
-                            <select
-                              value={cls.group}
-                              onChange={e => setCustomClasses(prev => prev.map((c, i) => i === idx ? { ...c, group: e.target.value } : c))}
-                              style={{ padding: '3px 6px', border: '1px solid #E5E7EB', borderRadius: 5, fontSize: 11, fontFamily: 'inherit', outline: 'none', background: '#fff', color: grp.color, fontWeight: 600, flexShrink: 0 }}
-                            >
-                              {customGroups.map(g => <option key={g.group} value={g.group}>{g.group}</option>)}
-                            </select>
-
-                            {/* Delete */}
-                            <button
-                              onClick={() => { if (activeClasses.length > 1) setCustomClasses(prev => prev.filter((_, i) => i !== idx)) }}
-                              title="Remove class"
-                              style={{ background: 'none', border: 'none', cursor: activeClasses.length > 1 ? 'pointer' : 'not-allowed', color: activeClasses.length > 1 ? '#FCA5A5' : '#E5E7EB', padding: 3, display: 'flex', flexShrink: 0 }}
-                            >
-                              <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M2 2l10 10M12 2L2 12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
-                            </button>
-                          </div>
-                        )
-                      })}
-
-                      {/* Add class row — predicts next standard class */}
-                      <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-                        <button
-                          onClick={() => {
-                            const last    = activeClasses[activeClasses.length - 1]
-                            const newKey  = 'cls-' + Date.now().toString(36)
-                            const next    = last ? predictNext(last.label, last.group) : { label: 'New Class', short: 'New', group: customGroups[customGroups.length - 1]?.group ?? CLASS_GROUPS[CLASS_GROUPS.length - 1].group }
-                            setCustomClasses(prev => [...prev, { key: newKey, ...next }])
-                          }}
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 7, border: '1.5px dashed #D1D5DB', background: '#fff', fontSize: 12, fontWeight: 600, color: '#6B7280', cursor: 'pointer', fontFamily: 'inherit' }}
-                        >
-                          <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M5.5 1v9M1 5.5h9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
-                          Add class
-                        </button>
-                        <button
-                          onClick={() => { setCustomClasses(CLASSES); setCustomGroups(CLASS_GROUPS) }}
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 7, border: '1px solid #E5E7EB', background: '#fff', fontSize: 12, fontWeight: 600, color: '#9CA3AF', cursor: 'pointer', fontFamily: 'inherit' }}
-                        >
-                          Reset to defaults
-                        </button>
-                      </div>
-                    </div>
-                  )}
+                    )
+                  })}
                 </div>
               )}
             </div>
