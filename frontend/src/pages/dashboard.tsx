@@ -1072,11 +1072,9 @@ export function DashboardPage() {
     const next = ttList.map(t => t.id === updated.id ? updated : t)
     setTTList(next)
     saveTTList(next)
-    // If this is the active timetable, sync the name into the store too
-    if (getActiveTTId() === updated.id) {
-      useTimetableStore.setState({ config: { ...useTimetableStore.getState().config, name: updated.name } } as any)
-    }
     setEditingTT(null)
+    // Navigate into the wizard for this timetable
+    handleContinue(updated)
   }
 
   if (!user) { window.location.href = '/login'; return null }
@@ -1136,8 +1134,7 @@ export function DashboardPage() {
         .db-tt-row:hover { border-color: #D1D5DB !important; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
         .db-qa-card   { transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s; }
         .db-qa-card:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,0.07); border-color: #D1D5DB !important; }
-        .db-act-btn   { transition: background 0.13s; }
-        .db-act-btn:hover { background: #F3F4F6 !important; }
+        .db-act-btn   { transition: background 0.13s, border-color 0.13s; }
         .sb-label     { white-space: nowrap; overflow: hidden; pointer-events: none; }
         .sb-upgrade   { transition: background 0.14s; }
         .sb-upgrade:hover { background: #6655CC !important; }
@@ -1667,15 +1664,27 @@ function TtBtn({ children, onClick, primary }: {
   primary?: boolean
 }) {
   return (
-    <button onClick={onClick} className="db-act-btn" style={{
-      display: 'inline-flex', alignItems: 'center', gap: 5,
-      padding: '6px 14px', borderRadius: 7, cursor: 'pointer',
-      border: primary ? 'none' : '1px solid #E5E7EB',
-      background: primary ? '#13111E' : '#fff',
-      color: primary ? '#fff' : '#374151',
-      fontSize: 13, fontWeight: 600, flexShrink: 0,
-      fontFamily: 'inherit',
-    }}>
+    <button
+      onClick={onClick}
+      className="db-act-btn"
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 5,
+        padding: '6px 14px', borderRadius: 7, cursor: 'pointer',
+        border: primary ? 'none' : '1px solid #E5E7EB',
+        background: primary ? '#13111E' : '#fff',
+        color: primary ? '#fff' : '#374151',
+        fontSize: 13, fontWeight: 600, flexShrink: 0,
+        fontFamily: 'inherit',
+      }}
+      onMouseEnter={e => {
+        e.currentTarget.style.background = primary ? '#2D2B45' : '#F3F4F6'
+        if (!primary) e.currentTarget.style.borderColor = '#D1D5DB'
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.background = primary ? '#13111E' : '#fff'
+        if (!primary) e.currentTarget.style.borderColor = '#E5E7EB'
+      }}
+    >
       {children}
     </button>
   )
