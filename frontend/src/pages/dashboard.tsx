@@ -534,11 +534,15 @@ function CreateTimetableModal({
 
         {/* ── Approximate counts ── */}
         <div style={{ marginBottom: 14 }}>
-          <label style={{ ...lbl, marginBottom: 8 }}>
-            Approximate counts <span style={{ fontSize: 12, fontWeight: 400, color: '#9CA3AF' }}>
-              (AI uses these as targets)
-            </span>
-          </label>
+          <label style={{ ...lbl, marginBottom: 8 }}>Approximate counts</label>
+          <div style={{
+            background: '#F5F3FF', border: '1px solid #DDD8FF', borderRadius: 8,
+            padding: '9px 12px', marginBottom: 12,
+            fontSize: 12.5, color: '#5B52A8', lineHeight: 1.5,
+          }}>
+            Enter a count and <strong>schedU</strong> will auto-create initial editable resources for you.{' '}
+            <span style={{ color: '#9590BF' }}>Leave blank if you'd like to create them yourself.</span>
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
             {[
               { label: 'Classes',  value: classes,  set: setClasses  },
@@ -571,7 +575,7 @@ function CreateTimetableModal({
               fontSize: 12, fontWeight: 600, color: '#065F46', marginBottom: 9,
             }}>
               <Sparkles size={13} color="#059669" />
-              AI will auto-generate
+              schedU will auto-create editable
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {tags.map(tag => (
@@ -822,7 +826,7 @@ function EditTimetableModal({
             padding: '9px 12px', marginBottom: 12,
             fontSize: 12.5, color: '#5B52A8', lineHeight: 1.5,
           }}>
-            Enter a count and <strong>schedU</strong> will auto-create initial resources for you.{' '}
+            Enter a count and <strong>schedU</strong> will auto-create initial editable resources for you.{' '}
             <span style={{ color: '#9590BF' }}>Leave blank if you'd like to create them yourself.</span>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
