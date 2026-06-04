@@ -134,6 +134,21 @@ const GROUP_PALETTE: Array<[string, string]> = [
   ['#374151','#F9FAFB'],
 ]
 
+// Map a grade short-name to the bell-step group name
+function gradeToGroup(g: string): string {
+  const u = g.replace(/^class\s+/i, '').trim().toUpperCase()
+  if (['NURSERY','LKG','UKG'].includes(u)) return 'Pre-Primary'
+  const MAP: Record<string, string> = {
+    I:'Primary',II:'Primary',III:'Primary',IV:'Primary',V:'Primary',
+    VI:'Middle',VII:'Middle',VIII:'Middle',IX:'Middle',X:'Middle',
+    XI:'Senior',XII:'Senior',
+  }
+  if (MAP[u]) return MAP[u]
+  const n = parseInt(u)
+  if (!isNaN(n)) return n <= 5 ? 'Primary' : n <= 10 ? 'Middle' : 'Senior'
+  return 'Senior'
+}
+
 // Convert grade range (from dashboard modal) to a filtered CLASSES subset
 const GRADE_TO_KEY: Record<string, string> = {
   'Nursery':'nur','LKG':'lkg','UKG':'ukg',
@@ -1340,6 +1355,73 @@ export function StepBell() {
     }
     return migrated
   })
+
+  // ── Sync from Resources step ──────────────────────────────────────────────
+  // Whenever Step-1 sections change, rebuild customClasses / classStreamMap /
+  // customStreams so the bell step always reflects the actual classes & streams.
+  useEffect(() => {
+    if (!storeSections?.length) return
+
+    // Collect unique grades + their streams
+    const gradeStreams = new Map<string, Set<string>>()
+    ;(storeSections as any[]).forEach(s => {
+      const raw: string = s.grade || (s.name ?? '').split('-')[0] || 'Unknown'
+      const g = raw.replace(/^class\s+/i, '').trim()
+      const stream: string = s.stream ?? ''
+      if (!gradeStreams.has(g)) gradeStreams.set(g, new Set())
+      if (stream) gradeStreams.get(g)!.add(stream)
+    })
+
+    // Match grades to the CLASSES constant by short name (XI → key 'xi')
+    const matched = CLASSES.filter(c => gradeStreams.has(c.short))
+    const matchedShorts = new Set(matched.map(c => c.short))
+
+    // Synthesise entries for any grade not in the constant
+    const extra: typeof CLASSES = [...gradeStreams.keys()]
+      .filter(g => !matchedShorts.has(g))
+      .map(g => ({
+        key:   g.toLowerCase().replace(/\s+/g, '-'),
+        label: /^(nursery|lkg|ukg)$/i.test(g) ? g : `Class ${g}`,
+        short: g,
+        group: gradeToGroup(g),
+      }))
+
+    const newClasses = [...matched, ...extra]
+    if (!newClasses.length) return
+
+    // classStreamMap: class key → [stream names]
+    const newStreamMap: Record<string, string[]> = {}
+    gradeStreams.forEach((streams, g) => {
+      const cls = newClasses.find(c => c.short === g)
+      if (cls && streams.size > 0) newStreamMap[cls.key] = [...streams]
+    })
+
+    // Unique streams with distinct colours
+    const allStreams = [...new Set([...gradeStreams.values()].flatMap(s => [...s]))]
+    const STREAM_COLORS = [
+      { color: '#7C6FE0', bg: '#F0EDFF' }, { color: '#059669', bg: '#D1FAE5' },
+      { color: '#D97706', bg: '#FEF3C7' }, { color: '#DC2626', bg: '#FEE2E2' },
+      { color: '#2563EB', bg: '#DBEAFE' }, { color: '#9333EA', bg: '#F5F3FF' },
+    ]
+    const newStreamDefs = allStreams.map((stream, i) => {
+      let group = 'Senior'
+      for (const [g, ss] of gradeStreams) {
+        if (ss.has(stream)) { group = gradeToGroup(g); break }
+      }
+      const col = STREAM_COLORS[i % STREAM_COLORS.length]
+      return { stream, color: col.color, bg: col.bg, group }
+    })
+
+    // Only include groups that are actually used
+    const usedGroups = new Set(newClasses.map(c => c.group))
+    const newGroups = CLASS_GROUPS.filter(g => usedGroups.has(g.group))
+
+    setCustomClasses(newClasses as typeof CLASSES)
+    setCustomGroups((newGroups.length ? newGroups : CLASS_GROUPS) as typeof CLASS_GROUPS)
+    setClassStreamMap(newStreamMap)
+    setCustomStreams(newStreamDefs)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeSections])
 
   const activeClasses    = customClasses
   const activeClassKeys  = useMemo(() => customClasses.map(c => c.key), [customClasses])
