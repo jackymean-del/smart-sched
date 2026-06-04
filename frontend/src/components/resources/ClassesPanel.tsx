@@ -497,32 +497,40 @@ function StreamSetupBanner({ streams, onApply }: {
   )
 }
 
-// ─── Inline stream name editor (used inside stream header row) ────────────────
-function StreamNameInput({ initial, onCommit, onCancel }: {
+// ─── Stream name input — always visible in the stream header row ─────────────
+function StreamNameInput({ initial, onCommit, onCancel: _onCancel }: {
   initial: string
   onCommit: (v: string) => void
   onCancel: () => void
 }) {
   const [val, setVal] = useState(initial)
-  const ref = useRef<HTMLInputElement>(null)
-  useEffect(() => { ref.current?.focus(); ref.current?.select() }, [])
+  // Keep in sync when the stored stream name changes (e.g. after a rename)
+  useEffect(() => { setVal(initial) }, [initial])
+
+  const isShort = initial.trim().length <= 5   // highlight if still abbreviated
+
   return (
     <input
-      ref={ref}
       value={val}
       onChange={e => setVal(e.target.value)}
-      onBlur={() => onCommit(val)}
+      onBlur={() => { if (val.trim() && val.trim() !== initial) onCommit(val.trim()) }}
       onKeyDown={e => {
-        if (e.key === 'Enter') { e.preventDefault(); onCommit(val) }
-        if (e.key === 'Escape') { e.preventDefault(); onCancel() }
+        if (e.key === 'Enter') { e.preventDefault(); if (val.trim()) onCommit(val.trim()) }
+        if (e.key === 'Escape') { e.preventDefault(); setVal(initial) }
       }}
-      placeholder="Full stream name…"
+      placeholder="Enter full stream name…"
+      title="Type full stream name and press Enter"
       style={{
-        fontSize: 12, fontWeight: 700, color: '#6B64A8',
-        border: '1.5px solid #C4BAFF', borderRadius: 6,
-        padding: '2px 8px', outline: 'none', background: '#fff',
-        fontFamily: 'inherit', width: 160,
+        fontSize: 12, fontWeight: 700,
+        color: val.trim().length > 5 ? '#6B64A8' : '#B45309',
+        border: isShort ? '1.5px solid #FDE68A' : `1.5px solid ${P_B}`,
+        background: isShort ? '#FFFBEB' : '#F7F5FF',
+        borderRadius: 6, padding: '3px 10px', outline: 'none',
+        fontFamily: 'inherit', width: 170,
+        transition: 'border-color 0.15s, background 0.15s',
       }}
+      onFocus={e => { e.currentTarget.style.borderColor = isShort ? '#F59E0B' : P; e.currentTarget.style.boxShadow = `0 0 0 3px ${isShort ? '#FDE68A' : P_B}` }}
+      onBlurCapture={e => { e.currentTarget.style.boxShadow = 'none' }}
     />
   )
 }
@@ -764,22 +772,6 @@ export function ClassesPanel({ sections, setSections, onScopeClick }: {
         />
       )}
 
-      {/* Stream setup banner — auto-shown when any stream name looks abbreviated */}
-      <StreamSetupBanner
-        streams={existingStreams}
-        onApply={map => {
-          undoHistory.push(sections)
-          setSections(sections.map(s => {
-            const sec = s as SectionExt
-            const g   = sec.grade ?? getGrade(s.name)
-            const st  = sec.stream ?? getStreamFromName(s.name, g) ?? ''
-            const full = map[st]
-            if (full && full.trim() !== st) return { ...s, stream: full.trim() } as Section
-            return s
-          }) as Section[])
-        }}
-      />
-
       {/* Table */}
       <div style={TABLE_CARD}>
         {sections.length === 0 && !search ? (
@@ -882,24 +874,12 @@ export function ClassesPanel({ sections, setSections, onScopeClick }: {
                                   <ChevronDown size={13} strokeWidth={2.5} />
                                 </span>
 
-                                {/* Inline-editable stream name */}
-                                {editingStreamKey === streamKey ? (
-                                  <StreamNameInput
-                                    initial={stream}
-                                    onCommit={v => renameStream(grade, stream, v)}
-                                    onCancel={() => setEditingStreamKey(null)}
-                                  />
-                                ) : (
-                                  <span
-                                    onClick={() => setEditingStreamKey(streamKey)}
-                                    title="Click to rename this stream"
-                                    style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.01em', color: '#6B64A8', cursor: 'text', borderRadius: 4, padding: '1px 4px' }}
-                                    onMouseEnter={e => (e.currentTarget.style.background = '#EDE9FF')}
-                                    onMouseLeave={e => (e.currentTarget.style.background = '')}
-                                  >
-                                    {stream}
-                                  </span>
-                                )}
+                                {/* Stream name — always an input so user types directly */}
+                                <StreamNameInput
+                                  initial={stream}
+                                  onCommit={v => renameStream(grade, stream, v)}
+                                  onCancel={() => {}}
+                                />
 
                                 <span style={{ fontSize: 11, fontWeight: 500, color: '#ADA8CC' }}>
                                   · {secs.length} class{secs.length !== 1 ? 'es' : ''}
