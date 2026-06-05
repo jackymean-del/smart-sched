@@ -1012,8 +1012,12 @@ export function DashboardPage() {
     useTimetableStore.getState().resetWizard()
     useTimetableStore.getState().setConfig({
       timetableName: entry.name,
-      fromGrade: entry.fromGrade ?? 'Nursery',
-      toGrade:   entry.toGrade   ?? 'Class XII',
+      fromGrade:   entry.fromGrade   ?? 'Nursery',
+      toGrade:     entry.toGrade     ?? 'Class XII',
+      numSections: entry.approxClasses,
+      numStaff:    entry.approxTeachers,
+      numSubjects: entry.approxSubjects,
+      numRooms:    entry.approxRooms,
     } as any)
     useTimetableStore.getState().setStep(1)
     window.location.href = '/wizard'
@@ -1073,6 +1077,17 @@ export function DashboardPage() {
     setTTList(next)
     saveTTList(next)
     setEditingTT(null)
+    // If this is the active timetable, sync new counts to the store config
+    if (getActiveTTId() === updated.id) {
+      const s = useTimetableStore.getState() as any
+      s.setConfig?.({
+        ...s.config,
+        numSections: updated.approxClasses,
+        numStaff:    updated.approxTeachers,
+        numSubjects: updated.approxSubjects,
+        numRooms:    updated.approxRooms,
+      })
+    }
     // Navigate into the wizard for this timetable
     handleContinue(updated)
   }

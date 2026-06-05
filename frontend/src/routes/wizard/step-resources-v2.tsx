@@ -476,10 +476,19 @@ export function StepResourcesV2() {
   const handleGenerateAll = async () => {
     setGenerating(true)
     await new Promise(r => setTimeout(r, 700))
-    const newSections = buildSections(3)
-    const newStaff    = buildDefaultStaff(84)
-    const newSubjects = buildDefaultSubjects(normalizeBoardType(config.board))
-    const newRooms    = buildDefaultRooms()
+    const targetStaff    = (config as any).numStaff    ?? 84
+    const targetSubjects = (config as any).numSubjects ?? undefined
+    const targetRooms    = (config as any).numRooms    ?? 60
+    const targetSections = (config as any).numSections ?? undefined
+    const builtSections  = buildSections(3)
+    const newSections    = targetSections && builtSections.length > targetSections
+      ? builtSections.slice(0, targetSections)
+      : builtSections
+    const newStaff       = buildDefaultStaff(targetStaff)
+    const allSubjects    = buildDefaultSubjects(normalizeBoardType(config.board))
+    const newSubjects    = targetSubjects ? allSubjects.slice(0, targetSubjects) : allSubjects
+    const allRooms       = buildDefaultRooms()
+    const newRooms       = allRooms.slice(0, targetRooms)
     setSections(newSections.map((sec: any, i: number) => ({
       ...sec,
       classTeacher: newStaff[i % newStaff.length]?.name ?? '',
@@ -488,7 +497,7 @@ export function StepResourcesV2() {
     setStaff(newStaff)
     setSubjects(newSubjects)
     setRooms(newRooms)
-    store.setConfig?.({ ...config, numStaff: 84, numSubjects: 38, numRooms: 60 })
+    store.setConfig?.({ ...config, numStaff: newStaff.length, numSubjects: newSubjects.length, numRooms: newRooms.length })
     setGenerating(false)
   }
 
