@@ -1087,6 +1087,10 @@ export function SubjectsPanel({
   const [sortAZ,           setSortAZ]           = useState(false)
   const [filterUnassigned, setFilterUnassigned] = useState(false)
 
+  // Must be declared before the useEffect that references them
+  const assignedCount   = useMemo(() => subjects.filter(s => getAssignedClasses(s).length > 0).length, [subjects])
+  const unassignedCount = subjects.length - assignedCount
+
   // Clear the unassigned filter automatically once all are assigned
   useEffect(() => {
     if (filterUnassigned && unassignedCount === 0) setFilterUnassigned(false)
@@ -1210,9 +1214,6 @@ export function SubjectsPanel({
       .filter(s => s.name)
     if (newSubjects.length) setSubjects([...subjects, ...newSubjects])
   }
-
-  const assignedCount   = useMemo(() => subjects.filter(s => getAssignedClasses(s).length > 0).length, [subjects])
-  const unassignedCount = subjects.length - assignedCount
 
   // ─────────────────────────────────────────────────────────────────────────────
   return (
