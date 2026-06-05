@@ -479,45 +479,47 @@ export const CURRICULUM: Record<string, SubjectRule> = {
   // ── Secondary (IX–X) — science disciplines ────────────────────────────────────
   'Physics': {
     grades: ['secondary','srSec'],
+    streams: ['science','general'],   // science sections + untagged (general) sections; NOT commerce/arts
     requiresLab: true,
     slots:           { secondary: 4, srSec: 5 },
     icseSlots:       { secondary: 4, srSec: 6 },
     ibSlots:         { secondary: 5, srSec: 5 },
     cambridgeSlots:  { secondary: 5, srSec: 6 },
-    hint: 'Physics — standalone at XI–XII; 4 theory + 1 practical per week; requires lab',
+    hint: 'Physics — Science stream XI–XII only; 4 theory + 1 practical per week; requires lab',
   },
   'Chemistry': {
     grades: ['secondary','srSec'],
+    streams: ['science','general'],   // science + untagged sections; NOT commerce/arts
     requiresLab: true,
     slots:           { secondary: 4, srSec: 5 },
     icseSlots:       { secondary: 4, srSec: 6 },
     ibSlots:         { secondary: 5, srSec: 5 },
     cambridgeSlots:  { secondary: 5, srSec: 6 },
-    hint: 'Chemistry — standalone at XI–XII; 4 theory + 1 practical per week; requires lab',
+    hint: 'Chemistry — Science stream XI–XII only; 4 theory + 1 practical per week; requires lab',
   },
   'Biology': {
     grades: ['secondary','srSec'],
-    streams: ['science'],
+    streams: ['science','general'],   // PCB science sections
     requiresLab: true,
     slots:           { secondary: 4, srSec: 5 },
     icseSlots:       { secondary: 4, srSec: 6 },
     ibSlots:         { secondary: 4, srSec: 5 },
     cambridgeSlots:  { secondary: 4, srSec: 5 },
-    hint: 'Biology — PCB stream at XI–XII; 4 theory + 1 practical per week; requires lab',
+    hint: 'Biology — PCB science stream at XI–XII; 4 theory + 1 practical per week; requires lab',
   },
   'Botany': {
     grades: ['srSec'],
-    streams: ['science'],
+    streams: ['science','general'],
     requiresLab: true,
     slots: { srSec: 4 },
-    hint: 'Botany — part of Biology for PCB/PCM+Bio stream at XI–XII (SPARK sections); requires lab',
+    hint: 'Botany — SPARK (PCB) science sections at XI–XII; requires lab',
   },
   'Zoology': {
     grades: ['srSec'],
-    streams: ['science'],
+    streams: ['science','general'],
     requiresLab: true,
     slots: { srSec: 4 },
-    hint: 'Zoology — part of Biology for PCB/PCM+Bio stream at XI–XII (SPARK sections); requires lab',
+    hint: 'Zoology — SPARK (PCB) science sections at XI–XII; requires lab',
   },
   'Biotechnology': {
     grades: ['srSec'],
@@ -530,21 +532,21 @@ export const CURRICULUM: Record<string, SubjectRule> = {
   // ── Secondary — social sciences ───────────────────────────────────────────────
   'History': {
     grades: ['secondary','srSec'],
-    streams: ['arts','general'],
+    streams: ['arts'],                // Humanities sections only (XI-HUM, XII-HUM)
     slots:     { secondary: 3, srSec: 4 },
     icseSlots: { secondary: 4, srSec: 4 },
-    hint: 'History — part of SST in CBSE IX–X; standalone Humanities stream subject at XI–XII (4 p/w)',
+    hint: 'History — Humanities stream only at XI–XII (4 p/w)',
   },
   'Geography': {
     grades: ['secondary','srSec'],
-    streams: ['arts','general'],
+    streams: ['arts'],                // Humanities sections only
     slots:     { secondary: 3, srSec: 4 },
     icseSlots: { secondary: 4, srSec: 4 },
-    hint: 'Geography — part of SST in CBSE IX–X; standalone Humanities stream subject at XI–XII (4 p/w)',
+    hint: 'Geography — Humanities stream only at XI–XII (4 p/w)',
   },
   'Political Science': {
     grades: ['secondary','srSec'],
-    streams: ['arts','general'],
+    streams: ['arts'],                // Humanities sections only
     slots:     { secondary: 2, srSec: 6 },
     icseSlots: { secondary: 3, srSec: 6 },
     hint: 'Political Science — Humanities core at XI–XII; 5–6 periods per week',
@@ -612,9 +614,9 @@ export const CURRICULUM: Record<string, SubjectRule> = {
   },
   'Entrepreneurship': {
     grades: ['srSec'],
-    streams: ['commerce','arts','general'],
+    streams: ['commerce','arts'],     // Commerce + Humanities only; NOT science sections
     slots: { srSec: 4 },
-    hint: 'Entrepreneurship — popular elective in Commerce and Arts at XI–XII',
+    hint: 'Entrepreneurship — Commerce and Humanities 5th-subject elective at XI–XII',
   },
   'Legal Studies': {
     grades: ['srSec'],
@@ -632,13 +634,13 @@ export const CURRICULUM: Record<string, SubjectRule> = {
   // ── Sr. Secondary — Arts/Humanities stream (XI–XII) ──────────────────────────
   'Psychology': {
     grades: ['srSec'],
-    streams: ['arts','general'],
+    streams: ['arts'],                // Humanities sections only
     slots: { srSec: 4 },
     hint: 'Psychology — Humanities 5th subject elective at XI–XII (4 p/w)',
   },
   'Sociology': {
     grades: ['srSec'],
-    streams: ['arts','general'],
+    streams: ['arts'],                // Humanities sections only
     slots: { srSec: 4 },
     hint: 'Sociology — Humanities 5th subject elective at XI–XII (4 p/w)',
   },
@@ -727,10 +729,13 @@ export function suggestClassesForSubject(
       const grade = getGrade(sec.name)
       const group = getGradeGroup(grade)
       if (!rule.grades.includes(group)) return false
-      // Stream check applies only to srSec sections
+      // Stream check applies only to srSec sections.
+      // We no longer have a blanket "general sections get everything" fallback —
+      // each subject must explicitly declare 'general' in its streams list if it
+      // should appear in sections that don't carry a stream code (e.g. XI-A1, XI-C).
       if (group === 'srSec' && rule.streams && rule.streams.length > 0) {
         const stream = detectStream(sec.name)
-        return rule.streams.includes(stream) || stream === 'general'
+        return rule.streams.includes(stream)
       }
       return true
     })

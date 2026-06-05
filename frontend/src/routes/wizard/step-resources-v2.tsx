@@ -116,58 +116,56 @@ function buildSectionsFromDefs(
 // Subject definitions: curriculum-aware with AI-recommended slots (middle-school baseline)
 // ppw = fallback; the actual value gets set when the user runs "AI Assign" from SubjectsPanel
 const DEFAULT_SUBJECTS: Array<{ name: string; cat: string; ppw: number; short?: string }> = [
-  // Core academics
-  { name: 'Mathematics',              cat: 'Compulsory',   ppw: 6 },
-  { name: 'English',                  cat: 'Compulsory',   ppw: 5 },
-  { name: 'Science',                  cat: 'Compulsory',   ppw: 5 },
-  { name: 'Social Studies',           cat: 'Compulsory',   ppw: 5, short: 'SST' },
-  // Languages
-  { name: 'Hindi',                    cat: 'Language',     ppw: 4 },
-  { name: 'Sanskrit / MIL',           cat: 'Language',     ppw: 3 },
-  { name: 'EVS',                      cat: 'Compulsory',   ppw: 4 },
-  // Technology
-  { name: 'Computer Science',         cat: 'Compulsory',   ppw: 5 },
-  // Sciences (secondary / sr. secondary)
-  { name: 'Physics',                  cat: 'Compulsory',   ppw: 5 },
-  { name: 'Chemistry',                cat: 'Compulsory',   ppw: 5 },
-  { name: 'Biology',                  cat: 'Compulsory',   ppw: 5 },
-  { name: 'Botany',                   cat: 'Compulsory',   ppw: 4, short: 'BOT' },
-  { name: 'Zoology',                  cat: 'Compulsory',   ppw: 4, short: 'ZOO' },
-  // Commerce
-  { name: 'Accountancy',              cat: 'Compulsory',   ppw: 6, short: 'ACC' },
-  { name: 'Business Studies',         cat: 'Compulsory',   ppw: 4, short: 'BST' },
-  { name: 'Economics',                cat: 'Compulsory',   ppw: 5, short: 'ECO' },
-  // Humanities / SST components
-  { name: 'History',                  cat: 'Compulsory',   ppw: 4 },
-  { name: 'Geography',                cat: 'Compulsory',   ppw: 4 },
-  { name: 'Political Science',        cat: 'Compulsory',   ppw: 6, short: 'POL SC' },
-  // Electives / 5th subject
-  { name: 'Psychology',               cat: 'Optional',     ppw: 4 },
-  { name: 'Sociology',                cat: 'Optional',     ppw: 4 },
-  { name: 'Informatics Practices',    cat: 'Compulsory',   ppw: 4, short: 'IP' },
-  { name: 'English Literature',       cat: 'Language',     ppw: 4 },
-  { name: 'Entrepreneurship',         cat: 'Skill',        ppw: 4, short: 'ENT' },
-  // Environmental Studies (all streams XI-XII — EST period)
-  { name: 'Environmental Studies',    cat: 'Compulsory',   ppw: 1, short: 'EST' },
-  // Activities & CCA
-  { name: 'Physical Education',       cat: 'CCA',          ppw: 1, short: 'PE' },
-  { name: 'Painting',                 cat: 'CCA',          ppw: 1 },
-  { name: 'Library',                  cat: 'CCA',          ppw: 1 },
-  { name: 'Art & Craft',              cat: 'CCA',          ppw: 2 },
-  { name: 'Music',                    cat: 'CCA',          ppw: 1 },
-  { name: 'Dance',                    cat: 'CCA',          ppw: 1 },
-  { name: 'Drawing',                  cat: 'CCA',          ppw: 2 },
-  { name: 'Moral Science',            cat: 'Activity',     ppw: 1 },
-  { name: 'G.K.',                     cat: 'Activity',     ppw: 2 },
-  { name: 'SUPW / Life Skills',       cat: 'Activity',     ppw: 2 },
-  { name: 'Yoga & Health',            cat: 'Activity',     ppw: 1 },
-  { name: 'Scout & Guide',            cat: 'CCA',          ppw: 1 },
-  // Pre-primary
+  // ── Subjects present in ALL grade levels ─────────────────────────────────────
+  { name: 'Mathematics',              cat: 'Compulsory',   ppw: 6,  short: 'MATH' },
+  { name: 'English',                  cat: 'Compulsory',   ppw: 5,  short: 'ENG'  },
+  // ── Pre-primary / primary only ───────────────────────────────────────────────
   { name: 'Number Work',              cat: 'Compulsory',   ppw: 4 },
   { name: 'Nursery Rhymes & Stories', cat: 'Activity',     ppw: 3 },
   { name: 'Activity / Free Play',     cat: 'Activity',     ppw: 4 },
-  // Regional
-  { name: 'Odia / Regional Language', cat: 'Language',     ppw: 3 },
+  { name: 'EVS',                      cat: 'Compulsory',   ppw: 4 },
+  // ── Lower school (I–VIII) ────────────────────────────────────────────────────
+  { name: 'Science',                  cat: 'Compulsory',   ppw: 5 },
+  { name: 'Social Studies',           cat: 'Compulsory',   ppw: 5,  short: 'SST'  },
+  { name: 'Hindi',                    cat: 'Language',     ppw: 4,  short: 'HIN'  },
+  { name: 'Sanskrit / MIL',           cat: 'Language',     ppw: 3,  short: 'SANS' },
+  { name: 'Odia / Regional Language', cat: 'Language',     ppw: 3,  short: 'ODI'  },
+  { name: 'G.K.',                     cat: 'Activity',     ppw: 2 },
+  { name: 'Moral Science',            cat: 'Activity',     ppw: 1 },
+  { name: 'SUPW / Life Skills',       cat: 'Activity',     ppw: 2 },
+  { name: 'Scout & Guide',            cat: 'CCA',          ppw: 1 },
+  { name: 'Drawing',                  cat: 'CCA',          ppw: 2 },
+  { name: 'Music',                    cat: 'CCA',          ppw: 1 },
+  { name: 'Dance',                    cat: 'CCA',          ppw: 1 },
+  { name: 'Art & Craft',              cat: 'CCA',          ppw: 2 },
+  // ── Sciences — Secondary + Sr. Secondary ────────────────────────────────────
+  // (stream: science/general — NOT Commerce or Humanities)
+  { name: 'Physics',                  cat: 'Compulsory',   ppw: 5,  short: 'PHY'  },
+  { name: 'Chemistry',                cat: 'Compulsory',   ppw: 5,  short: 'CHEM' },
+  { name: 'Biology',                  cat: 'Compulsory',   ppw: 5,  short: 'BIO'  },
+  { name: 'Botany',                   cat: 'Compulsory',   ppw: 4,  short: 'BOT'  },
+  { name: 'Zoology',                  cat: 'Compulsory',   ppw: 4,  short: 'ZOO'  },
+  // Technology (science/general + Commerce)
+  { name: 'Computer Science',         cat: 'Compulsory',   ppw: 5,  short: 'CS'   },
+  // ── Commerce stream ──────────────────────────────────────────────────────────
+  { name: 'Accountancy',              cat: 'Compulsory',   ppw: 6,  short: 'ACC'  },
+  { name: 'Business Studies',         cat: 'Compulsory',   ppw: 4,  short: 'BST'  },
+  // ── Commerce + Humanities + optional in Science ──────────────────────────────
+  { name: 'Economics',                cat: 'Compulsory',   ppw: 5,  short: 'ECO'  },
+  // ── 5th subject — Commerce and Humanities only ───────────────────────────────
+  { name: 'Entrepreneurship',         cat: 'Skill',        ppw: 4,  short: 'ENT'  },
+  // ── Humanities stream ────────────────────────────────────────────────────────
+  { name: 'History',                  cat: 'Compulsory',   ppw: 4,  short: 'HIS'  },
+  { name: 'Geography',                cat: 'Compulsory',   ppw: 4,  short: 'GEO'  },
+  { name: 'Political Science',        cat: 'Compulsory',   ppw: 6,  short: 'POL SC'},
+  { name: 'Psychology',               cat: 'Optional',     ppw: 4,  short: 'PSY'  },
+  { name: 'Sociology',                cat: 'Optional',     ppw: 4,  short: 'SOC'  },
+  // ── All Sr. Secondary streams ────────────────────────────────────────────────
+  { name: 'Environmental Studies',    cat: 'Compulsory',   ppw: 1,  short: 'EST'  },
+  { name: 'Physical Education',       cat: 'CCA',          ppw: 1,  short: 'PE'   },
+  { name: 'Painting',                 cat: 'CCA',          ppw: 1,  short: 'PAINT'},
+  { name: 'Library',                  cat: 'CCA',          ppw: 1,  short: 'LIB'  },
+  { name: 'Yoga & Health',            cat: 'Activity',     ppw: 1 },
 ]
 
 function buildDefaultSubjects(board: CurriculumBoard = 'CBSE', sections: Section[] = []): Subject[] {
@@ -175,22 +173,25 @@ function buildDefaultSubjects(board: CurriculumBoard = 'CBSE', sections: Section
   const presentGroups = new Set(sections.map(s => getGradeGroup(getGrade(s.name))))
   const srSecOnly = presentGroups.size > 0 && [...presentGroups].every(g => g === 'srSec')
 
-  // Subject-level grade group rules (from CURRICULUM keys that match DEFAULT_SUBJECTS names)
-  const SRSEC_ONLY_SUBJECTS = new Set([
-    'Physics','Chemistry','Biology','Botany','Zoology',
-    'Accountancy','Business Studies','Entrepreneurship',
-    'Political Science','Psychology','Sociology',
-    'Informatics Practices','English Literature',
-    'Applied Mathematics','Mathematics (Optional)',
-    'Biotechnology','Fine Arts','Legal Studies','Statistics',
-  ])
+  // Subjects that only make sense below sr. secondary (exclude from XI-XII-only schools)
   const PRIMARY_ONLY_SUBJECTS = new Set([
     'Number Work','Nursery Rhymes & Stories','Activity / Free Play','EVS',
   ])
+  // Subjects that are lower-school focused (drop when school is XI-XII only)
   const PRESRSEC_SUBJECTS = new Set([
     'Science','Social Studies','Hindi','Sanskrit / MIL',
-    'G.K.','SUPW / Life Skills','Scout & Guide','Drawing','Moral Science',
+    'G.K.','Moral Science','SUPW / Life Skills','Scout & Guide',
+    'Drawing','Music','Dance','Art & Craft',
     'Odia / Regional Language',
+  ])
+  // Subjects that are sr. secondary only (drop when there are NO srSec sections)
+  const SRSEC_ONLY_SUBJECTS = new Set([
+    'Physics','Chemistry','Biology','Botany','Zoology',
+    'Accountancy','Business Studies','Entrepreneurship',
+    'Political Science','History','Geography','Psychology','Sociology',
+    'Environmental Studies',
+    'Applied Mathematics','Mathematics (Optional)',
+    'Biotechnology','Fine Arts','Legal Studies','Statistics',
   ])
 
   return DEFAULT_SUBJECTS
