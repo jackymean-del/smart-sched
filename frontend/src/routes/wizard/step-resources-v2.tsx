@@ -516,47 +516,88 @@ export function StepResourcesV2() {
   }, [])
 
   // ── Generate all ──────────────────────────────────────────────────────────
+  /**
+   * Fills in blank resources (subjects · staff · rooms).
+   * NEVER rebuilds sections if the user already has classes set up —
+   * existing sections are preserved and drive subject/staff assignment.
+   */
   const handleGenerateAll = async () => {
     setGenerating(true)
     await new Promise(r => setTimeout(r, 700))
-    const targetStaff    = (config as any).numStaff    ?? 84
-    const targetSubjects = (config as any).numSubjects ?? undefined
-    const targetRooms    = (config as any).numRooms    ?? 60
-    const targetSections = (config as any).numSections ?? undefined
-    const board          = normalizeBoardType(config.board)
-    const builtSections  = buildSections(3)
-    const rawSections    = targetSections && builtSections.length > targetSections
-      ? builtSections.slice(0, targetSections)
-      : builtSections
-    const newStaff       = buildDefaultStaff(targetStaff)
-    const seededSections = rawSections.map((sec: any, i: number) => ({
-      ...sec,
-      classTeacher: newStaff[i % newStaff.length]?.name ?? '',
-      strength: DEFAULT_STRENGTH[GRADE_GROUP[(sec as any).grade] ?? 'Primary'] ?? 35,
-    }))
-    // Pass sections so buildDefaultSubjects can filter & size for the actual grade groups
-    const allSubjects    = buildDefaultSubjects(board, seededSections)
-    const newSubjects    = targetSubjects ? allSubjects.slice(0, targetSubjects) : allSubjects
-    const allRooms       = buildDefaultRooms()
-    const newRooms       = allRooms.slice(0, targetRooms)
 
-    // For srSec-only (XI-XII) schools: auto-assign subjects → stream sections
-    const presentGroups  = new Set(seededSections.map((s: any) => getGradeGroup(getGrade(s.name))))
-    const srSecOnly      = presentGroups.size > 0 && [...presentGroups].every(g => g === 'srSec')
-    if (srSecOnly && newStaff.length > 0) {
-      const assigned = runAIAssignment(newSubjects, seededSections, newStaff, newRooms, board)
-      setSections(assigned.sections)
+    const targetStaff    = (config as any).numStaff    ?? 47
+    const targetSubjects = (config as any).numSubjects ?? undefined
+    const targetRooms    = (config as any).numRooms    ?? 30
+    const board          = normalizeBoardType(config.board)
+
+    // ── 1. Sections: KEEP existing if present; only seed if truly empty ──────
+    let workingSections: any[]
+    if (sections.length > 0) {
+      // Preserve every class the user configured
+      workingSections = sections as any[]
+    } else {
+      const targetSections = (config as any).numSections ?? undefined
+      const built = buildSections(3)
+      const raw   = targetSections && built.length > targetSections
+        ? built.slice(0, targetSections) : built
+      workingSections = raw.map((sec: any) => ({
+        ...sec,
+        strength: DEFAULT_STRENGTH[GRADE_GROUP[(sec as any).grade] ?? 'Primary'] ?? 35,
+      }))
+      setSections(workingSections)
+    }
+
+    // ── 2. Staff: always regenerate to the target count ──────────────────────
+    const newStaff = buildDefaultStaff(targetStaff)
+
+    // Assign class-teachers only to sections that don't already have one
+    const updatedSections = workingSections.map((sec: any, i: number) => ({
+      ...sec,
+      classTeacher: sec.classTeacher || newStaff[i % newStaff.length]?.name || '',
+    }))
+    if (updatedSections.some((s: any, i: number) => s.classTeacher !== workingSections[i]?.classTeacher)) {
+      setSections(updatedSections)
+    }
+
+    // ── 3. Subjects: build from the actual sections present ──────────────────
+    const allSubjects = buildDefaultSubjects(board, updatedSections)
+    const newSubjects = targetSubjects ? allSubjects.slice(0, targetSubjects) : allSubjects
+
+    // ── 4. Rooms ─────────────────────────────────────────────────────────────
+    const newRooms = buildDefaultRooms().slice(0, targetRooms)
+
+    // ── 5. For srSec-only (XI-XII) schools: stream-assign subjects via AI ────
+    const presentGroups = new Set(
+      updatedSections.map((s: any) => getGradeGroup(getGrade(s.name)))
+    )
+    const srSecOnly = presentGroups.size > 0 &&
+      [...presentGroups].every(g => g === 'srSec')
+
+    if (srSecOnly) {
+      const assigned = runAIAssignment(newSubjects, updatedSections, newStaff, newRooms, board)
       setStaff(assigned.staff)
       setSubjects(assigned.subjects)
       setRooms(assigned.rooms)
-      store.setConfig?.({ ...config, numStaff: assigned.staff.length, numSubjects: assigned.subjects.length, numRooms: assigned.rooms.length })
+      // Update class-teachers from AI result if it improved them
+      if (sections.length > 0) setSections(assigned.sections)
+      store.setConfig?.({
+        ...config,
+        numStaff: assigned.staff.length,
+        numSubjects: assigned.subjects.length,
+        numRooms: assigned.rooms.length,
+      })
     } else {
-      setSections(seededSections)
       setStaff(newStaff)
       setSubjects(newSubjects)
       setRooms(newRooms)
-      store.setConfig?.({ ...config, numStaff: newStaff.length, numSubjects: newSubjects.length, numRooms: newRooms.length })
+      store.setConfig?.({
+        ...config,
+        numStaff: newStaff.length,
+        numSubjects: newSubjects.length,
+        numRooms: newRooms.length,
+      })
     }
+
     setGenerating(false)
   }
 
@@ -654,8 +695,8 @@ export function StepResourcesV2() {
           })}
         </div>
 
-        {/* Regenerate all — in sidebar */}
-        {hasAnyData && (
+        {/* Fill / Regenerate button — visible whenever classes exist */}
+        {counts.classes > 0 && (
           <div style={{ margin: '8px 10px 0' }}>
             <button
               onClick={handleGenerateAll}
@@ -671,9 +712,14 @@ export function StepResourcesV2() {
               }}
               onMouseEnter={e => { if (!generating) (e.currentTarget.style.background = P_D) }}
               onMouseLeave={e => { if (!generating) (e.currentTarget.style.background = P) }}
+              title="Fills Subjects, Faculty and Rooms based on your classes. Does not change Classes."
             >
               <RefreshCw size={12} style={generating ? { animation: 'spin 1s linear infinite' } : {}} />
-              {generating ? 'Generating…' : 'Regenerate All'}
+              {generating
+                ? 'Generating…'
+                : (counts.subjects === 0 && counts.teachers === 0 && counts.rooms === 0)
+                  ? 'Fill Subjects & Staff'
+                  : 'Regenerate All'}
             </button>
           </div>
         )}
