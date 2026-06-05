@@ -24,7 +24,7 @@ import { makeId } from '@/components/master/EntityGrids'
 import { TeachersPanel } from '@/components/resources/TeachersPanel'
 import { ClassesPanel }  from '@/components/resources/ClassesPanel'
 import { SubjectsPanel, generateShortName } from '@/components/resources/SubjectsPanel'
-import { suggestSlotsPerWeek, normalizeBoardType, type CurriculumBoard } from '@/components/resources/curriculum'
+import { suggestSlotsPerWeek, normalizeBoardType, getGrade, getGradeGroup, type CurriculumBoard } from '@/components/resources/curriculum'
 import { RoomsPanel, type RoomExt } from '@/components/resources/RoomsPanel'
 import { runAIAssignment, type AISnapshot } from '@/components/resources/aiEngine'
 import {
@@ -118,38 +118,44 @@ function buildSectionsFromDefs(
 const DEFAULT_SUBJECTS: Array<{ name: string; cat: string; ppw: number; short?: string }> = [
   // Core academics
   { name: 'Mathematics',              cat: 'Compulsory',   ppw: 6 },
-  { name: 'English',                  cat: 'Compulsory',   ppw: 6 },
+  { name: 'English',                  cat: 'Compulsory',   ppw: 5 },
   { name: 'Science',                  cat: 'Compulsory',   ppw: 5 },
-  { name: 'Social Studies',           cat: 'Compulsory',   ppw: 5, short: 'SSC' },
+  { name: 'Social Studies',           cat: 'Compulsory',   ppw: 5, short: 'SST' },
   // Languages
   { name: 'Hindi',                    cat: 'Language',     ppw: 4 },
   { name: 'Sanskrit / MIL',           cat: 'Language',     ppw: 3 },
   { name: 'EVS',                      cat: 'Compulsory',   ppw: 4 },
   // Technology
-  { name: 'Computer Science',         cat: 'Compulsory',   ppw: 3 },
+  { name: 'Computer Science',         cat: 'Compulsory',   ppw: 5 },
   // Sciences (secondary / sr. secondary)
   { name: 'Physics',                  cat: 'Compulsory',   ppw: 5 },
   { name: 'Chemistry',                cat: 'Compulsory',   ppw: 5 },
   { name: 'Biology',                  cat: 'Compulsory',   ppw: 5 },
+  { name: 'Botany',                   cat: 'Compulsory',   ppw: 4, short: 'BOT' },
+  { name: 'Zoology',                  cat: 'Compulsory',   ppw: 4, short: 'ZOO' },
   // Commerce
-  { name: 'Accountancy',              cat: 'Compulsory',   ppw: 5 },
-  { name: 'Business Studies',         cat: 'Compulsory',   ppw: 5 },
-  { name: 'Economics',                cat: 'Compulsory',   ppw: 5 },
+  { name: 'Accountancy',              cat: 'Compulsory',   ppw: 6, short: 'ACC' },
+  { name: 'Business Studies',         cat: 'Compulsory',   ppw: 4, short: 'BST' },
+  { name: 'Economics',                cat: 'Compulsory',   ppw: 5, short: 'ECO' },
   // Humanities / SST components
-  { name: 'History',                  cat: 'Compulsory',   ppw: 5 },
-  { name: 'Geography',                cat: 'Compulsory',   ppw: 5 },
-  { name: 'Political Science',        cat: 'Compulsory',   ppw: 5 },
-  // Electives
-  { name: 'Psychology',               cat: 'Optional',     ppw: 5 },
-  { name: 'Informatics Practices',    cat: 'Compulsory',   ppw: 4 },
+  { name: 'History',                  cat: 'Compulsory',   ppw: 4 },
+  { name: 'Geography',                cat: 'Compulsory',   ppw: 4 },
+  { name: 'Political Science',        cat: 'Compulsory',   ppw: 6, short: 'POL SC' },
+  // Electives / 5th subject
+  { name: 'Psychology',               cat: 'Optional',     ppw: 4 },
+  { name: 'Sociology',                cat: 'Optional',     ppw: 4 },
+  { name: 'Informatics Practices',    cat: 'Compulsory',   ppw: 4, short: 'IP' },
   { name: 'English Literature',       cat: 'Language',     ppw: 4 },
-  { name: 'Entrepreneurship',         cat: 'Skill',        ppw: 4 },
+  { name: 'Entrepreneurship',         cat: 'Skill',        ppw: 4, short: 'ENT' },
+  // Environmental Studies (all streams XI-XII — EST period)
+  { name: 'Environmental Studies',    cat: 'Compulsory',   ppw: 1, short: 'EST' },
   // Activities & CCA
-  { name: 'Physical Education',       cat: 'CCA',          ppw: 2 },
+  { name: 'Physical Education',       cat: 'CCA',          ppw: 1, short: 'PE' },
+  { name: 'Painting',                 cat: 'CCA',          ppw: 1 },
+  { name: 'Library',                  cat: 'CCA',          ppw: 1 },
   { name: 'Art & Craft',              cat: 'CCA',          ppw: 2 },
   { name: 'Music',                    cat: 'CCA',          ppw: 1 },
   { name: 'Dance',                    cat: 'CCA',          ppw: 1 },
-  { name: 'Library',                  cat: 'CCA',          ppw: 1 },
   { name: 'Drawing',                  cat: 'CCA',          ppw: 2 },
   { name: 'Moral Science',            cat: 'Activity',     ppw: 1 },
   { name: 'G.K.',                     cat: 'Activity',     ppw: 2 },
@@ -162,22 +168,58 @@ const DEFAULT_SUBJECTS: Array<{ name: string; cat: string; ppw: number; short?: 
   { name: 'Activity / Free Play',     cat: 'Activity',     ppw: 4 },
   // Regional
   { name: 'Odia / Regional Language', cat: 'Language',     ppw: 3 },
-  { name: 'Environmental Studies',    cat: 'Compulsory',   ppw: 4, short: 'EVS' },
 ]
 
-function buildDefaultSubjects(board: CurriculumBoard = 'CBSE'): Subject[] {
-  return DEFAULT_SUBJECTS.map(d => {
-    // Use curriculum-recommended middle-school slot as the starting baseline
-    const aiPpw = suggestSlotsPerWeek(d.name, 'middle', board) ?? d.ppw
-    return {
-      id: makeId(), name: d.name,
-      periodsPerWeek: aiPpw,
-      category: d.cat as any, isOptional: false,
-      shortName: d.short ?? generateShortName(d.name),
-      sessionDuration: 45, maxPeriodsPerDay: 2,
-      requiresLab: false, color: P, sections: [], classConfigs: [],
-    } as unknown as Subject
-  })
+function buildDefaultSubjects(board: CurriculumBoard = 'CBSE', sections: Section[] = []): Subject[] {
+  // Determine which grade groups are present in the configured sections
+  const presentGroups = new Set(sections.map(s => getGradeGroup(getGrade(s.name))))
+  const srSecOnly = presentGroups.size > 0 && [...presentGroups].every(g => g === 'srSec')
+
+  // Subject-level grade group rules (from CURRICULUM keys that match DEFAULT_SUBJECTS names)
+  const SRSEC_ONLY_SUBJECTS = new Set([
+    'Physics','Chemistry','Biology','Botany','Zoology',
+    'Accountancy','Business Studies','Entrepreneurship',
+    'Political Science','Psychology','Sociology',
+    'Informatics Practices','English Literature',
+    'Applied Mathematics','Mathematics (Optional)',
+    'Biotechnology','Fine Arts','Legal Studies','Statistics',
+  ])
+  const PRIMARY_ONLY_SUBJECTS = new Set([
+    'Number Work','Nursery Rhymes & Stories','Activity / Free Play','EVS',
+  ])
+  const PRESRSEC_SUBJECTS = new Set([
+    'Science','Social Studies','Hindi','Sanskrit / MIL',
+    'G.K.','SUPW / Life Skills','Scout & Guide','Drawing','Moral Science',
+    'Odia / Regional Language',
+  ])
+
+  return DEFAULT_SUBJECTS
+    .filter(d => {
+      if (srSecOnly) {
+        // For XI-XII only schools: drop pre-primary and lower-grade-only subjects
+        if (PRIMARY_ONLY_SUBJECTS.has(d.name)) return false
+        if (PRESRSEC_SUBJECTS.has(d.name)) return false
+        return true
+      }
+      if (presentGroups.size > 0 && !presentGroups.has('srSec')) {
+        // No sr-sec sections — drop sr-sec-only subjects
+        if (SRSEC_ONLY_SUBJECTS.has(d.name)) return false
+      }
+      return true
+    })
+    .map(d => {
+      // Use the dominant grade group for slot recommendation
+      const dominant = srSecOnly ? 'srSec' : 'middle'
+      const aiPpw = suggestSlotsPerWeek(d.name, dominant, board) ?? d.ppw
+      return {
+        id: makeId(), name: d.name,
+        periodsPerWeek: aiPpw,
+        category: d.cat as any, isOptional: false,
+        shortName: d.short ?? generateShortName(d.name),
+        sessionDuration: 45, maxPeriodsPerDay: 2,
+        requiresLab: false, color: P, sections: [], classConfigs: [],
+      } as unknown as Subject
+    })
 }
 
 function buildDefaultRooms(): RoomExt[] {
@@ -480,24 +522,40 @@ export function StepResourcesV2() {
     const targetSubjects = (config as any).numSubjects ?? undefined
     const targetRooms    = (config as any).numRooms    ?? 60
     const targetSections = (config as any).numSections ?? undefined
+    const board          = normalizeBoardType(config.board)
     const builtSections  = buildSections(3)
-    const newSections    = targetSections && builtSections.length > targetSections
+    const rawSections    = targetSections && builtSections.length > targetSections
       ? builtSections.slice(0, targetSections)
       : builtSections
     const newStaff       = buildDefaultStaff(targetStaff)
-    const allSubjects    = buildDefaultSubjects(normalizeBoardType(config.board))
-    const newSubjects    = targetSubjects ? allSubjects.slice(0, targetSubjects) : allSubjects
-    const allRooms       = buildDefaultRooms()
-    const newRooms       = allRooms.slice(0, targetRooms)
-    setSections(newSections.map((sec: any, i: number) => ({
+    const seededSections = rawSections.map((sec: any, i: number) => ({
       ...sec,
       classTeacher: newStaff[i % newStaff.length]?.name ?? '',
       strength: DEFAULT_STRENGTH[GRADE_GROUP[(sec as any).grade] ?? 'Primary'] ?? 35,
-    })))
-    setStaff(newStaff)
-    setSubjects(newSubjects)
-    setRooms(newRooms)
-    store.setConfig?.({ ...config, numStaff: newStaff.length, numSubjects: newSubjects.length, numRooms: newRooms.length })
+    }))
+    // Pass sections so buildDefaultSubjects can filter & size for the actual grade groups
+    const allSubjects    = buildDefaultSubjects(board, seededSections)
+    const newSubjects    = targetSubjects ? allSubjects.slice(0, targetSubjects) : allSubjects
+    const allRooms       = buildDefaultRooms()
+    const newRooms       = allRooms.slice(0, targetRooms)
+
+    // For srSec-only (XI-XII) schools: auto-assign subjects → stream sections
+    const presentGroups  = new Set(seededSections.map((s: any) => getGradeGroup(getGrade(s.name))))
+    const srSecOnly      = presentGroups.size > 0 && [...presentGroups].every(g => g === 'srSec')
+    if (srSecOnly && newStaff.length > 0) {
+      const assigned = runAIAssignment(newSubjects, seededSections, newStaff, newRooms, board)
+      setSections(assigned.sections)
+      setStaff(assigned.staff)
+      setSubjects(assigned.subjects)
+      setRooms(assigned.rooms)
+      store.setConfig?.({ ...config, numStaff: assigned.staff.length, numSubjects: assigned.subjects.length, numRooms: assigned.rooms.length })
+    } else {
+      setSections(seededSections)
+      setStaff(newStaff)
+      setSubjects(newSubjects)
+      setRooms(newRooms)
+      store.setConfig?.({ ...config, numStaff: newStaff.length, numSubjects: newSubjects.length, numRooms: newRooms.length })
+    }
     setGenerating(false)
   }
 
