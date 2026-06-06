@@ -19,52 +19,81 @@ type SuggestionTemplate = {
   reason: string
 }
 
-/** Keyword clusters → typical OR/AND pattern */
+/** Keyword clusters — each entry can emit OR, AND, or both suggestions */
 const PATTERN_CLUSTERS: Array<{
-  keywords: string[]
-  label: string
-  logic: 'OR' | 'AND'
-  reason: string
+  keywords:  string[]
+  logic:     'OR' | 'AND' | 'BOTH'
+  orLabel?:  string
+  andLabel?: string
+  orReason:  string
+  andReason?: string
 }> = [
+  // ── Dedicated lab / practical entries → AND only ────────────────────────
   {
-    keywords: ['physics lab', 'chemistry lab', 'biology lab', 'computer lab', 'lab'],
-    label: 'Lab Parallel Split', logic: 'AND',
-    reason: 'Lab groups run simultaneously — students split into separate lab groups in the same slot',
+    keywords:  ['physics lab', 'chemistry lab', 'biology lab', 'computer lab', 'practical', 'workshop'],
+    logic:     'AND',
+    andLabel:  'Lab / Practical Parallel Split',
+    orReason:  '',
+    andReason: 'Lab and practical groups run simultaneously — students split into separate rooms in the same slot',
   },
+  // ── Science subjects → OR rotation + AND lab-split ───────────────────────
   {
-    keywords: ['physics', 'chemistry', 'biology', 'botany', 'zoology'],
-    label: 'Science Elective Rotation', logic: 'OR',
-    reason: 'Science electives typically rotate — one subject runs per slot based on teacher availability',
+    keywords:  ['physics', 'chemistry', 'biology', 'botany', 'zoology'],
+    logic:     'BOTH',
+    orLabel:   'Science Elective Rotation',
+    andLabel:  'Science Lab Parallel Split',
+    orReason:  'Science electives rotate — one subject runs per slot based on teacher availability',
+    andReason: 'Students divide into groups — physics, chemistry, and biology labs run simultaneously in the same period',
   },
+  // ── Arts subjects → OR rotation + AND activity split ─────────────────────
   {
-    keywords: ['music', 'art', 'dance', 'craft', 'drawing', 'painting', 'sculpture', 'theatre'],
-    label: 'Arts & Co-curricular Rotation', logic: 'OR',
-    reason: 'Co-curricular subjects rotate in a shared slot — students attend their chosen activity',
+    keywords:  ['music', 'art', 'dance', 'craft', 'drawing', 'painting', 'sculpture', 'theatre', 'drama', 'film'],
+    logic:     'BOTH',
+    orLabel:   'Arts & Co-curricular Rotation',
+    andLabel:  'Arts Activity Parallel Split',
+    orReason:  'Co-curricular subjects rotate — students attend their chosen activity in a shared slot',
+    andReason: 'Students are pre-divided into arts groups (music/art/dance) that run simultaneously',
   },
+  // ── PE / activity subjects → OR rotation + AND parallel groups ────────────
   {
-    keywords: ['french', 'german', 'spanish', 'japanese', 'arabic', 'persian', 'sanskrit', 'chinese'],
-    label: 'Foreign / Classical Language Options', logic: 'OR',
-    reason: 'Students choose one optional language — subjects rotate in the same language period',
+    keywords:  ['physical education', 'yoga', 'ncc', 'nss', 'sports', 'games', 'gym', 'scouts', 'band'],
+    logic:     'BOTH',
+    orLabel:   'Physical Activity Rotation',
+    andLabel:  'Activity Group Parallel Split',
+    orReason:  'Physical activities rotate in a shared P.E. period',
+    andReason: 'Students are pre-divided into activity groups (NCC / NSS / Sports / Yoga) that run in parallel',
   },
+  // ── Languages → OR only (students choose one) ────────────────────────────
   {
-    keywords: ['economics', 'business studies', 'accountancy', 'commerce', 'entrepreneurship'],
-    label: 'Commerce Elective Rotation', logic: 'OR',
-    reason: 'Commerce optional subjects typically rotate in a shared commerce slot',
+    keywords:  ['french', 'german', 'spanish', 'japanese', 'arabic', 'persian', 'sanskrit', 'chinese', 'mandarin'],
+    logic:     'OR',
+    orLabel:   'Foreign / Classical Language Options',
+    orReason:  'Students choose one optional language — subjects rotate in the same language period',
   },
+  // ── Commerce → OR rotation + AND parallel split ───────────────────────────
   {
-    keywords: ['psychology', 'sociology', 'political science', 'philosophy', 'legal studies'],
-    label: 'Humanities Elective Rotation', logic: 'OR',
-    reason: 'Humanities optional subjects rotate in a shared elective period',
+    keywords:  ['economics', 'business studies', 'accountancy', 'commerce', 'entrepreneurship', 'taxation'],
+    logic:     'BOTH',
+    orLabel:   'Commerce Elective Rotation',
+    andLabel:  'Commerce Parallel Split',
+    orReason:  'Commerce optional subjects rotate in a shared slot',
+    andReason: 'Students divide into commerce groups — accountancy, economics, and business studies run simultaneously',
   },
+  // ── Humanities → OR rotation + AND parallel split ─────────────────────────
   {
-    keywords: ['computer science', 'information technology', 'informatics', 'computer application', 'ai', 'artificial intelligence'],
-    label: 'Computing Options', logic: 'OR',
-    reason: 'Computing variants share the same slot — one runs per period',
+    keywords:  ['psychology', 'sociology', 'political science', 'philosophy', 'legal studies', 'history', 'geography'],
+    logic:     'BOTH',
+    orLabel:   'Humanities Elective Rotation',
+    andLabel:  'Humanities Parallel Split',
+    orReason:  'Humanities optional subjects rotate in a shared elective period',
+    andReason: 'Students divide into humanities groups that run simultaneously in the same elective period',
   },
+  // ── Computing → OR only ──────────────────────────────────────────────────
   {
-    keywords: ['physical education', 'yoga', 'ncc', 'nss', 'sports', 'games', 'gym'],
-    label: 'Physical Activity Rotation', logic: 'OR',
-    reason: 'Physical education activities rotate in a shared P.E. period',
+    keywords:  ['computer science', 'information technology', 'informatics', 'computer application', 'artificial intelligence', 'data science'],
+    logic:     'OR',
+    orLabel:   'Computing Options',
+    orReason:  'Computing variants share the same slot — one runs per period',
   },
 ]
 
@@ -77,21 +106,42 @@ function generateSuggestions(
   const alreadyCombo = new Set<string>(existingCombos.flatMap(g => g.subjects))
   const lc = (s: string) => s.toLowerCase()
 
-  // 1. Pattern-based suggestions
+  const push = (sug: SuggestionTemplate) => {
+    if (!suggestions.find(x => x.id === sug.id)) suggestions.push(sug)
+  }
+
+  // 1. Pattern-based suggestions — emit OR / AND / both per cluster
   for (const cluster of PATTERN_CLUSTERS) {
     const matched = allSubjects.filter(s =>
       !alreadyCombo.has(s) &&
       cluster.keywords.some(kw => lc(s).includes(kw))
     )
     if (matched.length < 2) continue
-    // Avoid duplicates with previously emitted suggestions
-    const id = 'sug_' + cluster.label.replace(/\s+/g, '_').toLowerCase().slice(0, 24)
-    if (!suggestions.find(s => s.id === id)) {
-      suggestions.push({ id, label: cluster.label, logic: cluster.logic, subjects: matched, reason: cluster.reason })
+
+    const base = cluster.keywords[0].replace(/\s+/g, '_').slice(0, 16)
+
+    if (cluster.logic === 'OR' || cluster.logic === 'BOTH') {
+      push({
+        id:       `sug_or_${base}`,
+        label:    cluster.orLabel ?? 'Elective Rotation',
+        logic:    'OR',
+        subjects: matched,
+        reason:   cluster.orReason,
+      })
+    }
+    if (cluster.logic === 'AND' || cluster.logic === 'BOTH') {
+      push({
+        id:       `sug_and_${base}`,
+        label:    cluster.andLabel ?? 'Parallel Split',
+        logic:    'AND',
+        subjects: matched,
+        reason:   cluster.andReason ?? '',
+      })
     }
   }
 
   // 2. Section-signature suggestions: subjects sharing the exact same set of sections
+  //    → suggest as OR rotation; also as AND if ≥2 subjects share same sections
   const bySig = new Map<string, string[]>()
   for (const [sub, secs] of Object.entries(subjectSectionsMap)) {
     if (!allSubjects.includes(sub) || alreadyCombo.has(sub)) continue
@@ -102,16 +152,28 @@ function generateSuggestions(
   }
   for (const [, subs] of bySig) {
     if (subs.length < 2) continue
-    // Skip if already covered by a pattern suggestion
-    if (suggestions.some(sg => sg.subjects.every(s => subs.includes(s)) && subs.every(s => sg.subjects.includes(s)))) continue
-    const id = 'sug_sec_' + subs.slice(0, 3).join('_').replace(/\s+/g, '').toLowerCase()
-    suggestions.push({
-      id,
-      label: 'Subjects for the same classes',
-      logic: 'OR',
-      subjects: subs,
-      reason: 'These subjects are all assigned to the same class-sections — they are likely optional electives that rotate in a shared slot',
-    })
+    // Skip if every subject is already covered by a pattern suggestion
+    const covered = (logic: 'OR' | 'AND') =>
+      suggestions.some(sg => sg.logic === logic && subs.every(s => sg.subjects.includes(s)))
+    const sigKey = subs.slice(0, 3).join('_').replace(/\s+/g, '').toLowerCase()
+    if (!covered('OR')) {
+      push({
+        id:       `sug_sec_or_${sigKey}`,
+        label:    'Subjects for the same classes — Rotation',
+        logic:    'OR',
+        subjects: subs,
+        reason:   'These subjects are all assigned to the same class-sections — likely optional electives that rotate in a shared slot',
+      })
+    }
+    if (!covered('AND')) {
+      push({
+        id:       `sug_sec_and_${sigKey}`,
+        label:    'Subjects for the same classes — Parallel Split',
+        logic:    'AND',
+        subjects: subs,
+        reason:   'Alternatively, students can be pre-divided into groups — all subjects run simultaneously in the same period',
+      })
+    }
   }
 
   return suggestions
