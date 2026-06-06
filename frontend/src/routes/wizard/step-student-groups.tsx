@@ -425,7 +425,22 @@ export function StepStudentGroups() {
     (subjects as any[]).filter(s => s.isOptional === true || (s.category ?? '').toLowerCase().includes('optional'))
   , [subjects])
 
-  const subjectList = useMemo(() => optionalSubjects.map(s => s.name as string), [optionalSubjects])
+  // Only show optional subjects that are actually assigned to at least one section.
+  // A subject with no assignments (classConfigs, sections[], or subjectAllocations)
+  // has nothing to display in the matrix — hide it until sections are assigned.
+  const subjectList = useMemo(() =>
+    optionalSubjects
+      .filter((s: any) => {
+        const fromConfigs = (s.classConfigs ?? []).map((c: any) => c.sectionName).filter(Boolean) as string[]
+        if (fromConfigs.length > 0) return true
+        if ((s.sections ?? []).length > 0) return true
+        return Object.keys(subjectAllocations).some(secName => {
+          const raw = (subjectAllocations[secName] as any)?.[s.name]
+          return raw && parseAllocation(raw).weeklyTotal > 0
+        })
+      })
+      .map((s: any) => s.name as string)
+  , [optionalSubjects, subjectAllocations])
 
   // ── Relevant sections ──────────────────────────────────────────────────────
   const optionalSections = useMemo(() => {
