@@ -407,7 +407,7 @@ const initialState: Omit<ScheduState,
   | 'setSections' | 'setLegacySubjects' | 'setStaff' | 'setBreaks' | 'setPeriods'
   | 'setClassTT' | 'setTeacherTT' | 'setSubstitutions' | 'setConflicts' | 'setSuggestions'
   | 'setParticipantPools' | 'setFacilities' | 'setTeacherPools' | 'setRooms'
-  | 'setOptionalConfigs' | 'setSubjectPools' | 'setSchedulingMode' | 'setWorkingDaysPerYear'
+  | 'setOptionalConfigs' | 'setSubjectPools' | 'setSubjectGroups' | 'setSchedulingMode' | 'setWorkingDaysPerYear'
   | 'togglePeriodShiftable' | 'updateCell'
   | 'setOptionalBlocks' | 'upsertOptionalBlock' | 'removeOptionalBlock'
   | 'setSubjectCombinations' | 'upsertSubjectCombination' | 'removeSubjectCombination'
