@@ -3,6 +3,7 @@ import { useTimetableStore } from "@/store/timetableStore"
 import { ORG_CONFIGS } from "@/lib/orgData"
 import { rebuildTeacherTT } from "@/lib/aiEngine"
 import { detectConflicts } from "@/lib/schedulingEngine"
+import { parseCellSubject } from "@/components/timetable/TimetableCell"
 
 interface Props {
   target: { section: string; day: string; periodId: string }
@@ -28,6 +29,16 @@ const SUBJECT_COLORS = [
   { bg: "#ecfeff", border: "#67e8f9", text: "#164e63" },  // cyan
 ]
 
+// ── Colours for group mode ────────────────────────────────────────────────────
+const OR_C  = { bg: "#FFFBEB", bdr: "#FDE68A", text: "#92400E", tag: "#D97706" }
+const AND_C = { bg: "#EDE9FF", bdr: "#C4B5FD", text: "#3730A3", tag: "#7C6FE0" }
+
+type CellMode = "single" | "OR" | "AND"
+
+function buildGroupSubject(logic: "OR" | "AND", subjects: string[]) {
+  return subjects.length >= 2 ? subjects.join(` ${logic} `) : subjects[0] ?? ""
+}
+
 export function EditCellModal({ target, onClose, initialSubject }: Props) {
   const {
     config, classTT, staff, subjects, sections, periods, facilities,
@@ -39,10 +50,33 @@ export function EditCellModal({ target, onClose, initialSubject }: Props) {
   const section    = sections.find(s => s.name === target.section)
   const periodObj  = periods.find(p => p.id === target.periodId)
 
-  // When dragged from the Period Pool, `initialSubject` pre-selects the subject.
-  const [selectedSubject, setSelectedSubject] = useState(cell.subject || initialSubject || "")
+  // ── Determine initial mode from existing cell subject ──────────────────────
+  const existingParsed = parseCellSubject(cell.subject ?? initialSubject ?? "")
+  const initMode: CellMode = existingParsed.type === "group" ? existingParsed.logic : "single"
+  const initGroupSubs: string[] = existingParsed.type === "group" ? existingParsed.subjects : []
+
+  const [mode,           setMode]           = useState<CellMode>(initMode)
+  const [groupSubjects,  setGroupSubjects]  = useState<string[]>(initGroupSubs)
+  const [groupTextInput, setGroupTextInput] = useState(
+    existingParsed.type === "group"
+      ? buildGroupSubject(existingParsed.logic, existingParsed.subjects)
+      : ""
+  )
+  const [useTextInput, setUseTextInput] = useState(false)
+
+  // Single-mode state
+  const [selectedSubject, setSelectedSubject] = useState(
+    existingParsed.type === "single" ? (cell.subject || initialSubject || "") : ""
+  )
   const [selectedTeacher, setSelectedTeacher] = useState(cell.teacher || "")
   const [selectedRoom,    setSelectedRoom]    = useState(cell.room    || "")
+
+  // ── Derived: the effective subject string ──────────────────────────────────
+  const effectiveSubject: string = useMemo(() => {
+    if (mode === "single") return selectedSubject
+    if (useTextInput) return groupTextInput.trim()
+    return buildGroupSubject(mode, groupSubjects)
+  }, [mode, selectedSubject, useTextInput, groupTextInput, groupSubjects])
 
   // ── Subjects that apply to this section ────────────────────────
   const sectionSubjects = useMemo(() =>
@@ -169,17 +203,17 @@ export function EditCellModal({ target, onClose, initialSubject }: Props) {
   }
 
   const save = () =>
-    commitAndRebuild({ subject: selectedSubject, teacher: selectedTeacher, room: selectedRoom })
+    commitAndRebuild({ subject: effectiveSubject, teacher: selectedTeacher, room: selectedRoom })
 
   const clearPeriod = () =>
     commitAndRebuild({ subject: "", teacher: "", room: "" })
 
   const isDirty =
-    selectedSubject !== (cell.subject ?? "") ||
-    selectedTeacher !== (cell.teacher ?? "") ||
-    selectedRoom    !== (cell.room    ?? "")
+    effectiveSubject !== (cell.subject ?? "") ||
+    selectedTeacher  !== (cell.teacher  ?? "") ||
+    selectedRoom     !== (cell.room     ?? "")
 
-  const canSave = isDirty && (!!selectedSubject || !!selectedTeacher)
+  const canSave = isDirty && (!!effectiveSubject || !!selectedTeacher)
 
   // ── Render ──────────────────────────────────────────────────────
 
@@ -234,8 +268,160 @@ export function EditCellModal({ target, onClose, initialSubject }: Props) {
         {/* ── Scrollable body ── */}
         <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px", display: "flex", flexDirection: "column" as const, gap: 18 }}>
 
-          {/* ── Subject pills ── */}
+          {/* ── Mode selector ── */}
           <div>
+            <label style={{
+              fontSize: 10, fontWeight: 700, textTransform: "uppercase" as const,
+              letterSpacing: "0.08em", color: "#94a3b8", display: "block", marginBottom: 8,
+            }}>Period type</label>
+            <div style={{ display: "flex", gap: 6 }}>
+              {(["single", "OR", "AND"] as CellMode[]).map(m => {
+                const active = mode === m
+                const col = m === "OR" ? OR_C : m === "AND" ? AND_C : null
+                return (
+                  <button key={m} onClick={() => { setMode(m); setUseTextInput(false) }} style={{
+                    flex: 1, padding: "7px 0", borderRadius: 7, cursor: "pointer",
+                    border: `2px solid ${active ? (col?.tag ?? "#7C6FE0") : "#e2e8f0"}`,
+                    background: active ? (col?.bg ?? "#EDE9FF") : "#f8fafc",
+                    color: active ? (col?.text ?? "#4338CA") : "#64748b",
+                    fontSize: 11, fontWeight: active ? 800 : 500, fontFamily: "inherit",
+                    transition: "all 0.12s",
+                  }}>
+                    {m === "single" ? "Single subject" : `${m} group`}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* ── Group subject picker (OR / AND mode) ── */}
+          {mode !== "single" && (() => {
+            const col = mode === "OR" ? OR_C : AND_C
+            return (
+              <div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                  <label style={{
+                    fontSize: 10, fontWeight: 700, textTransform: "uppercase" as const,
+                    letterSpacing: "0.08em", color: "#94a3b8",
+                  }}>
+                    {mode} subjects
+                    <span style={{ color: "#c0c0c0", fontWeight: 400, marginLeft: 6 }}>
+                      select 2+ or type below
+                    </span>
+                  </label>
+                  <button
+                    onClick={() => setUseTextInput(p => !p)}
+                    style={{
+                      fontSize: 10, padding: "2px 8px", borderRadius: 5, cursor: "pointer",
+                      border: `1px solid ${useTextInput ? col.tag : "#e2e8f0"}`,
+                      background: useTextInput ? col.bg : "#f8fafc",
+                      color: useTextInput ? col.text : "#94a3b8",
+                      fontFamily: "inherit", fontWeight: 600,
+                    }}
+                  >
+                    ✏️ Type directly
+                  </button>
+                </div>
+
+                {useTextInput ? (
+                  /* Free-text input */
+                  <div>
+                    <input
+                      value={groupTextInput}
+                      onChange={e => setGroupTextInput(e.target.value)}
+                      placeholder={`e.g. PHY ${mode} CHEM ${mode} BIO`}
+                      style={{
+                        width: "100%", boxSizing: "border-box" as const,
+                        padding: "8px 12px", borderRadius: 8, outline: "none",
+                        border: `1.5px solid ${col.bdr}`, fontSize: 13,
+                        fontFamily: "'DM Mono', monospace", color: col.text,
+                        background: col.bg,
+                      }}
+                    />
+                    <p style={{ fontSize: 10.5, color: "#94a3b8", margin: "4px 0 0" }}>
+                      Separate subject names with " {mode} " (with spaces) — exactly as you want it to appear in the cell.
+                    </p>
+                  </div>
+                ) : (
+                  /* Chip picker */
+                  <div>
+                    {/* Selected chips */}
+                    {groupSubjects.length > 0 && (
+                      <div style={{ display: "flex", flexWrap: "wrap" as const, gap: 5, marginBottom: 8 }}>
+                        {groupSubjects.map(s => (
+                          <span key={s} style={{
+                            display: "inline-flex", alignItems: "center", gap: 4,
+                            background: col.bg, border: `1.5px solid ${col.bdr}`,
+                            color: col.text, borderRadius: 5,
+                            padding: "3px 8px", fontSize: 11.5, fontWeight: 700,
+                          }}>
+                            {s}
+                            <button
+                              onClick={() => setGroupSubjects(p => p.filter(x => x !== s))}
+                              style={{ background: "none", border: "none", cursor: "pointer",
+                                       color: "inherit", padding: 0, fontSize: 12, opacity: 0.7, lineHeight: 1 }}
+                            >✕</button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Preview label */}
+                    {groupSubjects.length >= 2 && (
+                      <div style={{
+                        padding: "5px 10px", borderRadius: 6, marginBottom: 8,
+                        background: col.bg, border: `1px solid ${col.bdr}`,
+                        fontSize: 11.5, fontWeight: 700, color: col.text,
+                        display: "inline-flex", alignItems: "center", gap: 5,
+                      }}>
+                        <span style={{
+                          fontSize: 8, fontWeight: 900, background: col.tag,
+                          color: "#fff", borderRadius: 3, padding: "0 4px 1px",
+                        }}>{mode}</span>
+                        {groupSubjects.join(` ${mode} `)}
+                      </div>
+                    )}
+
+                    {/* Subject picker pills */}
+                    <div style={{ display: "flex", flexWrap: "wrap" as const, gap: 6 }}>
+                      {sectionSubjects
+                        .filter(s => !groupSubjects.includes(s.name))
+                        .map((sub, i) => {
+                          const c = SUBJECT_COLORS[i % SUBJECT_COLORS.length]
+                          return (
+                            <button
+                              key={sub.id ?? sub.name}
+                              onClick={() => setGroupSubjects(p => [...p, sub.name])}
+                              style={{
+                                padding: "5px 12px", borderRadius: 20,
+                                border: `1.5px solid ${c.border}`,
+                                background: "#f8fafc", color: "#64748b",
+                                fontSize: 12, fontWeight: 500,
+                                cursor: "pointer", transition: "all 0.1s",
+                              }}
+                              onMouseEnter={e => {
+                                e.currentTarget.style.background = c.bg
+                                e.currentTarget.style.color = c.text
+                                e.currentTarget.style.borderColor = c.border
+                              }}
+                              onMouseLeave={e => {
+                                e.currentTarget.style.background = "#f8fafc"
+                                e.currentTarget.style.color = "#64748b"
+                              }}
+                            >
+                              + {sub.name}
+                            </button>
+                          )
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })()}
+
+          {/* ── Subject pills (single mode) ── */}
+          {mode === "single" && <div>
             <label style={{
               fontSize: 10, fontWeight: 700, textTransform: "uppercase" as const,
               letterSpacing: "0.08em", color: "#94a3b8", display: "block", marginBottom: 8,
@@ -272,7 +458,7 @@ export function EditCellModal({ target, onClose, initialSubject }: Props) {
                 })}
               </div>
             )}
-          </div>
+          </div>}
 
           {/* ── Conflict warning ── */}
           {conflictWith && (
@@ -374,7 +560,7 @@ export function EditCellModal({ target, onClose, initialSubject }: Props) {
           </div>
 
           {/* ── Assignment preview card ── */}
-          {(selectedSubject || selectedTeacher || selectedRoom) && (
+          {(effectiveSubject || selectedTeacher || selectedRoom) && (
             <div style={{
               padding: "12px 14px", background: "#f8fafc",
               border: "1.5px solid #e2e8f0", borderRadius: 9,
@@ -383,14 +569,15 @@ export function EditCellModal({ target, onClose, initialSubject }: Props) {
                 fontSize: 10, fontWeight: 700, textTransform: "uppercase" as const,
                 letterSpacing: "0.08em", color: "#94a3b8", marginBottom: 8,
               }}>
-                Assignment Preview
+                Cell Preview
               </div>
               <div style={{ display: "flex", flexWrap: "wrap" as const, gap: 6 }}>
-                {selectedSubject && (
+                {effectiveSubject && (
                   <span style={{
                     fontSize: 11, background: "#EDE9FF", color: "#4338ca",
                     padding: "3px 10px", borderRadius: 5, fontWeight: 600,
-                  }}>📚 {selectedSubject}</span>
+                    fontFamily: mode !== "single" ? "'DM Mono', monospace" : "inherit",
+                  }}>📚 {effectiveSubject}</span>
                 )}
                 {selectedTeacher && (
                   <span style={{
