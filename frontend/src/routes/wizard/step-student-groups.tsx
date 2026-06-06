@@ -445,7 +445,11 @@ export function StepStudentGroups() {
       }
     }
     if (sectionSet.size > 0) return (sections as any[]).filter(s => sectionSet.has(s.name))
-    return sections as any[]
+    // No explicit section assignments found — return empty so the matrix
+    // doesn't show every class (e.g. LKG–XII) as rows for senior-only subjects.
+    // Users can add rows manually via "+ Add class" or by assigning sections
+    // to optional subjects in Resources → Subjects.
+    return []
   }, [sections, optionalSubjects, subjectAllocations])
 
   // ── Effective columns & rows ───────────────────────────────────────────────
@@ -1096,6 +1100,22 @@ export function StepStudentGroups() {
                       </tr>
                     )
                   })}
+
+                  {/* Empty-rows hint */}
+                  {displayRows.length === 0 && allCols.length > 0 && (
+                    <tr>
+                      <td colSpan={displayCols.length + 4} style={{ padding: '18px 14px', borderBottom: '1px solid #F0EDFF', textAlign: 'center' }}>
+                        <div style={{ color: '#8B87AD', fontSize: 12, lineHeight: 1.6 }}>
+                          No classes are assigned to these optional subjects yet.
+                          <br />
+                          <span style={{ fontSize: 11, color: '#B8B4D4' }}>
+                            Go to <strong style={{ color: '#7C6FE0' }}>Resources → Subjects</strong> and assign sections to each optional subject,
+                            or click <strong style={{ color: '#7C6FE0' }}>+ Add class</strong> below to add rows manually.
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
 
                   {/* Add row */}
                   <tr>
