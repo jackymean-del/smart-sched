@@ -1272,10 +1272,30 @@ export function StepStudentGroups() {
       <Section title="AI-Generated Groups" icon={<Sparkles size={15} color="#7C6FE0" />}
         hint={dynamicLearningGroups.length > 0 ? `${dynamicLearningGroups.length} group${dynamicLearningGroups.length !== 1 ? 's' : ''} defined — periods are assigned by the timetable generator.` : 'Click "Generate groups" below.'}>
         {dynamicLearningGroups.length === 0 ? (
-          <div style={{ padding: '32px 24px', textAlign: 'center', background: '#F8F7FF', borderRadius: 10, border: '1px dashed #D8D2FF' }}>
-            <Sparkles size={28} color="#C4B5FD" style={{ marginBottom: 10 }} />
-            <div style={{ fontSize: 13, color: '#8B87AD', marginBottom: 6 }}>No groups generated yet</div>
-            <div style={{ fontSize: 11, color: '#B8B4D4' }}>Fill in the preference matrix and click ✦ Generate groups below</div>
+          <div style={{ position: 'relative' }}>
+            {/* Banner */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12,
+              padding: '9px 14px', borderRadius: 8,
+              background: '#F5F2FF', border: '1px dashed #C4B5FD',
+              fontSize: 11, color: '#7C3AED', fontWeight: 600,
+            }}>
+              <Sparkles size={13} color="#7C6FE0" />
+              Sample preview — fill the preference matrix above and click ✦ Generate groups to see your real groups here
+            </div>
+
+            {/* Ghost mockup grid */}
+            <div style={{ opacity: 0.42, pointerEvents: 'none', filter: 'grayscale(0.25)' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
+                {([
+                  { id: 'm1', subject: 'Mathematics',       sectionNames: ['XI-A', 'XI-B'],       totalStrength: 52, teacher: 'A. Kumar',   room: 'Room 201', roomCapacity: 55, behavior: 'SAME_GRADE_ONLY'      },
+                  { id: 'm2', subject: 'Physics',           sectionNames: ['XI-Sci-A'],            totalStrength: 28, teacher: 'R. Sharma',  room: 'Lab 1',    roomCapacity: 30, behavior: 'SAME_GRADE_ONLY'      },
+                  { id: 'm3', subject: 'Computer Science',  sectionNames: ['XI-A', 'XI-B', 'XII-A'], totalStrength: 45, teacher: '',          room: 'Comp Lab', roomCapacity: 50, behavior: 'CROSS_STREAM_ALLOWED' },
+                ] as any[]).map((grp, gi) => (
+                  <GroupCard key={grp.id} grp={grp} colorDot={groupColor(gi)} teacher={grp.teacher} />
+                ))}
+              </div>
+            </div>
           </div>
         ) : (
           <>

@@ -7,7 +7,115 @@
  */
 
 import { useState, useMemo } from 'react'
-import { Plus, Trash2, Pencil, X, Check, ChevronDown, ChevronUp, Info } from 'lucide-react'
+import { Plus, Trash2, Pencil, X, Check, ChevronDown, ChevronUp, Info, Lightbulb, ArrowRight } from 'lucide-react'
+
+// ── Suggestion engine ─────────────────────────────────────────────────────────
+
+type SuggestionTemplate = {
+  id: string
+  label: string
+  logic: 'OR' | 'AND'
+  subjects: string[]
+  reason: string
+}
+
+/** Keyword clusters → typical OR/AND pattern */
+const PATTERN_CLUSTERS: Array<{
+  keywords: string[]
+  label: string
+  logic: 'OR' | 'AND'
+  reason: string
+}> = [
+  {
+    keywords: ['physics lab', 'chemistry lab', 'biology lab', 'computer lab', 'lab'],
+    label: 'Lab Parallel Split', logic: 'AND',
+    reason: 'Lab groups run simultaneously — students split into separate lab groups in the same slot',
+  },
+  {
+    keywords: ['physics', 'chemistry', 'biology', 'botany', 'zoology'],
+    label: 'Science Elective Rotation', logic: 'OR',
+    reason: 'Science electives typically rotate — one subject runs per slot based on teacher availability',
+  },
+  {
+    keywords: ['music', 'art', 'dance', 'craft', 'drawing', 'painting', 'sculpture', 'theatre'],
+    label: 'Arts & Co-curricular Rotation', logic: 'OR',
+    reason: 'Co-curricular subjects rotate in a shared slot — students attend their chosen activity',
+  },
+  {
+    keywords: ['french', 'german', 'spanish', 'japanese', 'arabic', 'persian', 'sanskrit', 'chinese'],
+    label: 'Foreign / Classical Language Options', logic: 'OR',
+    reason: 'Students choose one optional language — subjects rotate in the same language period',
+  },
+  {
+    keywords: ['economics', 'business studies', 'accountancy', 'commerce', 'entrepreneurship'],
+    label: 'Commerce Elective Rotation', logic: 'OR',
+    reason: 'Commerce optional subjects typically rotate in a shared commerce slot',
+  },
+  {
+    keywords: ['psychology', 'sociology', 'political science', 'philosophy', 'legal studies'],
+    label: 'Humanities Elective Rotation', logic: 'OR',
+    reason: 'Humanities optional subjects rotate in a shared elective period',
+  },
+  {
+    keywords: ['computer science', 'information technology', 'informatics', 'computer application', 'ai', 'artificial intelligence'],
+    label: 'Computing Options', logic: 'OR',
+    reason: 'Computing variants share the same slot — one runs per period',
+  },
+  {
+    keywords: ['physical education', 'yoga', 'ncc', 'nss', 'sports', 'games', 'gym'],
+    label: 'Physical Activity Rotation', logic: 'OR',
+    reason: 'Physical education activities rotate in a shared P.E. period',
+  },
+]
+
+function generateSuggestions(
+  allSubjects: string[],
+  subjectSectionsMap: Record<string, string[]>,
+  existingCombos: SubjectAndOrGroup[],
+): SuggestionTemplate[] {
+  const suggestions: SuggestionTemplate[] = []
+  const alreadyCombo = new Set<string>(existingCombos.flatMap(g => g.subjects))
+  const lc = (s: string) => s.toLowerCase()
+
+  // 1. Pattern-based suggestions
+  for (const cluster of PATTERN_CLUSTERS) {
+    const matched = allSubjects.filter(s =>
+      !alreadyCombo.has(s) &&
+      cluster.keywords.some(kw => lc(s).includes(kw))
+    )
+    if (matched.length < 2) continue
+    // Avoid duplicates with previously emitted suggestions
+    const id = 'sug_' + cluster.label.replace(/\s+/g, '_').toLowerCase().slice(0, 24)
+    if (!suggestions.find(s => s.id === id)) {
+      suggestions.push({ id, label: cluster.label, logic: cluster.logic, subjects: matched, reason: cluster.reason })
+    }
+  }
+
+  // 2. Section-signature suggestions: subjects sharing the exact same set of sections
+  const bySig = new Map<string, string[]>()
+  for (const [sub, secs] of Object.entries(subjectSectionsMap)) {
+    if (!allSubjects.includes(sub) || alreadyCombo.has(sub)) continue
+    if (secs.length === 0) continue
+    const sig = [...secs].sort().join('|')
+    if (!bySig.has(sig)) bySig.set(sig, [])
+    bySig.get(sig)!.push(sub)
+  }
+  for (const [, subs] of bySig) {
+    if (subs.length < 2) continue
+    // Skip if already covered by a pattern suggestion
+    if (suggestions.some(sg => sg.subjects.every(s => subs.includes(s)) && subs.every(s => sg.subjects.includes(s)))) continue
+    const id = 'sug_sec_' + subs.slice(0, 3).join('_').replace(/\s+/g, '').toLowerCase()
+    suggestions.push({
+      id,
+      label: 'Subjects for the same classes',
+      logic: 'OR',
+      subjects: subs,
+      reason: 'These subjects are all assigned to the same class-sections — they are likely optional electives that rotate in a shared slot',
+    })
+  }
+
+  return suggestions
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 export interface SubjectAndOrGroup {
@@ -448,18 +556,38 @@ export function SubjectGroupsSection({
   /** Start the collapsible panel open (default false; set true when used as primary content) */
   defaultOpen?: boolean
 }) {
-  const [open,       setOpen]       = useState(defaultOpen)
-  const [editTarget, setEditTarget] = useState<SubjectAndOrGroup | null>(null)
-  const [modalOpen,  setModalOpen]  = useState(false)
+  const [open,               setOpen]               = useState(defaultOpen)
+  const [editTarget,         setEditTarget]         = useState<SubjectAndOrGroup | null>(null)
+  const [modalOpen,          setModalOpen]          = useState(false)
+  const [dismissedSugs,      setDismissedSugs]      = useState<Set<string>>(new Set())
 
   const openNew  = () => { setEditTarget(null); setModalOpen(true) }
   const openEdit = (g: SubjectAndOrGroup) => { setEditTarget(g); setModalOpen(true) }
 
+  /** Open modal pre-filled with a suggestion (user can still edit before saving) */
+  const useSuggestion = (sug: SuggestionTemplate) => {
+    setEditTarget({
+      id: '',          // blank id = treat as "new" in handleSave
+      name: sug.label,
+      logic: sug.logic,
+      subjects: sug.subjects,
+    })
+    setModalOpen(true)
+  }
+  const dismissSug = (id: string) => setDismissedSugs(prev => new Set([...prev, id]))
+
+  const suggestions = useMemo(
+    () => generateSuggestions(allSubjectNames, subjectSectionsMap ?? {}, groups).filter(s => !dismissedSugs.has(s.id)),
+    [allSubjectNames, subjectSectionsMap, groups, dismissedSugs],
+  )
+
   const handleSave = (g: SubjectAndOrGroup) => {
+    // editTarget with id='' means it came from a suggestion → treat as new
+    const isEdit = editTarget && editTarget.id !== ''
     setGroups(
-      editTarget
+      isEdit
         ? groups.map(x => x.id === g.id ? g : x)
-        : [...groups, g]
+        : [...groups, { ...g, id: g.id || makeId() }]
     )
     setModalOpen(false)
   }
@@ -517,12 +645,112 @@ export function SubjectGroupsSection({
               </span>
             </div>
 
-            {/* Existing combos */}
-            {groups.length === 0 ? (
+            {/* ── AI Suggestions ── */}
+            {suggestions.length > 0 && (
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                  <Lightbulb size={12} color="#D97706" />
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#92400E', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                    Suggested combos
+                  </span>
+                  <span style={{ fontSize: 10, color: '#B45309', background: '#FEF3C7', border: '1px solid #FDE68A', borderRadius: 8, padding: '1px 6px', fontWeight: 600 }}>
+                    {suggestions.length}
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {suggestions.map(sug => {
+                    const isOR  = sug.logic === 'OR'
+                    const tagBg   = isOR ? OR_TAG  : AND_TAG
+                    const cardBg  = isOR ? OR_BG   : AND_BG
+                    const cardBdr = isOR ? OR_BDR  : AND_BDR
+                    const txt     = isOR ? OR_TEXT : AND_TEXT
+                    return (
+                      <div key={sug.id} style={{
+                        display: 'flex', alignItems: 'flex-start', gap: 10,
+                        padding: '10px 12px', borderRadius: 9,
+                        background: cardBg, border: `1px solid ${cardBdr}`,
+                      }}>
+                        {/* Logic badge */}
+                        <span style={{
+                          flexShrink: 0, marginTop: 2,
+                          fontSize: 9, fontWeight: 900, letterSpacing: '0.06em',
+                          background: tagBg, color: '#fff',
+                          borderRadius: 4, padding: '2px 6px',
+                        }}>{sug.logic}</span>
+
+                        {/* Body */}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: txt, marginBottom: 3 }}>
+                            {sug.label}
+                          </div>
+                          {/* Subject pills */}
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 5 }}>
+                            {sug.subjects.map((s, i) => (
+                              <span key={s} style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                                <span style={{
+                                  fontSize: 11, fontWeight: 600, color: txt,
+                                  background: '#fff', border: `1px solid ${cardBdr}`,
+                                  borderRadius: 4, padding: '1px 7px',
+                                }}>{s}</span>
+                                {i < sug.subjects.length - 1 && (
+                                  <span style={{ fontSize: 9, fontWeight: 800, color: tagBg, opacity: 0.7 }}>{sug.logic}</span>
+                                )}
+                              </span>
+                            ))}
+                          </div>
+                          <div style={{ fontSize: 10, color: txt, opacity: 0.75, lineHeight: 1.4 }}>
+                            {sug.reason}
+                          </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 5, flexShrink: 0 }}>
+                          <button
+                            onClick={() => useSuggestion(sug)}
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', gap: 4,
+                              padding: '5px 10px', borderRadius: 6, border: 'none',
+                              background: tagBg, color: '#fff',
+                              fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                              whiteSpace: 'nowrap',
+                            }}
+                            title="Open this suggestion in the combo editor"
+                          >
+                            Use <ArrowRight size={10} />
+                          </button>
+                          <button
+                            onClick={() => dismissSug(sug.id)}
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                              padding: '4px 8px', borderRadius: 6,
+                              border: `1px solid ${cardBdr}`, background: 'transparent',
+                              color: txt, opacity: 0.6,
+                              fontSize: 10, cursor: 'pointer', fontFamily: 'inherit',
+                            }}
+                            title="Dismiss this suggestion"
+                          >
+                            <X size={10} /> dismiss
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {/* Divider before user-created combos */}
+                {groups.length > 0 && (
+                  <div style={{ borderTop: '1px dashed #E4E0FF', margin: '12px 0 0' }} />
+                )}
+              </div>
+            )}
+
+            {/* ── Existing combos ── */}
+            {groups.length === 0 && suggestions.length === 0 ? (
               <p style={{ fontSize: 12, color: '#C4C0DC', margin: '0 0 12px', fontStyle: 'italic' }}>
                 No combos yet — add one below.
               </p>
-            ) : (
+            ) : groups.length === 0 ? null : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
                 {groups.map(g => (
                   <div key={g.id} style={{
