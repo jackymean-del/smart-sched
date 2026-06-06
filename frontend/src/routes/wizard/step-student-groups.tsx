@@ -920,8 +920,6 @@ export function StepStudentGroups() {
   }, [allCols, rows, storeRooms, minGroupSize, subjectGroupingRules])
 
   const colW = Math.max(70, Math.min(100, Math.floor((1100 - 140 - 100 - 36 - 80) / Math.max(1, allCols.length))))
-  const showMatrix = allCols.length > 0 || allRowNames.length > 0
-
   return (
     <div style={{ padding: '20px 24px 40px', maxWidth: 1280, margin: '0 auto' }}>
 
@@ -980,12 +978,7 @@ export function StepStudentGroups() {
         icon={<GraduationCap size={15} color="#7C6FE0" />}
         hint="Enter how many students in each class opted for each subject. NA = subject not offered to that class."
       >
-        {!showMatrix && subjects.length === 0 ? (
-          <EmptyState msg="Add subjects in Resources, mark them as Optional (4th/5th/6th Optional category) to appear here." />
-        ) : !showMatrix ? (
-          <EmptyState msg='Mark at least one subject as Optional (category = "4th Optional", "5th Optional", etc.) in the Subjects panel.' />
-        ) : (
-          <>
+        <>
             {/* Sort controls */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
               <SortToggle active={sortCols} onToggle={() => setSortCols(p => !p)} label="Cols A→Z" />
@@ -1116,7 +1109,24 @@ export function StepStudentGroups() {
                     )
                   })}
 
-                  {/* Empty-rows hint */}
+                  {/* Empty hint — no optional subjects configured yet */}
+                  {allCols.length === 0 && displayRows.length === 0 && (
+                    <tr>
+                      <td colSpan={4} style={{ padding: '22px 14px', textAlign: 'center' }}>
+                        <div style={{ color: '#8B87AD', fontSize: 12, lineHeight: 1.7 }}>
+                          No optional subjects added yet.
+                          <br />
+                          <span style={{ fontSize: 11, color: '#B8B4D4' }}>
+                            Mark subjects as <strong style={{ color: '#7C6FE0' }}>Optional</strong> (4th / 5th / 6th Optional category) in{' '}
+                            <strong style={{ color: '#7C6FE0' }}>Resources → Subjects</strong>, or click{' '}
+                            <strong style={{ color: '#7C6FE0' }}>+</strong> in the column header above to add a subject column manually.
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+
+                  {/* Empty-rows hint — subjects exist but none assigned to sections */}
                   {displayRows.length === 0 && allCols.length > 0 && (
                     <tr>
                       <td colSpan={displayCols.length + 4} style={{ padding: '18px 14px', borderBottom: '1px solid #F0EDFF', textAlign: 'center' }}>
@@ -1155,7 +1165,6 @@ export function StepStudentGroups() {
               </table>
             </div>
           </>
-        )}
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', marginTop: 10, fontSize: 10, color: '#B8B4D4' }}>
           <span>✦ Purple = ≥ 5 students (AI groups these)</span>
