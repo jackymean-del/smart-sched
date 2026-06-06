@@ -436,14 +436,6 @@ export function StepStudentGroups() {
     return () => document.removeEventListener('mousedown', handler)
   }, [showRowPicker])
 
-  /** Sections from the store not yet shown as rows */
-  const sectionsToAdd = useMemo(() => {
-    const rowSet = new Set(allRowNames)
-    return (sections as any[])
-      .filter(s => !rowSet.has(s.name))
-      .filter(s => s.name.toLowerCase().includes(rowPickerSearch.toLowerCase()))
-  }, [sections, allRowNames, rowPickerSearch])
-
   // ── Optional subjects ─────────────────────────────────────────────────────
   const optionalSubjects = useMemo(() =>
     (subjects as any[]).filter(s => s.isOptional === true || (s.category ?? '').toLowerCase().includes('optional'))
@@ -501,6 +493,14 @@ export function StepStudentGroups() {
     ...optionalSections.filter((s: any) => !hiddenRows.has(s.name)).map((s: any) => s.name as string),
     ...customRows,
   ], [optionalSections, hiddenRows, customRows])
+
+  /** Sections from the store not yet shown as rows (for the row picker dropdown) */
+  const sectionsToAdd = useMemo(() => {
+    const rowSet = new Set(allRowNames)
+    return (sections as any[])
+      .filter(s => !rowSet.has(s.name))
+      .filter(s => s.name.toLowerCase().includes(rowPickerSearch.toLowerCase()))
+  }, [sections, allRowNames, rowPickerSearch])
 
   // ── Sorted display versions (only for rendering, not logic) ───────────────
   const displayCols = useMemo(() =>
