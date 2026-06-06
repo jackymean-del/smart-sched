@@ -15,6 +15,8 @@ interface TimetableCellProps {
   onClick?: () => void
 }
 
+type GroupAssignment = { subject: string; teacher?: string; room?: string }
+
 // ── AND/OR parser ──────────────────────────────────────────────────────────────
 export type ParsedCell =
   | { type: 'single'; subject: string }
@@ -33,15 +35,23 @@ const AND_CHIP = { bg: '#EDE9FF', border: '#C4B5FD', text: '#3730A3', tag: '#7C6
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 function GroupCell({
-  parsed, teacher, room, showTeacher, showRoom, isSubstituted, substituteTeacher,
+  parsed, teacher, room, showTeacher, showRoom, isSubstituted, substituteTeacher, groupAssignments,
 }: {
   parsed: Extract<ParsedCell, { type: 'group' }>
   teacher: string; room: string
   showTeacher: boolean; showRoom: boolean
   isSubstituted?: boolean; substituteTeacher?: string
+  groupAssignments?: GroupAssignment[]
 }) {
   const c = parsed.logic === 'OR' ? OR_CHIP : AND_CHIP
-  const displayTeacher = isSubstituted ? (substituteTeacher ?? teacher) : teacher
+
+  // Build a map from subject name → { teacher, room } for quick lookup
+  const gaMap: Record<string, GroupAssignment> = {}
+  if (groupAssignments?.length) {
+    for (const ga of groupAssignments) gaMap[ga.subject] = ga
+  }
+
+  const hasPerSubject = groupAssignments && groupAssignments.length > 0
 
   return (
     <div style={{
@@ -57,24 +67,54 @@ function GroupCell({
       <span style={{
         fontSize: 7, fontWeight: 900, letterSpacing: '0.06em',
         background: c.tag, color: '#fff', borderRadius: 2,
-        padding: '0 3px 0.5px', alignSelf: 'flex-start', marginBottom: 2,
+        padding: '0 3px 0.5px', alignSelf: 'flex-start', marginBottom: 3,
       }}>
         {parsed.logic}
       </span>
-      {/* Subject names */}
-      <span style={{
-        fontSize: 9, fontWeight: 700, color: c.text, lineHeight: 1.3,
-        wordBreak: 'break-word',
-      }}>
-        {parsed.subjects.join(` ${parsed.logic} `)}
-      </span>
-      {showTeacher && displayTeacher && (
-        <span style={{ fontSize: 7.5, opacity: 0.7, fontFamily: 'monospace', marginTop: 1 }}>
-          {isSubstituted && '🔄 '}{displayTeacher}
-        </span>
-      )}
-      {showRoom && room && (
-        <span style={{ fontSize: 7, opacity: 0.55, marginTop: 0.5 }}>{room}</span>
+
+      {hasPerSubject ? (
+        /* Per-subject rows (teacher + room per entry) */
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {parsed.subjects.map(sub => {
+            const ga = gaMap[sub]
+            const displayT = isSubstituted && sub === parsed.subjects[0]
+              ? (substituteTeacher ?? ga?.teacher ?? '')
+              : (ga?.teacher ?? '')
+            return (
+              <div key={sub} style={{ display: 'flex', flexDirection: 'column' }}>
+                <span style={{ fontSize: 9, fontWeight: 700, color: c.text, lineHeight: 1.2 }}>
+                  {sub}
+                </span>
+                {showTeacher && displayT && (
+                  <span style={{ fontSize: 7, opacity: 0.65, fontFamily: 'monospace', lineHeight: 1.2 }}>
+                    {isSubstituted && sub === parsed.subjects[0] && '🔄 '}{displayT}
+                  </span>
+                )}
+                {showRoom && ga?.room && (
+                  <span style={{ fontSize: 6.5, opacity: 0.5, lineHeight: 1.2 }}>{ga.room}</span>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      ) : (
+        /* Legacy: single teacher/room for the whole group */
+        <>
+          <span style={{
+            fontSize: 9, fontWeight: 700, color: c.text, lineHeight: 1.3,
+            wordBreak: 'break-word',
+          }}>
+            {parsed.subjects.join(` ${parsed.logic} `)}
+          </span>
+          {showTeacher && (isSubstituted ? (substituteTeacher ?? teacher) : teacher) && (
+            <span style={{ fontSize: 7.5, opacity: 0.7, fontFamily: 'monospace', marginTop: 1 }}>
+              {isSubstituted && '🔄 '}{isSubstituted ? (substituteTeacher ?? teacher) : teacher}
+            </span>
+          )}
+          {showRoom && room && (
+            <span style={{ fontSize: 7, opacity: 0.55, marginTop: 0.5 }}>{room}</span>
+          )}
+        </>
       )}
     </div>
   )
@@ -110,6 +150,7 @@ export function TimetableCell({
           showRoom={showRoom}
           isSubstituted={isSubstituted}
           substituteTeacher={substituteTeacher}
+          groupAssignments={cell.groupAssignments}
         />
       </div>
     )

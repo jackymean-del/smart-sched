@@ -244,28 +244,53 @@ export function rebuildTeacherTT(
     workDays.forEach(day => { teacherTT[name].schedule[day] = {} })
   })
 
+  // Helper: register one teacher→slot mapping into teacherTT
+  const registerSlot = (
+    teacherName: string,
+    day: string,
+    periodId: string,
+    subjectLabel: string,
+    room: string,
+    sectionName: string,
+    isClassTeacher?: boolean,
+  ) => {
+    if (!teacherTT[teacherName]) {
+      teacherTT[teacherName] = { classes: [], subjects: [], schedule: Object.fromEntries(workDays.map(d => [d, {}])) }
+    }
+    const existing = teacherTT[teacherName].schedule[day]?.[periodId]
+    if (existing) {
+      existing.subject += ` / ${subjectLabel}(${sectionName})`
+      existing.conflict = true
+    } else {
+      teacherTT[teacherName].schedule[day][periodId] = {
+        subject: `${subjectLabel} (${sectionName})`,
+        room,
+        sectionName,
+        isClassTeacher,
+      }
+    }
+    if (!teacherTT[teacherName].classes.includes(sectionName)) {
+      teacherTT[teacherName].classes.push(sectionName)
+    }
+  }
+
   Object.entries(classTT).forEach(([sectionName, sectionData]) => {
     Object.entries(sectionData).forEach(([day, dayData]) => {
       Object.entries(dayData).forEach(([periodId, cell]) => {
-        if (!cell?.teacher) return
-        if (!teacherTT[cell.teacher]) {
-          teacherTT[cell.teacher] = { classes: [], subjects: [], schedule: Object.fromEntries(workDays.map(d => [d, {}])) }
-        }
-        const existing = teacherTT[cell.teacher].schedule[day]?.[periodId]
-        if (existing) {
-          existing.subject += ` / ${cell.subject}(${sectionName})`
-          existing.conflict = true
-        } else {
-          teacherTT[cell.teacher].schedule[day][periodId] = {
-            subject: `${cell.subject} (${sectionName})`,
-            room: cell.room,
-            sectionName,
-            isClassTeacher: cell.isClassTeacher,
+        if (!cell) return
+
+        // ── OR / AND group cells: register each subject's teacher separately ──
+        if (cell.groupAssignments && cell.groupAssignments.length > 0) {
+          for (const ga of cell.groupAssignments) {
+            if (!ga.teacher) continue
+            registerSlot(ga.teacher, day, periodId, ga.subject, ga.room ?? '', sectionName, cell.isClassTeacher)
           }
+          return
         }
-        if (!teacherTT[cell.teacher].classes.includes(sectionName)) {
-          teacherTT[cell.teacher].classes.push(sectionName)
-        }
+
+        // ── Standard single-teacher cell ──
+        if (!cell.teacher) return
+        registerSlot(cell.teacher, day, periodId, cell.subject, cell.room, sectionName, cell.isClassTeacher)
       })
     })
   })

@@ -679,6 +679,14 @@ export interface TimetableCell {
    *  still reflect the first option for backwards compatibility. */
   optionalBlockId?: string
   options?: OptionalOption[]
+  /**
+   * Per-subject teacher + room for OR / AND group cells.
+   * When present, each entry overrides the cell-level teacher/room for
+   * that specific subject. The cell-level teacher/room fields are kept
+   * as the first subject's values for backward-compatibility with
+   * rebuildTeacherTT and conflict detection.
+   */
+  groupAssignments?: Array<{ subject: string; teacher?: string; room?: string }>
 }
 
 /** Class-view timetable: section → day → periodId → cell */
