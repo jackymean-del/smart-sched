@@ -207,10 +207,10 @@ export function EditCellModal({ target, onClose, initialSubject }: Props) {
 
   // ── Set per-subject teacher / room ────────────────────────────────────────
   const setSubjectTeacher = (sub: string, teacher: string) =>
-    setGroupAsgn(prev => ({ ...prev, [sub]: { room: prev[sub]?.room ?? "", ...prev[sub], teacher } }))
+    setGroupAsgn(prev => ({ ...prev, [sub]: { ...(prev[sub] ?? { room: "" }), teacher } }))
 
   const setSubjectRoom = (sub: string, room: string) =>
-    setGroupAsgn(prev => ({ ...prev, [sub]: { teacher: prev[sub]?.teacher ?? "", ...prev[sub], room } }))
+    setGroupAsgn(prev => ({ ...prev, [sub]: { ...(prev[sub] ?? { teacher: "" }), room } }))
 
   // ── Bidirectional auto-fill (single mode) ─────────────────────────────────
   const handleSubjectChange = (subjectName: string) => {
