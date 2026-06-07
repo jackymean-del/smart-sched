@@ -1541,6 +1541,7 @@ function LiveBellTimeline({
       </div>
       {data.map(({ row, start }, idx) => {
         const tm  = TYPE_META[row.type]
+        const end = addMins(start, row.duration)
         const grp = row.classes.length === 0 ? '—'
           : row.classes.length <= 4 ? row.classes.map(k => resolveShort(k)).join(', ')
           : `${row.classes.length} classes`
@@ -1550,8 +1551,9 @@ function LiveBellTimeline({
             borderLeft: `3px solid ${tm.line}`,
             borderBottom: idx < data.length - 1 ? '1px solid #F9FAFB' : 'none',
           }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: '#374151', fontFamily: "'DM Mono',monospace", minWidth: 56, flexShrink: 0 }}>
-              {fmt12(start, use12h)}
+            <div style={{ fontFamily: "'DM Mono',monospace", flexShrink: 0 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#374151' }}>{fmt12(start, use12h)}</div>
+              <div style={{ fontSize: 9, color: '#9CA3AF' }}>{fmt12(end, use12h)}</div>
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 11, fontWeight: 600, color: '#13111E', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.name}</div>
@@ -2209,16 +2211,20 @@ export function StepBell() {
   }, [displayRows, rowStartTimes, activeStartTime])
 
   // ── Timeline data: per-group filtered if partial breaks exist ─
+  //
+  // IMPORTANT: use rowStartTimes (concurrent-aware) instead of startTimes (naive
+  // sequential).  The bell table already uses rowStartTimes — the timeline must
+  // read from the same source so both panels stay in sync.
+  // computeStartsFiltered() was the old approach; it doesn't handle concurrent
+  // rows (e.g. Pre-Primary lunch running at the same clock slot as the Short Break)
+  // so it drifted away from the table times.  Mapping rowStartTimes directly and
+  // filtering by group gives exactly the same times the table shows.
   const groupTimelineData = useMemo(() => {
     return activeClassGroups.map(gm => {
       const groupKeys = activeClasses.filter(c => c.group === gm.group).map(c => c.key)
-      const repKey    = groupKeys[0]
-      const fStarts   = hasPartialBreaks
-        ? computeStartsFiltered(activeStartTime, displayRows, repKey)
-        : startTimes
 
       const data = displayRows
-        .map((row, i) => ({ row, start: fStarts[i] }))
+        .map((row, i) => ({ row, start: rowStartTimes[i] ?? activeStartTime }))
         .filter(({ row }) => row.classes.some(k => {
           const kBase = isCompositeKey(k) ? baseClassKey(k) : k
           return groupKeys.includes(k) || groupKeys.includes(kBase)
@@ -2226,12 +2232,12 @@ export function StepBell() {
 
       return { gm, data }
     })
-  }, [hasPartialBreaks, activeStartTime, displayRows, startTimes])
+  }, [activeClassGroups, activeClasses, displayRows, rowStartTimes, activeStartTime])
 
-  // Master timeline (all rows, no filter)
+  // Master timeline (all rows, no filter) — also uses rowStartTimes for accuracy
   const masterTimelineData = useMemo(() =>
-    displayRows.map((row, i) => ({ row, start: startTimes[i] })),
-    [displayRows, startTimes],
+    displayRows.map((row, i) => ({ row, start: rowStartTimes[i] ?? activeStartTime })),
+    [displayRows, rowStartTimes, activeStartTime],
   )
 
   // ── Class-wise breaks panel ───────────────────────────────────
@@ -4625,6 +4631,7 @@ export function StepBell() {
             <div style={{ background: '#fff', borderRadius: 10, border: '1px solid #E5E7EB', overflow: 'hidden', marginBottom: 14 }}>
               {masterTimelineData.map(({ row, start }, idx) => {
                 const tm  = TYPE_META[row.type]
+                const end = addMins(start, row.duration)
                 const grp = activeClassKeys.every(k => row.classes.includes(k)) ? 'All'
                   : row.classes.length === 0 ? '—'
                   : row.classes.length <= 4 ? row.classes.map(k => activeClasses.find(c => c.key === k)?.short ?? k).join(', ')
@@ -4635,8 +4642,9 @@ export function StepBell() {
                     borderLeft: `3px solid ${tm.line}`,
                     borderBottom: idx < masterTimelineData.length - 1 ? '1px solid #F9FAFB' : 'none',
                   }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', fontFamily: "'DM Mono',monospace", minWidth: 58, flexShrink: 0 }}>
-                      {fmt12(start, use12h)}
+                    <div style={{ fontFamily: "'DM Mono',monospace", flexShrink: 0, minWidth: 58 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: '#374151' }}>{fmt12(start, use12h)}</div>
+                      <div style={{ fontSize: 10, color: '#9CA3AF' }}>{fmt12(end, use12h)}</div>
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 12, fontWeight: 600, color: '#13111E' }}>{row.name}</div>
