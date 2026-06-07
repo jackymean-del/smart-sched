@@ -564,8 +564,10 @@ function approxLunchTime(
   concurrentAtPeriod?: number,  // which period (1-indexed) runs concurrently with Pre-Primary lunch
   morningBreakDur = 0,          // duration of the morning break (0 = no morning break)
   morningBreakAfterP = 0,       // which period the morning break follows (0 = none)
+  shortBreakDur = 15,           // 0 = no separate short break (morning break fills this role)
+  shortBreakAfterP?: number,    // explicit sb slot; if omitted falls back to Math.ceil(30%)
 ): string {
-  const sbAfter = Math.max(1, Math.ceil(maxPeriods * 0.3))
+  const sbAfter = shortBreakAfterP ?? Math.max(1, Math.ceil(maxPeriods * 0.3))
   let mins = toMins(startTime) + 10 // assembly 10 min
   mins += afterPeriod * periodDur
   // Add morning break if it falls before (or at) this lunch slot.
@@ -581,9 +583,9 @@ function approxLunchTime(
   ) {
     mins -= (periodDur - concurrentPeriodDur)
   }
-  // Only add short-break time if the lunch comes AFTER the short break.
-  // When replacesShortBreak is true the group eats AT the short-break slot, not after it.
-  if (!replacesShortBreak && sbAfter <= afterPeriod) mins += 15
+  // Only add short-break time if the lunch comes AFTER the short break slot,
+  // AND there actually is a separate short break (shortBreakDur > 0).
+  if (!replacesShortBreak && shortBreakDur > 0 && sbAfter <= afterPeriod) mins += shortBreakDur
   return fmt12(toHHMM(mins), use12h)
 }
 
@@ -2081,16 +2083,22 @@ export function StepBell() {
   // only 2–3 slots fit before 2 PM so groups are shared across slots.
   // User overrides in smartLunchAP always take precedence.
   const effectiveLunchAP = useMemo(() => {
-    const asmDur   = 10
-    const sbAfterP = Math.max(1, Math.ceil(maxPeriods * 0.3))
-    const asmEnd   = toMins(startTime) + asmDur
-    const sbEnd    = asmEnd + sbAfterP * periodDur + 15  // minutes when short break ends
+    const asmDur = 10
+    // When morning break is configured it acts as the mid-morning break.
+    // Use its position and duration so lunch slots are computed relative to
+    // the correct break, not the hardcoded 30%-of-periods default.
+    const sbAfterP  = morningBreak
+      ? morningBreakPos
+      : Math.max(1, Math.ceil(maxPeriods * 0.3))
+    const sbDurUsed = morningBreak ? morningBreakDur : 15
 
-    // Pre-Primary (under 5 yrs) eats early — at the same slot as the short break for others.
-    // This means their lunch starts at ~11:15 AM instead of waiting until 12:40+ PM.
-    const prePrimaryP = sbAfterP  // e.g., after P2 → 11:15 AM
+    const asmEnd = toMins(startTime) + asmDur
+    const sbEnd  = asmEnd + sbAfterP * periodDur + sbDurUsed  // clock when the break ends
 
-    // Remaining 4 groups distribute across slots AFTER the short break (before 2 PM cap).
+    // Pre-Primary eats at the shared break slot (earliest lunch).
+    const prePrimaryP = sbAfterP
+
+    // Remaining 4 groups distribute across slots AFTER the break (before 2 PM cap).
     const LATEST_LUNCH = 14 * 60  // 2 PM hard cap
     const minsAfterSb  = LATEST_LUNCH - sbEnd
     const maxLunchP    = Math.min(maxPeriods, sbAfterP + Math.max(1, Math.floor(minsAfterSb / periodDur)))
@@ -2105,7 +2113,7 @@ export function StepBell() {
       defaults[g] = Math.max(minLunchP, Math.min(maxLunchP, minLunchP + slotIdx))
     })
     return { ...defaults, ...smartLunchAP }
-  }, [maxPeriods, periodDur, startTime, smartLunchAP])
+  }, [maxPeriods, periodDur, startTime, smartLunchAP, morningBreak, morningBreakPos, morningBreakDur])
 
   // ── Auto-generate bell schedule when Smart Bell settings change ─
   // Replaces the explicit "Generate Bell Schedule" button. Fires whenever
@@ -4303,9 +4311,13 @@ export function StepBell() {
                             ? effConcurrentDur : undefined
                           const concPeriodAt  = (!isPrePrimary && ppEatsEarly && concurrentMode !== 'regular')
                             ? sbAP + 1 : undefined
+                          // When morning break is on it IS the short break — no separate +15 to add.
                           const approx = approxLunchTime(startTime, periodDur, ap, maxPeriods, use12h,
                             replacesShortBreak, concPeriodDur, concPeriodAt,
-                            morningBreak ? morningBreakDur : 0, morningBreak ? morningBreakPos : 0)
+                            morningBreak ? morningBreakDur : 0, morningBreak ? morningBreakPos : 0,
+                            morningBreak ? 0 : 15,  // shortBreakDur
+                            sbAPShared,             // shortBreakAfterP (effective slot)
+                          )
                           return (
                             <div key={gm.group} style={{
                               display: 'flex', alignItems: 'center', gap: 10,
