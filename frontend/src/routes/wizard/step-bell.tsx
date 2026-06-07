@@ -1515,34 +1515,6 @@ export function StepBell() {
       .filter(g => customClasses.some(c => c.group === g.group)),
   [customClasses, customGroups])
 
-  // ── Age-appropriate day-off smart suggestions ─────────────────
-  // A suggestion is shown when:
-  //  1. Its day is currently a work day (user could add a rule for it)
-  //  2. At least one of its class keys is active in this school
-  //  3. No existing dayOffRule already covers that day for those classes
-  //  4. The user hasn't dismissed it this session
-  const daySuggestions = useMemo(() =>
-    AGE_DAYOFF_SUGGESTIONS.filter(sug => {
-      if (!workDays.includes(sug.day)) return false
-      if (!sug.classKeys.some(k => activeClassKeys.includes(k))) return false
-      const alreadyCovered = dayOffRules.some(
-        r => r.day === sug.day && r.classes.some(c => sug.classKeys.includes(c))
-      )
-      if (alreadyCovered) return false
-      if (dismissedDaySugs.includes(sug.id)) return false
-      return true
-    }),
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  [workDays, activeClassKeys, dayOffRules, dismissedDaySugs])
-
-  const applyDaySuggestion = (sug: DaySuggestion) => {
-    const keys = sug.classKeys.filter(k => activeClassKeys.includes(k))
-    if (!keys.length) return
-    setDayOffRules(prev => [...prev, { id: makeId(), day: sug.day, classes: keys }])
-    // Remove from suggestions immediately — rule now covers it
-    setDismissedDaySugs(prev => [...prev, sug.id])
-  }
-
   const [autoBellMode,  setAutoBellMode]  = useState<boolean>(() => _saved?.autoBellMode  ?? false)
   const [schoolEndTime, setSchoolEndTime] = useState<string>( () => _saved?.schoolEndTime ?? '15:30')
   const [shiftName,  setShiftName]  = useState<string>(  () => _saved?.shiftName ?? 'Main Shift')
@@ -1579,6 +1551,34 @@ export function StepBell() {
   // Not persisted — suggestions re-appear on fresh load so the user always sees
   // the recommendation until they either apply or dismiss it manually.
   const [dismissedDaySugs, setDismissedDaySugs] = useState<string[]>([])
+
+  // ── Age-appropriate day-off smart suggestions ─────────────────
+  // A suggestion is shown when:
+  //  1. Its day is currently a work day (user could add a rule for it)
+  //  2. At least one of its class keys is active in this school
+  //  3. No existing dayOffRule already covers that day for those classes
+  //  4. The user hasn't dismissed it this session
+  const daySuggestions = useMemo(() =>
+    AGE_DAYOFF_SUGGESTIONS.filter(sug => {
+      if (!workDays.includes(sug.day)) return false
+      if (!sug.classKeys.some(k => activeClassKeys.includes(k))) return false
+      const alreadyCovered = dayOffRules.some(
+        r => r.day === sug.day && r.classes.some(c => sug.classKeys.includes(c))
+      )
+      if (alreadyCovered) return false
+      if (dismissedDaySugs.includes(sug.id)) return false
+      return true
+    }),
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  [workDays, activeClassKeys, dayOffRules, dismissedDaySugs])
+
+  const applyDaySuggestion = (sug: DaySuggestion) => {
+    const keys = sug.classKeys.filter(k => activeClassKeys.includes(k))
+    if (!keys.length) return
+    setDayOffRules(prev => [...prev, { id: makeId(), day: sug.day, classes: keys }])
+    // Remove from suggestions immediately — rule now covers it
+    setDismissedDaySugs(prev => [...prev, sug.id])
+  }
 
   // ── UI-only (not persisted) ───────────────────────────────────
   const [confirmDialog, setConfirmDialog] = useState<{ msg: string; onConfirm: () => void } | null>(null)
