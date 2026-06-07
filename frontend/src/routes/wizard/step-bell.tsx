@@ -509,7 +509,10 @@ function autoGenerateBellRows(
   periodDur:  number,
   allKeys:    string[],
 ): BellRow[] {
-  const totalMins = toMins(endTime) - toMins(startTime)
+  // Hard cap: school day ≤ 8 hours
+  const maxEnd = toHHMM(toMins(startTime) + 8 * 60)
+  const effEnd = toMins(endTime) > toMins(maxEnd) ? maxEnd : endTime
+  const totalMins = toMins(effEnd) - toMins(startTime)
   if (totalMins <= 0) return buildRows(maxPeriods, periodDur)
 
   const asmDur  = 10
@@ -611,10 +614,14 @@ function smartGenerateBellConfig(
   const lunchDur = lunchBreakDur   // user-configurable, default 30 min
   const sbDur    = 15
 
+  // Hard cap: school day ≤ 8 hours
+  const maxEnd8h = toHHMM(toMins(startTime) + 8 * 60)
+  const effEnd   = toMins(endTime) > toMins(maxEnd8h) ? maxEnd8h : endTime
+
   // ── Simple path: single lunch + no morning break ─────────────
   if (lunchMode === 'single' && !morningBreak) {
     return {
-      rows:   autoGenerateBellRows(startTime, endTime, maxPeriods, periodDur, allKeys),
+      rows:   autoGenerateBellRows(startTime, effEnd, maxPeriods, periodDur, allKeys),
       cwRows: [],
     }
   }
@@ -672,8 +679,13 @@ function smartGenerateBellConfig(
     }
   }
 
+  // Ensure smart-path period duration fits within 8-hour school day
+  const totalBreakMins = cwRows.reduce((s, r) => s + r.duration, 0)
+  const availForPeriods = 8 * 60 - 10 /* assembly */ - totalBreakMins
+  const cappedPeriodDur = Math.min(periodDur, Math.max(10, Math.floor(availForPeriods / maxPeriods)))
+
   return {
-    rows:   buildBellRowsFromCw(startTime, periodDur, maxPeriods, cwRows, allKeys, 10, concurrentPeriodDur),
+    rows:   buildBellRowsFromCw(startTime, cappedPeriodDur, maxPeriods, cwRows, allKeys, 10, concurrentPeriodDur),
     cwRows,
   }
 }
@@ -2026,6 +2038,43 @@ export function StepBell() {
     return { ...defaults, ...smartLunchAP }
   }, [maxPeriods, periodDur, startTime, smartLunchAP])
 
+  // ── Auto-generate bell schedule when Smart Bell settings change ─
+  // Replaces the explicit "Generate Bell Schedule" button. Fires whenever
+  // any setting that affects the generated output changes, but only when
+  // autoBellMode is enabled. Uses a stringified key so object/array identity
+  // changes don't retrigger unnecessarily.
+  const _autoGenKey = useMemo(() => JSON.stringify({
+    startTime, schoolEndTime, maxPeriods, periodDur,
+    smartLunchMode,
+    lunchAP: effectiveLunchAP,
+    morningBreak, morningBreakPos, morningBreakDur,
+    concurrentMode, concurrentDur, lunchBreakDur,
+    groups: activeClassGroups.map(g => g.group).sort().join(','),
+    classes: activeClasses.map(c => c.key).sort().join(','),
+  }), [startTime, schoolEndTime, maxPeriods, periodDur,
+       smartLunchMode, effectiveLunchAP,
+       morningBreak, morningBreakPos, morningBreakDur,
+       concurrentMode, concurrentDur, lunchBreakDur,
+       activeClassGroups, activeClasses])
+
+  useEffect(() => {
+    if (!autoBellMode) return
+    const concPeriodDur = concurrentMode === 'regular'     ? undefined
+                        : concurrentMode === 'match-lunch' ? lunchBreakDur
+                        :                                    concurrentDur
+    const { rows: generated, cwRows: generated_cwRows } = smartGenerateBellConfig(
+      startTime, schoolEndTime, maxPeriods, periodDur,
+      smartLunchMode, effectiveLunchAP,
+      activeClassGroups, activeClasses,
+      morningBreak, morningBreakPos, morningBreakDur,
+      concPeriodDur,
+      lunchBreakDur,
+    )
+    setRows(generated)
+    setCwRows(generated_cwRows)
+    setSmartGenDone(true)
+  }, [_autoGenKey, autoBellMode]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Group metadata for Smart Timing UI ───────────────────────
   const SMART_GROUP_META: Record<string, { emoji: string; color: string; bg: string; border: string }> = {
     'Pre-Primary':      { emoji: '🧸', color: '#6D28D9', bg: '#F5F3FF', border: '#C4B5FD' },
@@ -2347,7 +2396,10 @@ export function StepBell() {
   // ── Other handlers ────────────────────────────────────────────
   const handleEndTimeEdit = (val: string) => {
     if (!val || !/^\d{2}:\d{2}$/.test(val)) return
-    const target = toMins(val) - toMins(activeStartTime)
+    // Hard cap: school day must not exceed 8 hours
+    const maxEndMins = toMins(activeStartTime) + 8 * 60
+    const clampedVal = toMins(val) > maxEndMins ? toHHMM(maxEndMins) : val
+    const target = toMins(clampedVal) - toMins(activeStartTime)
     if (target <= 0) return
     const current = displayRows.reduce((s, r) => s + r.duration, 0)
     const diff    = target - current
@@ -3167,7 +3219,14 @@ export function StepBell() {
                       <span style={{ fontSize: 10, color: '#C4B5FD', fontWeight: 400 }}>✎</span>
                     </div>
                   )}
-                  <div style={FH}>adjusts last period</div>
+                  {toMins(endTime) - toMins(startTime) > 8 * 60
+                    ? <div style={{ ...FH, color: '#DC2626', fontWeight: 700, cursor: 'pointer' }}
+                        title="School day exceeds 8 hours — click to trim to 8 h"
+                        onClick={() => handleEndTimeEdit(toHHMM(toMins(startTime) + 8 * 60))}>
+                        ⚠ &gt;8h — tap to fix
+                      </div>
+                    : <div style={FH}>adjusts last period</div>
+                  }
                 </div>
                 {/* Period Min */}
                 <div style={{ flex: '0 0 80px' }}>
@@ -4278,41 +4337,11 @@ export function StepBell() {
                     </div>
                   )}
 
-                  {/* Generate button */}
-                  <button
-                    onClick={() => {
-                      const { rows: generated, cwRows: generated_cwRows } = smartGenerateBellConfig(
-                        startTime, schoolEndTime, maxPeriods, periodDur,
-                        smartLunchMode, effectiveLunchAP,
-                        activeClassGroups, activeClasses,
-                        morningBreak, morningBreakPos, morningBreakDur,
-                        concurrentMode === 'regular' ? undefined
-                          : concurrentMode === 'match-lunch' ? lunchBreakDur
-                          : concurrentDur,
-                        lunchBreakDur,
-                      )
-                      setRows(generated)
-                      setCwRows(generated_cwRows)
-                      setSmartGenDone(true)
-                    }}
-                    style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 7,
-                      padding: '9px 20px', borderRadius: 8,
-                      background: 'linear-gradient(135deg, #7C3AED, #6D28D9)',
-                      border: 'none', color: '#fff',
-                      fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-                      boxShadow: '0 2px 8px rgba(124,58,237,.35)',
-                      alignSelf: 'flex-start',
-                    }}>
-                    <Sparkles size={13} color="#fff" />
-                    Generate Bell Schedule
-                  </button>
-
-                  {/* Post-generation hint */}
+                  {/* Auto-generate hint — shows once settings have produced a schedule */}
                   {smartGenDone && (
                     <div style={{ fontSize: 11, color: '#6B7280', display: 'flex', alignItems: 'center', gap: 6 }}>
                       <span style={{ color: '#16A34A', fontWeight: 700 }}>✓</span>
-                      Bell schedule generated below — review and edit freely before proceeding.
+                      Bell schedule updates automatically as you change settings above.
                     </div>
                   )}
                 </div>
