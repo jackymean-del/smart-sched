@@ -192,6 +192,53 @@ interface DayOffRule {
   classes: string[]  // class keys that are off on this day
 }
 
+// ── Age-appropriate day-off smart suggestions ─────────────────
+// Each suggestion is shown contextually: only when the relevant
+// class group is active AND the suggested day is a work day AND
+// no rule already covers it.
+interface DaySuggestion {
+  id:        string
+  emoji:     string
+  title:     string
+  detail:    string  // human, empathetic explanation
+  day:       string  // 'Sat', 'Mon', …
+  classKeys: string[]
+  group:     string  // display name
+  color:     string  // ink colour (matches CLASS_GROUPS)
+  bg:        string  // card background
+  border:    string  // card border
+  urgent:    boolean // strong recommendation vs optional note
+}
+
+const AGE_DAYOFF_SUGGESTIONS: DaySuggestion[] = [
+  {
+    id:        'pre-primary-sat',
+    emoji:     '🧸',
+    title:     'Nursery · LKG · UKG need Saturday off',
+    detail:    'Children aged 3–5 have very short attention spans, tire quickly, and require significantly more rest than older students. A 6-day school week is developmentally inappropriate for pre-primary ages — it leads to burnout, anxiety, and disrupted sleep patterns. Most state boards and the NEP 2020 explicitly recommend a 5-day week for the under-5 age group.',
+    day:       'Sat',
+    classKeys: ['nur', 'lkg', 'ukg'],
+    group:     'Pre-Primary',
+    color:     '#6D28D9',
+    bg:        '#F5F3FF',
+    border:    '#C4B5FD',
+    urgent:    true,
+  },
+  {
+    id:        'primary-sat',
+    emoji:     '📖',
+    title:     'Class I–V benefit from a lighter Saturday',
+    detail:    'Children aged 6–11 still need substantial rest between learning days. After five consecutive school days their engagement, memory retention, and emotional regulation all drop measurably. If Saturday must be a school day, consider shorter hours or fewer periods for the primary wing.',
+    day:       'Sat',
+    classKeys: ['i', 'ii', 'iii', 'iv', 'v'],
+    group:     'Primary',
+    color:     '#1D4ED8',
+    bg:        '#EFF6FF',
+    border:    '#BFDBFE',
+    urgent:    false,
+  },
+]
+
 // ── Shift (Advanced mode — multiple shifts) ───────────────────
 interface ShiftConfig {
   id:            string
@@ -386,8 +433,11 @@ function autoGenerateBellRows(
   const rows: BellRow[] = [mkAssembly()]
   for (let i = 1; i <= maxPeriods; i++) {
     rows.push(mkPeriod(i, actualDur))
-    if (i === sbAfter  && hasShortBreak) rows.push({ id: makeId(), name: 'Short Break', type: 'short-break', duration: sbDur,   classes: [...allKeys] })
-    if (i === lunchAfter && hasLunch)    rows.push({ id: makeId(), name: 'Lunch Break',  type: 'lunch',       duration: lunchDur, classes: [...allKeys] })
+    // Guard: if sbAfter === lunchAfter (e.g. maxPeriods=4), skip the short break —
+    // inserting both at the same position would create two consecutive break rows
+    // which confuses buildPeriodSequence and produces a double-lunch in the display.
+    if (i === sbAfter  && hasShortBreak && i !== lunchAfter) rows.push({ id: makeId(), name: 'Short Break', type: 'short-break', duration: sbDur,   classes: [...allKeys] })
+    if (i === lunchAfter && hasLunch)                         rows.push({ id: makeId(), name: 'Lunch Break',  type: 'lunch',       duration: lunchDur, classes: [...allKeys] })
   }
   rows.push(mkDispersal())
   return rows
@@ -1465,6 +1515,34 @@ export function StepBell() {
       .filter(g => customClasses.some(c => c.group === g.group)),
   [customClasses, customGroups])
 
+  // ── Age-appropriate day-off smart suggestions ─────────────────
+  // A suggestion is shown when:
+  //  1. Its day is currently a work day (user could add a rule for it)
+  //  2. At least one of its class keys is active in this school
+  //  3. No existing dayOffRule already covers that day for those classes
+  //  4. The user hasn't dismissed it this session
+  const daySuggestions = useMemo(() =>
+    AGE_DAYOFF_SUGGESTIONS.filter(sug => {
+      if (!workDays.includes(sug.day)) return false
+      if (!sug.classKeys.some(k => activeClassKeys.includes(k))) return false
+      const alreadyCovered = dayOffRules.some(
+        r => r.day === sug.day && r.classes.some(c => sug.classKeys.includes(c))
+      )
+      if (alreadyCovered) return false
+      if (dismissedDaySugs.includes(sug.id)) return false
+      return true
+    }),
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  [workDays, activeClassKeys, dayOffRules, dismissedDaySugs])
+
+  const applyDaySuggestion = (sug: DaySuggestion) => {
+    const keys = sug.classKeys.filter(k => activeClassKeys.includes(k))
+    if (!keys.length) return
+    setDayOffRules(prev => [...prev, { id: makeId(), day: sug.day, classes: keys }])
+    // Remove from suggestions immediately — rule now covers it
+    setDismissedDaySugs(prev => [...prev, sug.id])
+  }
+
   const [autoBellMode,  setAutoBellMode]  = useState<boolean>(() => _saved?.autoBellMode  ?? false)
   const [schoolEndTime, setSchoolEndTime] = useState<string>( () => _saved?.schoolEndTime ?? '15:30')
   const [shiftName,  setShiftName]  = useState<string>(  () => _saved?.shiftName ?? 'Main Shift')
@@ -1498,6 +1576,9 @@ export function StepBell() {
   const [dayStartTimes,  setDayStartTimes]  = useState<Record<string, string>>( () => _saved?.dayStartTimes  ?? {})
   const [dayPeriodDurs,  setDayPeriodDurs]  = useState<Record<string, number>>( () => _saved?.dayPeriodDurs  ?? {})
   const [dayOffRules,    setDayOffRules]    = useState<DayOffRule[]>(           () => _saved?.dayOffRules    ?? [])
+  // Not persisted — suggestions re-appear on fresh load so the user always sees
+  // the recommendation until they either apply or dismiss it manually.
+  const [dismissedDaySugs, setDismissedDaySugs] = useState<string[]>([])
 
   // ── UI-only (not persisted) ───────────────────────────────────
   const [confirmDialog, setConfirmDialog] = useState<{ msg: string; onConfirm: () => void } | null>(null)
@@ -2309,8 +2390,21 @@ export function StepBell() {
       }))
       setBreaks(canonical as any)
     } else {
+      // Normalise BellRow types to Period types so buildPeriodSequence works correctly:
+      //   'assembly'    → 'fixed-start'  (prepended before all periods)
+      //   'short-break' → 'break'        (recognised as a midBreak by buildPeriodSequence)
+      //   'dispersal'   → 'fixed-end'    (appended after all periods)
+      //   'lunch'       → 'lunch'        (unchanged)
+      const normaliseType = (t: RowType): string => {
+        if (t === 'assembly')    return 'fixed-start'
+        if (t === 'short-break') return 'break'
+        if (t === 'dispersal')   return 'fixed-end'
+        return t
+      }
       setBreaks(displayRows.filter(r => r.type !== 'teaching').map(r => ({
-        id: r.id, name: r.name, duration: r.duration, type: r.type as any, shiftable: r.type === 'short-break',
+        id: r.id, name: r.name, duration: r.duration,
+        type: normaliseType(r.type) as any,
+        shiftable: r.type === 'short-break',
       })))
     }
     setStep(3)
@@ -2747,14 +2841,63 @@ export function StepBell() {
                 </div>
               </div>
 
-              {/* ── Day Off Rules list ── */}
-              <div style={{ marginTop: dayOffRules.length > 0 ? 10 : 0 }}>
+              {/* ── Age-appropriate smart suggestions ── */}
+              {daySuggestions.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
+                  {daySuggestions.map(sug => (
+                    <div key={sug.id} style={{
+                      background: sug.bg,
+                      border: `1.5px solid ${sug.border}`,
+                      borderRadius: 10, padding: '11px 13px',
+                      display: 'flex', gap: 10, alignItems: 'flex-start',
+                    }}>
+                      <span style={{ fontSize: 20, lineHeight: 1, flexShrink: 0, marginTop: 1 }}>{sug.emoji}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 4 }}>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: sug.color }}>{sug.title}</span>
+                          {sug.urgent && (
+                            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.4,
+                              background: '#FEE2E2', color: '#DC2626', border: '1px solid #FECACA',
+                              borderRadius: 8, padding: '1px 6px' }}>RECOMMENDED</span>
+                          )}
+                        </div>
+                        <p style={{ fontSize: 11, color: '#6B7280', margin: '0 0 9px', lineHeight: 1.6 }}>
+                          {sug.detail}
+                        </p>
+                        <button
+                          onClick={() => applyDaySuggestion(sug)}
+                          style={{
+                            fontSize: 11, fontWeight: 700,
+                            color: '#fff',
+                            background: sug.color,
+                            border: 'none',
+                            borderRadius: 6, padding: '5px 12px', cursor: 'pointer', fontFamily: 'inherit',
+                            display: 'inline-flex', alignItems: 'center', gap: 5,
+                          }}>
+                          Add {sug.day} off for {sug.group} →
+                        </button>
+                      </div>
+                      <button
+                        title="Dismiss suggestion"
+                        onClick={() => setDismissedDaySugs(prev => [...prev, sug.id])}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer',
+                          color: '#D1D5DB', padding: 2, flexShrink: 0, fontSize: 16,
+                          lineHeight: 1, marginTop: -1 }}>
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
 
-                {dayOffRules.length === 0 ? (
+              {/* ── Day Off Rules list ── */}
+              <div style={{ marginTop: (dayOffRules.length > 0 || daySuggestions.length > 0) ? 10 : 0 }}>
+
+                {dayOffRules.length === 0 && daySuggestions.length === 0 ? (
                   <div style={{ fontSize: 11, color: '#D1D5DB', fontStyle: 'italic' }}>
                     e.g. Saturday off for Nursery, LKG &amp; UKG
                   </div>
-                ) : (
+                ) : dayOffRules.length > 0 ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {dayOffRules.map(rule => (
                       <div key={rule.id} style={{
@@ -2821,7 +2964,7 @@ export function StepBell() {
                       </div>
                     ))}
                   </div>
-                )}
+                ) : null /* suggestions shown above already, no empty hint needed */}
               </div>
               </div>{/* end card body */}
             </div>{/* end card */}
@@ -3094,6 +3237,39 @@ export function StepBell() {
                     </button>
                   </div>
                 </div>
+                {/* Age-appropriate smart suggestions (advanced mode) */}
+                {daySuggestions.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
+                    {daySuggestions.map(sug => (
+                      <div key={sug.id} style={{
+                        background: sug.bg, border: `1.5px solid ${sug.border}`,
+                        borderRadius: 10, padding: '11px 13px',
+                        display: 'flex', gap: 10, alignItems: 'flex-start',
+                      }}>
+                        <span style={{ fontSize: 20, lineHeight: 1, flexShrink: 0, marginTop: 1 }}>{sug.emoji}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 4 }}>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: sug.color }}>{sug.title}</span>
+                            {sug.urgent && (
+                              <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.4,
+                                background: '#FEE2E2', color: '#DC2626', border: '1px solid #FECACA',
+                                borderRadius: 8, padding: '1px 6px' }}>RECOMMENDED</span>
+                            )}
+                          </div>
+                          <p style={{ fontSize: 11, color: '#6B7280', margin: '0 0 9px', lineHeight: 1.6 }}>{sug.detail}</p>
+                          <button onClick={() => applyDaySuggestion(sug)} style={{
+                            fontSize: 11, fontWeight: 700, color: '#fff', background: sug.color,
+                            border: 'none', borderRadius: 6, padding: '5px 12px', cursor: 'pointer',
+                            fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 5,
+                          }}>Add {sug.day} off for {sug.group} →</button>
+                        </div>
+                        <button title="Dismiss" onClick={() => setDismissedDaySugs(prev => [...prev, sug.id])}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer',
+                            color: '#D1D5DB', padding: 2, flexShrink: 0, fontSize: 16, lineHeight: 1, marginTop: -1 }}>×</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {dayOffRules.length > 0 && (
                   <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {dayOffRules.map(rule => (

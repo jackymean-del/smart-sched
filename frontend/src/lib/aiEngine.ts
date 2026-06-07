@@ -407,7 +407,9 @@ export function autoAssign(
     sessionDuration: sub.sessionDuration ?? 40,
     maxPeriodsPerDay: sub.maxPeriodsPerDay ?? 2,
     classConfigs: sub.classConfigs ?? [],
-    sections: sections.map(s => s.name),
+    // Preserve any already-scoped sections; only fall back to empty (all classes)
+    // when none were ever assigned — do NOT assign every section to every subject.
+    sections: sub.sections?.length ? sub.sections : [],
   }))
 
   // Distribute subjects and classes among staff

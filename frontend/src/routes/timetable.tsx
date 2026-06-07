@@ -277,6 +277,19 @@ function buildClassPeriods(
   )
   if (!sectionBreaks.length) return allPeriods
 
+  // Deduplicate: keep only one break per afterPeriod position for this section.
+  // Prefer 'lunch' over 'short-break'; then prefer longer duration.
+  // This prevents double-lunch when a class-key matches both a specific entry
+  // and an "all classes" entry at the same afterPeriod slot.
+  const byPos = new Map<number, typeof sectionBreaks[0]>()
+  for (const b of sectionBreaks) {
+    const ex = byPos.get(b.afterPeriod)
+    if (!ex) { byPos.set(b.afterPeriod, b); continue }
+    if (b.type === 'lunch' && ex.type !== 'lunch') { byPos.set(b.afterPeriod, b); continue }
+    if (b.duration > ex.duration && b.type === ex.type) byPos.set(b.afterPeriod, b)
+  }
+  const dedupedBreaks = Array.from(byPos.values())
+
   const mkBreak = (b: typeof sectionBreaks[0]): Period => ({
     id: b.id, name: b.name, duration: b.duration,
     type: (b.type === 'lunch' ? 'lunch' : 'break') as Period['type'],
@@ -290,12 +303,12 @@ function buildClassPeriods(
   const result: Period[] = [...fixedStarts]
 
   // Breaks before period 1 (afterPeriod === 0)
-  sectionBreaks.filter(b => b.afterPeriod === 0).forEach(b => result.push(mkBreak(b)))
+  dedupedBreaks.filter(b => b.afterPeriod === 0).forEach(b => result.push(mkBreak(b)))
 
   classPeriods.forEach((p, idx) => {
     result.push(p)
     const pNum = idx + 1
-    sectionBreaks.filter(b => b.afterPeriod === pNum).forEach(b => result.push(mkBreak(b)))
+    dedupedBreaks.filter(b => b.afterPeriod === pNum).forEach(b => result.push(mkBreak(b)))
   })
 
   result.push(...fixedEnds)

@@ -929,9 +929,9 @@ export function solveTimetable(input: SolverInput): SolverOutput {
       if (sectionOffDays.get(sec.name)?.has(day)) return
 
       classPeriods.forEach((period, pi) => {
-        if (pi === 0) return // already filled by class teacher pass
-
-        // Skip if already filled
+        // Skip if already filled (by class teacher pass, Pass 0 optional block, etc.)
+        // NOTE: do NOT blanket-skip pi===0 — sections without a class teacher still
+        // need Period 1 to be filled here, otherwise it is always blank.
         if (classTT[sec.name][day][period.id]) return
 
         // Find best subject to place (rotating, respecting max per day).
