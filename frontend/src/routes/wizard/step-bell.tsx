@@ -78,17 +78,18 @@ const CLASSES = [
   { key: 'vi',   label: 'Class VI',   short: 'VI',    group: 'Middle' },
   { key: 'vii',  label: 'Class VII',  short: 'VII',   group: 'Middle' },
   { key: 'viii', label: 'Class VIII', short: 'VIII',  group: 'Middle' },
-  { key: 'ix',   label: 'Class IX',   short: 'IX',    group: 'Middle' },
-  { key: 'x',    label: 'Class X',    short: 'X',     group: 'Middle' },
-  { key: 'xi',   label: 'Class XI',   short: 'XI',    group: 'Senior' },
-  { key: 'xii',  label: 'Class XII',  short: 'XII',   group: 'Senior' },
+  { key: 'ix',   label: 'Class IX',   short: 'IX',    group: 'Senior' },
+  { key: 'x',    label: 'Class X',    short: 'X',     group: 'Senior' },
+  { key: 'xi',   label: 'Class XI',   short: 'XI',    group: 'Senior Secondary' },
+  { key: 'xii',  label: 'Class XII',  short: 'XII',   group: 'Senior Secondary' },
 ]
 
 const CLASS_GROUPS = [
-  { group: 'Pre-Primary', desc: 'Nursery–UKG',  color: '#7C3AED', bg: '#F5F3FF' },
-  { group: 'Primary',     desc: 'Class I–V',     color: '#1D4ED8', bg: '#EFF6FF' },
-  { group: 'Middle',      desc: 'Class VI–X',    color: '#059669', bg: '#F0FDF4' },
-  { group: 'Senior',      desc: 'Class XI–XII',  color: '#D97706', bg: '#FFFBEB' },
+  { group: 'Pre-Primary',      desc: 'Nursery–UKG',   color: '#7C3AED', bg: '#F5F3FF' },
+  { group: 'Primary',          desc: 'Class I–V',      color: '#1D4ED8', bg: '#EFF6FF' },
+  { group: 'Middle',           desc: 'Class VI–VIII',  color: '#059669', bg: '#F0FDF4' },
+  { group: 'Senior',           desc: 'Class IX–X',     color: '#D97706', bg: '#FFFBEB' },
+  { group: 'Senior Secondary', desc: 'Class XI–XII',   color: '#DC2626', bg: '#FEF2F2' },
 ]
 
 const ALL_CLASS_KEYS = CLASSES.map(c => c.key)
@@ -140,13 +141,14 @@ function gradeToGroup(g: string): string {
   if (['NURSERY','LKG','UKG'].includes(u)) return 'Pre-Primary'
   const MAP: Record<string, string> = {
     I:'Primary',II:'Primary',III:'Primary',IV:'Primary',V:'Primary',
-    VI:'Middle',VII:'Middle',VIII:'Middle',IX:'Middle',X:'Middle',
-    XI:'Senior',XII:'Senior',
+    VI:'Middle',VII:'Middle',VIII:'Middle',
+    IX:'Senior',X:'Senior',
+    XI:'Senior Secondary',XII:'Senior Secondary',
   }
   if (MAP[u]) return MAP[u]
   const n = parseInt(u)
-  if (!isNaN(n)) return n <= 5 ? 'Primary' : n <= 10 ? 'Middle' : 'Senior'
-  return 'Senior'
+  if (!isNaN(n)) return n <= 5 ? 'Primary' : n <= 8 ? 'Middle' : n <= 10 ? 'Senior' : 'Senior Secondary'
+  return 'Senior Secondary'
 }
 
 // Convert grade range (from dashboard modal) to a filtered CLASSES subset
@@ -1538,10 +1540,15 @@ export function StepBell() {
   const [showManageClasses, setShowManageClasses] = useState(false)
   const [manageTab, setManageTab] = useState<'groups' | 'streams' | 'classes'>('classes')
 
-  // Custom group definitions — initialized from saved state or defaults
+  // Custom group definitions — initialized from saved state or defaults.
+  // Any canonical groups missing from saved data (e.g. newly-added 'Senior Secondary')
+  // are merged in so the UI always reflects the current CLASS_GROUPS definition.
   const [customGroups, setCustomGroups] = useState<typeof CLASS_GROUPS>(() => {
-    if (_saved?.customGroups?.length) return _saved.customGroups as typeof CLASS_GROUPS
-    return CLASS_GROUPS
+    if (!_saved?.customGroups?.length) return CLASS_GROUPS
+    const saved = _saved.customGroups as typeof CLASS_GROUPS
+    const savedNames = new Set(saved.map(g => g.group))
+    const merged = [...saved, ...CLASS_GROUPS.filter(g => !savedNames.has(g.group))]
+    return merged as typeof CLASS_GROUPS
   })
 
   // Stream definitions (e.g. Science, Commerce, Arts) + class→stream assignments
@@ -1827,20 +1834,22 @@ export function StepBell() {
   const effectiveLunchAP = useMemo(() => {
     const sbAfterP = Math.max(1, Math.ceil(maxPeriods * 0.3))
     const defaults: Record<string, number> = {
-      'Pre-Primary': sbAfterP + 1,
-      'Primary':     sbAfterP + 2,
-      'Middle':      Math.min(sbAfterP + 3, maxPeriods),
-      'Senior':      Math.min(sbAfterP + 3, maxPeriods),
+      'Pre-Primary':      sbAfterP + 1,
+      'Primary':          sbAfterP + 2,
+      'Middle':           Math.min(sbAfterP + 3, maxPeriods),
+      'Senior':           Math.min(sbAfterP + 4, maxPeriods),
+      'Senior Secondary': Math.min(sbAfterP + 5, maxPeriods),
     }
     return { ...defaults, ...smartLunchAP }
   }, [maxPeriods, smartLunchAP])
 
   // ── Group metadata for Smart Timing UI ───────────────────────
   const SMART_GROUP_META: Record<string, { emoji: string; color: string; bg: string; border: string }> = {
-    'Pre-Primary': { emoji: '🧸', color: '#6D28D9', bg: '#F5F3FF', border: '#C4B5FD' },
-    'Primary':     { emoji: '📚', color: '#1D4ED8', bg: '#EFF6FF', border: '#BFDBFE' },
-    'Middle':      { emoji: '📖', color: '#059669', bg: '#F0FDF4', border: '#6EE7B7' },
-    'Senior':      { emoji: '🎓', color: '#D97706', bg: '#FFFBEB', border: '#FDE68A' },
+    'Pre-Primary':      { emoji: '🧸', color: '#6D28D9', bg: '#F5F3FF', border: '#C4B5FD' },
+    'Primary':          { emoji: '📚', color: '#1D4ED8', bg: '#EFF6FF', border: '#BFDBFE' },
+    'Middle':           { emoji: '📖', color: '#059669', bg: '#F0FDF4', border: '#6EE7B7' },
+    'Senior':           { emoji: '📐', color: '#D97706', bg: '#FFFBEB', border: '#FDE68A' },
+    'Senior Secondary': { emoji: '🎓', color: '#DC2626', bg: '#FEF2F2', border: '#FECACA' },
   }
 
   // ── Day keys ─────────────────────────────────────────────────
