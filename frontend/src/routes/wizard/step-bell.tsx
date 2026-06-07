@@ -645,26 +645,34 @@ function smartGenerateBellConfig(
     })
   }
 
+  // When a morning break is already configured, it serves as the mid-morning
+  // short break — use its position as the reference slot so we don't end up
+  // with two separate short-type breaks in the generated schedule.
+  const effectiveSbAfterP = morningBreak ? morningBreakPos : sbAfterP
+
   // Determine if Pre-Primary is eating at (or before) the short-break slot.
   // If so, they eat lunch while everyone else takes their short break — skip them from sb.
   const prePrimaryKeys = activeClasses.filter(c => c.group === 'Pre-Primary').map(c => c.key)
-  const ppLunchAP      = lunchAfterPeriod['Pre-Primary'] ?? sbAfterP
-  const ppEatsEarly    = lunchMode !== 'single' && prePrimaryKeys.length > 0 && ppLunchAP <= sbAfterP
+  const ppLunchAP      = lunchAfterPeriod['Pre-Primary'] ?? effectiveSbAfterP
+  const ppEatsEarly    = lunchMode !== 'single' && prePrimaryKeys.length > 0 && ppLunchAP <= effectiveSbAfterP
 
-  // Shared mid-morning short break — exclude Pre-Primary when they eat early
-  const sbClasses = ppEatsEarly ? allKeys.filter(k => !prePrimaryKeys.includes(k)) : [...allKeys]
-  if (sbClasses.length > 0) {
-    cwRows.push({
-      id: makeId(), name: 'Short Break', type: 'short-break',
-      classes: sbClasses, afterPeriod: sbAfterP, duration: sbDur,
-    })
+  // Only add a separate mid-morning Short Break when morning break is NOT already
+  // configured — otherwise the morning break already fills this role.
+  if (!morningBreak) {
+    const sbClasses = ppEatsEarly ? allKeys.filter(k => !prePrimaryKeys.includes(k)) : [...allKeys]
+    if (sbClasses.length > 0) {
+      cwRows.push({
+        id: makeId(), name: 'Short Break', type: 'short-break',
+        classes: sbClasses, afterPeriod: effectiveSbAfterP, duration: sbDur,
+      })
+    }
   }
 
   if (lunchMode === 'single' || activeGroups.length === 0) {
     // Single lunch for every class (with morning break active, so we're in cwRows path)
     cwRows.push({
       id: makeId(), name: 'Lunch Break', type: 'lunch',
-      classes: [...allKeys], afterPeriod: sbAfterP + 1, duration: lunchDur,
+      classes: [...allKeys], afterPeriod: effectiveSbAfterP + 1, duration: lunchDur,
     })
   } else {
     // Smart staggered lunch — each age group eats at a different period.
@@ -674,10 +682,10 @@ function smartGenerateBellConfig(
       const grpKeys = activeClasses.filter(c => c.group === g.group).map(c => c.key)
       if (!grpKeys.length) continue
       const isPrePrimary = g.group === 'Pre-Primary'
-      const desired      = lunchAfterPeriod[g.group] ?? (isPrePrimary ? sbAfterP : sbAfterP + 1)
+      const desired      = lunchAfterPeriod[g.group] ?? (isPrePrimary ? effectiveSbAfterP : effectiveSbAfterP + 1)
       const effective    = isPrePrimary && ppEatsEarly
-        ? Math.max(1, Math.min(desired, sbAfterP))       // can eat at or before sb slot
-        : Math.max(sbAfterP + 1, Math.min(desired, maxPeriods))  // must be after sb
+        ? Math.max(1, Math.min(desired, effectiveSbAfterP))       // can eat at or before sb slot
+        : Math.max(effectiveSbAfterP + 1, Math.min(desired, maxPeriods))  // must be after sb
       cwRows.push({
         id: makeId(), name: 'Lunch Break', type: 'lunch',
         classes: grpKeys, afterPeriod: effective, duration: lunchDur,
@@ -4266,7 +4274,10 @@ export function StepBell() {
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                         {(() => {
                           // Compute concurrent-period info once, shared across all group rows.
-                          const sbAPShared  = Math.max(1, Math.ceil(maxPeriods * 0.3))
+                          // When morning break is configured, it acts as the short break slot.
+                          const sbAPShared  = morningBreak
+                            ? morningBreakPos
+                            : Math.max(1, Math.ceil(maxPeriods * 0.3))
                           const ppLunchAP   = effectiveLunchAP['Pre-Primary'] ?? sbAPShared
                           const ppKeys      = activeClasses.filter(c => c.group === 'Pre-Primary').map(c => c.key)
                           const ppEatsEarly = ppKeys.length > 0 && ppLunchAP <= sbAPShared
