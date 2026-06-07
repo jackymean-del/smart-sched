@@ -2084,16 +2084,25 @@ export function StepBell() {
   // User overrides in smartLunchAP always take precedence.
   const effectiveLunchAP = useMemo(() => {
     const asmDur = 10
+
+    // Mirror the 8h-cap logic in smartGenerateBellConfig so the lunch-slot
+    // defaults are computed with the ACTUAL period duration that will be used
+    // in the generated schedule (not the raw P.Max state which may be trimmed).
+    const lunchGroupCount  = activeClassGroups.length || 1
+    const sbDurUsed        = morningBreak ? morningBreakDur : 15
+    // When morningBreak is on there's no separate short break → 0 extra.
+    const shortBreakTotal  = morningBreak ? 0 : sbDurUsed
+    const estimatedBreaks  = sbDurUsed + shortBreakTotal + lunchGroupCount * lunchBreakDur
+    const avail8h          = 8 * 60 - asmDur - estimatedBreaks
+    const effPeriodDur     = snap5(Math.min(periodDur, Math.max(periodDurMin, Math.floor(avail8h / Math.max(1, maxPeriods)))))
+
     // When morning break is configured it acts as the mid-morning break.
-    // Use its position and duration so lunch slots are computed relative to
-    // the correct break, not the hardcoded 30%-of-periods default.
-    const sbAfterP  = morningBreak
+    const sbAfterP = morningBreak
       ? morningBreakPos
       : Math.max(1, Math.ceil(maxPeriods * 0.3))
-    const sbDurUsed = morningBreak ? morningBreakDur : 15
 
     const asmEnd = toMins(startTime) + asmDur
-    const sbEnd  = asmEnd + sbAfterP * periodDur + sbDurUsed  // clock when the break ends
+    const sbEnd  = asmEnd + sbAfterP * effPeriodDur + sbDurUsed  // clock when the break ends
 
     // Pre-Primary eats at the shared break slot (earliest lunch).
     const prePrimaryP = sbAfterP
@@ -2101,7 +2110,7 @@ export function StepBell() {
     // Remaining 4 groups distribute across slots AFTER the break (before 2 PM cap).
     const LATEST_LUNCH = 14 * 60  // 2 PM hard cap
     const minsAfterSb  = LATEST_LUNCH - sbEnd
-    const maxLunchP    = Math.min(maxPeriods, sbAfterP + Math.max(1, Math.floor(minsAfterSb / periodDur)))
+    const maxLunchP    = Math.min(maxPeriods, sbAfterP + Math.max(1, Math.floor(minsAfterSb / effPeriodDur)))
     const minLunchP    = sbAfterP + 1
     const availSlots   = Math.max(1, maxLunchP - minLunchP + 1)
 
@@ -2113,7 +2122,8 @@ export function StepBell() {
       defaults[g] = Math.max(minLunchP, Math.min(maxLunchP, minLunchP + slotIdx))
     })
     return { ...defaults, ...smartLunchAP }
-  }, [maxPeriods, periodDur, startTime, smartLunchAP, morningBreak, morningBreakPos, morningBreakDur])
+  }, [maxPeriods, periodDur, periodDurMin, startTime, smartLunchAP,
+      morningBreak, morningBreakPos, morningBreakDur, lunchBreakDur, activeClassGroups])
 
   // ── Auto-generate bell schedule when Smart Bell settings change ─
   // Replaces the explicit "Generate Bell Schedule" button. Fires whenever
@@ -4286,6 +4296,15 @@ export function StepBell() {
                           const sbAPShared  = morningBreak
                             ? morningBreakPos
                             : Math.max(1, Math.ceil(maxPeriods * 0.3))
+
+                          // Mirror the 8h-cap from smartGenerateBellConfig so the approximate
+                          // times shown here match the ACTUAL generated bell schedule.
+                          const _sbDurUsed        = morningBreak ? morningBreakDur : 15
+                          const _shortBreakTotal  = morningBreak ? 0 : _sbDurUsed
+                          const _estimatedBreaks  = _sbDurUsed + _shortBreakTotal + activeClassGroups.length * lunchBreakDur
+                          const _avail8h          = 8 * 60 - 10 - _estimatedBreaks
+                          const effPeriodDur      = snap5(Math.min(periodDur, Math.max(periodDurMin, Math.floor(_avail8h / Math.max(1, maxPeriods)))))
+
                           const ppLunchAP   = effectiveLunchAP['Pre-Primary'] ?? sbAPShared
                           const ppKeys      = activeClasses.filter(c => c.group === 'Pre-Primary').map(c => c.key)
                           const ppEatsEarly = ppKeys.length > 0 && ppLunchAP <= sbAPShared
@@ -4312,7 +4331,8 @@ export function StepBell() {
                           const concPeriodAt  = (!isPrePrimary && ppEatsEarly && concurrentMode !== 'regular')
                             ? sbAP + 1 : undefined
                           // When morning break is on it IS the short break — no separate +15 to add.
-                          const approx = approxLunchTime(startTime, periodDur, ap, maxPeriods, use12h,
+                          // Use effPeriodDur (8h-capped) so the time here matches actual bell timing.
+                          const approx = approxLunchTime(startTime, effPeriodDur, ap, maxPeriods, use12h,
                             replacesShortBreak, concPeriodDur, concPeriodAt,
                             morningBreak ? morningBreakDur : 0, morningBreak ? morningBreakPos : 0,
                             morningBreak ? 0 : 15,  // shortBreakDur
