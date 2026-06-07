@@ -243,7 +243,7 @@ const SCHOOL_HOUR_STANDARDS = {
     suggestedStart: '07:30', suggestedEnd: '14:30',
     periodDurSuggested: 45, periodDurRange: [40, 50] as [number, number],
     maxPeriodsSuggested: 8, maxPeriodsRange: [7, 9] as [number, number],
-    lunchDur: 35,
+    lunchDur: 30,
     color: '#059669', bg: '#F0FDF4', border: '#6EE7B7',
     source: 'RTE Act 2009 · NEP 2020 Middle Stage',
     note: 'RTE mandates 1000 instructional hrs/yr (200 days × 5 hrs net). OECD average: 6.5 hrs school day.',
@@ -254,7 +254,7 @@ const SCHOOL_HOUR_STANDARDS = {
     suggestedStart: '07:30', suggestedEnd: '14:30',
     periodDurSuggested: 45, periodDurRange: [40, 55] as [number, number],
     maxPeriodsSuggested: 8, maxPeriodsRange: [8, 9] as [number, number],
-    lunchDur: 40,
+    lunchDur: 30,
     color: '#D97706', bg: '#FFFBEB', border: '#FDE68A',
     source: 'NCERT · CBSE Secondary Level · NEP 2020',
     note: 'Board-prep years. CBSE schools average 7 hrs. UK secondary: 6.5 hrs. US high school: 6–7 hrs.',
@@ -265,7 +265,7 @@ const SCHOOL_HOUR_STANDARDS = {
     suggestedStart: '07:30', suggestedEnd: '15:00',
     periodDurSuggested: 50, periodDurRange: [45, 60] as [number, number],
     maxPeriodsSuggested: 8, maxPeriodsRange: [8, 9] as [number, number],
-    lunchDur: 40,
+    lunchDur: 30,
     color: '#DC2626', bg: '#FEF2F2', border: '#FECACA',
     source: 'NCERT · CBSE Sr. Secondary · NEP 2020',
     note: 'College-prep depth with self-study. WHO cautions against >8 hrs; cognitive load peaks at 7 hrs.',
@@ -607,7 +607,7 @@ function smartGenerateBellConfig(
 ): { rows: BellRow[]; cwRows: CwBreakRow[] } {
   const allKeys  = activeClasses.map(c => c.key)
   const sbAfterP = Math.max(1, Math.ceil(maxPeriods * 0.3))
-  const lunchDur = 45
+  const lunchDur = 30
   const sbDur    = 15
 
   // ── Simple path: single lunch + no morning break ─────────────
@@ -4112,7 +4112,7 @@ export function StepBell() {
                           const ppEatsEarly = ppKeys.length > 0 && ppLunchAP <= sbAPShared
                           // Effective duration of the period that OTHER classes have while Pre-Primary eats lunch.
                           // This period starts right after the short break (sbAP + 1).
-                          const lunchDurConst = 45
+                          const lunchDurConst = 30
                           const effConcurrentDur = ppEatsEarly
                             ? (concurrentMode === 'regular'     ? periodDur
                              : concurrentMode === 'match-lunch' ? lunchDurConst
@@ -4202,7 +4202,7 @@ export function StepBell() {
                       <div style={{ display: 'flex', gap: 7 }}>
                         {([
                           { val: 'regular',    label: 'Regular',       sub: `${periodDur} min`, desc: 'Normal period, unaffected' },
-                          { val: 'match-lunch',label: 'Match lunch',   sub: '45 min',           desc: 'Period equals lunch duration — bells align cleanly' },
+                          { val: 'match-lunch',label: 'Match lunch',   sub: '30 min',           desc: 'Period equals lunch duration — bells align cleanly' },
                           { val: 'custom',     label: 'Custom',        sub: '',                 desc: 'Set your own duration' },
                         ] as const).map(opt => {
                           const active = concurrentMode === opt.val
