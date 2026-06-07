@@ -31,7 +31,7 @@
  */
 
 import {
-  useState, useMemo, useEffect, useRef,
+  useState, useMemo, useEffect, useRef, useCallback,
   type CSSProperties,
 } from 'react'
 import { useTimetableStore } from '@/store/timetableStore'
@@ -973,6 +973,8 @@ interface SavedBell {
   morningBreak?:    boolean  // enabled?
   morningBreakPos?: number   // 0 = after assembly, 1 = after P1, 2 = after P2 …
   morningBreakDur?: number   // minutes
+  // True = user has manually edited the schedule; false = auto-generated
+  bellCustomized?:  boolean
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1900,6 +1902,9 @@ export function StepBell() {
   const [smartLunchAP,     setSmartLunchAP]     = useState<Record<string, number>>(() => _saved?.smartLunchAfterPeriod ?? {})
   // Set to true after first successful generation so the "generated" banner shows
   const [smartGenDone,     setSmartGenDone]     = useState(false)
+  // True when the user has manually edited the schedule since the last auto-generation.
+  // When true, auto-gen is paused so manual edits are preserved.
+  const [bellCustomized,   setBellCustomized]   = useState<boolean>(() => _saved?.bellCustomized ?? false)
   // Concurrent period: duration of a period for classes NOT eating during a staggered lunch
   const [concurrentMode, setConcurrentMode] = useState<'regular' | 'match-lunch' | 'custom'>(() => _saved?.concurrentPeriodMode ?? 'regular')
   const [concurrentDur,  setConcurrentDur]  = useState<number>(                               () => _saved?.concurrentPeriodDur  ?? 30)
@@ -2068,6 +2073,7 @@ export function StepBell() {
       smartLunchMode, smartLunchAfterPeriod: smartLunchAP,
       morningBreak, morningBreakPos, morningBreakDur,
       concurrentPeriodMode: concurrentMode, concurrentPeriodDur: concurrentDur, lunchBreakDur,
+      bellCustomized,
     } as SavedBell))
   }, [shiftName, startTime, use12h, periodDur, periodDurMin, maxPeriods, workDays, rows,
       cycleWeeks, useDayNames, cycleStartDate, fixedDuration, rotationDays,
@@ -2075,7 +2081,7 @@ export function StepBell() {
       scheduleMode, shifts, activeShiftId, shiftRows, customClasses, customGroups,
       customStreams, classStreamMap, autoBellMode, schoolEndTime,
       smartLunchMode, smartLunchAP, morningBreak, morningBreakPos, morningBreakDur,
-      concurrentMode, concurrentDur])
+      concurrentMode, concurrentDur, bellCustomized])
 
   // ── Smart lunch: effective afterPeriod per group ─────────────
   // Time-aware defaults: distribute all 5 groups within a 12:00–2:00 PM lunch window.
@@ -2146,8 +2152,8 @@ export function StepBell() {
        concurrentMode, concurrentDur, lunchBreakDur,
        activeClassGroups, activeClasses])
 
-  useEffect(() => {
-    if (!autoBellMode) return
+  /** Run the smart generator immediately (used by auto-gen effect and Regenerate button). */
+  const runAutoGen = useCallback((opts?: { resetCustomized?: boolean }) => {
     const concPeriodDur = concurrentMode === 'regular'     ? undefined
                         : concurrentMode === 'match-lunch' ? lunchBreakDur
                         :                                    concurrentDur
@@ -2156,13 +2162,23 @@ export function StepBell() {
       smartLunchMode, effectiveLunchAP,
       activeClassGroups, activeClasses,
       morningBreak, morningBreakPos, morningBreakDur,
-      concPeriodDur,
-      lunchBreakDur,
-      periodDurMin,
+      concPeriodDur, lunchBreakDur, periodDurMin,
     )
     setRows(generated)
     setCwRows(generated_cwRows)
     setSmartGenDone(true)
+    if (opts?.resetCustomized !== false) setBellCustomized(false)
+  }, [concurrentMode, lunchBreakDur, concurrentDur, startTime, schoolEndTime,
+      maxPeriods, periodDur, smartLunchMode, effectiveLunchAP,
+      activeClassGroups, activeClasses, morningBreak, morningBreakPos, morningBreakDur,
+      periodDurMin]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!autoBellMode) return
+    // Skip auto-gen if user has manually customized the schedule — they
+    // must click "Regenerate" to get a fresh auto-generated schedule.
+    if (bellCustomized) return
+    runAutoGen({ resetCustomized: false })
   }, [_autoGenKey, autoBellMode]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Group metadata for Smart Timing UI ───────────────────────
@@ -2492,9 +2508,15 @@ export function StepBell() {
     const targetMins    = snap5(rawTargetMins)
     const target        = targetMins - toMins(activeStartTime)
     if (target <= 0) return
-    const current = displayRows.reduce((s, r) => s + r.duration, 0)
+    // Use the CLOCK duration (not sum of row durations) so staggered/concurrent
+    // schedules with overlapping rows don't produce a wildly wrong diff.
+    const current = toMins(endTime) - toMins(activeStartTime)
     let   diff    = target - current
     if (diff === 0) return
+    // Mark schedule as manually customized so auto-gen doesn't overwrite it.
+    // Also sync schoolEndTime so the Smart Timing "School ends at" field stays consistent.
+    setBellCustomized(true)
+    setSchoolEndTime(toHHMM(targetMins))
     setDisplayRows(prev => {
       const next = [...prev]
       // Work backward from the last teaching period, distributing adjustment
@@ -2682,10 +2704,15 @@ export function StepBell() {
   const toggleDay = (d: string) =>
     setWorkDays(w => w.includes(d) ? w.filter(x => x !== d) : [...w, d])
 
-  const updateRow = (id: string, patch: Partial<BellRow>) =>
+  const updateRow = (id: string, patch: Partial<BellRow>) => {
+    setBellCustomized(true)
     setDisplayRows(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r))
+  }
 
-  const deleteRow = (id: string) => setDisplayRows(prev => prev.filter(x => x.id !== id))
+  const deleteRow = (id: string) => {
+    setBellCustomized(true)
+    setDisplayRows(prev => prev.filter(x => x.id !== id))
+  }
 
   // Inline time editing state — tracks which row + field is being edited
   const [editingTime, setEditingTime] = useState<{ rowId: string; field: 'start' | 'end' } | null>(null)
@@ -2755,6 +2782,7 @@ export function StepBell() {
       : 'short-break'
     const defaultDur: Record<RowType, number> = { assembly: 10, teaching: 40, 'short-break': 10, lunch: 30, dispersal: 10 }
     const newRow: BellRow = { id: makeId(), name, type, duration: defaultDur[type], classes: [...activeClassKeys] }
+    setBellCustomized(true)
     setDisplayRows(prev => { const n = [...prev]; n.splice(afterIndex + 1, 0, newRow); return n })
   }
 
@@ -3296,6 +3324,17 @@ export function StepBell() {
                 <input className="b-input" value={shiftName} onChange={e => setShiftName(e.target.value)}
                   placeholder="e.g. Main Shift"
                   style={{ fontWeight: 700, fontSize: 13, border: 'none', padding: '0', outline: 'none', background: 'transparent', flex: 1 }} />
+                {/* Customized / Auto-Generated badge */}
+                {displayRows.length > 0 && autoBellMode && (
+                  <span style={{
+                    fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20, flexShrink: 0,
+                    background: bellCustomized ? '#FEF3C7' : '#ECFDF5',
+                    color:      bellCustomized ? '#92400E' : '#065F46',
+                    border: `1px solid ${bellCustomized ? '#FDE68A' : '#6EE7B7'}`,
+                  }}>
+                    {bellCustomized ? '✎ Customized' : '✦ Auto Generated'}
+                  </span>
+                )}
               </div>
               <div style={{ padding: '14px 16px' }}>
 
@@ -3962,29 +4001,29 @@ export function StepBell() {
                   Smart Timing
                 </span>
                 {autoBellMode && (
-                  <button
-                    title="Regenerate bell schedule now (applies current P.Max, Max/day, and all other settings)"
-                    onClick={() => {
-                      const concPeriodDur = concurrentMode === 'regular'     ? undefined
-                                          : concurrentMode === 'match-lunch' ? lunchBreakDur
-                                          :                                    concurrentDur
-                      const { rows: g, cwRows: gc } = smartGenerateBellConfig(
-                        startTime, schoolEndTime, maxPeriods, periodDur,
-                        smartLunchMode, effectiveLunchAP,
-                        activeClassGroups, activeClasses,
-                        morningBreak, morningBreakPos, morningBreakDur,
-                        concPeriodDur, lunchBreakDur, periodDurMin,
-                      )
-                      setRows(g); setCwRows(gc); setSmartGenDone(true)
-                    }}
-                    style={{
-                      fontSize: 10, fontWeight: 700, color: '#7C3AED',
-                      background: '#EDE9FF', border: '1px solid #C4B5FD',
-                      borderRadius: 6, padding: '2px 9px', cursor: 'pointer',
-                      fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4,
+                  <>
+                    {/* Customized / Auto-Generated status badge */}
+                    <span style={{
+                      fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
+                      background: bellCustomized ? '#FEF3C7' : '#ECFDF5',
+                      color:      bellCustomized ? '#92400E' : '#065F46',
+                      border: `1px solid ${bellCustomized ? '#FDE68A' : '#6EE7B7'}`,
+                      display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0,
                     }}>
-                    ⟳ Regenerate
-                  </button>
+                      {bellCustomized ? '✎ Customized' : '✦ Auto Generated'}
+                    </span>
+                    <button
+                      title="Regenerate bell schedule now (applies current P.Max, Max/day, and all other settings)"
+                      onClick={() => runAutoGen()}
+                      style={{
+                        fontSize: 10, fontWeight: 700, color: '#7C3AED',
+                        background: '#EDE9FF', border: '1px solid #C4B5FD',
+                        borderRadius: 6, padding: '2px 9px', cursor: 'pointer',
+                        fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4,
+                      }}>
+                      ⟳ Regenerate
+                    </button>
+                  </>
                 )}
                 {/* Toggle */}
                 <button
@@ -5005,13 +5044,14 @@ export function StepBell() {
                 <button onClick={() => {
                   const count = displayRows.filter(r => r.type === 'teaching').length
                   const nr    = { ...mkPeriod(count + 1, periodDur), id: makeId(), classes: [...activeClassKeys] }
+                  setBellCustomized(true)
                   setDisplayRows(prev => { const n = [...prev]; const di = n.findIndex(r => r.type === 'dispersal'); n.splice(di >= 0 ? di : n.length, 0, nr); return n })
                 }} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 14px', borderRadius: 7, border: '1px solid #E5E7EB', background: '#fff', fontSize: 12, fontWeight: 600, color: '#374151', cursor: 'pointer', fontFamily: 'inherit' }}>
                   <Plus size={12} /> Add period
                 </button>
                 <button
                   title="Wipes custom row durations and rebuilds with the default period duration"
-                  onClick={() => setDisplayRows(buildRows(maxPeriods, periodDur).map(r => ({ ...r, classes: [...activeClassKeys] })))}
+                  onClick={() => { setBellCustomized(false); setDisplayRows(buildRows(maxPeriods, periodDur).map(r => ({ ...r, classes: [...activeClassKeys] }))) }}
                   style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 14px', borderRadius: 7, border: '1px solid #E5E7EB', background: '#fff', fontSize: 12, fontWeight: 600, color: '#6B7280', cursor: 'pointer', fontFamily: 'inherit' }}>
                   Reset to default
                 </button>
