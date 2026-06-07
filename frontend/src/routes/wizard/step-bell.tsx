@@ -1723,7 +1723,30 @@ export function StepBell() {
   const [weekWorkDays,   setWeekWorkDays]   = useState<Record<number, string[]>>(() => _saved?.weekWorkDays ?? {})
   const [dayStartTimes,  setDayStartTimes]  = useState<Record<string, string>>( () => _saved?.dayStartTimes  ?? {})
   const [dayPeriodDurs,  setDayPeriodDurs]  = useState<Record<string, number>>( () => _saved?.dayPeriodDurs  ?? {})
-  const [dayOffRules,    setDayOffRules]    = useState<DayOffRule[]>(           () => _saved?.dayOffRules    ?? [])
+  const [dayOffRules,    setDayOffRules]    = useState<DayOffRule[]>(() => {
+    // If previously saved (even as []), respect the user's choice exactly.
+    if (_saved !== null && _saved.dayOffRules !== undefined) return _saved.dayOffRules
+    // Fresh load — auto-apply Saturday off for all Pre-Primary classes present in this school.
+    // Pre-Primary children (under 5) should never have a 6-day week; this mirrors NEP 2020.
+    const from = (config as any).fromGrade as string | undefined
+    const to   = (config as any).toGrade   as string | undefined
+    const initClasses = canonicalizeClasses(
+      _saved?.customClasses?.length
+        ? (_saved.customClasses as typeof CLASSES)
+        : (from && to) ? classesFromGradeRange(from, to) : CLASSES
+    )
+    const initWorkDays: string[] = _saved?.workDays?.length
+      ? _saved.workDays
+      : config.workDays?.length
+        ? config.workDays.map((d: string) => d.charAt(0) + d.slice(1, 3).toLowerCase())
+        : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
+    // Only create the rule when Saturday is actually a school day (otherwise no rule needed)
+    const prePrimaryKeys = ['nur', 'lkg', 'ukg'].filter(k => initClasses.some(c => c.key === k))
+    if (prePrimaryKeys.length > 0 && initWorkDays.includes('Sat')) {
+      return [{ id: makeId(), day: 'Sat', classes: prePrimaryKeys }]
+    }
+    return []
+  })
   // Not persisted — suggestions re-appear on fresh load so the user always sees
   // the recommendation until they either apply or dismiss it manually.
   const [dismissedDaySugs, setDismissedDaySugs] = useState<string[]>([])
