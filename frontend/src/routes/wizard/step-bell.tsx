@@ -165,6 +165,33 @@ function classesFromGradeRange(from: string, to: string): typeof CLASSES {
   return subset.length > 0 ? subset : CLASSES
 }
 
+/**
+ * Normalise a class list loaded from saved state or built from sections:
+ *  1. Replace any entry whose label matches a canonical CLASSES entry (case-insensitive)
+ *     with the canonical entry — fixes legacy keys like 'nursery' → 'nur'.
+ *  2. Sort by canonical CLASSES order (Nursery → LKG → UKG → Class I …).
+ *     Unknown / custom classes appear at the end in their original relative order.
+ */
+function canonicalizeClasses(classes: typeof CLASSES): typeof CLASSES {
+  const normalised = classes.map(c => {
+    // Direct key match (already canonical)
+    const byKey = CLASSES.find(cc => cc.key === c.key)
+    if (byKey) return byKey
+    // Label match — catches 'nursery' key that should map to canonical {key:'nur',…}
+    const byLabel = CLASSES.find(cc => cc.label.toLowerCase() === c.label.toLowerCase())
+    return byLabel ?? c
+  })
+  // Deduplicate (in case save had both 'nur' and 'nursery')
+  const seen = new Set<string>()
+  const deduped = normalised.filter(c => { if (seen.has(c.key)) return false; seen.add(c.key); return true })
+  // Sort by canonical index; custom entries go last
+  return deduped.sort((a, b) => {
+    const ai = CLASSES.findIndex(cc => cc.key === a.key)
+    const bi = CLASSES.findIndex(cc => cc.key === b.key)
+    return (ai < 0 ? 999 : ai) - (bi < 0 ? 999 : bi)
+  })
+}
+
 // ── Type metadata ──────────────────────────────────────────────
 const TYPE_META: Record<RowType, { label: string; bg: string; fg: string; border: string; line: string }> = {
   assembly:     { label: 'Assembly',    bg: '#EDE9FF', fg: '#7C3AED', border: '#C4B5FD', line: '#7C3AED' },
@@ -1497,13 +1524,16 @@ export function StepBell() {
   const bellKey = useRef(getBellKey()).current
   const [_saved] = useState<SavedBell | null>(loadSaved)
 
-  // Custom class list — initialized from saved state OR from the grade range set in the modal
+  // Custom class list — initialized from saved state OR from the grade range set in the modal.
+  // Always run through canonicalizeClasses so stale keys ('nursery' → 'nur') are migrated
+  // and Nursery is always sorted first within the Pre-Primary group.
   const [customClasses, setCustomClasses] = useState<typeof CLASSES>(() => {
-    if (_saved?.customClasses?.length) return _saved.customClasses as typeof CLASSES
     const from = (config as any).fromGrade as string | undefined
     const to   = (config as any).toGrade   as string | undefined
-    if (from && to) return classesFromGradeRange(from, to)
-    return CLASSES
+    const raw  = _saved?.customClasses?.length
+      ? (_saved.customClasses as typeof CLASSES)
+      : (from && to) ? classesFromGradeRange(from, to) : CLASSES
+    return canonicalizeClasses(raw)
   })
   const [showManageClasses, setShowManageClasses] = useState(false)
   const [manageTab, setManageTab] = useState<'groups' | 'streams' | 'classes'>('classes')
@@ -1545,13 +1575,18 @@ export function StepBell() {
       if (stream) gradeStreams.get(g)!.add(stream)
     })
 
-    // Match grades to the CLASSES constant by short name (XI → key 'xi')
-    const matched = CLASSES.filter(c => gradeStreams.has(c.short))
-    const matchedShorts = new Set(matched.map(c => c.short))
+    // Match grades to the CLASSES constant by short name (XI → key 'xi') OR label
+    // ('Nursery' short = 'Nur' so label-match is essential for pre-primary grades).
+    const gradeKeys = [...gradeStreams.keys()]
+    const matched = CLASSES.filter(c =>
+      gradeStreams.has(c.short) ||
+      gradeKeys.some(k => k.toLowerCase() === c.label.toLowerCase())
+    )
+    const matchedKeys = new Set(matched.flatMap(c => [c.short, c.label.toLowerCase()]))
 
-    // Synthesise entries for any grade not in the constant
-    const extra: typeof CLASSES = [...gradeStreams.keys()]
-      .filter(g => !matchedShorts.has(g))
+    // Synthesise entries for any grade that still didn't match a canonical class
+    const extra: typeof CLASSES = gradeKeys
+      .filter(g => !matchedKeys.has(g) && !matchedKeys.has(g.toLowerCase()))
       .map(g => ({
         key:   g.toLowerCase().replace(/\s+/g, '-'),
         label: /^(nursery|lkg|ukg)$/i.test(g) ? g : `Class ${g}`,
@@ -1559,7 +1594,8 @@ export function StepBell() {
         group: gradeToGroup(g),
       }))
 
-    const newClasses = [...matched, ...extra]
+    // Canonicalise so Nursery gets key 'nur' and is sorted first in Pre-Primary
+    const newClasses = canonicalizeClasses([...matched, ...extra])
     if (!newClasses.length) return
 
     // classStreamMap: class key → [stream names]
