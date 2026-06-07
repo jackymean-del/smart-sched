@@ -443,6 +443,83 @@ function autoGenerateBellRows(
   return rows
 }
 
+// ── Approximate lunch-start time for a given group ───────────
+function approxLunchTime(
+  startTime: string,
+  periodDur: number,
+  afterPeriod: number,
+  maxPeriods: number,
+  use12h: boolean,
+): string {
+  const sbAfter = Math.max(1, Math.ceil(maxPeriods * 0.3))
+  let mins = toMins(startTime) + 10 // assembly 10 min
+  mins += afterPeriod * periodDur
+  if (sbAfter <= afterPeriod) mins += 15 // short break has already fired
+  return fmt12(toHHMM(mins), use12h)
+}
+
+// ── Smart bell schedule generator ────────────────────────────
+/**
+ * Generates a full bell config in two modes:
+ *
+ * 'single'  — one shared lunch for all classes (wraps autoGenerateBellRows).
+ *             Returns cwRows = [] so handleNext uses the simple break path.
+ *
+ * 'smart'   — staggered lunch: each class GROUP gets lunch at a different
+ *             period slot so they don't hit the canteen simultaneously.
+ *             Uses buildBellRowsFromCw → returns populated cwRows so the
+ *             classwise timing path is taken in handleNext.
+ */
+function smartGenerateBellConfig(
+  startTime:        string,
+  endTime:          string,
+  maxPeriods:       number,
+  periodDur:        number,
+  lunchMode:        'single' | 'smart',
+  lunchAfterPeriod: Record<string, number>,   // groupName → afterPeriod
+  activeGroups:     Array<{ group: string }>,
+  activeClasses:    Array<{ key: string; group: string }>,
+): { rows: BellRow[]; cwRows: CwBreakRow[] } {
+  const allKeys = activeClasses.map(c => c.key)
+
+  if (lunchMode === 'single' || activeGroups.length === 0) {
+    return {
+      rows:   autoGenerateBellRows(startTime, endTime, maxPeriods, periodDur, allKeys),
+      cwRows: [],
+    }
+  }
+
+  // ── Smart mode ──────────────────────────────────────────────
+  const sbAfterP  = Math.max(1, Math.ceil(maxPeriods * 0.3))
+  const lunchDur  = 45
+  const sbDur     = 15
+  const cwRows: CwBreakRow[] = []
+
+  // Shared short break for ALL classes (same position)
+  cwRows.push({
+    id: makeId(), name: 'Short Break', type: 'short-break',
+    classes: [...allKeys], afterPeriod: sbAfterP, duration: sbDur,
+  })
+
+  // Per-group lunch at different period positions
+  // Guard: lunch must come AFTER the shared short break
+  for (const g of activeGroups) {
+    const grpKeys = activeClasses.filter(c => c.group === g.group).map(c => c.key)
+    if (!grpKeys.length) continue
+    const desired = lunchAfterPeriod[g.group] ?? (sbAfterP + 1)
+    const effective = Math.max(sbAfterP + 1, Math.min(desired, maxPeriods))
+    cwRows.push({
+      id: makeId(), name: 'Lunch Break', type: 'lunch',
+      classes: grpKeys, afterPeriod: effective, duration: lunchDur,
+    })
+  }
+
+  return {
+    rows:   buildBellRowsFromCw(startTime, periodDur, maxPeriods, cwRows, allKeys),
+    cwRows,
+  }
+}
+
 // ── Class-wise bell generation ────────────────────────────────
 /**
  * Build a merged BellRow[] from class-wise break configs.
@@ -626,9 +703,11 @@ interface SavedBell {
   customStreams?: Array<{ stream: string; color: string; bg: string; group: string }>
   // Maps class key → stream names (multi-stream supported)
   classStreamMap?: Record<string, string[]>
-  // Automatic bell timing mode
+  // Automatic / Smart bell timing mode
   autoBellMode?: boolean
   schoolEndTime?: string   // HH:MM end-of-school time used for auto-generation
+  smartLunchMode?: 'single' | 'smart'
+  smartLunchAfterPeriod?: Record<string, number>  // group → afterPeriod override
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1515,9 +1594,16 @@ export function StepBell() {
       .filter(g => customClasses.some(c => c.group === g.group)),
   [customClasses, customGroups])
 
-  const [autoBellMode,  setAutoBellMode]  = useState<boolean>(() => _saved?.autoBellMode  ?? false)
-  const [schoolEndTime, setSchoolEndTime] = useState<string>( () => _saved?.schoolEndTime ?? '15:30')
+  const [autoBellMode,     setAutoBellMode]     = useState<boolean>(() => _saved?.autoBellMode ?? false)
+  const [schoolEndTime,    setSchoolEndTime]    = useState<string>( () => _saved?.schoolEndTime ?? '15:30')
+  // 'single' = one shared lunch for all | 'smart' = staggered by age group
+  const [smartLunchMode,   setSmartLunchMode]   = useState<'single' | 'smart'>(() => _saved?.smartLunchMode ?? 'single')
+  // Per-group overrides of the computed lunch afterPeriod default
+  const [smartLunchAP,     setSmartLunchAP]     = useState<Record<string, number>>(() => _saved?.smartLunchAfterPeriod ?? {})
+  // Set to true after first successful generation so the "generated" banner shows
+  const [smartGenDone,     setSmartGenDone]     = useState(false)
   const [shiftName,  setShiftName]  = useState<string>(  () => _saved?.shiftName ?? 'Main Shift')
+
   const [startTime,  setStartTime]  = useState<string>(  () => _saved?.startTime ?? (config.startTime ?? '09:00'))
   const [use12h,     setUse12h]     = useState<boolean>( () => _saved?.use12h ?? true)
   const [periodDur,    setPeriodDur]    = useState<number>(() => _saved?.periodDur    ?? (config.defaultSessionDuration ?? 40))
@@ -1642,12 +1728,36 @@ export function StepBell() {
       weekWorkDays, dayStartTimes, dayPeriodDurs, dayOffRules, cwRows, varyByDay, dayRows,
       scheduleMode, shifts, activeShiftId, shiftRows, customClasses, customGroups,
       customStreams, classStreamMap, autoBellMode, schoolEndTime,
+      smartLunchMode, smartLunchAfterPeriod: smartLunchAP,
     } as SavedBell))
   }, [shiftName, startTime, use12h, periodDur, periodDurMin, maxPeriods, workDays, rows,
       cycleWeeks, useDayNames, cycleStartDate, fixedDuration, rotationDays,
       weekWorkDays, dayStartTimes, dayPeriodDurs, dayOffRules, cwRows, varyByDay, dayRows,
       scheduleMode, shifts, activeShiftId, shiftRows, customClasses, customGroups,
-      customStreams, classStreamMap, autoBellMode, schoolEndTime])
+      customStreams, classStreamMap, autoBellMode, schoolEndTime,
+      smartLunchMode, smartLunchAP])
+
+  // ── Smart lunch: effective afterPeriod per group ─────────────
+  // Computed defaults are spread per group; user overrides in smartLunchAP take precedence.
+  // Defaults stagger lunch by one period per group, starting after the shared short break.
+  const effectiveLunchAP = useMemo(() => {
+    const sbAfterP = Math.max(1, Math.ceil(maxPeriods * 0.3))
+    const defaults: Record<string, number> = {
+      'Pre-Primary': sbAfterP + 1,
+      'Primary':     sbAfterP + 2,
+      'Middle':      Math.min(sbAfterP + 3, maxPeriods),
+      'Senior':      Math.min(sbAfterP + 3, maxPeriods),
+    }
+    return { ...defaults, ...smartLunchAP }
+  }, [maxPeriods, smartLunchAP])
+
+  // ── Group metadata for Smart Timing UI ───────────────────────
+  const SMART_GROUP_META: Record<string, { emoji: string; color: string; bg: string; border: string }> = {
+    'Pre-Primary': { emoji: '🧸', color: '#6D28D9', bg: '#F5F3FF', border: '#C4B5FD' },
+    'Primary':     { emoji: '📚', color: '#1D4ED8', bg: '#EFF6FF', border: '#BFDBFE' },
+    'Middle':      { emoji: '📖', color: '#059669', bg: '#F0FDF4', border: '#6EE7B7' },
+    'Senior':      { emoji: '🎓', color: '#D97706', bg: '#FFFBEB', border: '#FDE68A' },
+  }
 
   // ── Day keys ─────────────────────────────────────────────────
   // • day-names mode  → rotation day shorts (D1, D2, …)
@@ -3303,29 +3413,35 @@ export function StepBell() {
           </div>
           )}
 
-          {/* ─── AUTOMATIC BELL TIMING CARD ─── */}
+          {/* ─── SMART TIMING CARD ─── */}
           <div style={{ marginBottom: 16 }}>
             <div style={{
-              background: autoBellMode ? '#F0FDF4' : '#F8F7FF',
-              border: `1.5px solid ${autoBellMode ? '#86EFAC' : '#C4B5FD'}`,
-              borderRadius: 10, padding: '14px 18px',
-              display: 'flex', alignItems: 'flex-start', gap: 14,
+              background: autoBellMode ? '#F8F7FF' : '#FAFAFA',
+              border: `1.5px solid ${autoBellMode ? '#C4B5FD' : '#E5E7EB'}`,
+              borderRadius: 12, overflow: 'hidden',
             }}>
-              {/* Toggle */}
-              <div style={{ flexShrink: 0, marginTop: 2 }}>
+              {/* ── Header row ── */}
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '12px 16px',
+                background: autoBellMode ? '#EDE9FF' : '#F3F4F6',
+                borderBottom: autoBellMode ? '1px solid #C4B5FD' : '1px solid #E5E7EB',
+              }}>
+                <Sparkles size={14} color={autoBellMode ? '#7C3AED' : '#9CA3AF'} />
+                <span style={{ fontSize: 13, fontWeight: 700, color: autoBellMode ? '#5B21B6' : '#6B7280', flex: 1 }}>
+                  Smart Timing
+                </span>
+                {smartGenDone && autoBellMode && (
+                  <span style={{ fontSize: 10, fontWeight: 700, background: '#DCFCE7', color: '#16A34A', border: '1px solid #86EFAC', borderRadius: 8, padding: '1px 8px' }}>
+                    ✓ Generated
+                  </span>
+                )}
+                {/* Toggle */}
                 <button
-                  onClick={() => {
-                    const next = !autoBellMode
-                    setAutoBellMode(next)
-                    if (next) {
-                      // Generate a best-effort schedule immediately so user sees a preview
-                      const generated = autoGenerateBellRows(startTime, schoolEndTime, maxPeriods, periodDur, activeClassKeys)
-                      setRows(generated)
-                    }
-                  }}
+                  onClick={() => setAutoBellMode(v => !v)}
                   style={{
-                    width: 40, height: 22, borderRadius: 11,
-                    background: autoBellMode ? '#22C55E' : '#D1D5DB',
+                    width: 40, height: 22, borderRadius: 11, flexShrink: 0,
+                    background: autoBellMode ? '#7C3AED' : '#D1D5DB',
                     border: 'none', cursor: 'pointer', position: 'relative',
                     transition: 'background .15s',
                   }}
@@ -3335,69 +3451,185 @@ export function StepBell() {
                     left: autoBellMode ? 21 : 3,
                     width: 16, height: 16, borderRadius: '50%',
                     background: '#fff', transition: 'left .15s',
-                    boxShadow: '0 1px 3px rgba(0,0,0,.2)',
+                    boxShadow: '0 1px 3px rgba(0,0,0,.25)',
                   }} />
                 </button>
               </div>
-              {/* Text */}
-              <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                  <Sparkles size={13} color={autoBellMode ? '#16A34A' : '#7C3AED'} />
-                  <span style={{ fontSize: 13, fontWeight: 700, color: autoBellMode ? '#15803D' : '#7C3AED' }}>
-                    Automatic bell timing
-                  </span>
-                  {autoBellMode && (
-                    <span style={{ fontSize: 10, fontWeight: 700, background: '#DCFCE7', color: '#16A34A', border: '1px solid #86EFAC', borderRadius: 8, padding: '1px 8px' }}>
-                      ON
-                    </span>
-                  )}
-                </div>
-                <p style={{ fontSize: 11, color: '#6B7280', margin: '0 0 10px', lineHeight: 1.5 }}>
-                  {autoBellMode
-                    ? 'Bell timing will be auto-generated based on your school hours. You can customise it anytime from Step 2.'
-                    : 'Skip manual bell configuration. Enter your school end time below — the system will generate an optimised schedule with periods and breaks automatically.'}
-                </p>
-                {/* End time + regenerate when in auto mode */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 11, fontWeight: 600, color: '#374151' }}>School ends at</span>
+
+              {/* ── Body — only when enabled ── */}
+              {autoBellMode && (
+                <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+                  {/* School end time */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>School ends at</span>
                     <input type="time" value={schoolEndTime}
-                      onChange={e => {
-                        setSchoolEndTime(e.target.value)
-                        if (autoBellMode) {
-                          setRows(autoGenerateBellRows(startTime, e.target.value, maxPeriods, periodDur, activeClassKeys))
-                        }
-                      }}
+                      onChange={e => setSchoolEndTime(e.target.value)}
                       style={{
-                        padding: '4px 8px', borderRadius: 6,
-                        border: `1px solid ${autoBellMode ? '#86EFAC' : '#C4B5FD'}`,
-                        fontSize: 12, fontFamily: 'inherit', outline: 'none',
-                        background: autoBellMode ? '#F0FDF4' : '#F8F7FF',
-                        color: autoBellMode ? '#15803D' : '#7C3AED', fontWeight: 700,
+                        padding: '5px 9px', borderRadius: 7,
+                        border: '1.5px solid #C4B5FD', fontSize: 12, fontFamily: 'inherit',
+                        outline: 'none', background: '#fff', color: '#5B21B6', fontWeight: 700,
                       }}
                     />
+                    <span style={{ fontSize: 11, color: '#9CA3AF' }}>
+                      ({maxPeriods} periods · {periodDur} min each)
+                    </span>
                   </div>
-                  {autoBellMode && (
-                    <button
-                      onClick={() => setRows(autoGenerateBellRows(startTime, schoolEndTime, maxPeriods, periodDur, activeClassKeys))}
-                      style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 5,
-                        padding: '4px 12px', borderRadius: 6,
-                        border: '1px solid #86EFAC', background: '#DCFCE7',
-                        fontSize: 11, fontWeight: 600, color: '#16A34A',
-                        cursor: 'pointer', fontFamily: 'inherit',
-                      }}
-                    >
-                      <Sparkles size={10} /> Regenerate
-                    </button>
+
+                  {/* Lunch break mode chooser */}
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 8, letterSpacing: 0.3, textTransform: 'uppercase' as const }}>
+                      Lunch break mode
+                    </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      {/* Single lunch option */}
+                      {(['single', 'smart'] as const).map(mode => {
+                        const active = smartLunchMode === mode
+                        const isSmart = mode === 'smart'
+                        return (
+                          <button key={mode}
+                            onClick={() => setSmartLunchMode(mode)}
+                            style={{
+                              flex: 1, textAlign: 'left' as const,
+                              padding: '11px 13px', borderRadius: 9, cursor: 'pointer',
+                              border: active ? `2px solid ${isSmart ? '#7C3AED' : '#6B7280'}` : '1.5px solid #E5E7EB',
+                              background: active ? (isSmart ? '#F5F3FF' : '#F9FAFB') : '#fff',
+                              fontFamily: 'inherit', transition: 'all .12s',
+                            }}>
+                            <div style={{ fontSize: 15, marginBottom: 4 }}>
+                              {isSmart ? '🧠' : '🕐'}
+                            </div>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: active ? (isSmart ? '#5B21B6' : '#111827') : '#6B7280', marginBottom: 3 }}>
+                              {isSmart ? 'Smart Lunch' : 'Single Lunch'}
+                            </div>
+                            <div style={{ fontSize: 10, color: '#9CA3AF', lineHeight: 1.5 }}>
+                              {isSmart
+                                ? 'Each age group eats at a different time. Avoids canteen rush.'
+                                : 'All classes share one common lunch break slot.'}
+                            </div>
+                            {active && (
+                              <div style={{ width: 8, height: 8, borderRadius: '50%', background: isSmart ? '#7C3AED' : '#374151', marginTop: 6 }} />
+                            )}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Smart lunch per-group controls */}
+                  {smartLunchMode === 'smart' && (
+                    <div style={{
+                      background: '#FAFAFE', border: '1px solid #EDE9FF',
+                      borderRadius: 9, padding: '12px 14px',
+                    }}>
+                      <div style={{ fontSize: 11, color: '#6B7280', marginBottom: 10, lineHeight: 1.5 }}>
+                        <strong style={{ color: '#5B21B6' }}>How it works:</strong> Each age group gets lunch at a different period. Younger children eat earlier (they get hungry sooner), older classes eat later — the canteen serves one group at a time, no rush.
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {activeClassGroups.map(gm => {
+                          const meta = SMART_GROUP_META[gm.group] ?? { emoji: '🏫', color: '#374151', bg: '#F9FAFB', border: '#E5E7EB' }
+                          const ap   = effectiveLunchAP[gm.group] ?? 4
+                          const sbAP = Math.max(1, Math.ceil(maxPeriods * 0.3))
+                          const minAP = sbAP + 1
+                          const maxAP = maxPeriods
+                          const approx = approxLunchTime(startTime, periodDur, ap, maxPeriods, use12h)
+                          return (
+                            <div key={gm.group} style={{
+                              display: 'flex', alignItems: 'center', gap: 10,
+                              background: meta.bg, border: `1px solid ${meta.border}`,
+                              borderRadius: 7, padding: '7px 11px',
+                            }}>
+                              <span style={{ fontSize: 16, flexShrink: 0 }}>{meta.emoji}</span>
+                              <span style={{ fontSize: 12, fontWeight: 700, color: meta.color, minWidth: 100 }}>{gm.group}</span>
+                              <span style={{ fontSize: 10, color: '#9CA3AF', flex: 1 }}>{gm.desc}</span>
+                              <span style={{ fontSize: 10, color: '#9CA3AF', minWidth: 80 }}>≈ {approx}</span>
+                              <span style={{ fontSize: 11, color: '#6B7280' }}>After P</span>
+                              {/* − / value / + stepper */}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                                <button
+                                  onClick={() => setSmartLunchAP(prev => ({ ...prev, [gm.group]: Math.max(minAP, ap - 1) }))}
+                                  disabled={ap <= minAP}
+                                  style={{
+                                    width: 22, height: 22, borderRadius: 5, border: `1px solid ${meta.border}`,
+                                    background: '#fff', cursor: ap <= minAP ? 'not-allowed' : 'pointer',
+                                    color: ap <= minAP ? '#D1D5DB' : meta.color, fontWeight: 700, fontSize: 13,
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    fontFamily: 'inherit',
+                                  }}>−</button>
+                                <span style={{
+                                  minWidth: 28, textAlign: 'center' as const, fontSize: 13,
+                                  fontWeight: 700, color: meta.color, fontFamily: "'DM Mono', monospace",
+                                }}>{ap}</span>
+                                <button
+                                  onClick={() => setSmartLunchAP(prev => ({ ...prev, [gm.group]: Math.min(maxAP, ap + 1) }))}
+                                  disabled={ap >= maxAP}
+                                  style={{
+                                    width: 22, height: 22, borderRadius: 5, border: `1px solid ${meta.border}`,
+                                    background: '#fff', cursor: ap >= maxAP ? 'not-allowed' : 'pointer',
+                                    color: ap >= maxAP ? '#D1D5DB' : meta.color, fontWeight: 700, fontSize: 13,
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    fontFamily: 'inherit',
+                                  }}>+</button>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                      {/* Canteen tip */}
+                      <div style={{ marginTop: 10, fontSize: 10, color: '#9CA3AF', display: 'flex', gap: 5, alignItems: 'flex-start' }}>
+                        <span style={{ flexShrink: 0 }}>💡</span>
+                        <span>A 30–45 min gap between groups is ideal for canteen throughput. The short break remains shared at the same time for all classes.</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Generate button */}
+                  <button
+                    onClick={() => {
+                      const { rows: generated, cwRows: generated_cwRows } = smartGenerateBellConfig(
+                        startTime, schoolEndTime, maxPeriods, periodDur,
+                        smartLunchMode, effectiveLunchAP,
+                        activeClassGroups, activeClasses,
+                      )
+                      setRows(generated)
+                      setCwRows(generated_cwRows)
+                      setSmartGenDone(true)
+                    }}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 7,
+                      padding: '9px 20px', borderRadius: 8,
+                      background: 'linear-gradient(135deg, #7C3AED, #6D28D9)',
+                      border: 'none', color: '#fff',
+                      fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                      boxShadow: '0 2px 8px rgba(124,58,237,.35)',
+                      alignSelf: 'flex-start',
+                    }}>
+                    <Sparkles size={13} color="#fff" />
+                    Generate Bell Schedule
+                  </button>
+
+                  {/* Post-generation hint */}
+                  {smartGenDone && (
+                    <div style={{ fontSize: 11, color: '#6B7280', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ color: '#16A34A', fontWeight: 700 }}>✓</span>
+                      Bell schedule generated below — review and edit freely before proceeding.
+                    </div>
                   )}
                 </div>
-              </div>
+              )}
+
+              {/* Collapsed state hint */}
+              {!autoBellMode && (
+                <div style={{ padding: '10px 16px', fontSize: 11, color: '#9CA3AF' }}>
+                  Enable to auto-generate an optimised bell schedule based on your school hours — with optional smart staggered lunches per age group.
+                </div>
+              )}
             </div>
           </div>
 
           {/* ─── BELL TIMING GRID ─── */}
-          <div style={{ opacity: autoBellMode ? 0.55 : 1, pointerEvents: autoBellMode ? 'none' : 'auto', transition: 'opacity .2s' }}>
+          {/* Grid is always editable — Smart Timing populates it but never locks it. */}
+          <div>
             {/* In Advanced mode: shift selector mini-tabs above the grid */}
             {isAdvanced && shifts.length > 1 && (
               <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 10 }}>
