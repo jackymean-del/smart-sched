@@ -390,6 +390,10 @@ function toHHMM(mins: number): string {
 function addMins(hhmm: string, mins: number): string {
   return toHHMM(toMins(hhmm) + mins)
 }
+/** Round a minute value to the nearest 5 (e.g. 18 → 20, 43 → 45, 48 → 50). */
+const snap5 = (n: number): number => Math.round(n / 5) * 5
+/** Floor a minute value down to the nearest 5. */
+const floor5 = (n: number): number => Math.floor(n / 5) * 5
 function fmt12(hhmm: string, use12: boolean): string {
   if (!hhmm) return ''
   if (!use12) return hhmm
@@ -527,8 +531,9 @@ function autoGenerateBellRows(
   const breakMins = lunchDur + sbDur
 
   // Compute actual period duration so all periods fit within remaining time
+  // Snap to nearest 5 min; never below 10 min
   const teachMins   = Math.max(schoolMins - breakMins, maxPeriods * 10)
-  const actualDur   = Math.max(10, Math.floor(teachMins / maxPeriods))
+  const actualDur   = Math.max(10, snap5(Math.floor(teachMins / maxPeriods)))
 
   // Break insertion points (after which period index, 1-based)
   const lunchAfter = hasLunch ? Math.ceil(maxPeriods / 2) : -1
@@ -608,6 +613,7 @@ function smartGenerateBellConfig(
   morningBreakDur:     number  = 15,
   concurrentPeriodDur?: number,   // period dur for non-eating classes during staggered lunch
   lunchBreakDur:       number  = 30,
+  periodDurMin:        number  = 15,
 ): { rows: BellRow[]; cwRows: CwBreakRow[] } {
   const allKeys  = activeClasses.map(c => c.key)
   const sbAfterP = Math.max(1, Math.ceil(maxPeriods * 0.3))
@@ -679,13 +685,20 @@ function smartGenerateBellConfig(
     }
   }
 
-  // Ensure smart-path period duration fits within 8-hour school day
-  const totalBreakMins = cwRows.reduce((s, r) => s + r.duration, 0)
+  // Ensure smart-path period duration fits within 8-hour school day,
+  // snapped to nearest 5 and clamped to [periodDurMin, periodDur].
+  const totalBreakMins  = cwRows.reduce((s, r) => s + r.duration, 0)
   const availForPeriods = 8 * 60 - 10 /* assembly */ - totalBreakMins
-  const cappedPeriodDur = Math.min(periodDur, Math.max(10, Math.floor(availForPeriods / maxPeriods)))
+  const rawCapped       = Math.floor(availForPeriods / maxPeriods)
+  const cappedPeriodDur = snap5(Math.min(periodDur, Math.max(periodDurMin, rawCapped)))
+
+  // concurrentPeriodDur must also be snapped and >= periodDurMin
+  const effectiveConcurrent = concurrentPeriodDur !== undefined
+    ? snap5(Math.max(periodDurMin, concurrentPeriodDur))
+    : undefined
 
   return {
-    rows:   buildBellRowsFromCw(startTime, cappedPeriodDur, maxPeriods, cwRows, allKeys, 10, concurrentPeriodDur),
+    rows:   buildBellRowsFromCw(startTime, cappedPeriodDur, maxPeriods, cwRows, allKeys, 10, effectiveConcurrent, periodDurMin),
     cwRows,
   }
 }
@@ -716,6 +729,7 @@ function buildBellRowsFromCw(
   activeClsKeys:       string[] = ALL_CLASS_KEYS,
   asmDur:              number   = 10,
   concurrentPeriodDur?: number,  // if set: classes not eating use this dur during another group's lunch
+  periodDurMin:        number   = 15, // minimum teaching fragment; shorter fragments are merged/dropped
 ): BellRow[] {
   type Ev = { type: RowType; name: string; startMins: number; duration: number }
   const startMins = toMins(startTimeStr)
@@ -816,6 +830,53 @@ function buildBellRowsFromCw(
 
     evs.push({ type: 'dispersal', name: 'Dispersal', startMins: cur, duration: asmDur })
     classEvs.push({ key: clsKey, evs })
+  }
+
+  // ── Post-process per-class events ─────────────────────────────────────────
+  // 1. Merge teaching fragments shorter than periodDurMin into the nearest adjacent
+  //    teaching segment (backward first, then forward). This eliminates the 18-min
+  //    "stub" periods created when a concurrent period mis-aligns with a break boundary.
+  // 2. Snap all durations to the nearest 5 min.
+  // 3. Rebuild absolute start times so the timeline stays consistent after changes.
+  for (const cls of classEvs) {
+    // Step 1 – merge short fragments
+    let changed = true
+    while (changed) {
+      changed = false
+      for (let i = 0; i < cls.evs.length; i++) {
+        const ev = cls.evs[i]
+        if (ev.type !== 'teaching' || ev.duration >= periodDurMin) continue
+        // Try merging with the nearest previous teaching segment
+        let merged = false
+        for (let j = i - 1; j >= 0; j--) {
+          if (cls.evs[j].type === 'teaching') {
+            cls.evs[j] = { ...cls.evs[j], duration: cls.evs[j].duration + ev.duration }
+            cls.evs.splice(i, 1)
+            merged = true; changed = true; break
+          }
+        }
+        // Fall back to merging with the nearest next teaching segment
+        if (!merged) {
+          for (let j = i + 1; j < cls.evs.length; j++) {
+            if (cls.evs[j].type === 'teaching') {
+              cls.evs[j] = { ...cls.evs[j], duration: cls.evs[j].duration + ev.duration }
+              cls.evs.splice(i, 1)
+              merged = true; changed = true; break
+            }
+          }
+        }
+        // No adjacent teaching — just drop the fragment
+        if (!merged) { cls.evs.splice(i, 1); changed = true }
+        break // restart scan after any mutation
+      }
+    }
+
+    // Step 2 – snap every duration to nearest 5 min (min 5)
+    cls.evs = cls.evs.map(ev => ({ ...ev, duration: Math.max(5, snap5(ev.duration)) }))
+
+    // Step 3 – rebuild absolute start times sequentially
+    let t = startMins
+    for (const ev of cls.evs) { ev.startMins = t; t += ev.duration }
   }
 
   // ── Merge identical events across classes ─────────────────────────────────
@@ -2043,16 +2104,18 @@ export function StepBell() {
   // any setting that affects the generated output changes, but only when
   // autoBellMode is enabled. Uses a stringified key so object/array identity
   // changes don't retrigger unnecessarily.
+  // Auto-gen key: only structural/mode changes trigger regeneration.
+  // Deliberately excludes periodDur & maxPeriods so manual end-time edits
+  // are not overwritten when the user tweaks P.Max.
   const _autoGenKey = useMemo(() => JSON.stringify({
-    startTime, schoolEndTime, maxPeriods, periodDur,
+    startTime, schoolEndTime,
     smartLunchMode,
-    lunchAP: effectiveLunchAP,
     morningBreak, morningBreakPos, morningBreakDur,
     concurrentMode, concurrentDur, lunchBreakDur,
     groups: activeClassGroups.map(g => g.group).sort().join(','),
     classes: activeClasses.map(c => c.key).sort().join(','),
-  }), [startTime, schoolEndTime, maxPeriods, periodDur,
-       smartLunchMode, effectiveLunchAP,
+  }), [startTime, schoolEndTime,
+       smartLunchMode,
        morningBreak, morningBreakPos, morningBreakDur,
        concurrentMode, concurrentDur, lunchBreakDur,
        activeClassGroups, activeClasses])
@@ -2069,6 +2132,7 @@ export function StepBell() {
       morningBreak, morningBreakPos, morningBreakDur,
       concPeriodDur,
       lunchBreakDur,
+      periodDurMin,
     )
     setRows(generated)
     setCwRows(generated_cwRows)
@@ -2396,23 +2460,37 @@ export function StepBell() {
   // ── Other handlers ────────────────────────────────────────────
   const handleEndTimeEdit = (val: string) => {
     if (!val || !/^\d{2}:\d{2}$/.test(val)) return
-    // Hard cap: school day must not exceed 8 hours
-    const maxEndMins = toMins(activeStartTime) + 8 * 60
-    const clampedVal = toMins(val) > maxEndMins ? toHHMM(maxEndMins) : val
-    const target = toMins(clampedVal) - toMins(activeStartTime)
+    // Hard cap: school day ≤ 8 h; snap end time to nearest 5-min boundary
+    const maxEndMins    = toMins(activeStartTime) + 8 * 60
+    const rawTargetMins = Math.min(toMins(val), maxEndMins)
+    const targetMins    = snap5(rawTargetMins)
+    const target        = targetMins - toMins(activeStartTime)
     if (target <= 0) return
     const current = displayRows.reduce((s, r) => s + r.duration, 0)
-    const diff    = target - current
+    let   diff    = target - current
     if (diff === 0) return
     setDisplayRows(prev => {
       const next = [...prev]
-      for (let i = next.length - 1; i >= 0; i--) {
-        if (next[i].type === 'teaching') {
-          next[i] = { ...next[i], duration: Math.max(5, next[i].duration + diff) }
-          return next
+      // Work backward from the last teaching period, distributing adjustment
+      // while respecting periodDurMin per period.
+      for (let i = next.length - 1; i >= 0 && diff !== 0; i--) {
+        if (next[i].type !== 'teaching') continue
+        const minDur  = Math.max(5, periodDurMin)
+        if (diff < 0) {
+          // Trim: reduce this period, but not below minDur; snap reduction to 5
+          const canReduce = floor5(next[i].duration - minDur)
+          const reduce    = Math.min(-diff, canReduce)
+          if (reduce > 0) {
+            next[i] = { ...next[i], duration: next[i].duration - reduce }
+            diff    += reduce
+          }
+        } else {
+          // Extend: add remaining diff to this period (snapped), then stop
+          const add = snap5(diff)
+          next[i]   = { ...next[i], duration: next[i].duration + add }
+          diff      = 0
         }
       }
-      if (next.length > 0) next[next.length - 1] = { ...next[next.length - 1], duration: Math.max(5, next[next.length - 1].duration + diff) }
       return next
     })
   }
@@ -3857,10 +3935,30 @@ export function StepBell() {
                 <span style={{ fontSize: 13, fontWeight: 700, color: autoBellMode ? '#5B21B6' : '#6B7280', flex: 1 }}>
                   Smart Timing
                 </span>
-                {smartGenDone && autoBellMode && (
-                  <span style={{ fontSize: 10, fontWeight: 700, background: '#DCFCE7', color: '#16A34A', border: '1px solid #86EFAC', borderRadius: 8, padding: '1px 8px' }}>
-                    ✓ Generated
-                  </span>
+                {autoBellMode && (
+                  <button
+                    title="Regenerate bell schedule now (applies current P.Max, Max/day, and all other settings)"
+                    onClick={() => {
+                      const concPeriodDur = concurrentMode === 'regular'     ? undefined
+                                          : concurrentMode === 'match-lunch' ? lunchBreakDur
+                                          :                                    concurrentDur
+                      const { rows: g, cwRows: gc } = smartGenerateBellConfig(
+                        startTime, schoolEndTime, maxPeriods, periodDur,
+                        smartLunchMode, effectiveLunchAP,
+                        activeClassGroups, activeClasses,
+                        morningBreak, morningBreakPos, morningBreakDur,
+                        concPeriodDur, lunchBreakDur, periodDurMin,
+                      )
+                      setRows(g); setCwRows(gc); setSmartGenDone(true)
+                    }}
+                    style={{
+                      fontSize: 10, fontWeight: 700, color: '#7C3AED',
+                      background: '#EDE9FF', border: '1px solid #C4B5FD',
+                      borderRadius: 6, padding: '2px 9px', cursor: 'pointer',
+                      fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4,
+                    }}>
+                    ⟳ Regenerate
+                  </button>
                 )}
                 {/* Toggle */}
                 <button
