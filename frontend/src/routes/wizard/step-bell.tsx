@@ -479,8 +479,9 @@ function smartGenerateBellConfig(
   lunchAfterPeriod: Record<string, number>,   // groupName → afterPeriod
   activeGroups:     Array<{ group: string }>,
   activeClasses:    Array<{ key: string; group: string }>,
-  morningBreak:     'none' | 'after-assembly' | 'after-p1' = 'none',
-  morningBreakDur:  number = 15,
+  morningBreak:    boolean = false,
+  morningBreakPos: number  = 1,    // 0 = after assembly, 1 = after P1, 2 = after P2 …
+  morningBreakDur: number  = 15,
 ): { rows: BellRow[]; cwRows: CwBreakRow[] } {
   const allKeys  = activeClasses.map(c => c.key)
   const sbAfterP = Math.max(1, Math.ceil(maxPeriods * 0.3))
@@ -488,7 +489,7 @@ function smartGenerateBellConfig(
   const sbDur    = 15
 
   // ── Simple path: single lunch + no morning break ─────────────
-  if (lunchMode === 'single' && morningBreak === 'none') {
+  if (lunchMode === 'single' && !morningBreak) {
     return {
       rows:   autoGenerateBellRows(startTime, endTime, maxPeriods, periodDur, allKeys),
       cwRows: [],
@@ -499,11 +500,11 @@ function smartGenerateBellConfig(
   const cwRows: CwBreakRow[] = []
 
   // Optional morning break — placed earliest (before the shared short break)
-  if (morningBreak !== 'none') {
+  if (morningBreak) {
     cwRows.push({
       id: makeId(), name: 'Morning Break', type: 'short-break',
       classes: [...allKeys],
-      afterPeriod: morningBreak === 'after-assembly' ? 0 : 1,
+      afterPeriod: morningBreakPos,
       duration: morningBreakDur,
     })
   }
@@ -730,8 +731,9 @@ interface SavedBell {
   smartLunchMode?: 'single' | 'smart'
   smartLunchAfterPeriod?: Record<string, number>  // group → afterPeriod override
   // Morning break (optional breakfast / snack break for day-boarding schools)
-  morningBreak?:    'none' | 'after-assembly' | 'after-p1'
-  morningBreakDur?: number  // minutes
+  morningBreak?:    boolean  // enabled?
+  morningBreakPos?: number   // 0 = after assembly, 1 = after P1, 2 = after P2 …
+  morningBreakDur?: number   // minutes
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1644,8 +1646,9 @@ export function StepBell() {
   // Set to true after first successful generation so the "generated" banner shows
   const [smartGenDone,     setSmartGenDone]     = useState(false)
   // Optional morning break (breakfast / snack break for day-boarding schools)
-  const [morningBreak,    setMorningBreak]    = useState<'none' | 'after-assembly' | 'after-p1'>(() => _saved?.morningBreak    ?? 'none')
-  const [morningBreakDur, setMorningBreakDur] = useState<number>(                                 () => _saved?.morningBreakDur ?? 15)
+  const [morningBreak,    setMorningBreak]    = useState<boolean>(() => _saved?.morningBreak    ?? false)
+  const [morningBreakPos, setMorningBreakPos] = useState<number>( () => _saved?.morningBreakPos ?? 1)   // 0 = assembly, 1 = P1, 2 = P2 …
+  const [morningBreakDur, setMorningBreakDur] = useState<number>( () => _saved?.morningBreakDur ?? 15)
   const [shiftName,  setShiftName]  = useState<string>(  () => _saved?.shiftName ?? 'Main Shift')
 
   const [startTime,  setStartTime]  = useState<string>(  () => _saved?.startTime ?? (config.startTime ?? '09:00'))
@@ -1773,14 +1776,14 @@ export function StepBell() {
       scheduleMode, shifts, activeShiftId, shiftRows, customClasses, customGroups,
       customStreams, classStreamMap, autoBellMode, schoolEndTime,
       smartLunchMode, smartLunchAfterPeriod: smartLunchAP,
-      morningBreak, morningBreakDur,
+      morningBreak, morningBreakPos, morningBreakDur,
     } as SavedBell))
   }, [shiftName, startTime, use12h, periodDur, periodDurMin, maxPeriods, workDays, rows,
       cycleWeeks, useDayNames, cycleStartDate, fixedDuration, rotationDays,
       weekWorkDays, dayStartTimes, dayPeriodDurs, dayOffRules, cwRows, varyByDay, dayRows,
       scheduleMode, shifts, activeShiftId, shiftRows, customClasses, customGroups,
       customStreams, classStreamMap, autoBellMode, schoolEndTime,
-      smartLunchMode, smartLunchAP, morningBreak, morningBreakDur])
+      smartLunchMode, smartLunchAP, morningBreak, morningBreakPos, morningBreakDur])
 
   // ── Smart lunch: effective afterPeriod per group ─────────────
   // Computed defaults are spread per group; user overrides in smartLunchAP take precedence.
@@ -2510,7 +2513,7 @@ export function StepBell() {
         scheduleMode, shifts, activeShiftId, shiftRows, customClasses, customGroups,
         customStreams, classStreamMap, autoBellMode, schoolEndTime,
         smartLunchMode, smartLunchAfterPeriod: smartLunchAP,
-        morningBreak, morningBreakDur,
+        morningBreak, morningBreakPos, morningBreakDur,
       } satisfies SavedBell))
     } catch { /* localStorage might be full */ }
     setConfig({
@@ -3525,8 +3528,8 @@ export function StepBell() {
 
                   {/* ── Morning break ─────────────────────────────────── */}
                   <div style={{
-                    background: morningBreak !== 'none' ? '#FFFBEB' : '#F9FAFB',
-                    border: `1.5px solid ${morningBreak !== 'none' ? '#FDE68A' : '#E5E7EB'}`,
+                    background: morningBreak ? '#FFFBEB' : '#F9FAFB',
+                    border: `1.5px solid ${morningBreak ? '#FDE68A' : '#E5E7EB'}`,
                     borderRadius: 9, padding: '11px 13px',
                     transition: 'all .15s',
                   }}>
@@ -3536,14 +3539,14 @@ export function StepBell() {
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 2 }}>
                           Morning break
-                          {morningBreak !== 'none' && (
+                          {morningBreak && (
                             <span style={{
                               marginLeft: 8, fontSize: 10, fontWeight: 700,
                               color: '#92400E', background: '#FEF3C7',
                               border: '1px solid #FDE68A', borderRadius: 10,
                               padding: '1px 7px',
                             }}>
-                              {morningBreakDur} min · {morningBreak === 'after-assembly' ? 'after assembly' : 'after Period 1'}
+                              {morningBreakDur} min · after {morningBreakPos === 0 ? 'Assembly' : `Period ${morningBreakPos}`}
                             </span>
                           )}
                         </div>
@@ -3553,43 +3556,86 @@ export function StepBell() {
                       </div>
                     </div>
 
-                    {/* Option pills: None / After Assembly / After Period 1 */}
-                    <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
-                      {([
-                        { val: 'none',           label: 'No break',       emoji: '—',  desc: 'Skip morning break'                    },
-                        { val: 'after-assembly', label: 'After Assembly', emoji: '🔔', desc: 'Right at the start, before Period 1'   },
-                        { val: 'after-p1',       label: 'After Period 1', emoji: '🥐', desc: 'After the first lesson — slightly later' },
-                      ] as const).map(opt => {
-                        const active = morningBreak === opt.val
-                        const accentC  = '#D97706'
-                        const accentBg = '#FFFBEB'
-                        const accentBd = '#FDE68A'
-                        return (
-                          <button key={opt.val}
-                            onClick={() => setMorningBreak(opt.val)}
-                            title={opt.desc}
-                            style={{
-                              flex: 1, padding: '8px 5px', borderRadius: 8,
-                              border: active ? `2px solid ${accentBd}` : '1.5px solid #E5E7EB',
-                              background: active ? accentBg : '#fff',
-                              cursor: 'pointer', fontFamily: 'inherit',
-                              textAlign: 'center' as const, transition: 'all .12s',
-                              outline: 'none',
-                            }}>
-                            <div style={{ fontSize: 15, marginBottom: 3 }}>{opt.emoji}</div>
-                            <div style={{ fontSize: 10, fontWeight: 700, color: active ? accentC : '#6B7280', lineHeight: 1.3 }}>
-                              {opt.label}
-                            </div>
-                            {active && (
-                              <div style={{ width: 6, height: 6, borderRadius: '50%', background: accentC, margin: '5px auto 0' }} />
-                            )}
-                          </button>
-                        )
-                      })}
+                    {/* Two primary buttons: No break / After... */}
+                    <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                      {/* No break */}
+                      <button
+                        onClick={() => setMorningBreak(false)}
+                        style={{
+                          flex: 1, padding: '9px 12px', borderRadius: 8,
+                          border: !morningBreak ? '2px solid #9CA3AF' : '1.5px solid #E5E7EB',
+                          background: !morningBreak ? '#F3F4F6' : '#fff',
+                          cursor: 'pointer', fontFamily: 'inherit',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                          transition: 'all .12s', outline: 'none',
+                        }}>
+                        <span style={{ fontSize: 13 }}>✗</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: !morningBreak ? '#374151' : '#9CA3AF' }}>No break</span>
+                        {!morningBreak && <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#6B7280', marginLeft: 2 }} />}
+                      </button>
+
+                      {/* After... */}
+                      <button
+                        onClick={() => setMorningBreak(true)}
+                        style={{
+                          flex: 1, padding: '9px 12px', borderRadius: 8,
+                          border: morningBreak ? '2px solid #FDE68A' : '1.5px solid #E5E7EB',
+                          background: morningBreak ? '#FFFBEB' : '#fff',
+                          cursor: 'pointer', fontFamily: 'inherit',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                          transition: 'all .12s', outline: 'none',
+                        }}>
+                        <span style={{ fontSize: 13 }}>☕</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: morningBreak ? '#92400E' : '#9CA3AF' }}>
+                          {morningBreak ? `After ${morningBreakPos === 0 ? 'Assembly' : `Period ${morningBreakPos}`}` : 'After…'}
+                        </span>
+                        {morningBreak && <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#D97706', marginLeft: 2 }} />}
+                      </button>
                     </div>
 
-                    {/* Duration stepper — only when a break position is chosen */}
-                    {morningBreak !== 'none' && (
+                    {/* Sub-picker: exactly after which point? — shown when break is enabled */}
+                    {morningBreak && (() => {
+                      // Show Assembly + up to 4 periods (sensible max for a morning break)
+                      const maxPos = Math.min(maxPeriods - 1, 4)
+                      const positions = [
+                        { pos: 0, label: 'Assembly', sub: 'Before P1' },
+                        ...Array.from({ length: maxPos }, (_, i) => ({
+                          pos: i + 1,
+                          label: `Period ${i + 1}`,
+                          sub: i === 0 ? 'Most common' : i === 1 ? 'A bit later' : '',
+                        })),
+                      ]
+                      return (
+                        <div style={{ marginTop: 10 }}>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: '#B45309', letterSpacing: 0.3, textTransform: 'uppercase' as const, marginBottom: 6 }}>
+                            Place break after…
+                          </div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 5 }}>
+                            {positions.map(({ pos, label, sub }) => {
+                              const active = morningBreakPos === pos
+                              return (
+                                <button key={pos}
+                                  onClick={() => setMorningBreakPos(pos)}
+                                  style={{
+                                    padding: '5px 12px', borderRadius: 20,
+                                    border: active ? '2px solid #F59E0B' : '1.5px solid #E5E7EB',
+                                    background: active ? '#FEF3C7' : '#fff',
+                                    cursor: 'pointer', fontFamily: 'inherit',
+                                    display: 'flex', flexDirection: 'column' as const, alignItems: 'center',
+                                    transition: 'all .1s', outline: 'none', minWidth: 68,
+                                  }}>
+                                  <span style={{ fontSize: 11, fontWeight: 700, color: active ? '#92400E' : '#6B7280' }}>{label}</span>
+                                  {sub && <span style={{ fontSize: 9, color: active ? '#B45309' : '#9CA3AF', marginTop: 1 }}>{sub}</span>}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )
+                    })()}
+
+                    {/* Duration stepper — only when break is enabled */}
+                    {morningBreak && (
                       <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
                         <span style={{ fontSize: 11, color: '#92400E', fontWeight: 600 }}>Duration</span>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
@@ -3623,9 +3669,7 @@ export function StepBell() {
                               fontFamily: 'inherit',
                             }}>+</button>
                         </div>
-                        <span style={{ fontSize: 10, color: '#B45309' }}>
-                          Typically 10–20 min is ideal
-                        </span>
+                        <span style={{ fontSize: 10, color: '#B45309' }}>Typically 10–20 min</span>
                       </div>
                     )}
                   </div>
@@ -3744,7 +3788,7 @@ export function StepBell() {
                         startTime, schoolEndTime, maxPeriods, periodDur,
                         smartLunchMode, effectiveLunchAP,
                         activeClassGroups, activeClasses,
-                        morningBreak, morningBreakDur,
+                        morningBreak, morningBreakPos, morningBreakDur,
                       )
                       setRows(generated)
                       setCwRows(generated_cwRows)
