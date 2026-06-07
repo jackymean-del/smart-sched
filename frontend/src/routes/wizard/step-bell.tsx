@@ -3324,17 +3324,6 @@ export function StepBell() {
                 <input className="b-input" value={shiftName} onChange={e => setShiftName(e.target.value)}
                   placeholder="e.g. Main Shift"
                   style={{ fontWeight: 700, fontSize: 13, border: 'none', padding: '0', outline: 'none', background: 'transparent', flex: 1 }} />
-                {/* Customized / Auto-Generated badge */}
-                {displayRows.length > 0 && autoBellMode && (
-                  <span style={{
-                    fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20, flexShrink: 0,
-                    background: bellCustomized ? '#FEF3C7' : '#ECFDF5',
-                    color:      bellCustomized ? '#92400E' : '#065F46',
-                    border: `1px solid ${bellCustomized ? '#FDE68A' : '#6EE7B7'}`,
-                  }}>
-                    {bellCustomized ? '✎ Customized' : '✦ Auto Generated'}
-                  </span>
-                )}
               </div>
               <div style={{ padding: '14px 16px' }}>
 
@@ -3347,30 +3336,45 @@ export function StepBell() {
                   <div style={FH}>{fmt12(startTime, use12h)}</div>
                 </div>
                 {/* End — formatted display with inline edit */}
-                <div style={{ flex: '0 0 116px' }}>
-                  <div style={FL}>End time</div>
-                  {editingEnd ? (
-                    <input className="b-input" type="time" defaultValue={endTime} autoFocus
-                      onChange={e => handleEndTimeEdit(e.target.value)}
-                      onBlur={() => setEditingEnd(false)}
-                      onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') e.currentTarget.blur() }}
-                      style={{ width: '100%' }} />
-                  ) : (
-                    <div className="b-input b-end-display" onClick={() => setEditingEnd(true)}
-                      style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', userSelect: 'none' }}>
-                      <span style={{ fontFamily: "'DM Mono',monospace", fontWeight: 700 }}>{fmt12(endTime, use12h)}</span>
-                      <span style={{ fontSize: 10, color: '#C4B5FD', fontWeight: 400 }}>✎</span>
-                    </div>
-                  )}
-                  {toMins(endTime) - toMins(startTime) > 8 * 60
-                    ? <div style={{ ...FH, color: '#DC2626', fontWeight: 700, cursor: 'pointer' }}
-                        title="School day exceeds 8 hours — click to trim to 8 h"
-                        onClick={() => handleEndTimeEdit(toHHMM(toMins(startTime) + 8 * 60))}>
-                        ⚠ &gt;8h — tap to fix
+                {(() => {
+                  // When Smart Timing is on but no schedule exists yet, show the
+                  // generation-target time (schoolEndTime) so the user can set it.
+                  const noRows = displayRows.length === 0
+                  const displayedEnd = (autoBellMode && noRows) ? schoolEndTime : endTime
+                  return (
+                  <div style={{ flex: '0 0 116px' }}>
+                    <div style={FL}>End time</div>
+                    {editingEnd ? (
+                      <input className="b-input" type="time" defaultValue={displayedEnd} autoFocus
+                        onChange={e => {
+                          if (autoBellMode && noRows) {
+                            // No rows yet — just update the generation target; auto-gen will fire
+                            setSchoolEndTime(e.target.value)
+                          } else {
+                            handleEndTimeEdit(e.target.value)
+                          }
+                        }}
+                        onBlur={() => setEditingEnd(false)}
+                        onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') e.currentTarget.blur() }}
+                        style={{ width: '100%' }} />
+                    ) : (
+                      <div className="b-input b-end-display" onClick={() => setEditingEnd(true)}
+                        style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', userSelect: 'none' }}>
+                        <span style={{ fontFamily: "'DM Mono',monospace", fontWeight: 700 }}>{fmt12(displayedEnd, use12h)}</span>
+                        <span style={{ fontSize: 10, color: '#C4B5FD', fontWeight: 400 }}>✎</span>
                       </div>
-                    : <div style={FH}>adjusts last period</div>
-                  }
-                </div>
+                    )}
+                    {toMins(endTime) - toMins(startTime) > 8 * 60
+                      ? <div style={{ ...FH, color: '#DC2626', fontWeight: 700, cursor: 'pointer' }}
+                          title="School day exceeds 8 hours — click to trim to 8 h"
+                          onClick={() => handleEndTimeEdit(toHHMM(toMins(startTime) + 8 * 60))}>
+                          ⚠ &gt;8h — tap to fix
+                        </div>
+                      : <div style={FH}>{autoBellMode && noRows ? 'generation target' : 'adjusts last period'}</div>
+                    }
+                  </div>
+                  )
+                })()}
                 {/* Period Min */}
                 <div style={{ flex: '0 0 80px' }}>
                   <div style={FL}>P. Min (min)</div>
@@ -4000,31 +4004,6 @@ export function StepBell() {
                 <span style={{ fontSize: 13, fontWeight: 700, color: autoBellMode ? '#5B21B6' : '#6B7280', flex: 1 }}>
                   Smart Timing
                 </span>
-                {autoBellMode && (
-                  <>
-                    {/* Customized / Auto-Generated status badge */}
-                    <span style={{
-                      fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
-                      background: bellCustomized ? '#FEF3C7' : '#ECFDF5',
-                      color:      bellCustomized ? '#92400E' : '#065F46',
-                      border: `1px solid ${bellCustomized ? '#FDE68A' : '#6EE7B7'}`,
-                      display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0,
-                    }}>
-                      {bellCustomized ? '✎ Customized' : '✦ Auto Generated'}
-                    </span>
-                    <button
-                      title="Regenerate bell schedule now (applies current P.Max, Max/day, and all other settings)"
-                      onClick={() => runAutoGen()}
-                      style={{
-                        fontSize: 10, fontWeight: 700, color: '#7C3AED',
-                        background: '#EDE9FF', border: '1px solid #C4B5FD',
-                        borderRadius: 6, padding: '2px 9px', cursor: 'pointer',
-                        fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4,
-                      }}>
-                      ⟳ Regenerate
-                    </button>
-                  </>
-                )}
                 {/* Toggle */}
                 <button
                   onClick={() => setAutoBellMode(v => !v)}
@@ -4049,21 +4028,6 @@ export function StepBell() {
               {autoBellMode && (
                 <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
-                  {/* School end time */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>School ends at</span>
-                    <input type="time" value={schoolEndTime}
-                      onChange={e => setSchoolEndTime(e.target.value)}
-                      style={{
-                        padding: '5px 9px', borderRadius: 7,
-                        border: '1.5px solid #C4B5FD', fontSize: 12, fontFamily: 'inherit',
-                        outline: 'none', background: '#fff', color: '#5B21B6', fontWeight: 700,
-                      }}
-                    />
-                    <span style={{ fontSize: 11, color: '#9CA3AF' }}>
-                      ({maxPeriods} periods · {periodDur} min each)
-                    </span>
-                  </div>
 
                   {/* ── Age-appropriate end-time suggestions (Smart mode) ── */}
                   {activeClassGroups.length > 0 && (() => {
@@ -4564,8 +4528,33 @@ export function StepBell() {
                 <span style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>
                   Bell Timing{isAdvanced && activeShift ? ` — ${activeShift.name}` : ''}
                 </span>
+                {/* Customized / Auto-Generated badge — only in Smart Timing mode */}
+                {autoBellMode && displayRows.length > 0 && (
+                  <span style={{
+                    fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20, flexShrink: 0,
+                    background: bellCustomized ? '#FEF3C7' : '#ECFDF5',
+                    color:      bellCustomized ? '#92400E' : '#065F46',
+                    border: `1px solid ${bellCustomized ? '#FDE68A' : '#6EE7B7'}`,
+                  }}>
+                    {bellCustomized ? '✎ Customized' : '✦ Auto Generated'}
+                  </span>
+                )}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                {/* Regenerate button — Smart Timing mode only */}
+                {autoBellMode && (
+                  <button
+                    title="Regenerate bell schedule now (applies current P.Max, Max/day, and all settings)"
+                    onClick={() => runAutoGen()}
+                    style={{
+                      fontSize: 11, fontWeight: 700, color: '#7C3AED',
+                      background: '#EDE9FF', border: '1px solid #C4B5FD',
+                      borderRadius: 6, padding: '3px 10px', cursor: 'pointer',
+                      fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4,
+                    }}>
+                    ⟳ Regenerate
+                  </button>
+                )}
 
                 {/* Vary by day toggle */}
                 <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', userSelect: 'none' }}>
