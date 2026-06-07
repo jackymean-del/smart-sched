@@ -479,11 +479,14 @@ function approxLunchTime(
   afterPeriod: number,
   maxPeriods: number,
   use12h: boolean,
+  replacesShortBreak = false,  // true when this group's lunch IS the short-break slot
 ): string {
   const sbAfter = Math.max(1, Math.ceil(maxPeriods * 0.3))
   let mins = toMins(startTime) + 10 // assembly 10 min
   mins += afterPeriod * periodDur
-  if (sbAfter <= afterPeriod) mins += 15 // short break has already fired
+  // Only add short-break time if the lunch comes AFTER the short break.
+  // When replacesShortBreak is true the group eats AT the short-break slot, not after it.
+  if (!replacesShortBreak && sbAfter <= afterPeriod) mins += 15
   return fmt12(toHHMM(mins), use12h)
 }
 
@@ -539,11 +542,20 @@ function smartGenerateBellConfig(
     })
   }
 
-  // Shared mid-morning short break for ALL classes
-  cwRows.push({
-    id: makeId(), name: 'Short Break', type: 'short-break',
-    classes: [...allKeys], afterPeriod: sbAfterP, duration: sbDur,
-  })
+  // Determine if Pre-Primary is eating at (or before) the short-break slot.
+  // If so, they eat lunch while everyone else takes their short break — skip them from sb.
+  const prePrimaryKeys = activeClasses.filter(c => c.group === 'Pre-Primary').map(c => c.key)
+  const ppLunchAP      = lunchAfterPeriod['Pre-Primary'] ?? sbAfterP
+  const ppEatsEarly    = lunchMode !== 'single' && prePrimaryKeys.length > 0 && ppLunchAP <= sbAfterP
+
+  // Shared mid-morning short break — exclude Pre-Primary when they eat early
+  const sbClasses = ppEatsEarly ? allKeys.filter(k => !prePrimaryKeys.includes(k)) : [...allKeys]
+  if (sbClasses.length > 0) {
+    cwRows.push({
+      id: makeId(), name: 'Short Break', type: 'short-break',
+      classes: sbClasses, afterPeriod: sbAfterP, duration: sbDur,
+    })
+  }
 
   if (lunchMode === 'single' || activeGroups.length === 0) {
     // Single lunch for every class (with morning break active, so we're in cwRows path)
@@ -552,13 +564,17 @@ function smartGenerateBellConfig(
       classes: [...allKeys], afterPeriod: sbAfterP + 1, duration: lunchDur,
     })
   } else {
-    // Smart staggered lunch — each age group eats at a different period
-    // Guard: each group's lunch must come AFTER the shared short break
+    // Smart staggered lunch — each age group eats at a different period.
+    // Pre-Primary (when eating early): lunch is AT the short-break slot (no guard needed).
+    // All other groups: lunch must come AFTER the shared short break.
     for (const g of activeGroups) {
       const grpKeys = activeClasses.filter(c => c.group === g.group).map(c => c.key)
       if (!grpKeys.length) continue
-      const desired   = lunchAfterPeriod[g.group] ?? (sbAfterP + 1)
-      const effective = Math.max(sbAfterP + 1, Math.min(desired, maxPeriods))
+      const isPrePrimary = g.group === 'Pre-Primary'
+      const desired      = lunchAfterPeriod[g.group] ?? (isPrePrimary ? sbAfterP : sbAfterP + 1)
+      const effective    = isPrePrimary && ppEatsEarly
+        ? Math.max(1, Math.min(desired, sbAfterP))       // can eat at or before sb slot
+        : Math.max(sbAfterP + 1, Math.min(desired, maxPeriods))  // must be after sb
       cwRows.push({
         id: makeId(), name: 'Lunch Break', type: 'lunch',
         classes: grpKeys, afterPeriod: effective, duration: lunchDur,
@@ -1895,18 +1911,22 @@ export function StepBell() {
     const asmEnd   = toMins(startTime) + asmDur
     const sbEnd    = asmEnd + sbAfterP * periodDur + 15  // minutes when short break ends
 
-    const LATEST_LUNCH = 14 * 60  // 2 PM hard cap (nobody eats lunch at 4 PM)
+    // Pre-Primary (under 5 yrs) eats early — at the same slot as the short break for others.
+    // This means their lunch starts at ~11:15 AM instead of waiting until 12:40+ PM.
+    const prePrimaryP = sbAfterP  // e.g., after P2 → 11:15 AM
+
+    // Remaining 4 groups distribute across slots AFTER the short break (before 2 PM cap).
+    const LATEST_LUNCH = 14 * 60  // 2 PM hard cap
     const minsAfterSb  = LATEST_LUNCH - sbEnd
-    // How many full period lengths fit between short-break-end and the 2 PM cap?
     const maxLunchP    = Math.min(maxPeriods, sbAfterP + Math.max(1, Math.floor(minsAfterSb / periodDur)))
     const minLunchP    = sbAfterP + 1
-    const availSlots   = Math.max(1, maxLunchP - minLunchP + 1)  // distinct period slots available
+    const availSlots   = Math.max(1, maxLunchP - minLunchP + 1)
 
-    const GROUPS = ['Pre-Primary', 'Primary', 'Middle', 'Senior', 'Senior Secondary'] as const
-    const defaults: Record<string, number> = {}
-    GROUPS.forEach((g, i) => {
-      const slotIdx = GROUPS.length <= 1 ? 0
-        : Math.round(i * (availSlots - 1) / (GROUPS.length - 1))
+    const LATER_GROUPS = ['Primary', 'Middle', 'Senior', 'Senior Secondary'] as const
+    const defaults: Record<string, number> = { 'Pre-Primary': prePrimaryP }
+    LATER_GROUPS.forEach((g, i) => {
+      const slotIdx = LATER_GROUPS.length <= 1 ? 0
+        : Math.round(i * (availSlots - 1) / (LATER_GROUPS.length - 1))
       defaults[g] = Math.max(minLunchP, Math.min(maxLunchP, minLunchP + slotIdx))
     })
     return { ...defaults, ...smartLunchAP }
@@ -3843,9 +3863,9 @@ export function StepBell() {
                           const meta = SMART_GROUP_META[gm.group] ?? { emoji: '🏫', color: '#374151', bg: '#F9FAFB', border: '#E5E7EB' }
                           const ap   = effectiveLunchAP[gm.group] ?? 4
                           const sbAP = Math.max(1, Math.ceil(maxPeriods * 0.3))
-                          const minAP = sbAP + 1
+                          const minAP = gm.group === 'Pre-Primary' ? sbAP : sbAP + 1
                           const maxAP = maxPeriods
-                          const approx = approxLunchTime(startTime, periodDur, ap, maxPeriods, use12h)
+                          const approx = approxLunchTime(startTime, periodDur, ap, maxPeriods, use12h, gm.group === 'Pre-Primary' && ap <= sbAP)
                           return (
                             <div key={gm.group} style={{
                               display: 'flex', alignItems: 'center', gap: 10,
