@@ -3468,6 +3468,73 @@ export function StepBell() {
                 </div>
               </div>
 
+              {/* ── Age-appropriate hours panel (Standard mode) ─────────── */}
+              {activeClassGroups.length > 0 && (() => {
+                const startMins = toMins(startTime)
+                const endMins   = toMins(endTime)
+                const totalHrs  = (endMins - startMins) / 60
+                return (
+                  <div style={{ marginBottom: 14 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#6B7280', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>
+                      Age-appropriate hours guide
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                      {(Object.keys(SCHOOL_HOUR_STANDARDS) as SchoolGroupKey[])
+                        .filter(gk => activeClassGroups.some(ag => ag.group === gk))
+                        .map(gk => {
+                          const s = SCHOOL_HOUR_STANDARDS[gk]
+                          const ok = totalHrs >= s.minHours && totalHrs <= s.maxHours
+                          const tooLong = totalHrs > s.maxHours
+                          const statusColor = ok ? '#059669' : tooLong ? '#DC2626' : '#D97706'
+                          const statusBg    = ok ? '#F0FDF4' : tooLong ? '#FEF2F2' : '#FFFBEB'
+                          const statusBdr   = ok ? '#6EE7B7' : tooLong ? '#FECACA' : '#FDE68A'
+                          const statusIcon  = ok ? '✓' : tooLong ? '↑' : '↓'
+                          const statusMsg   = ok
+                            ? `${totalHrs.toFixed(1)} hrs — within range`
+                            : tooLong
+                              ? `${totalHrs.toFixed(1)} hrs — too long (max ${s.maxHours} hrs)`
+                              : `${totalHrs.toFixed(1)} hrs — too short (min ${s.minHours} hrs)`
+                          return (
+                            <div key={gk} style={{ display: 'flex', alignItems: 'center', gap: 8,
+                              background: statusBg, border: `1px solid ${statusBdr}`,
+                              borderRadius: 8, padding: '6px 10px' }}>
+                              <span style={{ fontSize: 15 }}>{s.emoji}</span>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: 11, fontWeight: 700, color: '#374151' }}>
+                                  {s.label}
+                                  <span style={{ fontWeight: 400, color: '#9CA3AF', marginLeft: 5 }}>({s.ages})</span>
+                                </div>
+                                <div style={{ fontSize: 10, color: '#6B7280' }}>
+                                  Recommended {s.minHours}–{s.maxHours} hrs · {s.suggestedStart}–{s.suggestedEnd}
+                                </div>
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                                <span style={{ fontSize: 10, fontWeight: 700, color: statusColor,
+                                  background: '#fff', border: `1px solid ${statusBdr}`,
+                                  borderRadius: 20, padding: '2px 8px', whiteSpace: 'nowrap' }}>
+                                  {statusIcon} {statusMsg}
+                                </span>
+                                {!ok && (
+                                  <button
+                                    onClick={() => { setStartTime(s.suggestedStart); handleEndTimeEdit(s.suggestedEnd) }}
+                                    title={`Apply suggested hours: ${s.suggestedStart}–${s.suggestedEnd}`}
+                                    style={{ fontSize: 10, fontWeight: 600, color: s.color,
+                                      background: '#fff', border: `1px solid ${s.border}`,
+                                      borderRadius: 6, padding: '2px 8px', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                                    Apply {s.suggestedStart}–{s.suggestedEnd}
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
+                    </div>
+                    <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 4 }}>
+                      Based on NEP 2020 · NCERT · RTE Act 2009 · CBSE · WHO/UNESCO standards
+                    </div>
+                  </div>
+                )
+              })()}
 
               {/* ── Working days — only shown in single-week cycle ── */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
