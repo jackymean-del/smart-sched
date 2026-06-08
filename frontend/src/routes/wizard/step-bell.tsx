@@ -3505,7 +3505,7 @@ export function StepBell() {
                                   <span style={{ fontWeight: 400, color: '#9CA3AF', marginLeft: 5 }}>({s.ages})</span>
                                 </div>
                                 <div style={{ fontSize: 10, color: '#6B7280' }}>
-                                  Recommended {s.minHours}–{s.maxHours} hrs · {s.suggestedStart}–{s.suggestedEnd}
+                                  Recommended {s.minHours}–{s.maxHours} hrs · {fmt12(startTime, use12h)}–{fmt12(s.suggestedEnd, use12h)}
                                 </div>
                               </div>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
@@ -3516,12 +3516,12 @@ export function StepBell() {
                                 </span>
                                 {!ok && (
                                   <button
-                                    onClick={() => { setStartTime(s.suggestedStart); handleEndTimeEdit(s.suggestedEnd) }}
-                                    title={`Apply suggested hours: ${s.suggestedStart}–${s.suggestedEnd}`}
+                                    onClick={() => handleEndTimeEdit(s.suggestedEnd)}
+                                    title={`Adjust end time to ${fmt12(s.suggestedEnd, use12h)} (keeps your start time)`}
                                     style={{ fontSize: 10, fontWeight: 600, color: s.color,
                                       background: '#fff', border: `1px solid ${s.border}`,
                                       borderRadius: 6, padding: '2px 8px', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
-                                    Apply {s.suggestedStart}–{s.suggestedEnd}
+                                    Apply {fmt12(startTime, use12h)}–{fmt12(s.suggestedEnd, use12h)}
                                   </button>
                                 )}
                               </div>
