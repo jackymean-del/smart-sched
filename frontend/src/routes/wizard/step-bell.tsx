@@ -471,7 +471,8 @@ function NumInput({ value, onChange, min, max, className, style }: NumInputProps
     const n = parseInt(local, 10)
     if (isNaN(n)) { setLocal(String(value)); return }
     const clamped = Math.min(max ?? 99999, Math.max(min ?? 0, n))
-    setLocal(String(clamped)); onChange(clamped)
+    setLocal(String(clamped))
+    if (clamped !== value) onChange(clamped)  // only fire when value actually changed
   }
   return (
     <input className={className} style={style} type="text" inputMode="numeric" value={local}
