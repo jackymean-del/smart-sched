@@ -792,9 +792,11 @@ function buildBellRowsFromCw(
 
   const breakAbsMap = new Map<string, number>(cwBrks.map(b => [b.id, breakAbsStart(b)]))
 
-  // Collect ALL lunch start times across every class (used for concurrent period detection)
+  // Collect ALL lunch start times across every class (used for concurrent period detection).
+  // Snapped to the 5-min grid so the check survives the per-class clock drift that
+  // variable-duration concurrent periods introduce relative to these precomputed times.
   const allLunchStartTimes = new Set<number>(
-    cwBrks.filter(b => b.type === 'lunch').map(b => breakAbsMap.get(b.id)!)
+    cwBrks.filter(b => b.type === 'lunch').map(b => snap5(breakAbsMap.get(b.id)!))
   )
 
   // ── Build per-class event sequences ──────────────────────────────────────
@@ -817,9 +819,6 @@ function buildBellRowsFromCw(
       .map(b => ({ type: b.type as RowType, name: b.name, duration: b.duration, absStart: breakAbsMap.get(b.id)! }))
       .sort((a, b) => a.absStart - b.absStart)
 
-    // This class's own lunch start times (so we don't apply concurrentPeriodDur when eating)
-    const myLunchTimes = new Set(myBreaks.filter(b => b.type === 'lunch').map(b => b.absStart))
-
     let bi = 0
 
     // Flush pre-period breaks (absStart already reached before P1)
@@ -829,12 +828,22 @@ function buildBellRowsFromCw(
     }
 
     for (let pNum = 1; pNum <= clsMaxP; pNum++) {
-      // Use concurrentPeriodDur when another class's lunch starts exactly at this period's
-      // start time — so bell boundaries align cleanly across all groups.
+      // Is THIS class about to start its OWN lunch right now? If so it eats (handled by the
+      // break-split loop below) and its post-lunch teaching keeps the full period duration.
+      // We derive this from the live clock (myBreaks[bi]) rather than a precomputed set so
+      // it stays correct even after concurrent periods have shifted the class's clock.
+      const eatingNow =
+        bi < myBreaks.length &&
+        myBreaks[bi].type === 'lunch' &&
+        myBreaks[bi].absStart <= cur
+
+      // Use concurrentPeriodDur when ANOTHER class's lunch starts exactly at this period's
+      // start time — so bell boundaries align cleanly across all groups. The class that is
+      // itself eating at this instant is excluded (it eats, then teaches a full period).
       const effDur = (
         concurrentPeriodDur !== undefined &&
-        allLunchStartTimes.has(cur) &&
-        !myLunchTimes.has(cur)
+        allLunchStartTimes.has(snap5(cur)) &&
+        !eatingNow
       ) ? concurrentPeriodDur : periodDur
       let remaining = effDur
 
