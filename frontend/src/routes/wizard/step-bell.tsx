@@ -1932,7 +1932,11 @@ export function StepBell() {
   const [smartGenDone,     setSmartGenDone]     = useState(false)
   // True when the user has manually edited the schedule since the last auto-generation.
   // When true, auto-gen is paused so manual edits are preserved.
-  const [bellCustomized,   setBellCustomized]   = useState<boolean>(() => _saved?.bellCustomized ?? false)
+  // Treat existing rows as "customized" when no explicit flag is saved (old data safety).
+  // This prevents auto-gen from overwriting a manually-edited schedule loaded from localStorage.
+  const [bellCustomized,   setBellCustomized]   = useState<boolean>(() => _saved?.bellCustomized ?? (_saved?.rows?.length ? true : false))
+  // Class/group filter for the bell grid view — 'all' | group name
+  const [bellViewFilter,   setBellViewFilter]   = useState<'all' | string>('all')
   // Concurrent period: duration of a period for classes NOT eating during a staggered lunch
   const [concurrentMode, setConcurrentMode] = useState<'regular' | 'match-lunch' | 'custom'>(() => _saved?.concurrentPeriodMode ?? 'regular')
   const [concurrentDur,  setConcurrentDur]  = useState<number>(                               () => _saved?.concurrentPeriodDur  ?? 30)
@@ -2109,7 +2113,7 @@ export function StepBell() {
       scheduleMode, shifts, activeShiftId, shiftRows, customClasses, customGroups,
       customStreams, classStreamMap, autoBellMode, schoolEndTime,
       smartLunchMode, smartLunchAP, morningBreak, morningBreakPos, morningBreakDur,
-      concurrentMode, concurrentDur, bellCustomized])
+      concurrentMode, concurrentDur, lunchBreakDur, bellCustomized])
 
   // ── Smart lunch: effective afterPeriod per group ─────────────
   // Time-aware defaults: distribute all 5 groups within a 12:00–2:00 PM lunch window.
@@ -2436,6 +2440,38 @@ export function StepBell() {
       return computeStartsFiltered(activeStartTime, displayRows, repKey)[i] ?? activeStartTime
     })
   }, [hasPartialBreaks, displayRows, activeStartTime, startTimes])
+
+  /**
+   * View-filtered rows and their start times for the bell grid.
+   * When bellViewFilter = 'all': shows all rows with combined class lists.
+   * When bellViewFilter = a group name: shows only rows for that group's classes,
+   * with per-class accurate start times (via computeStartsFiltered).
+   */
+  const { viewRows, viewStartTimes } = useMemo(() => {
+    if (bellViewFilter === 'all') {
+      return { viewRows: displayRows, viewStartTimes: rowStartTimes }
+    }
+    const filterKeys = activeClasses
+      .filter(c => c.group === bellViewFilter)
+      .map(c => c.key)
+    if (!filterKeys.length) {
+      return { viewRows: displayRows, viewStartTimes: rowStartTimes }
+    }
+    // Keep rows that belong to this group (assembly/dispersal always shown)
+    const filtered = displayRows.filter(row =>
+      row.type === 'assembly' || row.type === 'dispersal' ||
+      row.classes.length === 0 ||
+      row.classes.some(k => filterKeys.includes(k))
+    )
+    // Per-class accurate start times (use first class key as representative)
+    const repKey   = filterKeys[0]
+    const fullSTs  = computeStartsFiltered(activeStartTime, displayRows, repKey)
+    const filtSTs  = filtered.map(row => {
+      const origIdx = displayRows.indexOf(row)
+      return origIdx >= 0 ? (fullSTs[origIdx] ?? activeStartTime) : activeStartTime
+    })
+    return { viewRows: filtered, viewStartTimes: filtSTs }
+  }, [bellViewFilter, displayRows, rowStartTimes, activeClasses, activeStartTime])
 
   /**
    * School end time = start of the last row (using filtered clock) + its duration.
@@ -4613,6 +4649,50 @@ export function StepBell() {
               </div>
             </div>
 
+            {/* ── Class / Group view filter chips ── */}
+            {activeClassGroups.length > 1 && displayRows.length > 0 && (
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10, alignItems: 'center' }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: '#9CA3AF', letterSpacing: '0.05em', marginRight: 2 }}>
+                  VIEW
+                </span>
+                {/* All chip */}
+                <button
+                  onClick={() => setBellViewFilter('all')}
+                  style={{
+                    padding: '3px 11px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+                    background: bellViewFilter === 'all' ? '#7C3AED' : '#F3F4F6',
+                    color: bellViewFilter === 'all' ? '#fff' : '#6B7280',
+                    border: bellViewFilter === 'all' ? '1.5px solid #7C3AED' : '1.5px solid #E5E7EB',
+                    cursor: 'pointer', fontFamily: 'inherit', transition: 'all .12s',
+                  }}>
+                  All classes
+                </button>
+                {/* Per-group chips */}
+                {activeClassGroups.map(g => {
+                  const active = bellViewFilter === g.group
+                  const std = SCHOOL_HOUR_STANDARDS[g.group as SchoolGroupKey]
+                  const color = std?.color ?? '#7C3AED'
+                  const bg    = std?.bg    ?? '#F5F3FF'
+                  const bord  = std?.border ?? '#C4B5FD'
+                  return (
+                    <button key={g.group}
+                      onClick={() => setBellViewFilter(active ? 'all' : g.group)}
+                      style={{
+                        padding: '3px 11px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+                        background: active ? color : bg,
+                        color: active ? '#fff' : color,
+                        border: `1.5px solid ${active ? color : bord}`,
+                        cursor: 'pointer', fontFamily: 'inherit', transition: 'all .12s',
+                        display: 'inline-flex', alignItems: 'center', gap: 5,
+                      }}>
+                      <span>{std?.emoji ?? '📚'}</span>
+                      {g.group}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+
             {/* Class-wise breaks panel */}
             {showCwPanel && (
               <ClasswiseBreaksPanel
@@ -4872,9 +4952,14 @@ export function StepBell() {
                 padding: '8px 14px', background: '#F9FAFB',
                 borderBottom: '1px solid #E5E7EB', borderRadius: '10px 10px 0 0',
               }}>
-                {['Bell', 'Start', 'End', 'Min ✎', 'Type', 'Classes', ''].map((h, i) => (
+                {['Bell', 'Start', 'End', 'Min ✎', 'Type',
+                  bellViewFilter === 'all' ? 'Classes' : `${bellViewFilter} only`,
+                  ''].map((h, i) => (
                   <div key={i} title={i === 3 ? 'Each row\'s duration is independently editable — click the value to change it' : undefined}
-                    style={{ fontSize: 11, fontWeight: 600, color: i === 3 ? '#7C6FE0' : '#6B7280', cursor: i === 3 ? 'help' : undefined }}>
+                    style={{
+                      fontSize: 11, fontWeight: 600, cursor: i === 3 ? 'help' : undefined,
+                      color: i === 3 ? '#7C6FE0' : (i === 5 && bellViewFilter !== 'all') ? '#7C3AED' : '#6B7280',
+                    }}>
                     {h}
                   </div>
                 ))}
@@ -4913,9 +4998,9 @@ export function StepBell() {
 
               {/* Rows */}
               <div>
-                {displayRows.map((row, i) => {
+                {viewRows.map((row, i) => {
                   const tm      = TYPE_META[row.type]
-                  const start   = rowStartTimes[i] ?? '—'
+                  const start   = viewStartTimes[i] ?? '—'
                   const end     = addMins(start, row.duration)
                   const isBreak = row.type === 'short-break' || row.type === 'lunch'
                   const isEdge  = row.type === 'assembly' || row.type === 'dispersal'
