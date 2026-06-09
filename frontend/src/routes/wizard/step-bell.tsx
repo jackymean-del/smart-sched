@@ -715,12 +715,28 @@ function smartGenerateBellConfig(
     ? snap5(Math.max(periodDurMin, concurrentPeriodDur))
     : undefined
 
-  // ── Per-group max periods for age-appropriate early dispersal ────────────
-  // Pre-Primary (max 4h) and Primary (max 6h) have fewer periods and disperse
-  // earlier than Middle/Senior classes based on SCHOOL_HOUR_STANDARDS.
   const classGroupMap: Record<string, string> = {}
   activeClasses.forEach(c => { classGroupMap[c.key] = c.group })
 
+  // ── Per-group period DURATION — age-appropriate ──────────────────────────
+  // The uniform fit (cappedPeriodDur) is the longest duration the day allows. Young
+  // children shouldn't sit through long sessions, so cap each group at its age-
+  // appropriate maximum (SCHOOL_HOUR_STANDARDS.periodDurRange[1]): Pre-Primary ≤30,
+  // Primary ≤45, Middle ≤50, Secondary ≤55, Sr.Sec ≤60. The most senior group keeps
+  // the longest periods; juniors get shorter ones — always within the user's
+  // [periodDurMin, periodDur] bounds. When the fitted duration already sits at/under
+  // every group's age cap, all groups share one value (uniform & bell-aligned).
+  const perGroupPeriodDur: Record<string, number> = {}
+  for (const g of activeGroups) {
+    const std    = SCHOOL_HOUR_STANDARDS[g.group as SchoolGroupKey]
+    const ageMax = std ? std.periodDurRange[1] : periodDur
+    perGroupPeriodDur[g.group] = snap5(Math.max(periodDurMin, Math.min(cappedPeriodDur, ageMax)))
+  }
+  const groupDur = (group: string) => perGroupPeriodDur[group] ?? cappedPeriodDur
+
+  // ── Per-group max periods for age-appropriate early dispersal ────────────
+  // Pre-Primary (max 4h) and Primary (max 6h) have fewer periods and disperse
+  // earlier than Middle/Senior classes based on SCHOOL_HOUR_STANDARDS.
   const perGroupMaxPeriods: Record<string, number> = {}
   for (const g of activeGroups) {
     const std = SCHOOL_HOUR_STANDARDS[g.group as SchoolGroupKey]
@@ -730,14 +746,15 @@ function smartGenerateBellConfig(
     const groupBreakMins = cwRows
       .filter(r => r.classes.some(c => grpKeys.includes(c)))
       .reduce((sum, r) => sum + r.duration, 0)
-    // Fit as many periods as possible within the group's max school hours
+    // Fit as many periods as possible within the group's max school hours,
+    // using THIS group's (possibly shorter) period duration.
     const targetMaxMins = std.maxHours * 60 - 10 /* assembly */ - 10 /* dispersal */ - groupBreakMins
-    const gMaxP = Math.max(1, Math.min(maxPeriods, Math.floor(targetMaxMins / cappedPeriodDur)))
+    const gMaxP = Math.max(1, Math.min(maxPeriods, Math.floor(targetMaxMins / groupDur(g.group))))
     perGroupMaxPeriods[g.group] = gMaxP
   }
 
   return {
-    rows:   buildBellRowsFromCw(startTime, cappedPeriodDur, maxPeriods, cwRows, allKeys, 10, effectiveConcurrent, periodDurMin, classGroupMap, perGroupMaxPeriods),
+    rows:   buildBellRowsFromCw(startTime, cappedPeriodDur, maxPeriods, cwRows, allKeys, 10, effectiveConcurrent, periodDurMin, classGroupMap, perGroupMaxPeriods, perGroupPeriodDur),
     cwRows,
   }
 }
@@ -771,6 +788,7 @@ function buildBellRowsFromCw(
   periodDurMin:        number   = 15, // minimum teaching fragment; shorter fragments are merged/dropped
   classGroupMap?:      Record<string, string>,   // class key → group name (for per-group dispersal)
   perGroupMaxPeriods?: Record<string, number>,   // group name → max periods (age-appropriate early dispersal)
+  perGroupPeriodDur?:  Record<string, number>,   // group name → period duration (age-appropriate length)
 ): BellRow[] {
   type Ev = { type: RowType; name: string; startMins: number; duration: number }
   const startMins = toMins(startTimeStr)
@@ -812,9 +830,10 @@ function buildBellRowsFromCw(
     const evs: Ev[] = []
     let cur = startMins
 
-    // Per-group max periods for age-appropriate early dispersal
-    const clsGroup = classGroupMap?.[clsKey] ?? ''
-    const clsMaxP  = perGroupMaxPeriods?.[clsGroup] ?? maxPeriods
+    // Per-group max periods + age-appropriate period duration
+    const clsGroup    = classGroupMap?.[clsKey] ?? ''
+    const clsMaxP     = perGroupMaxPeriods?.[clsGroup] ?? maxPeriods
+    const clsPeriodDur = perGroupPeriodDur?.[clsGroup] ?? periodDur
 
     evs.push({ type: 'assembly', name: 'Assembly', startMins: cur, duration: asmDur })
     cur += asmDur
@@ -854,7 +873,7 @@ function buildBellRowsFromCw(
         lunchStarts &&
         concurrentPeriodDur !== undefined &&
         lunchStarts.has(snap5(cur))
-      ) ? concurrentPeriodDur : periodDur
+      ) ? concurrentPeriodDur : clsPeriodDur
       let remaining = effDur
 
       // Split the period at any time-based break (customStartTime) landing within it.
