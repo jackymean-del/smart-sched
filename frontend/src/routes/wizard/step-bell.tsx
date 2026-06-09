@@ -1063,6 +1063,9 @@ interface SavedBell {
   morningBreakDur?: number   // minutes
   // True = user has manually edited the schedule; false = auto-generated
   bellCustomized?:  boolean
+  // Quick-Start onboarding: how the user chose to set up this step
+  setupChoice?: 'choose' | 'guided' | 'manual'
+  areaMode?:    'one' | 'per-block'
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1823,7 +1826,7 @@ function LiveBellTimeline({
 //  Main component
 // ══════════════════════════════════════════════════════════════
 export function StepBell() {
-  const { config, setConfig, setStep, setBreaks, sections: storeSections } = useTimetableStore()
+  const { config, setConfig, setStep, setBreaks, sections: storeSections, rooms: storeRooms } = useTimetableStore()
   // Scoped to this timetable — computed once on mount so saves never bleed into another TT
   const bellKey = useRef(getBellKey()).current
   const [_saved] = useState<SavedBell | null>(loadSaved)
@@ -1981,6 +1984,66 @@ export function StepBell() {
       }))
       .filter(g => customClasses.some(c => c.group === g.group)),
   [customClasses, customGroups])
+
+  // ── Block / Building / Area analysis (derived from Resources rooms) ─────────
+  // Sections are assigned a room (by name); each room belongs to a block (building,
+  // set in Resources → Rooms). We map active classes/groups → their block(s) so the
+  // wizard can offer block-wise timing or fall back to inferring it.
+  const roomBlockByName = useMemo(() => {
+    const m = new Map<string, string>()
+    ;(storeRooms ?? []).forEach((r: any) => {
+      const nm = (r.actualName ?? r.generatedName ?? r.name ?? '').trim()
+      if (nm) m.set(nm, (r.building ?? '').trim() || 'Main Block')
+    })
+    return m
+  }, [storeRooms])
+
+  // class key → its dominant block (most common room block among that grade's sections)
+  const classKeyBlock = useMemo(() => {
+    const m: Record<string, string> = {}
+    for (const cls of customClasses) {
+      const secs = (storeSections ?? []).filter((s: any) => {
+        const g = (s.grade || (s.name ?? '').split('-')[0] || '').replace(/^class\s+/i, '').trim()
+        return g.toLowerCase() === cls.short.toLowerCase() || g.toLowerCase() === cls.label.toLowerCase()
+      })
+      const blocks = secs
+        .map((s: any) => (s.room ? roomBlockByName.get((s.room ?? '').trim()) : undefined))
+        .filter((b: string | undefined): b is string => Boolean(b))
+      if (!blocks.length) continue
+      const count: Record<string, number> = {}
+      blocks.forEach(b => { count[b] = (count[b] ?? 0) + 1 })
+      m[cls.key] = Object.entries(count).sort((a, b) => b[1] - a[1])[0][0]
+    }
+    return m
+  }, [customClasses, storeSections, roomBlockByName])
+
+  const { groupBlocks, distinctBlocks, blocksConfigured } = useMemo(() => {
+    const gb: Record<string, Set<string>> = {}
+    let anyExplicit = false
+    customClasses.forEach(c => {
+      const b = classKeyBlock[c.key]
+      if (!b) return
+      if (b !== 'Main Block') anyExplicit = true
+      ;(gb[c.group] ??= new Set()).add(b)
+    })
+    const all = new Set<string>()
+    Object.values(gb).forEach(set => set.forEach(b => all.add(b)))
+    const groupBlocksObj: Record<string, string[]> = {}
+    Object.entries(gb).forEach(([g, set]) => { groupBlocksObj[g] = [...set].sort() })
+    return {
+      groupBlocks: groupBlocksObj,
+      distinctBlocks: [...all].sort((a, b) => a === 'Main Block' ? -1 : b === 'Main Block' ? 1 : a.localeCompare(b)),
+      blocksConfigured: anyExplicit,
+    }
+  }, [customClasses, classKeyBlock])
+
+  // ── Quick-Start onboarding ───────────────────────────────────────────────────
+  // 'choose' shows the guided/manual picker; returning users with saved rows start
+  // in 'manual' so the page isn't re-gated. areaMode decides single vs per-block.
+  const [setupChoice, setSetupChoice] = useState<'choose' | 'guided' | 'manual'>(
+    () => (_saved as any)?.setupChoice ?? (_saved?.rows?.length ? 'manual' : 'choose'))
+  const [areaMode, setAreaMode] = useState<'one' | 'per-block'>(
+    () => (_saved as any)?.areaMode ?? 'one')
 
   const [autoBellMode,     setAutoBellMode]     = useState<boolean>(() => _saved?.autoBellMode ?? false)
   const [schoolEndTime,    setSchoolEndTime]    = useState<string>( () => _saved?.schoolEndTime ?? '15:30')
@@ -2165,7 +2228,7 @@ export function StepBell() {
       smartLunchMode, smartLunchAfterPeriod: smartLunchAP,
       morningBreak, morningBreakPos, morningBreakDur,
       concurrentPeriodMode: concurrentMode, concurrentPeriodDur: concurrentDur, lunchBreakDur,
-      bellCustomized,
+      bellCustomized, setupChoice, areaMode,
     } as SavedBell))
   }, [shiftName, startTime, use12h, periodDur, periodDurMin, maxPeriods, workDays, rows,
       cycleWeeks, useDayNames, cycleStartDate, fixedDuration, rotationDays,
@@ -2173,7 +2236,7 @@ export function StepBell() {
       scheduleMode, shifts, activeShiftId, shiftRows, customClasses, customGroups,
       customStreams, classStreamMap, autoBellMode, schoolEndTime,
       smartLunchMode, smartLunchAP, morningBreak, morningBreakPos, morningBreakDur,
-      concurrentMode, concurrentDur, lunchBreakDur, bellCustomized])
+      concurrentMode, concurrentDur, lunchBreakDur, bellCustomized, setupChoice, areaMode])
 
   // ── Smart lunch: effective afterPeriod per group ─────────────
   // Time-aware defaults: distribute all 5 groups within a 12:00–2:00 PM lunch window.
@@ -2800,6 +2863,42 @@ export function StepBell() {
     setScheduleMode(mode)
   }
 
+  // ── Guided "Build it for me" ──────────────────────────────────
+  // One shift per block, classes auto-assigned by their room's block.
+  const buildBlockShifts = (): ShiftConfig[] => {
+    const byBlock: Record<string, string[]> = {}
+    customClasses.forEach(c => { const b = classKeyBlock[c.key] ?? 'Main Block'; (byBlock[b] ??= []).push(c.key) })
+    return Object.entries(byBlock).map(([block, keys], i) => ({
+      id: `shift-blk-${i}-${makeId()}`,
+      name: block,
+      startTime, periodDur, periodDurMin, maxPeriods, use12h,
+      classes: keys,
+    }))
+  }
+
+  /**
+   * Apply the guided preset: Smart staggered lunch + Match-Lunch concurrent periods
+   * (the aligned single-row behaviour). The auto-gen effect regenerates from the new
+   * settings on the next render, so we only set state here. When the user opted for
+   * per-block timing and >1 block exists, switch to Advanced with one shift per block.
+   */
+  const applyGuidedSetup = () => {
+    if (areaMode === 'per-block' && distinctBlocks.length > 1) {
+      const blockShifts = buildBlockShifts()
+      setShifts(blockShifts)
+      setActiveShiftId(blockShifts[0]?.id ?? 'shift-main')
+      setShiftRows(Object.fromEntries(blockShifts.map(s => [s.id, buildRows(s.maxPeriods, s.periodDur)])))
+      setScheduleMode('advanced')
+    } else {
+      setScheduleMode('standard')
+    }
+    setAutoBellMode(true)
+    setSmartLunchMode('smart')
+    setConcurrentMode('match-lunch')
+    setBellCustomized(false)
+    setSetupChoice('guided')
+  }
+
   // ── Vary-by-day toggle ────────────────────────────────────────
   const doTurnOffVaryByDay = () => {
     setActiveDayTab(''); setDayRows({}); setDayStartTimes({}); setDayPeriodDurs({}); setVaryByDay(false)
@@ -3150,6 +3249,76 @@ export function StepBell() {
         {/* ══════════ LEFT ══════════ */}
         <div>
 
+          {/* ─── QUICK START ─── */}
+          {setupChoice === 'choose' ? (
+            <div style={{ border: '1.5px solid #DDD6FE', background: 'linear-gradient(180deg,#FBFAFF,#F5F3FF)', borderRadius: 14, padding: '18px 20px', marginBottom: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                <span style={{ fontSize: 18 }}>🔔</span>
+                <span style={{ fontSize: 15, fontWeight: 800, color: '#1F2937' }}>Set up your bell timing</span>
+              </div>
+              <div style={{ fontSize: 12, color: '#6B7280', marginBottom: 14, lineHeight: 1.6 }}>
+                Pick how you'd like to start — you can fine-tune everything afterwards.
+              </div>
+
+              {/* AI block analysis */}
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, background: '#fff', border: '1px solid #EDE9FE', borderRadius: 10, padding: '10px 12px', marginBottom: 14 }}>
+                <span style={{ fontSize: 14 }}>🧠</span>
+                <div style={{ fontSize: 11.5, color: '#4B5563', lineHeight: 1.6 }}>
+                  {distinctBlocks.length === 0
+                    ? <>No room blocks set yet — I'll treat all classes as one location. <span style={{ color: '#9CA3AF' }}>Add blocks in Resources → Rooms to plan by building.</span></>
+                    : distinctBlocks.length === 1
+                      ? <>All classes are in <strong style={{ color: '#6D28D9' }}>{distinctBlocks[0]}</strong> — a single shared schedule fits best.</>
+                      : <>Detected <strong style={{ color: '#6D28D9' }}>{distinctBlocks.length} blocks</strong>: {distinctBlocks.join(', ')}. You can give each its own timing.</>}
+                </div>
+              </div>
+
+              {/* Area question — only when more than one block exists */}
+              {distinctBlocks.length > 1 && (
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#6B7280', marginBottom: 6 }}>How should blocks be timed?</div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {([['one', 'One schedule for all', 'Same bells across every block'], ['per-block', 'Different timing per block', 'One shift per block — set each separately']] as const).map(([val, label, desc]) => {
+                      const active = areaMode === val
+                      return (
+                        <button key={val} onClick={() => setAreaMode(val)} style={{
+                          flex: 1, textAlign: 'left', padding: '9px 11px', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit',
+                          border: active ? '2px solid #7C3AED' : '1.5px solid #E5E7EB', background: active ? '#F5F3FF' : '#fff',
+                        }}>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: active ? '#6D28D9' : '#374151' }}>{label}</div>
+                          <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 2 }}>{desc}</div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Action buttons */}
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button onClick={applyGuidedSetup} style={{ flex: 1, padding: '12px', borderRadius: 10, border: 'none', background: '#7C3AED', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', boxShadow: '0 2px 8px rgba(124,58,237,0.3)' }}>
+                  ✨ Build it for me
+                  <div style={{ fontSize: 10, fontWeight: 500, opacity: 0.85, marginTop: 2 }}>Smart staggered lunch · aligned bells · age-appropriate hours</div>
+                </button>
+                <button onClick={() => setSetupChoice('manual')} style={{ flex: 1, padding: '12px', borderRadius: 10, border: '1.5px solid #E5E7EB', background: '#fff', color: '#374151', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                  🛠 I'll configure manually
+                  <div style={{ fontSize: 10, fontWeight: 500, color: '#9CA3AF', marginTop: 2 }}>Set hours, breaks &amp; periods yourself</div>
+                </button>
+              </div>
+
+              <div style={{ fontSize: 10.5, color: '#9CA3AF', marginTop: 12, lineHeight: 1.5 }}>
+                ℹ️ All classes keep the same start &amp; end time. If lunch is staggered, classes that aren't eating run a matching-length period so the bells line up.
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, padding: '8px 12px', borderRadius: 10, border: '1px solid #EDE9FE', background: '#FBFAFF' }}>
+              <span style={{ fontSize: 13 }}>{setupChoice === 'guided' ? '✨' : '🛠'}</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: '#4B5563' }}>{setupChoice === 'guided' ? 'Guided setup' : 'Manual setup'}</span>
+              {distinctBlocks.length > 1 && <span style={{ fontSize: 11, color: '#9CA3AF' }}>· {areaMode === 'per-block' ? `${distinctBlocks.length} blocks` : 'one schedule'}</span>}
+              <div style={{ flex: 1 }} />
+              <button onClick={() => setSetupChoice('choose')} style={{ fontSize: 11, fontWeight: 700, color: '#7C3AED', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>Change</button>
+            </div>
+          )}
+
           {/* ─── SCHEDULE MODE ─── */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 20 }}>
             <div style={{ display: 'inline-flex', background: '#EFEFEF', borderRadius: 10, padding: 3, flexShrink: 0 }}>
@@ -3449,6 +3618,12 @@ export function StepBell() {
                   style={{ fontWeight: 700, fontSize: 13, border: 'none', padding: '0', outline: 'none', background: 'transparent', flex: 1 }} />
               </div>
               <div style={{ padding: '14px 16px' }}>
+
+              <div style={{ fontSize: 11, color: '#8B87AD', marginBottom: 10, lineHeight: 1.5 }}>
+                Set the school day's <strong>start</strong> &amp; <strong>end</strong>, the period length
+                (<strong>P.Min–P.Max</strong>), and periods per day (<strong>Max/day</strong>).
+                With Smart Timing on, the end time auto-fits the periods.
+              </div>
 
               <div style={{ display: 'flex', flexWrap: 'nowrap' as const, alignItems: 'flex-start', gap: 10, marginBottom: 14 }}>
                 {/* Start */}
@@ -4637,6 +4812,14 @@ export function StepBell() {
               </div>
             </div>
 
+            {displayRows.length > 0 && (
+              <div style={{ fontSize: 11, color: '#8B87AD', marginBottom: 10, lineHeight: 1.5 }}>
+                Your day runs <strong>Assembly → Periods → Breaks → Dispersal</strong>. Click any time or
+                duration to edit a row, or use <strong>+ Period</strong> / <strong>+ Break</strong> to add one.
+                Manual edits mark the schedule “Customized” (use <strong>Regenerate</strong> to rebuild).
+              </div>
+            )}
+
             {/* ── Class / Group view filter chips ── */}
             {activeClassGroups.length > 1 && displayRows.length > 0 && (
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10, alignItems: 'center' }}>
@@ -4675,6 +4858,15 @@ export function StepBell() {
                       }}>
                       <span>{std?.emoji ?? '📚'}</span>
                       {g.group}
+                      {blocksConfigured && groupBlocks[g.group]?.length > 0 && (
+                        <span style={{
+                          fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 10,
+                          background: active ? 'rgba(255,255,255,0.25)' : '#fff',
+                          color: active ? '#fff' : '#6D28D9', border: active ? 'none' : '1px solid #E9E3FF',
+                        }}>
+                          🏢 {groupBlocks[g.group].join(', ')}
+                        </span>
+                      )}
                     </button>
                   )
                 })}
