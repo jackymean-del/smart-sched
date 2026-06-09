@@ -726,8 +726,15 @@ function smartGenerateBellConfig(
   // the longest periods; juniors get shorter ones — always within the user's
   // [periodDurMin, periodDur] bounds. When the fitted duration already sits at/under
   // every group's age cap, all groups share one value (uniform & bell-aligned).
+  //
+  // EXCEPTION: when a concurrent-period feature is active (Match Lunch / Custom), all
+  // classes MUST share one duration so they reach each lunch boundary together and the
+  // concurrent period merges into a single aligned row. There, alignment wins over the
+  // age-cap (the user's choice), and durations stay uniform.
+  const concurrencyActive = concurrentPeriodDur !== undefined
   const perGroupPeriodDur: Record<string, number> = {}
   for (const g of activeGroups) {
+    if (concurrencyActive) { perGroupPeriodDur[g.group] = cappedPeriodDur; continue }
     const std    = SCHOOL_HOUR_STANDARDS[g.group as SchoolGroupKey]
     const ageMax = std ? std.periodDurRange[1] : periodDur
     perGroupPeriodDur[g.group] = snap5(Math.max(periodDurMin, Math.min(cappedPeriodDur, ageMax)))
