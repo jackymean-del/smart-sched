@@ -2306,7 +2306,41 @@ export function StepBell() {
        activeClassGroups, activeClasses])
 
   /** Run the smart generator immediately (used by auto-gen effect and Regenerate button). */
+  // Generate one Advanced-mode shift's bell rows with the smart generator, scoped to
+  // that shift's own classes/groups, start time, period length and max periods.
+  const generateShiftRows = useCallback((shift: ShiftConfig): BellRow[] => {
+    const shiftClasses = customClasses
+      .filter(c => shift.classes.includes(c.key))
+      .map(c => ({ key: c.key, group: c.group }))
+    if (!shiftClasses.length) return buildRows(shift.maxPeriods, shift.periodDur)
+    const groupsInShift = [...new Set(shiftClasses.map(c => c.group))].map(group => ({ group }))
+    const concPeriodDur = concurrentMode === 'regular'     ? undefined
+                        : concurrentMode === 'match-lunch' ? lunchBreakDur
+                        :                                    concurrentDur
+    const { rows } = smartGenerateBellConfig(
+      shift.startTime, schoolEndTime, shift.maxPeriods, shift.periodDur,
+      smartLunchMode, effectiveLunchAP,
+      groupsInShift, shiftClasses,
+      morningBreak, morningBreakPos, morningBreakDur,
+      concPeriodDur, lunchBreakDur, shift.periodDurMin ?? periodDurMin,
+    )
+    return rows
+  }, [customClasses, concurrentMode, lunchBreakDur, concurrentDur, schoolEndTime,
+      smartLunchMode, effectiveLunchAP, morningBreak, morningBreakPos, morningBreakDur,
+      periodDurMin])
+
   const runAutoGen = useCallback((opts?: { resetCustomized?: boolean }) => {
+    // Advanced (per-block / multi-shift): generate every shift into its own bucket.
+    if (isAdvanced) {
+      setShiftRows(prev => {
+        const next = { ...prev }
+        for (const s of shifts) next[s.id] = generateShiftRows(s)
+        return next
+      })
+      setSmartGenDone(true)
+      if (opts?.resetCustomized !== false) setBellCustomized(false)
+      return
+    }
     const concPeriodDur = concurrentMode === 'regular'     ? undefined
                         : concurrentMode === 'match-lunch' ? lunchBreakDur
                         :                                    concurrentDur
@@ -2321,8 +2355,8 @@ export function StepBell() {
     setCwRows(generated_cwRows)
     setSmartGenDone(true)
     if (opts?.resetCustomized !== false) setBellCustomized(false)
-  }, [concurrentMode, lunchBreakDur, concurrentDur, startTime, schoolEndTime,
-      maxPeriods, periodDur, smartLunchMode, effectiveLunchAP,
+  }, [isAdvanced, shifts, generateShiftRows, concurrentMode, lunchBreakDur, concurrentDur,
+      startTime, schoolEndTime, maxPeriods, periodDur, smartLunchMode, effectiveLunchAP,
       activeClassGroups, activeClasses, morningBreak, morningBreakPos, morningBreakDur,
       periodDurMin]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -2887,7 +2921,8 @@ export function StepBell() {
       const blockShifts = buildBlockShifts()
       setShifts(blockShifts)
       setActiveShiftId(blockShifts[0]?.id ?? 'shift-main')
-      setShiftRows(Object.fromEntries(blockShifts.map(s => [s.id, buildRows(s.maxPeriods, s.periodDur)])))
+      // Smart-generate each block's schedule immediately (Smart + Match-Lunch).
+      setShiftRows(Object.fromEntries(blockShifts.map(s => [s.id, generateShiftRows(s)])))
       setScheduleMode('advanced')
     } else {
       setScheduleMode('standard')
