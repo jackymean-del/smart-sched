@@ -2776,6 +2776,82 @@ export function StepBell() {
     setDisplayRows(prev => prev.map(r => r.type === 'teaching' ? { ...r, duration: activePeriodDur } : r))
   }
 
+  // ── Live schedule advisories ──────────────────────────────────────────────
+  // Non-blocking, professional guidance that reacts to ANY change (including manual
+  // grid edits): flags out-of-boundary conditions — over-long school day (8h cap),
+  // per-group day length vs age-appropriate hours, and periods that are too long/short
+  // for an age group or outside the configured P.Min/P.Max. Each item may offer a
+  // one-click fix. Empty list ⇒ everything is within healthy bounds.
+  type Advisory = { id: string; severity: 'warn' | 'info'; emoji: string; title: string; detail: string; fix?: { label: string; run: () => void } }
+  const scheduleAdvisories = useMemo<Advisory[]>(() => {
+    const out: Advisory[] = []
+    if (!displayRows.length) return out
+
+    // 1) Whole-day 8h cap (WHO/UNESCO)
+    const dayStart = toMins(activeStartTime)
+    const dayEnd   = toMins(endTime)
+    const totalHrs = (dayEnd - dayStart) / 60
+    if (totalHrs > 8.01) {
+      out.push({
+        id: 'day-8h', severity: 'warn', emoji: '⏱️',
+        title: 'School day is over 8 hours',
+        detail: `The day runs ${totalHrs.toFixed(1)} h. WHO/UNESCO advise keeping it within 8 h.`,
+        fix: { label: 'Cap at 8 h', run: () => handleEndTimeEdit(toHHMM(dayStart + 8 * 60)) },
+      })
+    }
+
+    // 2) Per-group: actual day length + period lengths vs age-appropriate standards
+    for (const { gm, data } of groupTimelineData) {
+      const std = SCHOOL_HOUR_STANDARDS[gm.group as SchoolGroupKey]
+      if (!std || !data.length) continue
+      const first = toMins(data[0].start)
+      const last  = data.reduce((mx, d) => Math.max(mx, toMins(d.start) + d.row.duration), first)
+      const hrs   = (last - first) / 60
+      if (hrs > std.maxHours + 0.01) {
+        out.push({
+          id: `grp-long-${gm.group}`, severity: 'warn', emoji: std.emoji,
+          title: `${std.label} day is long`,
+          detail: `${hrs.toFixed(1)} h — above the recommended ${std.maxHours} h max for ${std.ages}. Long days are tiring for this age.`,
+          fix: { label: `End at ${fmt12(std.suggestedEnd, use12h)}`, run: () => handleEndTimeEdit(std.suggestedEnd) },
+        })
+      } else if (hrs < std.minHours - 0.01) {
+        out.push({
+          id: `grp-short-${gm.group}`, severity: 'info', emoji: std.emoji,
+          title: `${std.label} day is short`,
+          detail: `${hrs.toFixed(1)} h — below the recommended ${std.minHours} h min for instructional time.`,
+        })
+      }
+      const longPeriods = data.filter(d => d.row.type === 'teaching' && d.row.duration > std.periodDurRange[1])
+      if (longPeriods.length) {
+        out.push({
+          id: `grp-perlong-${gm.group}`, severity: 'warn', emoji: '⏳',
+          title: `${std.label} periods may be too long`,
+          detail: `${longPeriods.length} period${longPeriods.length > 1 ? 's' : ''} exceed ${std.periodDurRange[1]} min — long attention spans are hard for ${std.ages}.`,
+        })
+      }
+    }
+
+    // 3) Periods outside the configured P.Min / P.Max bounds
+    const teach   = displayRows.filter(r => r.type === 'teaching')
+    const tooShort = teach.filter(r => r.duration < periodDurMin)
+    const tooLong  = teach.filter(r => r.duration > activePeriodDur)
+    if (tooShort.length) {
+      out.push({
+        id: 'per-belowmin', severity: 'warn', emoji: '⚠️',
+        title: 'Some periods are below your minimum',
+        detail: `${tooShort.length} period${tooShort.length > 1 ? 's are' : ' is'} shorter than your P.Min of ${periodDurMin} min.`,
+      })
+    }
+    if (tooLong.length) {
+      out.push({
+        id: 'per-abovemax', severity: 'info', emoji: '📏',
+        title: 'Some periods exceed your maximum',
+        detail: `${tooLong.length} period${tooLong.length > 1 ? 's are' : ' is'} longer than your P.Max of ${activePeriodDur} min.`,
+      })
+    }
+    return out
+  }, [displayRows, groupTimelineData, activeStartTime, endTime, periodDurMin, activePeriodDur, use12h]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleMaxPeriodsChange = (n: number) => {
     const v = Math.max(1, Math.min(16, n))
     if (isAdvanced) {
@@ -4827,6 +4903,40 @@ export function StepBell() {
                 Your day runs <strong>Assembly → Periods → Breaks → Dispersal</strong>. Click any time or
                 duration to edit a row, or use <strong>+ Period</strong> / <strong>+ Break</strong> to add one.
                 Manual edits mark the schedule “Customized” (use <strong>Regenerate</strong> to rebuild).
+              </div>
+            )}
+
+            {/* ── Live schedule advisories (works in manual mode too) ── */}
+            {scheduleAdvisories.length > 0 && (
+              <div style={{ marginBottom: 12, border: '1px solid #FCE8C8', background: 'linear-gradient(180deg,#FFFDF7,#FFF8EC)', borderRadius: 10, overflow: 'hidden' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 12px', borderBottom: '1px solid #F6E6C8' }}>
+                  <span style={{ fontSize: 13 }}>💡</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#92400E' }}>Schedule check</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: '#B45309', background: '#FEF3C7', border: '1px solid #FDE68A', borderRadius: 20, padding: '1px 8px' }}>
+                    {scheduleAdvisories.length} suggestion{scheduleAdvisories.length > 1 ? 's' : ''}
+                  </span>
+                  <span style={{ fontSize: 10, color: '#B9A88A', marginLeft: 'auto' }}>Guidance only — nothing is blocked</span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  {scheduleAdvisories.map(a => {
+                    const warn = a.severity === 'warn'
+                    return (
+                      <div key={a.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 9, padding: '9px 12px', borderTop: '1px solid #FCEFD6', borderLeft: `3px solid ${warn ? '#F59E0B' : '#60A5FA'}` }}>
+                        <span style={{ fontSize: 14, flexShrink: 0, marginTop: 1 }}>{a.emoji}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 11.5, fontWeight: 700, color: '#374151' }}>{a.title}</div>
+                          <div style={{ fontSize: 10.5, color: '#6B7280', lineHeight: 1.5, marginTop: 1 }}>{a.detail}</div>
+                        </div>
+                        {a.fix && (
+                          <button onClick={a.fix.run}
+                            style={{ flexShrink: 0, fontSize: 10.5, fontWeight: 700, color: '#7C3AED', background: '#fff', border: '1px solid #E9E3FF', borderRadius: 6, padding: '4px 9px', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                            {a.fix.label}
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
             )}
 
