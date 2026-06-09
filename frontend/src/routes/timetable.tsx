@@ -1002,13 +1002,23 @@ function TeacherCell({ colorClass, cell, showRoom, editMode, dragOver, isDropTar
 export function TimetablePage() {
   const store = useTimetableStore()
   const {
-    config, sections, staff, subjects, periods,
+    config, sections, staff, subjects, periods: storePeriods,
     classTT, teacherTT, substitutions, conflicts,
     showTeacher, showRoom, editMode,
     timetableStatus, setTimetableStatus,
     setShowTeacher, setShowRoom, setEditMode,
     setPeriods, setClassTT, setTeacherTT, setSubstitutions,
   } = store
+
+  // ── Block-wise (per-shift) view ────────────────────────────
+  // When the timetable was generated block-wise, config.blockMeta holds each block's
+  // sections + its own period grid + start time. The block selector swaps the columns
+  // (periods) and section list to the chosen block; "ALL" falls back to the store grid.
+  type BlockMeta = { id: string; name: string; startTime: string; sectionNames: string[]; periods: Period[] }
+  const blockMeta = (config as any).blockMeta as BlockMeta[] | undefined
+  const [blockFilter, setBlockFilter] = useState<string>(() => (config as any).blockMeta?.[0]?.id ?? 'ALL')
+  const activeBlock = (blockMeta && blockMeta.length > 1) ? (blockMeta.find(b => b.id === blockFilter) ?? null) : null
+  const periods = activeBlock ? activeBlock.periods : storePeriods
 
   const [editTarget, setEditTarget] = useState<{section:string;day:string;periodId:string}|null>(null)
   const [swapPreview, setSwapPreview] = useState<{
@@ -1098,9 +1108,9 @@ export function TimetablePage() {
   // ── Memoized derived values — avoid recomputation on every render ──────────
   // These are recomputed only when their actual data dependencies change,
   // NOT on drag-state changes (dragOverCell / dragItem), which fire 60fps.
-  const periodTimes  = useMemo(() => calcTimes(periods, config),
+  const periodTimes  = useMemo(() => calcTimes(periods, activeBlock ? { ...config, startTime: activeBlock.startTime } : config),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [periods, config.startTime, config.timeFormat])
+    [periods, config.startTime, config.timeFormat, blockFilter])
 
   const classPeriods = useMemo(() => periods.filter(p => p.type === "class"), [periods])
 
@@ -1213,7 +1223,12 @@ export function TimetablePage() {
   // Entity options per view
   const getEntityList = (): string[] => {
     switch (viewMode) {
-      case "class":   return ["ALL", ...sections.map(s => s.name)]
+      case "class": {
+        const names = activeBlock
+          ? sections.map(s => s.name).filter(n => activeBlock.sectionNames.includes(n))
+          : sections.map(s => s.name)
+        return ["ALL", ...names]
+      }
       case "teacher": return ["ALL", ...staff.map(s => s.name)]
       case "subject": return ["ALL", ...subjects.map(s => s.name)]
       case "room":    return ["ALL", ...allRooms]
@@ -3191,6 +3206,17 @@ export function TimetablePage() {
               )}
             </div>
           </div>
+
+          {/* ── Block selector (block-wise timetables) ── */}
+          {blockMeta && blockMeta.length > 1 && (
+            <div style={{ display:"flex", alignItems:"center", gap:6, marginLeft:8 }}>
+              <span style={{ fontSize:10, fontWeight:700, color:"#94A3B8", letterSpacing:"0.05em" }}>🏢 BLOCK</span>
+              <select value={blockFilter} onChange={e => startViewTransition(() => { setBlockFilter(e.target.value); setSelectedEntity("ALL") })}
+                style={{ padding:"5px 10px", border:"1px solid #E5EBF5", borderRadius:6, fontSize:12, background:"#fff", color:"#374151", cursor:"pointer", outline:"none" }}>
+                {blockMeta.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+              </select>
+            </div>
+          )}
 
           {/* ── Center: entity-type tabs ── */}
           <div style={{ display:"flex", alignItems:"stretch", marginLeft:4 }}>

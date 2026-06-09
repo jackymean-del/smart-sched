@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react"
 import { useTimetableStore } from "@/store/timetableStore"
 import { useTerminology } from "@/hooks/useTerminology"
-import { buildPeriodSequence, buildPeriodSequenceFromCw } from "@/lib/aiEngine"
+import { buildPeriodSequence, buildPeriodSequenceFromCw, rebuildTeacherTT } from "@/lib/aiEngine"
 import { solveTimetable, generateSuggestions, durationToWeeklyPeriods } from "@/lib/schedulingEngine"
 import { ReviewDashboard } from "@/components/master/ReviewDashboard"
 import { getCountry } from "@/lib/orgData"
@@ -112,6 +112,48 @@ function defaultEndDate(): string {
   return `${year}-03-31`
 }
 
+// ── Block-wise (per-shift) timetable generation helpers ───────────────────────
+const _toMins = (s: string) => { const [h, m] = (s || '08:00').split(':').map(Number); return h * 60 + m }
+
+/** Class key from a section name — mirrors the timetable view's getSectionClassKey. */
+function sectionKey(sectionName: string): string {
+  const norm = sectionName.toLowerCase().replace(/[\s-]/g, '')
+  if (norm.startsWith('nur')) return 'nur'
+  if (norm.startsWith('lkg')) return 'lkg'
+  if (norm.startsWith('ukg')) return 'ukg'
+  return sectionName.split(/[\s-]/)[0].toLowerCase()
+}
+
+/**
+ * Build a block's abstract period sequence (block-prefixed ids so merged
+ * timetables never collide) plus a periodId → [startMins, endMins] clock map.
+ * Period duration is uniform within a block, so clock times are exact.
+ */
+function buildBlockPeriods(shift: any, rows: any[]): { periods: Period[]; clock: Record<string, [number, number]> } {
+  const periods: Period[] = []
+  const clock: Record<string, [number, number]> = {}
+  let cur = _toMins(shift.startTime)
+  const push = (suffix: string, name: string, dur: number, type: Period['type']) => {
+    const id = `${shift.id}__${suffix}`
+    periods.push({ id, name, duration: dur, type, shiftable: type === 'class' } as Period)
+    clock[id] = [cur, cur + dur]; cur += dur
+  }
+  const asm = rows.find(r => r.type === 'assembly')
+  if (asm) push('asm', 'Assembly', asm.duration, 'fixed-start')
+  const lunchDur = Math.max(0, ...rows.filter(r => r.type === 'lunch').map(r => r.duration))
+  const sbDur    = Math.max(0, ...rows.filter(r => r.type === 'short-break').map(r => r.duration))
+  const N  = Math.max(1, shift.maxPeriods || 8)
+  const pd = shift.periodDur || 40
+  const sbAfter    = Math.max(1, Math.ceil(N * 0.3))
+  const lunchAfter = Math.ceil(N / 2)
+  for (let n = 1; n <= N; n++) {
+    push(`p${n}`, `Period ${n}`, pd, 'class')
+    if (n === sbAfter && sbDur > 0)    push('sb', 'Short Break', sbDur, 'break')
+    if (n === lunchAfter && lunchDur > 0) push('ln', 'Lunch', lunchDur, 'lunch')
+  }
+  return { periods, clock }
+}
+
 export function Step6Generate() {
   const store = useTimetableStore()
   const { config, sections, participantPools, facilities, subjects, breaks,
@@ -204,6 +246,85 @@ export function Step6Generate() {
           ? manualOptionalBlocks
           : dlgsToOptionalBlocks(storeDLGs, classPeriods, workDays)
 
+      // ── Block-wise (Advanced multi-shift) generation ──────────────────────
+      // Each block (shift) is solved independently over its own classes + its own
+      // period grid (block-prefixed ids), in sequence. After each block solves, its
+      // teachers' busy CLOCK intervals are blocked in later blocks so a teacher is
+      // never double-booked across blocks at the same wall-clock time.
+      const scheduleMode = (config as any).scheduleMode
+      const shiftsCfg    = (config as any).shifts as any[] | undefined
+      const shiftRowsCfg = (config as any).shiftRows as Record<string, any[]> | undefined
+      const blockWise = scheduleMode === 'advanced' && Array.isArray(shiftsCfg) && shiftsCfg.length > 1 && !!shiftRowsCfg
+
+      if (blockWise) {
+        const mergedClassTT: any = {}
+        const mergedTeacherTT: any = {}
+        const mergedConflicts: any[] = []
+        const unionPeriods: Period[] = []
+        const blockMeta: any[] = []
+        // teacher → day → busy clock intervals [startMins, endMins]
+        const busy: Record<string, Record<string, Array<[number, number]>>> = {}
+        const overlaps = (a: [number, number], b: [number, number]) => a[0] < b[1] && b[0] < a[1]
+
+        for (const shift of shiftsCfg!) {
+          const rows = shiftRowsCfg![shift.id] ?? []
+          const { periods: bp, clock } = buildBlockPeriods(shift, rows)
+          const blockSections = sections.filter(sec => (shift.classes || []).includes(sectionKey(sec.name)))
+          if (!blockSections.length) continue
+
+          // Block teacher slots that clash (clock-overlap) with already-solved blocks.
+          const avail: any = JSON.parse(JSON.stringify((store as any).teacherAvailability ?? {}))
+          for (const [tName, dayMap] of Object.entries(busy)) {
+            for (const [day, ivals] of Object.entries(dayMap)) {
+              for (const p of bp) {
+                if (p.type !== 'class') continue
+                const c = clock[p.id]
+                if (c && ivals.some(iv => overlaps(iv, c))) {
+                  avail[tName] ??= {}; avail[tName][day] ??= {}; avail[tName][day][p.id] = 'blocked'
+                }
+              }
+            }
+          }
+
+          const out = solveTimetable({
+            sections: blockSections, staff, subjects: resolvedSubjects, periods: bp, workDays,
+            requirements: [], optionalBlocks, subjectCombinations, sectionStrengths,
+            subjectAllocations, rooms, teacherAvailability: avail,
+            dayOffRules: (store as any).config?.dayOffRules ?? [],
+          })
+
+          Object.assign(mergedClassTT, out.classTT)
+          for (const [tn, ts] of Object.entries(out.teacherTT)) if (!mergedTeacherTT[tn]) mergedTeacherTT[tn] = ts
+          mergedConflicts.push(...out.conflicts)
+          unionPeriods.push(...bp)
+          blockMeta.push({ id: shift.id, name: shift.name, startTime: shift.startTime, sectionNames: blockSections.map(s => s.name), periods: bp })
+
+          // Record this block's teacher busy clock intervals for later blocks.
+          for (const [, days] of Object.entries(out.classTT)) {
+            for (const [day, slots] of Object.entries(days as any)) {
+              for (const [pid, cell] of Object.entries(slots as any)) {
+                const t = (cell as any).teacher
+                const c = clock[pid]
+                if (!t || !c) continue
+                busy[t] ??= {}; busy[t][day] ??= []; busy[t][day].push(c)
+              }
+            }
+          }
+        }
+
+        rebuildTeacherTT(mergedClassTT, mergedTeacherTT, workDays)
+        output = { classTT: mergedClassTT, teacherTT: mergedTeacherTT, conflicts: mergedConflicts, penalties: [], score: 0, iterations: 0 } as ReturnType<typeof solveTimetable>
+        solveMs = Date.now() - startedAt
+
+        setPeriods(unionPeriods)
+        setClassTT(mergedClassTT)
+        setTeacherTT(mergedTeacherTT)
+        setConflicts(mergedConflicts)
+        setSolverOutput(output)
+        setConfig({ blockMeta } as any)
+        setSuggestions([])
+      } else {
+
       output  = solveTimetable({
         sections, staff, subjects: resolvedSubjects, periods, workDays,
         requirements: [],
@@ -219,6 +340,7 @@ export function Step6Generate() {
       solveMs = Date.now() - startedAt
 
       const suggestions = generateSuggestions(output.classTT, output.teacherTT, staff, resolvedSubjects, workDays, periods)
+      setConfig({ blockMeta: undefined } as any)   // single schedule — clear any stale block metadata
       setPeriods(periods)
       setClassTT(output.classTT)
       setTeacherTT(output.teacherTT)
@@ -230,6 +352,7 @@ export function Step6Generate() {
       // Persist DLG metadata for the timetable-cell inspector
       ;(store as any).setDynamicLearningGroups?.(output.dynamicLearningGroups ?? [])
       setSuggestions(suggestions)
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       setJob(j => j ? { ...j, status: "failed", progress: 0, currentStep: `Error: ${msg}` } : j)
