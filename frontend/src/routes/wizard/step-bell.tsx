@@ -696,10 +696,17 @@ function smartGenerateBellConfig(
     }
   }
 
-  // Ensure smart-path period duration fits within 8-hour school day,
+  // Ensure smart-path period duration fits within the chosen school day so the
+  // generated schedule ends at the user's end time (effEnd, already 8h-capped),
   // snapped to nearest 5 and clamped to [periodDurMin, periodDur].
-  const totalBreakMins  = cwRows.reduce((s, r) => s + r.duration, 0)
-  const availForPeriods = 8 * 60 - 10 /* assembly */ - 10 /* dispersal */ - totalBreakMins
+  const dayMins         = toMins(effEnd) - toMins(startTime)
+  // Breaks a single full-length class actually experiences = the shared short/morning
+  // break + that class's OWN lunch. Summing every group's staggered lunch would
+  // overcount and shrink periods so the day ends earlier than the chosen end time.
+  const sbBreakMins     = cwRows.filter(r => r.type === 'short-break').reduce((s, r) => s + r.duration, 0)
+  const oneLunchMins    = cwRows.filter(r => r.type === 'lunch').reduce((m, r) => Math.max(m, r.duration), 0)
+  const perClassBreaks  = sbBreakMins + oneLunchMins
+  const availForPeriods = dayMins - 10 /* assembly */ - 10 /* dispersal */ - perClassBreaks
   const rawCapped       = Math.floor(availForPeriods / maxPeriods)
   const cappedPeriodDur = snap5(Math.min(periodDur, Math.max(periodDurMin, rawCapped)))
 
@@ -4411,7 +4418,7 @@ export function StepBell() {
                           const active = concurrentMode === opt.val
                           return (
                             <button key={opt.val}
-                              onClick={() => setConcurrentMode(opt.val)}
+                              onClick={() => { setConcurrentMode(opt.val); setBellCustomized(false) }}
                               title={opt.desc}
                               style={{
                                 flex: 1, padding: '8px 7px', borderRadius: 8,
@@ -4433,13 +4440,13 @@ export function StepBell() {
                         <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
                           <span style={{ fontSize: 11, color: '#065F46', fontWeight: 600 }}>Duration</span>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                            <button onClick={() => setConcurrentDur(d => Math.max(10, d - 5))} disabled={concurrentDur <= 10}
+                            <button onClick={() => { setConcurrentDur(d => Math.max(10, d - 5)); setBellCustomized(false) }} disabled={concurrentDur <= 10}
                               style={{ width: 24, height: 24, borderRadius: 6, border: '1px solid #6EE7B7', background: '#fff',
                                 cursor: concurrentDur <= 10 ? 'not-allowed' : 'pointer',
                                 color: concurrentDur <= 10 ? '#D1D5DB' : '#059669',
                                 fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit' }}>−</button>
                             <span style={{ minWidth: 42, textAlign: 'center' as const, fontSize: 13, fontWeight: 700, color: '#059669', fontFamily: "'DM Mono', monospace" }}>{concurrentDur} min</span>
-                            <button onClick={() => setConcurrentDur(d => Math.min(periodDur, d + 5))} disabled={concurrentDur >= periodDur}
+                            <button onClick={() => { setConcurrentDur(d => Math.min(periodDur, d + 5)); setBellCustomized(false) }} disabled={concurrentDur >= periodDur}
                               style={{ width: 24, height: 24, borderRadius: 6, border: '1px solid #6EE7B7', background: '#fff',
                                 cursor: concurrentDur >= periodDur ? 'not-allowed' : 'pointer',
                                 color: concurrentDur >= periodDur ? '#D1D5DB' : '#059669',
@@ -4455,13 +4462,13 @@ export function StepBell() {
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                             <span style={{ fontSize: 11, color: '#065F46', fontWeight: 600 }}>Lunch duration</span>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                              <button onClick={() => setLunchBreakDur(d => Math.max(15, d - 5))} disabled={lunchBreakDur <= 15}
+                              <button onClick={() => { setLunchBreakDur(d => Math.max(15, d - 5)); setBellCustomized(false) }} disabled={lunchBreakDur <= 15}
                                 style={{ width: 24, height: 24, borderRadius: 6, border: '1px solid #6EE7B7', background: '#fff',
                                   cursor: lunchBreakDur <= 15 ? 'not-allowed' : 'pointer',
                                   color: lunchBreakDur <= 15 ? '#D1D5DB' : '#059669',
                                   fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit' }}>−</button>
                               <span style={{ minWidth: 42, textAlign: 'center' as const, fontSize: 13, fontWeight: 700, color: '#059669', fontFamily: "'DM Mono', monospace" }}>{lunchBreakDur} min</span>
-                              <button onClick={() => setLunchBreakDur(d => Math.min(60, d + 5))} disabled={lunchBreakDur >= 60}
+                              <button onClick={() => { setLunchBreakDur(d => Math.min(60, d + 5)); setBellCustomized(false) }} disabled={lunchBreakDur >= 60}
                                 style={{ width: 24, height: 24, borderRadius: 6, border: '1px solid #6EE7B7', background: '#fff',
                                   cursor: lunchBreakDur >= 60 ? 'not-allowed' : 'pointer',
                                   color: lunchBreakDur >= 60 ? '#D1D5DB' : '#059669',

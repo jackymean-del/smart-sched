@@ -951,7 +951,7 @@ export function StepAllocation() {
         marginTop: 20, paddingTop: 14, borderTop: '1px solid #F0EDFF',
       }}>
         <button onClick={() => setStep(2)} style={btnSecondary}>
-          <ChevronLeft size={14} /> Resources
+          <ChevronLeft size={14} /> Shift & timing
         </button>
         <span style={{ fontSize: 10, color: '#B8B4D4', textAlign: 'center' as const, lineHeight: 1.5 }}>
           Step 3 of 5 · Period allocation → Teacher allocation → Validation
