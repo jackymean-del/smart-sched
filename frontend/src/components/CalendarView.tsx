@@ -108,7 +108,7 @@ const ACCENT_PALETTE: Array<{ accent: string; bg: string }> = [
   { accent:"#6366F1", bg:"#EEF2FF" }, // indigo
   { accent:"#D97706", bg:"#FEF3C7" }, // dark-amber
   { accent:"#059669", bg:"#D1FAE5" }, // emerald
-  { accent:"#7C3AED", bg:"#F5F3FF" }, // violet
+  { accent:"#7C6FE0", bg:"#F5F3FF" }, // violet
   { accent:"#BE185D", bg:"#FCE7F3" }, // deep-pink
   { accent:"#0369A1", bg:"#E0F2FE" }, // sky
 ]
@@ -126,7 +126,7 @@ function subjectColor(name: string): { accent:string; bg:string } {
 
 function breakStyle(type: Period["type"]): { bg:string; border:string; text:string } {
   if (type==="lunch")       return { bg:"#FFFBEB", border:"#F6D860", text:"#92400E" }
-  if (type==="fixed-start") return { bg:"#F3F0FE", border:"#D8CCFF", text:"#6D28D9" }
+  if (type==="fixed-start") return { bg:"#F3F0FE", border:"#D8CCFF", text:"#6358C4" }
   if (type==="fixed-end")   return { bg:"#ECFDF5", border:"#86EFAC", text:"#166534" }
   return { bg:"#FEFCE8", border:"#FDE68A", text:"#92400E" }
 }
@@ -1812,7 +1812,7 @@ export function CalendarView({
                       background:"#F5F2FF", borderRight:"1px solid #E5EBF5",
                       display:"flex", alignItems:"center", paddingLeft:14,
                     }}>
-                      <span style={{ fontSize:11.5, fontWeight:800, color:"#5B21B6", letterSpacing:"0.01em" }}>
+                      <span style={{ fontSize:11.5, fontWeight:800, color:"#6358C4", letterSpacing:"0.01em" }}>
                         {grpName}
                       </span>
                     </div>

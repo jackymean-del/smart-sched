@@ -25,7 +25,7 @@ const SUBJECT_COLORS = [
   { bg: "#fdf2f8", border: "#f9a8d4", text: "#9d174d" },  // pink
   { bg: "#eff6ff", border: "#93c5fd", text: "#1e40af" },  // blue
   { bg: "#fff7ed", border: "#fdba74", text: "#9a3412" },  // orange
-  { bg: "#f5f3ff", border: "#c4b5fd", text: "#5b21b6" },  // violet
+  { bg: "#f5f3ff", border: "#c4b5fd", text: "#6358C4" },  // violet
   { bg: "#ecfeff", border: "#67e8f9", text: "#164e63" },  // cyan
 ]
 

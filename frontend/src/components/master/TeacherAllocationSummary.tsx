@@ -66,7 +66,7 @@ function inferType(t: Staff, assignmentCount: number): TeacherType {
 }
 
 const TYPE_STYLE: Record<TeacherType, { bg: string; fg: string; border: string }> = {
-  'Specialist':    { bg: '#EDE9FF', fg: '#7C3AED', border: '#C4B5FD' },
+  'Specialist':    { bg: '#EDE9FF', fg: '#7C6FE0', border: '#C4B5FD' },
   'Class Teacher': { bg: '#DCFCE7', fg: '#15803D', border: '#BBF7D0' },
   'Activity':      { bg: '#FEF3C7', fg: '#92400E', border: '#FDE68A' },
 }

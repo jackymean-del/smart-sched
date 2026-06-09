@@ -59,7 +59,7 @@ const BEHAVIOR_META: Record<GroupingBehavior, {
   NO_GROUPING:          { label: 'No grouping',     short: 'No group',      bg: '#F8F7FF', fg: '#8B87AD', border: '#E8E4FF', desc: 'Each class section schedules this subject independently — no cross-class grouping.' },
   SAME_GRADE_ONLY:      { label: 'Same grade only', short: 'Same grade',    bg: '#EFF6FF', fg: '#1D4ED8', border: '#DBEAFE', desc: 'One group per grade. All streams within the same grade are merged (e.g. XI-Sci + XI-Com + XI-Arts → one XI group).' },
   SAME_STREAM_ONLY:     { label: 'Same stream only',short: 'Same stream',   bg: '#FFF7ED', fg: '#C2410C', border: '#FED7AA', desc: 'One group per stream across all grades. XI-Arts + XII-Arts form one group; XI-Sci + XII-Sci another. Useful for stream-specific electives.' },
-  CROSS_GRADE_ALLOWED:  { label: 'Cross grade',     short: 'Cross grade',   bg: '#EDE9FF', fg: '#7C3AED', border: '#C4B5FD', desc: 'All grades merged into one group regardless of grade or stream. Best for whole-school electives like Music or Dance.' },
+  CROSS_GRADE_ALLOWED:  { label: 'Cross grade',     short: 'Cross grade',   bg: '#EDE9FF', fg: '#7C6FE0', border: '#C4B5FD', desc: 'All grades merged into one group regardless of grade or stream. Best for whole-school electives like Music or Dance.' },
   CROSS_STREAM_ALLOWED: { label: 'Cross stream',    short: 'Cross stream',  bg: '#FCE7F3', fg: '#9D174D', border: '#FBCFE8', desc: 'No stream restriction — students from any stream can be grouped together. Pair with Same grade to get one group per grade with all streams merged.' },
   FLEXIBLE_GROUPING:    { label: 'Flexible (AI)',   short: 'Flexible',      bg: '#DCFCE7', fg: '#15803D', border: '#BBF7D0', desc: 'AI starts with the strictest rule (same grade + same stream) and progressively relaxes — merging streams, then grades — until every group reaches the minimum size threshold.' },
 }
@@ -131,7 +131,7 @@ function computeGroupingMode(behaviors: GroupingBehavior[]): GroupingMode {
 
 const MODE_META: Record<GroupingMode, { label: string; bg: string; fg: string; border: string }> = {
   none:         { label: 'No grouping',      bg: '#F8F7FF', fg: '#8B87AD', border: '#E8E4FF' },
-  all:          { label: 'Cross grade',      bg: '#EDE9FF', fg: '#7C3AED', border: '#C4B5FD' },
+  all:          { label: 'Cross grade',      bg: '#EDE9FF', fg: '#7C6FE0', border: '#C4B5FD' },
   grade:        { label: 'Same grade only',  bg: '#EFF6FF', fg: '#1D4ED8', border: '#DBEAFE' },
   stream:       { label: 'Same stream only', bg: '#FFF7ED', fg: '#C2410C', border: '#FED7AA' },
   grade_stream: { label: 'Grade + Stream',   bg: '#FCE7F3', fg: '#9D174D', border: '#FBCFE8' },
@@ -1002,7 +1002,7 @@ export function StepStudentGroups() {
                 padding: '9px 18px', border: 'none', cursor: 'pointer',
                 background: 'transparent', fontFamily: 'inherit',
                 fontSize: 13, fontWeight: active ? 700 : 500,
-                color: active ? '#7C3AED' : '#8B87AD',
+                color: active ? '#7C6FE0' : '#8B87AD',
                 borderBottom: active ? '3px solid #7C6FE0' : '3px solid transparent',
                 marginBottom: -2,
                 transition: 'all 0.13s',
@@ -1077,7 +1077,7 @@ export function StepStudentGroups() {
                                 onMouseEnter={e => { e.currentTarget.style.background = '#F5F2FF' }}
                                 onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}>
                                 <span style={{ fontSize: 12, fontWeight: 600, color: '#13111E' }}>{s.name}</span>
-                                {s.category && <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 8, background: s.category.includes('Optional') ? '#EDE9FF' : '#F0F0F0', color: s.category.includes('Optional') ? '#7C3AED' : '#8B87AD' }}>{s.category}</span>}
+                                {s.category && <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 8, background: s.category.includes('Optional') ? '#EDE9FF' : '#F0F0F0', color: s.category.includes('Optional') ? '#7C6FE0' : '#8B87AD' }}>{s.category}</span>}
                               </button>
                             ))}
                           </div>
@@ -1145,7 +1145,7 @@ export function StepStudentGroups() {
                                 onChange={e => updateCell(row.sectionName, col.key, parseInt(e.target.value) || 0)}
                                 onKeyDown={e => { handleCellKey(e, ri, ci) }}
                                 onFocus={e => e.currentTarget.select()}
-                                style={{ width: '100%', maxWidth: 62, textAlign: 'center', padding: '4px 5px', borderRadius: 6, border: `1px solid ${val >= 5 ? '#7C6FE0' : '#E8E4FF'}`, background: val >= 5 ? '#F5F2FF' : '#fff', fontSize: 12, fontWeight: 700, fontFamily: "'DM Mono', monospace", color: val >= 5 ? '#7C3AED' : '#4B5275', outline: 'none' }}
+                                style={{ width: '100%', maxWidth: 62, textAlign: 'center', padding: '4px 5px', borderRadius: 6, border: `1px solid ${val >= 5 ? '#7C6FE0' : '#E8E4FF'}`, background: val >= 5 ? '#F5F2FF' : '#fff', fontSize: 12, fontWeight: 700, fontFamily: "'DM Mono', monospace", color: val >= 5 ? '#7C6FE0' : '#4B5275', outline: 'none' }}
                               />
                             </td>
                           )
@@ -1418,7 +1418,7 @@ export function StepStudentGroups() {
               display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12,
               padding: '9px 14px', borderRadius: 8,
               background: '#F5F2FF', border: '1px dashed #C4B5FD',
-              fontSize: 11, color: '#7C3AED', fontWeight: 600,
+              fontSize: 11, color: '#7C6FE0', fontWeight: 600,
             }}>
               <Sparkles size={13} color="#7C6FE0" />
               Sample preview — fill the preference matrix above and click ✦ Generate groups to see your real groups here
@@ -1443,7 +1443,7 @@ export function StepStudentGroups() {
               const anyConflict = Object.values(groupConflictMap).some(Boolean)
               const bg     = anyConflict ? '#FFF7ED' : '#EDE9FF'
               const border = anyConflict ? '#FED7AA' : '#C4B5FD'
-              const color  = anyConflict ? '#92400E' : '#7C3AED'
+              const color  = anyConflict ? '#92400E' : '#7C6FE0'
               // Groups are DEFINED here (sections + subject + teacher + room).
               // The timetable generator assigns the actual periods per week.
               const msg = `${dynamicLearningGroups.length} group${dynamicLearningGroups.length !== 1 ? 's' : ''} defined — the generator will schedule each across its required periods/week.`
@@ -1472,7 +1472,7 @@ export function StepStudentGroups() {
           <ChevronLeft size={14} /> Period allocation
         </button>
         <button onClick={handleRegenerate} disabled={regenerating}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '9px 18px', borderRadius: 8, border: '1px solid #C4B5FD', background: regenerating ? '#EDE9FF' : '#F5F2FF', color: '#7C3AED', fontSize: 12, fontWeight: 700, cursor: regenerating ? 'wait' : 'pointer', fontFamily: 'inherit', transition: 'all 0.15s' }}>
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '9px 18px', borderRadius: 8, border: '1px solid #C4B5FD', background: regenerating ? '#EDE9FF' : '#F5F2FF', color: '#7C6FE0', fontSize: 12, fontWeight: 700, cursor: regenerating ? 'wait' : 'pointer', fontFamily: 'inherit', transition: 'all 0.15s' }}>
           <RefreshCw size={13} style={{ animation: regenerating ? 'spin 0.7s linear infinite' : 'none' }} />
           {regenerating ? 'Generating…' : '✦ Generate groups'}
         </button>
@@ -1553,7 +1553,7 @@ function SortToggle({ active, onToggle, label }: { active: boolean; onToggle: ()
         display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 9px', borderRadius: 6,
         border: `1px solid ${active ? '#7C6FE0' : '#E8E4FF'}`,
         background: active ? '#EDE9FF' : '#F8F7FF',
-        color: active ? '#7C3AED' : '#8B87AD',
+        color: active ? '#7C6FE0' : '#8B87AD',
         fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
       }}>
       <ArrowUpAZ size={11} />
@@ -1600,7 +1600,7 @@ function GroupFormationLogicPanel({ minGroupSize, setMinGroupSize, previewGroups
         <Info size={13} color="#8B87AD" />
         <span style={{ fontSize: 12, color: '#4B5275', flex: 1 }}>Minimum students to form a group:</span>
         <input type="number" min={1} max={50} value={minGroupSize} onChange={e => setMinGroupSize(Math.max(1, parseInt(e.target.value) || 1))}
-          style={{ width: 52, textAlign: 'center', padding: '4px 6px', borderRadius: 6, border: '1.5px solid #C4B5FD', background: '#fff', fontSize: 13, fontWeight: 700, fontFamily: "'DM Mono', monospace", color: '#7C3AED', outline: 'none' }} />
+          style={{ width: 52, textAlign: 'center', padding: '4px 6px', borderRadius: 6, border: '1.5px solid #C4B5FD', background: '#fff', fontSize: 13, fontWeight: 700, fontFamily: "'DM Mono', monospace", color: '#7C6FE0', outline: 'none' }} />
         <span style={{ fontSize: 11, color: '#8B87AD' }}>students</span>
       </div>
       {hasData ? (
@@ -1616,7 +1616,7 @@ function GroupFormationLogicPanel({ minGroupSize, setMinGroupSize, previewGroups
                   <span style={{ fontSize: 12, fontWeight: 700, color: '#13111E', minWidth: 120 }}>{g.label}</span>
                   <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', flex: 1 }}>
                     {g.sections.map(r => (
-                      <span key={r.sectionName} style={{ padding: '1px 7px', borderRadius: 8, background: '#EDE9FF', color: '#7C3AED', fontSize: 10, fontWeight: 700, border: '1px solid #C4B5FD' }}>{r.sectionName} ({r.subjectStrengths?.[g.colKey] ?? 0})</span>
+                      <span key={r.sectionName} style={{ padding: '1px 7px', borderRadius: 8, background: '#EDE9FF', color: '#7C6FE0', fontSize: 10, fontWeight: 700, border: '1px solid #C4B5FD' }}>{r.sectionName} ({r.subjectStrengths?.[g.colKey] ?? 0})</span>
                     ))}
                   </div>
                   <span style={{ fontSize: 11, fontWeight: 700, color: '#13111E' }}>= {g.total} students</span>
@@ -1626,7 +1626,7 @@ function GroupFormationLogicPanel({ minGroupSize, setMinGroupSize, previewGroups
                     : <span style={{ fontSize: 10, color: '#8B87AD', background: '#F8F7FF', padding: '2px 8px', borderRadius: 10, border: '1px solid #E8E4FF' }}>Room TBD</span>}
                 </div>
               ))}
-              <div style={{ marginTop: 4, padding: '7px 12px', borderRadius: 8, background: '#EDE9FF', border: '1px solid #C4B5FD', fontSize: 11, color: '#7C3AED', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 7 }}>
+              <div style={{ marginTop: 4, padding: '7px 12px', borderRadius: 8, background: '#EDE9FF', border: '1px solid #C4B5FD', fontSize: 11, color: '#7C6FE0', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 7 }}>
                 <Zap size={12} />All {previewGroups.filter(g => !g.belowThreshold).length} group{previewGroups.filter(g => !g.belowThreshold).length !== 1 ? 's' : ''} will run simultaneously — no student or teacher clash.
               </div>
             </div>
@@ -1652,12 +1652,12 @@ function TotalStudentsCell({ value, onChange }: { value: number; onChange: (v: n
         onBlur={() => { onChange(parseInt(draft) || 0); setEditing(false) }}
         onKeyDown={e => { if (e.key === 'Enter') { onChange(parseInt(draft) || 0); setEditing(false) } if (e.key === 'Escape') setEditing(false) }}
         onFocus={e => e.currentTarget.select()}
-        style={{ width: 60, textAlign: 'center', padding: '3px 5px', borderRadius: 5, border: '1.5px solid #7C6FE0', background: '#F5F2FF', fontSize: 12, fontWeight: 700, fontFamily: "'DM Mono', monospace", color: '#7C3AED', outline: 'none' }} />
+        style={{ width: 60, textAlign: 'center', padding: '3px 5px', borderRadius: 5, border: '1.5px solid #7C6FE0', background: '#F5F2FF', fontSize: 12, fontWeight: 700, fontFamily: "'DM Mono', monospace", color: '#7C6FE0', outline: 'none' }} />
     )
   }
   return (
     <span onClick={() => setEditing(true)} title="Click to edit"
-      style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 42, padding: '3px 7px', borderRadius: 5, background: value > 0 ? '#F5F2FF' : '#F8F7FF', border: `1px solid ${value > 0 ? '#C4B5FD' : '#E8E4FF'}`, fontSize: 12, fontWeight: 700, fontFamily: "'DM Mono', monospace", color: value > 0 ? '#7C3AED' : '#C4C0DC', cursor: 'text' }}>
+      style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 42, padding: '3px 7px', borderRadius: 5, background: value > 0 ? '#F5F2FF' : '#F8F7FF', border: `1px solid ${value > 0 ? '#C4B5FD' : '#E8E4FF'}`, fontSize: 12, fontWeight: 700, fontFamily: "'DM Mono', monospace", color: value > 0 ? '#7C6FE0' : '#C4C0DC', cursor: 'text' }}>
       {value > 0 ? value : '—'}
     </span>
   )
@@ -1736,14 +1736,14 @@ function GroupCard({ grp, colorDot, teacher, teacherConflict }: {
         )}
 
         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 6 }}>
-          {grp.sectionNames.map((sn: string) => <span key={sn} style={{ padding: '2px 7px', borderRadius: 8, background: '#EDE9FF', color: '#7C3AED', fontSize: 10, fontWeight: 700, border: '1px solid #C4B5FD' }}>{sn}</span>)}
+          {grp.sectionNames.map((sn: string) => <span key={sn} style={{ padding: '2px 7px', borderRadius: 8, background: '#EDE9FF', color: '#7C6FE0', fontSize: 10, fontWeight: 700, border: '1px solid #C4B5FD' }}>{sn}</span>)}
         </div>
         <div style={{ display: 'flex', gap: 12, fontSize: 10, color: '#8B87AD', alignItems: 'center', flexWrap: 'wrap' }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}><Users size={9} /> {grp.totalStrength} students</span>
           {grp.room && <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>🏫 {grp.room}{roomOk && <span style={{ color: '#15803D', fontWeight: 700 }}> (cap {grp.roomCapacity} ✓)</span>}{overCapacity && <span style={{ color: '#DC2626', fontWeight: 700 }}> (cap {grp.roomCapacity} — over by {grp.totalStrength - grp.roomCapacity}!)</span>}</span>}
         </div>
         {overCapacity && <div style={{ marginTop: 7, padding: '4px 8px', borderRadius: 6, background: '#FEF2F2', border: '1px solid #FECACA', fontSize: 10, color: '#DC2626', fontWeight: 600 }}>⚠ Room over capacity — assign a larger venue</div>}
-        {(grp.day || grp.periodId) && <div style={{ marginTop: 8, padding: '5px 8px', borderRadius: 6, background: '#F5F2FF', border: '1px solid #E8E4FF', display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 10, color: '#7C3AED', fontWeight: 600 }}>📅 {grp.day?.slice(0, 3)} {grp.periodId}</div>}
+        {(grp.day || grp.periodId) && <div style={{ marginTop: 8, padding: '5px 8px', borderRadius: 6, background: '#F5F2FF', border: '1px solid #E8E4FF', display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 10, color: '#7C6FE0', fontWeight: 600 }}>📅 {grp.day?.slice(0, 3)} {grp.periodId}</div>}
       </div>
     </div>
   )

@@ -23,5 +23,16 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
+    rollupOptions: {
+      output: {
+        // Split stable vendor code into cacheable chunks so app updates don't
+        // re-download React/router/icons; xlsx is dynamically imported and
+        // auto-splits into its own lazy chunk.
+        manualChunks: {
+          router: ['@tanstack/react-router', '@tanstack/react-query'],
+          icons:  ['lucide-react'],
+        },
+      },
+    },
   },
 })

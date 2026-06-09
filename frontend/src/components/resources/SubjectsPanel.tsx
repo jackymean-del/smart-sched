@@ -1295,7 +1295,7 @@ export function SubjectsPanel({
             display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 7,
             border: `1.5px solid ${sortAZ ? P : '#E4E0FF'}`,
             background: sortAZ ? '#EDE9FF' : '#FAFAFE',
-            color: sortAZ ? '#7C3AED' : '#8B87AD',
+            color: sortAZ ? '#7C6FE0' : '#8B87AD',
             fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0,
           }}
         >

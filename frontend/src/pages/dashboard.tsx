@@ -1267,7 +1267,7 @@ export function DashboardPage() {
               style={{
                 padding: '5px 14px', borderRadius: 7, border: 'none',
                 background: activeTab === t.key ? '#F0EDFF' : 'transparent',
-                color: activeTab === t.key ? '#7C3AED' : '#6B7280',
+                color: activeTab === t.key ? '#7C6FE0' : '#6B7280',
                 fontSize: 13, fontWeight: activeTab === t.key ? 600 : 500,
                 cursor: 'pointer', fontFamily: 'inherit',
               }}>
@@ -1356,11 +1356,11 @@ export function DashboardPage() {
                         margin: '0 0 1px',
                         borderRadius: 8,
                         background: isActive ? '#EDE9FF' : 'none',
-                        color: isActive ? '#7C3AED' : '#4B5563',
+                        color: isActive ? '#7C6FE0' : '#4B5563',
                         cursor: 'pointer', overflow: 'hidden', minWidth: 0,
                       }}
                     >
-                      <Icon size={17} style={{ flexShrink: 0, color: isActive ? '#7C3AED' : '#6B7280' }} />
+                      <Icon size={17} style={{ flexShrink: 0, color: isActive ? '#7C6FE0' : '#6B7280' }} />
                       <span className="sb-label" style={{
                         fontSize: 13, fontWeight: isActive ? 600 : 400,
                         opacity: sidebarOpen ? 1 : 0,
@@ -1572,7 +1572,7 @@ export function DashboardPage() {
                       flexShrink: 0,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                     }}>
-                      <CalendarDays size={16} color={tt.status === 'draft' ? '#7C3AED' : '#6B7280'} />
+                      <CalendarDays size={16} color={tt.status === 'draft' ? '#7C6FE0' : '#6B7280'} />
                     </div>
 
                     {/* Name + meta */}
@@ -1590,7 +1590,7 @@ export function DashboardPage() {
                             display: 'inline-flex', alignItems: 'center', gap: 3,
                             padding: '1px 7px', borderRadius: 10,
                             background: '#F0EDFF', border: '1px solid #C4B5FD',
-                            fontSize: 11, fontWeight: 600, color: '#7C3AED',
+                            fontSize: 11, fontWeight: 600, color: '#7C6FE0',
                             flexShrink: 0,
                           }}>
                             Step {tt.wizardStep} · {WIZARD_STEP_LABELS[tt.wizardStep]}

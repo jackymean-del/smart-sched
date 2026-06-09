@@ -13,7 +13,7 @@
  */
 
 import { useState, useMemo, useCallback } from 'react'
-import * as XLSX from 'xlsx'
+// xlsx is loaded on demand (export click) — keeps it out of the main bundle
 import { useTimetableStore } from '@/store/timetableStore'
 import type { Section, Subject, Staff } from '@/types'
 import { parseAllocation } from '@/lib/allocationSyntax'
@@ -143,7 +143,7 @@ function FilterBar({
           style={{
             ...chipBase,
             background:  filter.has(item) ? '#EDE9FF' : '#F8F7FF',
-            color:       filter.has(item) ? '#7C3AED' : '#8B87AD',
+            color:       filter.has(item) ? '#7C6FE0' : '#8B87AD',
             borderColor: filter.has(item) ? '#7C6FE0' : '#E8E4FF',
           }}
         >{item}</button>
@@ -317,9 +317,10 @@ export function AllocationReportModal({ mode, onClose, displayMode = 'periods', 
     return []
   }, [activeTab, filteredClassRows, filteredSubjectRows, filteredTeacherRows, filteredRoomRows, subjects, displayMode, periodMinutes])
 
-  const handleExportExcel = useCallback(() => {
+  const handleExportExcel = useCallback(async () => {
     const data = buildExportData()
     if (!data.length) return
+    const XLSX = await import('xlsx')
     const wb = XLSX.utils.book_new()
     const ws = XLSX.utils.aoa_to_sheet(data)
     ws['!cols'] = data[0].map((_, ci) => ({ wch: Math.min(30, Math.max(10, ...data.map(r => String(r[ci] ?? '').length))) }))

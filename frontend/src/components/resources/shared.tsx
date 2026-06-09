@@ -7,11 +7,12 @@ import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { Trash2 } from 'lucide-react'
 
-// ─── Design tokens ─────────────────────────────────────────────────────────────
-export const P   = '#7C6FE0'
-export const P_D = '#6358C4'
-export const P_L = '#EDE9FF'
-export const P_B = 'rgba(124,111,224,0.22)'
+// ─── Design tokens (canonical source: @/lib/theme) ────────────────────────────
+import { BRAND } from '@/lib/theme'
+export const P   = BRAND.primary
+export const P_D = BRAND.primaryDark
+export const P_L = BRAND.primaryLight
+export const P_B = BRAND.primaryBorder
 
 // ─── Table layout constants ────────────────────────────────────────────────────
 export const ROW_H = 40  // px — target row height

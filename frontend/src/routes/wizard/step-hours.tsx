@@ -153,7 +153,7 @@ export function StepHours() {
     <div>
       {/* Header */}
       <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:6 }}>
-        <div style={{ width:40, height:40, borderRadius:12, background:"linear-gradient(135deg,#9B8EF5,#6d28d9)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:20 }}>📊</div>
+        <div style={{ width:40, height:40, borderRadius:12, background:"linear-gradient(135deg,#9B8EF5,#6358C4)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:20 }}>📊</div>
         <div>
           <h1 style={{ fontFamily:"'DM Serif Display',Georgia,serif", fontSize:28, margin:0 }}>Subject Hours Matrix</h1>
           <p style={{ color:"#6a6860", fontSize:12, margin:0 }}>Step 4 of 6 — Periods/Week per Subject per Class</p>
@@ -165,7 +165,7 @@ export function StepHours() {
 
       <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16, flexWrap:"wrap" }}>
         <button onClick={autoCbse}
-          style={{ padding:"7px 14px", borderRadius:8, border:"1.5px solid #9B8EF5", background:"#f5f3ff", fontSize:12, fontWeight:600, cursor:"pointer", color:"#5b21b6" }}>
+          style={{ padding:"7px 14px", borderRadius:8, border:"1.5px solid #9B8EF5", background:"#f5f3ff", fontSize:12, fontWeight:600, cursor:"pointer", color:"#6358C4" }}>
           🏫 Auto-fill CBSE norms
         </button>
         <div style={{ fontSize:11, color:"#6a6860" }}>
@@ -318,7 +318,7 @@ export function StepHours() {
         </div>
       </div>
 
-      <div style={{ marginTop:12, padding:"9px 14px", background:"#EDE9FF", border:"1px solid #e9d5ff", borderRadius:8, fontSize:11, color:"#6d28d9", lineHeight:1.7 }}>
+      <div style={{ marginTop:12, padding:"9px 14px", background:"#EDE9FF", border:"1px solid #e9d5ff", borderRadius:8, fontSize:11, color:"#6358C4", lineHeight:1.7 }}>
         💡 <strong>Tip:</strong> Click a class column cell to override periods for that specific class.
         Grey = using global value. Purple = class-specific override. Red total = overloaded (exceeds {totalSlotsPerClass} weekly slots).
       </div>

@@ -65,7 +65,7 @@ export function HomePage() {
           white-space: nowrap; transition: background 0.15s, border-color 0.15s, color 0.15s;
         }
         .lp-board-tag:hover {
-          background: #EDE9FF; border-color: #C4B5FD; color: #7C3AED;
+          background: #EDE9FF; border-color: #C4B5FD; color: #7C6FE0;
         }
 
         .lp-hero-animate { animation: fadeUp 0.55s ease both; }
@@ -272,13 +272,13 @@ export function HomePage() {
                 }}>
                   <div style={{
                     fontSize: 10.5, fontWeight: 600, marginBottom: 5,
-                    color: hi ? '#7C3AED' : '#8B87AD',
+                    color: hi ? '#7C6FE0' : '#8B87AD',
                     whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                   }}>{label}</div>
                   <div style={{
                     fontSize: 20, fontWeight: 800, lineHeight: 1,
                     fontFamily: "'DM Mono', monospace",
-                    color: hi ? '#7C3AED' : '#13111E',
+                    color: hi ? '#7C6FE0' : '#13111E',
                   }}>{value}</div>
                 </div>
               ))}

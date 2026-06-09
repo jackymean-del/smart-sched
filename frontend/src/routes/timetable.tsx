@@ -805,7 +805,7 @@ function PeriodCol({ p, times, editMode, isDragSrc, isDragOver, isSwapped, isDim
   const isBreak = p.type !== "class"
   const canDrag = !!(editMode && !isBreak)
   const bg = isSwapped  ? "#fefce8"
-    : isDragOver ? "#5B21B6"
+    : isDragOver ? "#6358C4"
     : isDragSrc  ? "#e0e7ff"
     : p.type==="fixed-start"?"#dbeafe":p.type==="lunch"?"#fef3c7":p.type==="break"?"#fef9c3":p.type==="fixed-end"?"#EDE9FF":"#F8F7FF"
   const color = isSwapped  ? "#78350f"
@@ -1934,7 +1934,7 @@ export function TimetablePage() {
                         opacity: isDimCT ? 0.35 : isSrcCT ? 0.52 : 1,
                         userSelect:"none" as const,
                         border: isOverCT ? "2.5px dashed #A78BFA" : isSrcCT ? "2px dashed #7C6FE0" : isSwapCT ? "2px solid #eab308" : "1px solid #E8E4FF",
-                        background: isOverCT ? "#5B21B6" : isSrcCT ? "#e0e7ff" : isSwapCT ? "#fefce8" : undefined,
+                        background: isOverCT ? "#6358C4" : isSrcCT ? "#e0e7ff" : isSwapCT ? "#fefce8" : undefined,
                         boxShadow: isOverCT ? "inset 0 0 0 2px #A78BFA" : isSwapCT ? "0 0 0 2px #fbbf2466" : "none",
                         transition:"background 0.12s, opacity 0.15s",
                       }}>
@@ -3709,7 +3709,7 @@ export function TimetablePage() {
             <div style={{ fontSize:10, fontWeight:700, color:"#94A3B8", textTransform:"uppercase" as const, letterSpacing:"0.07em", marginBottom:8 }}>Legend</div>
             <div style={{ marginBottom:16 }}>
               {[
-                { label:"Assembly / Start", bg:"#F5F2FF", border:"#C4B5FD", color:"#6D28D9" },
+                { label:"Assembly / Start", bg:"#F5F2FF", border:"#C4B5FD", color:"#6358C4" },
                 { label:"Break",             bg:"#FEFCE8", border:"#FDE68A", color:"#92400E" },
                 { label:"Lunch Break",       bg:"#FFFBEB", border:"#F6D860", color:"#92400E" },
                 { label:"Substituted",       bg:"#FFF7ED", border:"#F59E0B", color:"#C2410C" },

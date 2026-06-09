@@ -28,7 +28,7 @@
  */
 
 import { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback } from 'react'
-import * as XLSX from 'xlsx'
+// xlsx is loaded on demand (export/import click) — keeps it out of the main bundle
 import {
   Plus, Upload, Download, ClipboardPaste, Search, RefreshCw,
   Trash2, Copy, X, ArrowUpDown, Sparkles, ChevronDown,
@@ -844,8 +844,9 @@ export function DataGrid<T>({
     onChange(next)
   }, [selection, selectionEnd, rows, filteredRows, columns, originalIndex, setCell, getCell, onChange])
 
-  // ── v2: XLSX import / export (via SheetJS) ───────────────
-  const exportXLSX = () => {
+  // ── v2: XLSX import / export (via SheetJS, lazily loaded) ───────────────
+  const exportXLSX = async () => {
+    const XLSX = await import('xlsx')
     const headers = columns.map(c => c.label)
     const data = [
       headers,
@@ -864,7 +865,8 @@ export function DataGrid<T>({
 
   const importXLSX = (file: File) => {
     const reader = new FileReader()
-    reader.onload = () => {
+    reader.onload = async () => {
+      const XLSX = await import('xlsx')
       const data = new Uint8Array(reader.result as ArrayBuffer)
       const wb = XLSX.read(data, { type: 'array' })
       const ws = wb.Sheets[wb.SheetNames[0]]
