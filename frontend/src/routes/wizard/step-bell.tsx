@@ -2299,11 +2299,16 @@ export function StepBell() {
     concurrentMode, concurrentDur, lunchBreakDur,
     groups: activeClassGroups.map(g => g.group).sort().join(','),
     classes: activeClasses.map(c => c.key).sort().join(','),
+    // Advanced/per-block: include each shift's config so editing a block's start time,
+    // period length, max periods or class assignment live-regenerates that block.
+    shifts: isAdvanced
+      ? shifts.map(s => `${s.id}:${s.startTime}:${s.periodDur}:${s.periodDurMin ?? ''}:${s.maxPeriods}:${[...s.classes].sort().join('|')}`).join(';')
+      : '',
   }), [startTime, schoolEndTime,
        smartLunchMode,
        morningBreak, morningBreakPos, morningBreakDur,
        concurrentMode, concurrentDur, lunchBreakDur,
-       activeClassGroups, activeClasses])
+       activeClassGroups, activeClasses, isAdvanced, shifts])
 
   /** Run the smart generator immediately (used by auto-gen effect and Regenerate button). */
   // Generate one Advanced-mode shift's bell rows with the smart generator, scoped to
