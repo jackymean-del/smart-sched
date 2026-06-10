@@ -429,7 +429,7 @@ function SectionRow({ sec, onUpdate, onDelete, onScopeClick, existingStreams, in
 
       {/* Actions */}
       <td style={{ ...TD, textAlign: 'center', whiteSpace: 'nowrap' }}>
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
           {onScopeClick && (
             <button
               title="Set availability scope for this class"
@@ -725,6 +725,112 @@ function LevelStrengthTotal({ secs, title }: { secs: SectionExt[]; title: string
   )
 }
 
+// ─── Inline group rename ──────────────────────────────────────────────────────
+function GroupNameCell({ name, onRename }: { name: string; onRename: (v: string) => void }) {
+  const [editing, setEditing] = useState(false)
+  const [val, setVal] = useState(name)
+  const ref = useRef<HTMLInputElement>(null)
+  useEffect(() => { if (editing) ref.current?.focus() }, [editing])
+  useEffect(() => { setVal(name) }, [name])
+  function commit() { const v = val.trim(); if (v && v !== name) onRename(v); setEditing(false) }
+  if (editing) return (
+    <input ref={ref} value={val} onChange={e => setVal(e.target.value)}
+      onClick={e => e.stopPropagation()}
+      onBlur={commit}
+      onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setVal(name); setEditing(false) } }}
+      style={{ fontSize: 13.5, fontWeight: 800, letterSpacing: '0.05em', color: '#3D3580', textTransform: 'uppercase', border: `1.5px solid ${P}`, background: '#fff', borderRadius: 6, padding: '1px 8px', outline: 'none', fontFamily: 'inherit', width: 160 }}
+    />
+  )
+  return (
+    <span
+      onClick={e => { e.stopPropagation(); setEditing(true) }}
+      title="Click to rename this group"
+      style={{ fontSize: 13.5, fontWeight: 800, letterSpacing: '0.05em', color: '#3D3580', textTransform: 'uppercase', cursor: 'text', padding: '1px 6px', borderRadius: 5 }}
+      onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.6)')}
+      onMouseLeave={e => (e.currentTarget.style.background = '')}
+    >{name}</span>
+  )
+}
+
+// ─── New-group popover ────────────────────────────────────────────────────────
+const GROUP_EMOJI_OPTIONS = ['🏷️','📋','🎒','🏫','📝','⭐','🌟','💡','🔬','🎨','⚽','🎭','🌱','🦋','🏆']
+
+function GroupCreatePopover({ onClose, onConfirm }: {
+  onClose: () => void
+  onConfirm: (name: string, emoji: string, grades: string[]) => void
+}) {
+  const [name, setName] = useState('')
+  const [gradesStr, setGradesStr] = useState('')
+  const [emoji, setEmoji] = useState('🏷️')
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) onClose() }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [onClose])
+  const grades = gradesStr.split(',').map(g => g.trim()).filter(Boolean)
+  const canCreate = name.trim() !== ''
+  function create() { if (!canCreate) return; onConfirm(name.trim(), emoji, grades); onClose() }
+  const lbl: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: 5, fontSize: 11, color: '#6B6891', fontWeight: 600 }
+  return (
+    <div ref={ref} style={{
+      position: 'absolute', top: 'calc(100% + 6px)', right: 0, width: 320,
+      background: '#fff', border: '1px solid #DDD8FF',
+      borderRadius: 12, boxShadow: '0 10px 32px rgba(90,80,180,0.18)',
+      zIndex: 300, padding: '18px',
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#111028' }}>New Group</div>
+          <div style={{ fontSize: 11, color: '#9896B5', marginTop: 2 }}>Create a custom class group</div>
+        </div>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#C0BBD8', padding: 2 }}><X size={14} /></button>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 14 }}>
+        <label style={lbl}>
+          Group name <span style={{ color: '#EF4444' }}>*</span>
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Foundation, Advanced…"
+            style={inp} autoFocus onKeyDown={e => { if (e.key === 'Enter') create() }} />
+        </label>
+        <label style={lbl}>
+          Grades to include <span style={{ fontWeight: 400, color: '#AAA6C8' }}>(comma-separated, optional)</span>
+          <input value={gradesStr} onChange={e => setGradesStr(e.target.value)}
+            placeholder="e.g. Nursery, LKG, UKG" style={inp} />
+          {grades.length > 0 && (
+            <span style={{ fontSize: 10.5, color: '#9590BF' }}>
+              These grades will be moved into this group.
+            </span>
+          )}
+        </label>
+        <div>
+          <div style={{ fontSize: 11, color: '#6B6891', fontWeight: 600, marginBottom: 6 }}>Icon</div>
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+            {GROUP_EMOJI_OPTIONS.map(e => (
+              <button key={e} onClick={() => setEmoji(e)} style={{
+                fontSize: 16, padding: '4px 6px', borderRadius: 6, cursor: 'pointer', border: 'none',
+                outline: emoji === e ? `2px solid ${P}` : '2px solid transparent',
+                background: emoji === e ? P_L : 'transparent',
+              }}>{e}</button>
+            ))}
+          </div>
+        </div>
+      </div>
+      <button onClick={create} disabled={!canCreate} style={{
+        width: '100%', padding: '9px', borderRadius: 7,
+        background: canCreate ? P : '#E8E4FF', color: canCreate ? '#fff' : '#B4ADDD',
+        border: 'none', fontSize: 13, fontWeight: 700,
+        cursor: canCreate ? 'pointer' : 'not-allowed', fontFamily: 'inherit',
+        boxShadow: canCreate ? '0 2px 8px rgba(124,111,224,0.28)' : 'none',
+      }}
+        onMouseEnter={e => { if (canCreate) e.currentTarget.style.background = P_D }}
+        onMouseLeave={e => { if (canCreate) e.currentTarget.style.background = P }}
+      >
+        Create group
+      </button>
+    </div>
+  )
+}
+
 // ─── Inline grade rename (rewrites grade field + section name prefixes) ───────
 function GradeNameCell({ grade, onRename }: { grade: string; onRename: (v: string) => void }) {
   const [editing, setEditing] = useState(false)
@@ -763,7 +869,11 @@ export function ClassesPanel({ sections, setSections, onScopeClick }: {
   const [search, setSearch]         = useState('')
   const [showBulk,         setShowBulk]         = useState(false)
   const [showStreamCreate, setShowStreamCreate] = useState(false)
+  const [showAddGroup,     setShowAddGroup]     = useState(false)
   const [importOpen,       setImportOpen]       = useState(false)
+
+  // Dynamic group definitions — user can rename or create new groups
+  const [groupDefs, setGroupDefs] = useState(() => GROUP_DEFS.map(g => ({ ...g })))
   const [searchFocused, setSearchFocused] = useState(false)
   const searchRef   = useRef<HTMLInputElement>(null)
   const undoHistory = useUndoHistory<Section[]>()
@@ -774,6 +884,35 @@ export function ClassesPanel({ sections, setSections, onScopeClick }: {
       if (prev !== undefined) { e.preventDefault(); setSections(prev) }
     }
   }, [undoHistory, setSections])
+
+  // Dynamic group resolution uses the mutable groupDefs state
+  const gradeGroupFn = useCallback((g: string): string => {
+    const u = g.trim()
+    const def = groupDefs.find(d => d.grades.some(x => x.toLowerCase() === u.toLowerCase()))
+    if (def) return def.name
+    const n = parseInt(u)
+    if (!isNaN(n)) return n <= 5 ? 'Primary' : n <= 8 ? 'Middle' : n <= 10 ? 'Secondary' : 'Senior Secondary'
+    return 'Other'
+  }, [groupDefs])
+
+  function renameGroup(oldName: string, newName: string) {
+    const trimmed = newName.trim()
+    if (!trimmed || trimmed === oldName) return
+    setGroupDefs(prev => prev.map(g => g.name === oldName ? { ...g, name: trimmed } : g))
+  }
+
+  function addGroup(name: string, emoji: string, grades: string[]) {
+    const trimmed = name.trim()
+    if (!trimmed) return
+    setGroupDefs(prev => {
+      // Remove specified grades from whichever existing group currently owns them
+      const updated = prev.map(g => ({
+        ...g,
+        grades: g.grades.filter(gr => !grades.some(ng => ng.toLowerCase() === gr.toLowerCase()))
+      }))
+      return [...updated, { name: trimmed, emoji, grades }]
+    })
+  }
 
   function handleImport(rows: string[][]) {
     const newSections = rows
@@ -898,17 +1037,22 @@ export function ClassesPanel({ sections, setSections, onScopeClick }: {
         sm.forEach((secs, stream) => sm.set(stream, [...secs].sort((a, b) => a.name.localeCompare(b.name))))
       })
     }
-    // Wrap grades in their groups (Pre-Primary → Primary → … → Other)
+    // Wrap grades in their groups; grades sorted by GRADE_ORDER (Nursery first)
     const byGroup = new Map<string, Map<string, Map<string, SectionExt[]>>>()
     ;[...byGrade.entries()]
       .sort((a, b) => gradeKey(a[0]) - gradeKey(b[0]))
       .forEach(([grade, sm]) => {
-        const grp = gradeGroup(grade)
+        const grp = gradeGroupFn(grade)
         if (!byGroup.has(grp)) byGroup.set(grp, new Map())
         byGroup.get(grp)!.set(grade, sm)
       })
-    return new Map([...byGroup.entries()].sort((a, b) => groupSortKey(a[0]) - groupSortKey(b[0])))
-  }, [sections, search, sortAZ])
+    // Also include any custom empty groups so they appear in the list
+    groupDefs.forEach(def => {
+      if (!byGroup.has(def.name)) byGroup.set(def.name, new Map())
+    })
+    const groupSortKeyDyn = (name: string) => { const i = groupDefs.findIndex(d => d.name === name); return i >= 0 ? i : 99 }
+    return new Map([...byGroup.entries()].sort((a, b) => groupSortKeyDyn(a[0]) - groupSortKeyDyn(b[0])))
+  }, [sections, search, sortAZ, gradeGroupFn, groupDefs])
 
   const filteredCount = useMemo(() =>
     Array.from(grouped.values()).reduce((acc, gradeMap) =>
@@ -1039,7 +1183,7 @@ export function ClassesPanel({ sections, setSections, onScopeClick }: {
           {/* + Stream button */}
           <div style={{ position: 'relative' }}>
             <button
-              onClick={() => { setShowStreamCreate(o => !o); setShowBulk(false) }}
+              onClick={() => { setShowStreamCreate(o => !o); setShowBulk(false); setShowAddGroup(false) }}
               style={{
                 ...outlineBtn,
                 display: 'inline-flex', alignItems: 'center', gap: 5,
@@ -1062,6 +1206,35 @@ export function ClassesPanel({ sections, setSections, onScopeClick }: {
                 onClose={() => setShowStreamCreate(false)}
                 onCreate={news => { bulkAdd(news); setShowStreamCreate(false) }}
                 existingStreams={existingStreams}
+              />
+            )}
+          </div>
+
+          {/* + Group button */}
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => { setShowAddGroup(o => !o); setShowBulk(false); setShowStreamCreate(false) }}
+              style={{
+                ...outlineBtn,
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+                background: showAddGroup ? P_L : '#fff',
+                borderColor: showAddGroup ? P : '#DDD8FF',
+                color: showAddGroup ? P_D : '#6B6891',
+              }}
+              title="Create a new class group"
+              onMouseEnter={e => { e.currentTarget.style.background = P_L; e.currentTarget.style.borderColor = P_B; e.currentTarget.style.color = P_D }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = showAddGroup ? P_L : '#fff'
+                e.currentTarget.style.borderColor = showAddGroup ? P : '#DDD8FF'
+                e.currentTarget.style.color = showAddGroup ? P_D : '#6B6891'
+              }}
+            >
+              + Group
+            </button>
+            {showAddGroup && (
+              <GroupCreatePopover
+                onClose={() => setShowAddGroup(false)}
+                onConfirm={(name, emoji, grades) => { addGroup(name, emoji, grades); setShowAddGroup(false) }}
               />
             )}
           </div>
@@ -1092,11 +1265,11 @@ export function ClassesPanel({ sections, setSections, onScopeClick }: {
             <div style={{ fontSize: 11.5, color: '#C4C0DC' }}>Use "Bulk Create" to generate grade sections quickly.</div>
           </div>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <colgroup>
-              <col />                              {/* Class: takes the remaining width */}
-              <col style={{ width: 110 }} />       {/* Strength — compact, near the name */}
-              <col style={{ width: 170 }} />       {/* Actions — Scope + delete */}
+              <col />                             {/* Class: sizes to content, gets extra space */}
+              <col style={{ width: 90 }} />       {/* Strength — tight */}
+              <col style={{ width: 160 }} />      {/* Actions — Scope + gap + delete */}
             </colgroup>
             <thead>
               <tr>
@@ -1126,10 +1299,8 @@ export function ClassesPanel({ sections, setSections, onScopeClick }: {
                           <span style={{ color: P_D, flexShrink: 0, transition: 'transform 0.18s', transform: groupCollapsed ? 'rotate(0deg)' : 'rotate(180deg)', display: 'flex' }}>
                             <ChevronDown size={17} strokeWidth={2.5} />
                           </span>
-                          <span style={{ fontSize: 14 }}>{groupEmoji(group)}</span>
-                          <span style={{ fontSize: 13.5, fontWeight: 800, letterSpacing: '0.05em', color: '#3D3580', textTransform: 'uppercase' }}>
-                            {group}
-                          </span>
+                          <span style={{ fontSize: 14 }}>{groupDefs.find(d => d.name === group)?.emoji ?? '🏷️'}</span>
+                          <GroupNameCell name={group} onRename={v => renameGroup(group, v)} />
                           <span style={{ fontSize: 11.5, fontWeight: 600, color: '#7C76AC' }}>
                             · {gradeMap.size} grade{gradeMap.size !== 1 ? 's' : ''} · {groupSecs.length} section{groupSecs.length !== 1 ? 's' : ''}
                           </span>
@@ -1142,7 +1313,7 @@ export function ClassesPanel({ sections, setSections, onScopeClick }: {
                         />
                       </td>
                       <td style={{ ...groupHdrCell, textAlign: 'center' }} onClick={e => e.stopPropagation()}>
-                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
                           {onScopeClick && (
                             <button
                               title={`Set availability scope for all ${groupSecs.length} sections in ${group}`}
@@ -1208,7 +1379,7 @@ export function ClassesPanel({ sections, setSections, onScopeClick }: {
                               />
                             </td>
                             <td style={{ ...gradeHdrCell, textAlign: 'center' }} onClick={e => e.stopPropagation()}>
-                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
                                 {onScopeClick && (
                                   <button
                                     title={`Set availability scope for all ${gradeSecs.length} sections in Grade ${grade}`}

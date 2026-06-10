@@ -938,9 +938,14 @@ export function StepResourcesV2() {
             cycleWeeks={cycleWeeks}
             anchorRect={scopeTarget.rect}
             entities={
-              // Grade/group-level scope passes memberIds — limit the pickable list to them
+              // Grade/group-level scope passes memberIds — limit and order by them
               scopeTarget.kind === 'BulkSection'  ? sections
                   .filter((s: Section) => !(scopeTarget.entity as any).memberIds || (scopeTarget.entity as any).memberIds.includes(s.id))
+                  .sort((a: Section, b: Section) => {
+                    const mIds = (scopeTarget.entity as any).memberIds as string[] | undefined
+                    if (!mIds) return 0
+                    return mIds.indexOf(a.id) - mIds.indexOf(b.id)
+                  })
                   .map((s: Section) => ({ id: s.id, name: s.name }))
               : scopeTarget.kind === 'BulkSubject' ? subjects.map((s: Subject) => ({ id: s.id, name: s.name }))
               : scopeTarget.kind === 'BulkTeacher' ? staff.map((t: Staff) => ({ id: t.id, name: t.name }))
