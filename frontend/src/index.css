@@ -1,14 +1,14 @@
 @import "tailwindcss";
 
-/* Distinctive premium pairing: Fraunces (display serif with character) +
-   Hanken Grotesk (warm, clean grotesque body) + DM Mono (timetable digits). */
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..700&family=Hanken+Grotesk:ital,wght@0,300..800;1,400&family=DM+Mono:wght@400;500&display=swap');
+/* Fonts are loaded via <link> in index.html (an @import here gets dropped after
+   the tailwind import). One clean family everywhere: Plus Jakarta Sans — crisp
+   lining numerals, true italics, full glyph coverage. DM Mono for timetable digits. */
 
 /* ── Base ── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { font-size: 13px; }
 body {
-  font-family: 'Hanken Grotesk', system-ui, sans-serif;
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
   background-color: #f7f6f2;
   color: #1c1b18;
   line-height: 1.55;
@@ -17,10 +17,11 @@ body {
 }
 
 /* ── Typography ── */
-.font-serif { font-family: 'Fraunces', Georgia, serif !important; font-optical-sizing: auto; }
+/* .font-serif is the legacy "display" class — now the same clean sans, heavier,
+   so headings stay aligned with everything else (one family = one brand). */
+.font-serif { font-family: 'Plus Jakarta Sans', system-ui, sans-serif !important; font-weight: 700; }
 .font-mono  { font-family: 'DM Mono', 'Courier New', monospace !important; }
-/* Fraunces is variable across optical sizes — let the browser pick the right cut */
-h1, h2, h3 { font-optical-sizing: auto; letter-spacing: -0.01em; }
+h1, h2, h3 { letter-spacing: -0.015em; }
 
 /* ── CSS Variable Utilities (shadcn compat) ── */
 .border-border    { border-color: #d4d1c8; }

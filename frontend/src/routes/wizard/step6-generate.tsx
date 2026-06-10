@@ -403,7 +403,7 @@ export function Step6Generate() {
 
       {/* ── Title ── */}
       <div style={{ animation:"fade-up 0.4s ease" }}>
-        <h2 style={{ fontFamily:"'Fraunces',Georgia,serif", fontSize:28, margin:"0 0 4px" }}>
+        <h2 style={{ fontFamily:"'Plus Jakarta Sans',Georgia,serif", fontSize:28, margin:"0 0 4px" }}>
           {!job && hasExistingTT && !showRegenConfirm ? `Your ${T.schedule.toLowerCase()} is saved ✓` :
            !job                       ? `Ready to generate your ${T.schedule.toLowerCase()}` :
            job.status === "running"   ? `Building your ${T.schedule.toLowerCase()}…` :

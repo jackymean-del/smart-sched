@@ -290,7 +290,7 @@ export function ReviewDashboard({
     <div style={{
       width: '100%', maxWidth: 980, margin: '0 auto',
       display: 'flex', flexDirection: 'column' as const, gap: 14,
-      textAlign: 'left' as const, fontFamily: "'Hanken Grotesk', sans-serif",
+      textAlign: 'left' as const, fontFamily: "'Plus Jakarta Sans', sans-serif",
     }}>
 
       {/* ─── A. Academic Summary ─── */}

@@ -613,7 +613,7 @@ export function StepResourcesV2() {
   return (
     <div style={{
       display: 'flex', minHeight: 'calc(100vh - 165px)',
-      fontFamily: "'Hanken Grotesk', -apple-system, sans-serif",
+      fontFamily: "'Plus Jakarta Sans', -apple-system, sans-serif",
       background: '#FAFAFE',
     }}>
 

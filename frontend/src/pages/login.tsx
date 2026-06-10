@@ -74,7 +74,7 @@ export function LoginPage() {
       minHeight: '100vh',
       background: '#F5F4F0',
       display: 'flex', flexDirection: 'column',
-      fontFamily: "'Hanken Grotesk', -apple-system, sans-serif",
+      fontFamily: "'Plus Jakarta Sans', -apple-system, sans-serif",
     }}>
     <div style={{
       flex: 1,
@@ -117,12 +117,12 @@ export function LoginPage() {
         <div style={{ textAlign: 'center', marginBottom: 28 }}>
           <a href="/" style={{ textDecoration: 'none', display: 'inline-block', marginBottom: 6 }}>
             <span style={{
-              fontFamily: "'Hanken Grotesk', sans-serif",
+              fontFamily: "'Plus Jakarta Sans', sans-serif",
               fontSize: 20, fontWeight: 900, letterSpacing: '-0.4px', color: '#13111E',
             }}>
               sched<span style={{
                 color: '#7C6FE0',
-                fontFamily: "'Fraunces', Georgia, serif",
+                fontFamily: "'Plus Jakarta Sans', Georgia, serif",
                 fontStyle: 'italic',
               }}>U</span>
             </span>
