@@ -2141,7 +2141,14 @@ export function StepBell() {
     if (_saved?.rows?.length) return _saved.rows
     const dur = _saved?.periodDur ?? (config.defaultSessionDuration ?? 40)
     const cnt = _saved?.maxPeriods ?? (config.periodsPerDay ?? 8)
-    return buildRows(cnt, dur)
+    // First run: generate a REALISTIC default day (short break + lunch fitted
+    // between periods) — bare back-to-back periods with no lunch is never a
+    // sensible school day. autoGenerateBellRows falls back to buildRows itself
+    // if the start/end window is degenerate.
+    const st  = _saved?.startTime ?? config.startTime ?? '08:00'
+    const en  = _saved?.schoolEndTime
+      ?? toHHMM(toMins(st) + 10 + cnt * dur + 15 + 30 + 10)  // asm + periods + sb + lunch + disp
+    return autoGenerateBellRows(st, en, cnt, dur, ALL_CLASS_KEYS)
   })
 
   // ── Schedule mode ────────────────────────────────────────────
@@ -5593,7 +5600,7 @@ export function StepBell() {
                 </button>
                 <button
                   title="Wipes custom row durations and rebuilds with the default period duration"
-                  onClick={() => { setBellCustomized(false); setDisplayRows(buildRows(maxPeriods, periodDur).map(r => ({ ...r, classes: [...activeClassKeys] }))) }}
+                  onClick={() => { setBellCustomized(false); setDisplayRows(autoGenerateBellRows(startTime, schoolEndTime, maxPeriods, periodDur, activeClassKeys)) }}
                   style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 14px', borderRadius: 7, border: '1px solid #E5E7EB', background: '#fff', fontSize: 12, fontWeight: 600, color: '#6B7280', cursor: 'pointer', fontFamily: 'inherit' }}>
                   Reset to default
                 </button>

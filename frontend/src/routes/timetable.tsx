@@ -260,12 +260,17 @@ function bellScheduleForSection(
     } else if (r.type === 'dispersal') {
       map.set('dispersal', slot)
     } else {
-      // short-break / lunch → take the first unmatched break of the same type
+      // short-break / lunch → take the first unmatched break of the same type.
+      // No class-wise breaks configured (simple single-lunch mode)? The store's
+      // break entries were created FROM these same bell rows, so the bell row's
+      // own id is the store id — key by it directly.
       let mi = unmatched.findIndex(b => ((b as any).type ?? '') === r.type)
       if (mi < 0) mi = unmatched.length ? 0 : -1
       if (mi >= 0) {
         const m = unmatched.splice(mi, 1)[0]
         map.set(m.id, slot)
+      } else {
+        map.set(r.id, slot)
       }
     }
     cur += r.duration
@@ -376,7 +381,20 @@ function buildClassPeriods(
     return out
   }
 
-  if (!classwiseBreaks?.length) return truncate(allPeriods, true)
+  // Order columns by the section's REAL bell times — the store's abstract
+  // sequence distributes breaks evenly (e.g. Short Break after P2) which can
+  // disagree with where the bell actually placed them (after P3).
+  const bellOrder = (list: Period[]): Period[] => {
+    const bell = bellScheduleForSection(sectionName, bellSchedules, classwiseBreaks as CwBreakLite[] | undefined, list.filter(p => p.type === 'class'))
+    if (!bell) return list
+    return [...list].sort((a, b) => {
+      const sa = bell.get(a.id)?.startMin ?? (a.type === 'fixed-start' ? -1 : Number.MAX_SAFE_INTEGER)
+      const sb = bell.get(b.id)?.startMin ?? (b.type === 'fixed-start' ? -1 : Number.MAX_SAFE_INTEGER)
+      return sa - sb
+    })
+  }
+
+  if (!classwiseBreaks?.length) return bellOrder(truncate(allPeriods, true))
 
   const classKey = getSectionClassKey(sectionName)
   const sectionBreaks = classwiseBreaks.filter(b =>
@@ -593,6 +611,18 @@ function buildUnifiedColumns(
     cols.set(ck, { key:ck, periodId:b.id, name:b.name ?? 'Break',
       type:(b.type === 'lunch' ? 'lunch' : 'break') as Period['type'],
       startMin:s.startMin, endMin:s.endMin, start:fmtMin(s.startMin,config), end:fmtMin(s.endMin,config) })
+  })
+  // 3b) Simple single-lunch mode: no class-wise breaks, but the store PERIODS
+  //     carry the bell's break entries (same ids as the bell rows, which the
+  //     bell schedules map directly). Without this, taking the bell-truth path
+  //     above would silently drop the Lunch/Short Break columns.
+  periods.filter(p => p.type === 'lunch' || p.type === 'break').forEach(p => {
+    const repSched = schedules.get([...allClassKeys][0])
+    const s = repSched?.get(p.id); if (!s) return
+    const ck = `${p.id}@${s.startMin}`
+    if (!cols.has(ck)) cols.set(ck, { key:ck, periodId:p.id, name:p.name,
+      type:p.type, startMin:s.startMin, endMin:s.endMin,
+      start:fmtMin(s.startMin,config), end:fmtMin(s.endMin,config) })
   })
   // 4) fixed-end (Dispersal) — position after last teaching column
   periods.filter(p=>p.type==='fixed-end').forEach(p=>{
