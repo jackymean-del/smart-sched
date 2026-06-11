@@ -22,7 +22,7 @@ import 'ag-grid-community/styles/ag-grid.css'
 import 'ag-grid-community/styles/ag-theme-quartz.css'
 
 import { useMemo, useCallback, useRef, useEffect, useState, useReducer } from 'react'
-import { AgGridReact } from 'ag-grid-react'
+import { AgGridReact, type CustomCellEditorProps } from 'ag-grid-react'
 import {
   ModuleRegistry,
   AllCommunityModule,
@@ -42,7 +42,7 @@ import { parseAllocation, validateAllocationCapacity } from '@/lib/allocationSyn
 import {
   computeCapacity, capacityForSection, inferBandFromSection, utilisationStatus,
 } from '@/lib/capacityEngine'
-import { Search, ChevronDown } from 'lucide-react'
+import { Search, ChevronDown, Minus, Plus, Check } from 'lucide-react'
 
 ModuleRegistry.registerModules([AllCommunityModule, AllEnterpriseModule])
 
@@ -98,11 +98,34 @@ interface GridContext {
   getCapOverrides:  () => Record<string, number>
   getDisplayMode:   () => 'periods' | 'hours'
   getPeriodMinutes: () => number
+  getSections:      () => Section[]
 }
 
 function effectiveCap(ctx: GridContext, sn: string): number {
   const o = ctx.getCapOverrides()[sn]
   return o !== undefined ? o : capacityForSection(ctx.getCap(), inferBandFromSection(sn))
+}
+
+/** Plain-English translation of an allocation syntax string ("5+1" → "5 theory + 1 lab = 6 periods/week"). */
+function describeAllocation(raw: string | undefined | null): string | null {
+  if (!raw || raw === '0') return null
+  const p = parseAllocation(raw)
+  if (!p.valid) return `"${raw}" is not a recognised allocation`
+  const bits: string[] = []
+  if (p.theoryPeriods > 0) bits.push(`${p.theoryPeriods} theory`)
+  if (p.labPeriods > 0)    bits.push(`${p.labPeriods} lab`)
+  if (p.doublePeriods > 0) bits.push(`${p.doublePeriods} block${p.doublePeriods > 1 ? 's' : ''} of ${p.doubleSpan} consecutive`)
+  if (!bits.length) return null
+  return `${bits.join(' + ')} = ${p.weeklyTotal} period${p.weeklyTotal !== 1 ? 's' : ''}/week`
+}
+
+/** Canonical compact syntax from counts — mirrors the syntax guide's examples. */
+function composeSyntax(theory: number, lab: number, doubles: number, span: number): string {
+  if (doubles > 0) return `${doubles}(${Math.max(2, span)}X)`
+  if (theory > 0 && lab > 0) return `${theory}+${lab}`
+  if (lab > 0)    return `${lab}L`
+  if (theory > 0) return String(theory)
+  return ''
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -133,6 +156,189 @@ function UsageCellRenderer(params: ICellRendererParams<RowData>) {
         <span style={{ color: '#9B8EF5', borderBottom: '1px dashed #C4BDFF' }}>{cl}</span>
       </span>
       <span style={{ width: 5, height: 5, borderRadius: '50%', background: dot, flexShrink: 0, opacity: 0.85 }} />
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Allocation Composer — popup cell editor
+//
+// Typing stays first-class (the input is auto-focused and seeded with the
+// pressed key), but nobody has to MEMORISE the syntax any more: steppers for
+// theory / lab / double blocks write the canonical syntax for you, quick
+// chips cover the common values, and a live line translates whatever is in
+// the box to plain English with a capacity check for this class.
+// AG Grid v31+ controlled-editor contract: mirror every change through
+// props.onValueChange(); commit = stopEditing(), Esc = grid-native cancel.
+// ─────────────────────────────────────────────────────────────────
+
+const QUICK_CHIPS = ['2', '3', '4', '5', '6', '5+1', '4+2', '2L', '3(2X)']
+
+function AllocationComposer(props: CustomCellEditorProps<RowData> & { subjectName?: string }) {
+  const ctx = props.context as GridContext
+  const sectionName = props.data?.sectionName ?? ''
+  const subjectName = props.subjectName ?? String(props.colDef?.colId ?? '').replace(/^subj:/, '')
+
+  // Seed: printable key starts a fresh value (spreadsheet convention);
+  // Enter / F2 / double-click edits the existing one.
+  const seed = props.eventKey && props.eventKey.length === 1 && /[\d]/.test(props.eventKey)
+    ? props.eventKey
+    : String(props.value ?? '')
+  const [text, setText] = useState(seed)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    props.onValueChange(text === '' ? null : text)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [text])
+
+  useEffect(() => {
+    const el = inputRef.current
+    if (!el) return
+    el.focus()
+    // Fresh-typed seed: caret at end. Existing value: select all for overwrite.
+    if (seed === String(props.value ?? '') && seed !== '') el.select()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const parsed = parseAllocation(text)
+  const theory  = parsed.valid ? parsed.theoryPeriods  : 0
+  const lab     = parsed.valid ? parsed.labPeriods     : 0
+  const doubles = parsed.valid ? parsed.doublePeriods  : 0
+  const span    = parsed.valid && parsed.doubleSpan >= 2 ? parsed.doubleSpan : 2
+
+  // Capacity preview: class total EXCLUDING this cell + the value being typed
+  const cap = effectiveCap(ctx, sectionName)
+  let usedOthers = 0
+  Object.entries(ctx.getAllocations()[sectionName] ?? {}).forEach(([sub, raw]) => {
+    if (sub === subjectName || !raw || raw === '0') return
+    const p = parseAllocation(raw)
+    if (p.valid) usedOthers += p.weeklyTotal
+  })
+  const newTotal = usedOthers + (parsed.valid ? parsed.weeklyTotal : 0)
+  const over = cap > 0 && newTotal > cap
+
+  // Same-grade sibling propagation happens in the valueSetter — be transparent.
+  const grade = gradeOf(sectionName)
+  const siblingCount = ctx.getSections().filter(s => gradeOf(s.name) === grade).length
+
+  const bump = (kind: 'theory' | 'lab' | 'doubles', delta: number) => {
+    // Steppers and double-blocks are mutually exclusive in the syntax —
+    // touching one family clears the other.
+    let t = theory, l = lab, d = doubles
+    if (kind === 'doubles') { d = Math.max(0, d + delta); if (d > 0) { t = 0; l = 0 } }
+    else {
+      if (kind === 'theory') t = Math.max(0, t + delta)
+      if (kind === 'lab')    l = Math.max(0, l + delta)
+      d = 0
+    }
+    setText(composeSyntax(t, l, d, span))
+  }
+
+  const commit = () => props.api.stopEditing()
+
+  const stepRow = (label: string, value: number, kind: 'theory' | 'lab' | 'doubles', hint?: string) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <span style={{ flex: 1, fontSize: 10.5, fontWeight: 600, color: '#5A5A78' }}>
+        {label}{hint && <span style={{ color: '#B0ABCC', fontWeight: 500 }}> {hint}</span>}
+      </span>
+      <button onClick={() => bump(kind, -1)} disabled={value <= 0} style={{
+        width: 20, height: 20, borderRadius: 5, border: '1px solid #DDD8FF', background: '#fff',
+        color: value > 0 ? '#6358C4' : '#D5D0F0', cursor: value > 0 ? 'pointer' : 'default',
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0,
+      }}><Minus size={11} strokeWidth={2.5} /></button>
+      <span style={{ width: 18, textAlign: 'center', fontSize: 12, fontWeight: 700, color: value > 0 ? '#13111E' : '#C4C0DC', fontFamily: "'DM Mono', monospace" }}>
+        {value}
+      </span>
+      <button onClick={() => bump(kind, +1)} style={{
+        width: 20, height: 20, borderRadius: 5, border: '1px solid #DDD8FF', background: '#fff',
+        color: '#6358C4', cursor: 'pointer',
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0,
+      }}><Plus size={11} strokeWidth={2.5} /></button>
+    </div>
+  )
+
+  const desc = text.trim() === '' ? null : describeAllocation(text)
+
+  return (
+    <div style={{
+      width: 248, background: '#fff', border: '1px solid #C8C2F0', borderRadius: 10,
+      boxShadow: '0 10px 32px rgba(60,50,140,0.18)', padding: 12,
+      fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif",
+      display: 'flex', flexDirection: 'column', gap: 9,
+    }}>
+      {/* Header: subject @ section */}
+      <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#8B7FE8' }}>
+        {subjectName} <span style={{ color: '#C4BBF0' }}>·</span> <span style={{ color: '#6B6891' }}>{sectionName}</span>
+      </div>
+
+      {/* Syntax input + apply */}
+      <div style={{ display: 'flex', gap: 6 }}>
+        <input
+          ref={inputRef}
+          value={text}
+          onChange={e => setText(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter') { e.preventDefault(); commit() }
+            e.stopPropagation()   // keep grid nav keys out while composing
+          }}
+          placeholder="e.g. 5+1"
+          spellCheck={false}
+          style={{
+            flex: 1, minWidth: 0, padding: '6px 9px', borderRadius: 7,
+            border: `1.5px solid ${text && !parsed.valid ? '#FCA5A5' : '#C8C2F0'}`,
+            fontSize: 13, fontWeight: 700, fontFamily: "'DM Mono', monospace",
+            color: '#13111E', outline: 'none', background: '#FAFAFE',
+          }}
+        />
+        <button onClick={commit} title="Apply (Enter)" style={{
+          width: 30, borderRadius: 7, border: 'none', background: '#7C6FE0', color: '#fff',
+          cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        }}><Check size={14} strokeWidth={2.5} /></button>
+      </div>
+
+      {/* Live translation + capacity check */}
+      <div style={{ fontSize: 10, lineHeight: 1.5, minHeight: 15 }}>
+        {text.trim() === '' ? (
+          <span style={{ color: '#B0ABCC' }}>Empty — no periods for this subject</span>
+        ) : parsed.valid ? (
+          <span style={{ color: '#15803D', fontWeight: 600 }}>
+            {desc}
+            <span style={{ color: over ? '#DC2626' : '#8B87AD', fontWeight: 600 }}>
+              {' '}· class {newTotal}/{cap}{over ? ' — over capacity' : ''}
+            </span>
+          </span>
+        ) : (
+          <span style={{ color: '#DC2626', fontWeight: 600 }}>{desc}</span>
+        )}
+      </div>
+
+      {/* Steppers */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 5, padding: '8px 9px', background: '#F7F5FF', borderRadius: 8, border: '1px solid #ECE8FF' }}>
+        {stepRow('Theory', theory, 'theory')}
+        {stepRow('Lab / practical', lab, 'lab')}
+        {stepRow('Double blocks', doubles, 'doubles', `(${span} consecutive)`)}
+      </div>
+
+      {/* Quick chips */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+        {QUICK_CHIPS.map(c => (
+          <button key={c} onClick={() => setText(c)} style={{
+            padding: '2px 8px', borderRadius: 11, cursor: 'pointer',
+            border: `1px solid ${text === c ? '#7C6FE0' : '#E4E0FF'}`,
+            background: text === c ? '#EDE9FF' : '#fff',
+            color: text === c ? '#6358C4' : '#6B6891',
+            fontSize: 10.5, fontWeight: 700, fontFamily: "'DM Mono', monospace",
+          }}>{c}</button>
+        ))}
+      </div>
+
+      {/* Sibling propagation note */}
+      {siblingCount > 1 && (
+        <div style={{ fontSize: 9.5, color: '#9B96BD', borderTop: '1px solid #F0EDFF', paddingTop: 7 }}>
+          Applies to all <strong style={{ color: '#6B6891' }}>{siblingCount} {grade}</strong> sections
+        </div>
+      )}
     </div>
   )
 }
@@ -694,6 +900,7 @@ export function AllocationGridAG({
     getCapOverrides:  () => capOverrideRef.current,
     getDisplayMode:   () => displayModeRef.current,
     getPeriodMinutes: () => periodMinRef.current,
+    getSections:      () => sectionsRef.current as Section[],
   }), [])
 
   // ── defaultColDef — stable, empty deps ───────────────────────
@@ -821,6 +1028,19 @@ export function AllocationGridAG({
         minWidth: 48, maxWidth: 90,
         sortable: true,
         headerTooltip: sub.name,
+
+        // Composer popup in periods mode; plain text editor in hours mode
+        // (hours input is a simple number/duration, no syntax to compose).
+        cellEditorSelector: () => displayModeRef.current === 'hours'
+          ? { component: 'agTextCellEditor' }
+          : { component: AllocationComposer, popup: true, popupPosition: 'under', params: { subjectName: sub.name } },
+
+        // Hover translation: "Mathematics — 5 theory + 1 lab = 6 periods/week"
+        tooltipValueGetter: (p) => {
+          const sn = p.data?.sectionName ?? ''
+          const d = describeAllocation(allocationsRef.current[sn]?.[sub.name])
+          return d ? `${sub.name} — ${d}` : sub.name
+        },
 
         valueGetter: (params: ValueGetterParams<RowData>) => {
           const sn = params.data?.sectionName ?? ''
@@ -1174,6 +1394,7 @@ export function AllocationGridAG({
           defaultColDef={defaultColDef}
           getRowId={(p) => p.data.__sectionId}
           context={gridContext}
+          onGridReady={e => { if (import.meta.env.DEV) (window as any).__allocApi = e.api }}
 
           rowNumbers={{ width: 40, minWidth: 36 }}
 
