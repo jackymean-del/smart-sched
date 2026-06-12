@@ -582,17 +582,26 @@ export function solveTimetable(input: SolverInput): SolverOutput {
   })
 
   // ── Doc Part 1: per-(section, subject) target periods/week ──
-  //   Read subjectAllocations matrix (cell syntax → numeric weekly total),
-  //   fall back to Subject.periodsPerWeek when not overridden.
+  //   The allocation matrix is AUTHORITATIVE for a section once it has a row:
+  //   a subject with no cell in that row is NOT taught there (target 0) — the
+  //   global Subject.periodsPerWeek default only applies when the section has
+  //   no allocation data at all (user skipped the Allocation step entirely).
+  //   This is what keeps unassigned/unallocated subjects out of the timetable.
   const subjectAllocations = input.subjectAllocations ?? {}
   const targetPeriods: Record<string, Record<string, number>> = {}
   sections.forEach(sec => {
     targetPeriods[sec.name] = {}
+    const row = subjectAllocations[sec.name]
+    const hasRow = !!row && Object.keys(row).length > 0
     subjects.forEach(sub => {
-      const cell = subjectAllocations[sec.name]?.[sub.name]
+      const cell = row?.[sub.name]
       if (cell) {
         const p = parseAllocation(cell)
-        targetPeriods[sec.name][sub.name] = p.valid ? p.weeklyTotal : (sub.periodsPerWeek ?? 0)
+        // Invalid syntax = user wrote something unparseable — treat as 0
+        // (grid marks the cell red) rather than resurrecting the default.
+        targetPeriods[sec.name][sub.name] = p.valid ? p.weeklyTotal : 0
+      } else if (hasRow) {
+        targetPeriods[sec.name][sub.name] = 0
       } else {
         targetPeriods[sec.name][sub.name] = sub.periodsPerWeek ?? 0
       }
@@ -887,12 +896,19 @@ export function solveTimetable(input: SolverInput): SolverOutput {
     if (!ctName) return
     ensureBusy(ctName)
     const ctStaff = staff.find(s => s.name === ctName)
-    // Pick a subject this teacher can actually teach for this section
+    // Pick a subject this teacher can actually teach for this section —
+    // PREFER one that is genuinely taught here (target quota > 0), so the
+    // daily Period-1 slot never shows a subject this class doesn't take.
     const ctRawSubs: string[] = ctStaff?.subjects ?? []
-    const ctSubjectRaw = ctRawSubs.find(s =>
+    const taughtHere = (raw: string) =>
+      (targetPeriods[sec.name]?.[raw.replace(/.*::/, '')] ?? 0) > 0
+    const eligible = ctRawSubs.filter(s =>
       s === `${sec.name}::${s.replace(/.*::/, '')}` ||   // section-specific
       (!s.includes('::'))                                  // or global
-    ) ?? ctRawSubs[0] ?? subjects[0]?.name ?? ''
+    )
+    const ctSubjectRaw =
+      eligible.find(taughtHere) ?? ctRawSubs.find(taughtHere) ??
+      eligible[0] ?? ctRawSubs[0] ?? subjects[0]?.name ?? ''
     const ctSubject = ctSubjectRaw.replace(/.*::/, '')
 
     workDays.forEach(day => {
@@ -922,10 +938,17 @@ export function solveTimetable(input: SolverInput): SolverOutput {
   // ── Pass 2: Fill remaining periods with constraint checking ──
   sections.forEach((sec, si) => {
     // Get subjects for this section.
-    // Empty sub.sections means "applies to all classes" — treat as universal.
+    // Explicit assignments (sections[] from the Resources picker, plus
+    // classConfigs[].sectionName for legacy data) restrict a subject to those
+    // sections. Subjects with NO assignments are only universal when they also
+    // carry a target quota here — targetPeriods already encodes "allocation
+    // row is authoritative", so a 0-target subject never gets placed.
     const sectionSubjects = subjects.filter(sub => {
-      const secs = sub.sections ?? []
-      return secs.length === 0 || secs.includes(sec.name)
+      const fromConfigs = ((sub as any).classConfigs ?? [])
+        .map((c: any) => c.sectionName).filter(Boolean) as string[]
+      const explicit = [...new Set([...(sub.sections ?? []), ...fromConfigs])]
+      if (explicit.length > 0 && !explicit.includes(sec.name)) return false
+      return (targetPeriods[sec.name]?.[sub.name] ?? 0) > 0
     })
     if (!sectionSubjects.length) return
 

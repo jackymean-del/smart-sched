@@ -1324,10 +1324,26 @@ export function AllocationGridAG({
     const subjs = subjects as Subject[]
     const next: Record<string, Record<string, string>> = {}
 
+    // Class assignments (Resources → Subjects → "Assign Classes") gate the
+    // suggestion: once ANY subject carries explicit assignments, a subject is
+    // only suggested for its own sections — unassigned leftovers (e.g. Botany
+    // never given a class) stay out of every row. A dataset with no
+    // assignments at all keeps the universal default so first runs still fill.
+    const explicitSecs = (s: Subject): string[] => {
+      const fromConfigs = ((s as any).classConfigs ?? [])
+        .map((c: any) => c.sectionName).filter(Boolean) as string[]
+      return [...new Set([...(s.sections ?? []), ...fromConfigs])]
+    }
+    const anyAssigned = subjs.some(s => explicitSecs(s).length > 0)
+
     secs.forEach(sec => {
       const capacity = effectiveCap(gridContext, sec.name)
       const ideal    = subjs
         .filter(s => s.periodsPerWeek && s.periodsPerWeek > 0)
+        .filter(s => {
+          if (!anyAssigned) return true
+          return explicitSecs(s).includes(sec.name)
+        })
         .map(s => ({ name: s.name, pw: s.periodsPerWeek!, isLab: !!(s as any).requiresLab }))
       if (!ideal.length) return
       const totalIdeal = ideal.reduce((a, s) => a + s.pw, 0)
