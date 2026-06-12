@@ -76,6 +76,92 @@ function dlgsToOptionalBlocks(
   return [...blockMap.values()]
 }
 
+// ── Subject Combos (Step 4, Tab 2) → OptionalBlock bridge ──────────────────
+//
+// OR/AND combos live in `store.subjectGroups` (SubjectAndOrGroup[]). The
+// solver only understands OptionalBlocks, so each combo becomes one block:
+//
+//   AND — all subjects run in parallel in the same slot, students split —
+//         exactly the engine's parallel-options semantics.
+//   OR  — one of the subjects runs per slot (rotation). Same shared-slot
+//         block; the engine books every option's teacher in those slots,
+//         the conservative reading that guarantees zero teacher clashes.
+//
+// Sections: the authored list when present; otherwise every section where
+// ALL the combo's subjects are offered (intersection of their assignments).
+// A combo whose subjects carry no assignments anywhere is skipped rather
+// than assumed to apply school-wide.
+// Teachers: resolved per option (subjectMappings first, then any teacher of
+// the subject), each teacher used for at most one option per block.
+function comboGroupsToOptionalBlocks(
+  groups: Array<{
+    id: string; name?: string; logic: 'AND' | 'OR'
+    subjects: string[]; sections?: string[]; periodsPerWeek?: number
+  }>,
+  subjects: any[],
+  sections: any[],
+  staff: any[],
+): OptionalBlock[] {
+  if (!groups?.length) return []
+  const allSecNames = sections.map((s: any) => s.name as string)
+
+  // subject → sections it is explicitly offered in ([] = unconstrained)
+  const subjSecs = (subName: string): string[] => {
+    const sub = subjects.find((s: any) => s.name === subName)
+    if (!sub) return []
+    const fromConfigs = ((sub as any).classConfigs ?? [])
+      .map((c: any) => c.sectionName).filter(Boolean) as string[]
+    return [...new Set([...((sub.sections as string[]) ?? []), ...fromConfigs])]
+  }
+
+  const teacherFor = (subName: string, secNames: string[], taken: Set<string>): string => {
+    const mapped = staff.find((t: any) =>
+      !taken.has(t.name) &&
+      ((t.subjectMappings ?? []) as Array<{ subject: string; classes?: string[] }>)
+        .some(m => m.subject === subName && (m.classes ?? []).some(c => secNames.includes(c))))
+    if (mapped) return mapped.name
+    const any = staff.find((t: any) => !taken.has(t.name) && (
+      ((t.subjects ?? []) as string[]).some(s => s === subName || s.endsWith(`::${subName}`)) ||
+      ((t.subjectMappings ?? []) as Array<{ subject: string }>).some(m => m.subject === subName)))
+    return any?.name ?? ''
+  }
+
+  const blocks: OptionalBlock[] = []
+  groups.forEach((g, gi) => {
+    const subs = (g.subjects ?? []).filter(Boolean)
+    if (subs.length < 2) return
+
+    let secNames = (g.sections ?? []).filter(sn => allSecNames.includes(sn))
+    if (!secNames.length) {
+      if (subs.every(sub => subjSecs(sub).length === 0)) return
+      secNames = allSecNames.filter(sn =>
+        subs.every(sub => {
+          const ss = subjSecs(sub)
+          return ss.length === 0 || ss.includes(sn)
+        }))
+    }
+    if (!secNames.length) return
+
+    const taken = new Set<string>()
+    const options = subs.map(sub => {
+      const t = teacherFor(sub, secNames, taken)
+      if (t) taken.add(t)
+      return { subject: sub, teacher: t, room: '' }
+    })
+
+    blocks.push({
+      id: `combo-${g.id || gi}`,
+      name: g.name || `${g.logic} Combo ${gi + 1}`,
+      sectionNames: secNames,
+      day: '', periodId: '',
+      options,
+      periodsPerWeek: g.periodsPerWeek && g.periodsPerWeek > 0 ? g.periodsPerWeek : undefined,
+      logic: g.logic,
+    })
+  })
+  return blocks
+}
+
 type JobStatus = "idle" | "running" | "completed" | "failed"
 
 interface Job {
@@ -334,8 +420,10 @@ export function Step6Generate() {
       .sort((a, b) => a.endMin - b.endMin)
       .map(b => ({ label: gradeLabel(b.secs), count: b.count, end: fmt(b.endMin), nSecs: b.secs.length }))
 
-    const parallelGroups = ((store as any).dynamicLearningGroups ?? []).length ||
-                           ((store as any).optionalBlocks ?? []).length
+    const parallelGroups =
+      (((store as any).dynamicLearningGroups ?? []).length +
+       ((store as any).subjectGroups ?? []).length) ||
+      ((store as any).optionalBlocks ?? []).length
     const dayOffRules = ((config as any).dayOffRules ?? []).length
 
     return { shapes, totalWeekly, doubleSubjects, parallelGroups, dayOffRules, overCap, unallocated }
@@ -395,10 +483,23 @@ export function Step6Generate() {
       // ran Step 4 (Student Groups), convert those DLGs into OptionalBlocks
       // so the solver honours the user's period assignments.
       const classPeriods = periods.filter((p: Period) => p.type === 'class')
-      const optionalBlocks: OptionalBlock[] =
+      const baseBlocks: OptionalBlock[] =
         manualOptionalBlocks.length > 0
           ? manualOptionalBlocks
           : dlgsToOptionalBlocks(storeDLGs, classPeriods, workDays)
+
+      // OR/AND combos from Step 4 Tab 2 are an independent source — always
+      // merged in, deduped against blocks covering the same sections+subjects.
+      const comboBlocks = comboGroupsToOptionalBlocks(
+        (store as any).subjectGroups ?? [], resolvedSubjects, sections, staff)
+      const blockSig = (b: OptionalBlock) =>
+        [...b.sectionNames].sort().join('|') + '::' +
+        b.options.map(o => o.subject).filter(Boolean).sort().join('|')
+      const seenSigs = new Set(baseBlocks.map(blockSig))
+      const optionalBlocks: OptionalBlock[] = [
+        ...baseBlocks,
+        ...comboBlocks.filter(b => !seenSigs.has(blockSig(b))),
+      ]
 
       // ── Block-wise (Advanced multi-shift) generation ──────────────────────
       // Each block (shift) is solved independently over its own classes + its own

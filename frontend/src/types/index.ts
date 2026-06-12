@@ -553,6 +553,8 @@ export interface OptionalBlock {
   periodId: string             // bell schedule slot id
   options: OptionalOption[]    // parallel subjects in this block
   totalCapacity?: number       // sum of option capacities
+  periodsPerWeek?: number      // pinned weekly slot count (overrides subject-derived quota)
+  logic?: 'AND' | 'OR'         // cell display joiner — AND = parallel split, OR = rotation (default)
 }
 
 export const OptionalBlockSchema = z.object({
@@ -572,6 +574,8 @@ export const OptionalBlockSchema = z.object({
     allocatedStrength: z.number().int().optional(),
   })),
   totalCapacity: z.number().int().optional(),
+  periodsPerWeek: z.number().int().optional(),
+  logic: z.enum(['AND', 'OR']).optional(),
 })
 
 /** A subject combination — e.g. "PCM + CS" with strength.

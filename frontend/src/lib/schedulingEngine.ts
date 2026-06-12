@@ -833,8 +833,12 @@ export function solveTimetable(input: SolverInput): SolverOutput {
     // the Student-Groups page — decide how many periods a group runs.
     const optSubjects = block.options.map(o => o.subject).filter(Boolean)
     const refSec = block.sectionNames[0]
-    const needed = Math.max(1, ...optSubjects.map(sub =>
-      targetPeriods[refSec]?.[sub] ?? subjects.find(s => s.name === sub)?.periodsPerWeek ?? 0))
+    // A block-level periodsPerWeek (set by Subject Combos) pins the weekly
+    // slot count; otherwise derive it from the option subjects' own quotas.
+    const needed = block.periodsPerWeek && block.periodsPerWeek > 0
+      ? block.periodsPerWeek
+      : Math.max(1, ...optSubjects.map(sub =>
+          targetPeriods[refSec]?.[sub] ?? subjects.find(s => s.name === sub)?.periodsPerWeek ?? 0))
     const blockRoom = block.options[0]?.room ?? ''
 
     const slotOk = (day: string, pid: string): boolean => {
@@ -858,8 +862,10 @@ export function solveTimetable(input: SolverInput): SolverOutput {
       if (slots.length >= needed) break
     }
 
-    // Parallel choices read as alternatives — "Physics OR Painting"
-    const cellSubject = block.options.map(o => o.subject).filter(Boolean).join(' OR ')
+    // OR combo = alternatives ("Physics OR Painting"); AND combo = parallel
+    // split where every subject runs simultaneously ("Physics AND Painting").
+    const cellSubject = block.options.map(o => o.subject).filter(Boolean)
+      .join(block.logic === 'AND' ? ' AND ' : ' OR ')
     slots.forEach(({ day, periodId }) => {
       block.sectionNames.forEach(secName => {
         if (sectionOffDays.get(secName)?.has(day)) return
