@@ -285,10 +285,13 @@ export function StepResourcesV2() {
     if (added.length === 0 || subjects.length === 0) return
 
     const board = normalizeBoardType(config.board ?? 'CBSE') as CurriculumBoard
-    // subjectName → new sections that should carry it
+    const byName = new Map((sections as Section[]).map(s => [s.name, s]))
+    // subjectName → new sections that should carry it (stream read from the
+    // section object, so assignment follows the chosen stream, not the name)
     const wants = new Map<string, string[]>()
     for (const secName of added) {
-      for (const subName of standardSubjectsForSection(secName, board)) {
+      const secObj = byName.get(secName) ?? { name: secName }
+      for (const subName of standardSubjectsForSection(secObj, board)) {
         if (!wants.has(subName)) wants.set(subName, [])
         wants.get(subName)!.push(secName)
       }

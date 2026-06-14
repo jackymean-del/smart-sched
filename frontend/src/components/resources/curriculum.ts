@@ -113,17 +113,58 @@ export function getGrade(sectionName: string): string {
 }
 
 /**
- * Detect stream from a section name.
- * "XI-Sci-A" → 'science', "XII-Com-B" → 'commerce', "XI-Arts" → 'arts'
+ * Detect stream from a section name. Robust to a trailing section NUMBER —
+ * the marker may be followed by a digit ("XI-COM1", "XI-HUM2") because schools
+ * number multiple sections of the same stream. (The old `\bcom\b` required a
+ * word boundary right after "com", so "COM1" silently fell through to science.)
+ *
+ *   "XI-Sci-A" / "XI-A1" (Spark) → 'science'   "XII-Com" / "XI-COM1" → 'commerce'
+ *   "XI-Hum" / "XI-HUM2"         → 'arts'      "XI-PCB-A" / "XI-Bot"  → 'pcb'
+ *
+ * Order matters: the most specific stream markers (commerce, humanities) are
+ * tested first so they win over the science fall-through. "Spark" is a gifted
+ * cohort that studies the science curriculum, so it maps to 'science' (the
+ * caller's class list, or an explicit PCB/Bio/Bot/Zoo marker, distinguishes the
+ * Botany–Zoology medical track).
  */
 export function detectStream(sectionName: string): Stream {
   const n = sectionName.toLowerCase()
-  if (/\bsci\b|pcm|\bphysics\b/.test(n))                return 'science'
-  // "Spark" stream (PCB — Biology/Botany/Zoology, no Economics or Computer)
-  if (/spark|\bspa\b|\bpcb\b|\bbot\b|\bzoo\b/.test(n))  return 'pcb'
-  if (/\bcom\b(?!p)|commerce|bst|acc|account/.test(n))  return 'commerce'
-  if (/arts?|hum|humanities|lit/.test(n))               return 'arts'
+  // Commerce — "com", "com1", "commerce", "bst", "acc"; never "computer"/"comp".
+  if (/commerce|\bcom(?!p)|\bbst\b|\bacc/.test(n))              return 'commerce'
+  // Humanities / Arts — tolerant of a section-number suffix (hum1, arts2).
+  if (/\bhum|humanities|\barts?\b|\blit\b/.test(n))            return 'arts'
+  // Explicit medical / PCB biology track — Botany + Zoology split.
+  if (/\bpcb\b|\bbot\b|\bzoo\b|\bbio\b/.test(n))               return 'pcb'
+  // Science / PCM, and the "Spark" gifted cohort (science by curriculum).
+  if (/\bsci\b|\bpcm\b|\bphysics\b|\bspark\b|\bspa\b/.test(n)) return 'science'
   return 'general'
+}
+
+/** A section as the curriculum engine sees it: a name plus the optional
+ *  explicit stream the user picked on the Classes tab. */
+export interface SectionLike { name: string; stream?: string }
+
+/**
+ * Resolve a section's stream for subject assignment.
+ *
+ * The EXPLICIT stream set on the section (Classes tab — "Science", "Spark",
+ * "Commerce", "Humanities") is authoritative, so a section called anything at
+ * all is assigned by its stream, NOT by guessing from its name. Name-based
+ * `detectStream` is only the fallback when no stream is recorded.
+ *
+ * "Spark" is a gifted cohort following the science curriculum → 'science'
+ * (an explicit Bio/PCB/Botany/Zoology stream routes to the medical track).
+ */
+export function resolveStream(section: SectionLike): Stream {
+  const s = (section.stream ?? '').trim().toLowerCase()
+  if (s && s !== 'general') {
+    if (/spark|\bsci|pcm|physics|stem|non[\s-]?med/.test(s)) return 'science'
+    if (/pcb|bio|botan|zoolog|medical|\bmed\b/.test(s))      return 'pcb'
+    if (/com(?!p)|commerce/.test(s))                         return 'commerce'
+    if (/hum|\barts?\b|\blit\b/.test(s))                     return 'arts'
+    // an unrecognised explicit stream → fall through to name-based detection
+  }
+  return detectStream(section.name)
 }
 
 // ─── AI Shortform Engine ──────────────────────────────────────────────────────
@@ -737,7 +778,7 @@ function getRule(subjectName: string): SubjectRule | undefined {
  */
 export function suggestClassesForSubject(
   subjectName: string,
-  sections: ReadonlyArray<{ name: string }>,
+  sections: ReadonlyArray<SectionLike>,
   board: CurriculumBoard = 'CBSE',
 ): string[] {
   const rule = getRule(subjectName)
@@ -754,12 +795,12 @@ export function suggestClassesForSubject(
       const grade = getGrade(sec.name)
       const group = getGradeGroup(grade)
       if (!rule.grades.includes(group)) return false
-      // Stream check applies only to srSec sections.
-      // We no longer have a blanket "general sections get everything" fallback —
-      // each subject must explicitly declare 'general' in its streams list if it
-      // should appear in sections that don't carry a stream code (e.g. XI-A1, XI-C).
+      // Stream check applies only to srSec sections. The section's explicit
+      // stream (Classes tab) is authoritative; resolveStream falls back to the
+      // name only when no stream is set. Each subject must declare 'general' in
+      // its streams list to appear in sections with no stream code.
       if (group === 'srSec' && rule.streams && rule.streams.length > 0) {
-        const stream = detectStream(sec.name)
+        const stream = resolveStream(sec)
         return rule.streams.includes(stream)
       }
       return true
@@ -898,19 +939,24 @@ const STD_SRSEC: Record<Stream, string[]> = {
 
 /**
  * The curated standard subject names a section should take, by grade + stream.
- * "Nursery-A" → pre-primary set; "XI-Com-1" → commerce set; "X-B" → secondary.
+ * Grade comes from the name; the XI–XII stream comes from the section's explicit
+ * `stream` field (falling back to the name only when unset) — see resolveStream.
+ *
+ * Accepts a section object; a bare string is still allowed for callers that only
+ * have a name (then stream is inferred from the name).
  */
 export function standardSubjectsForSection(
-  sectionName: string,
+  section: SectionLike | string,
   _board: CurriculumBoard = 'CBSE',
 ): string[] {
-  const group = getGradeGroup(getGrade(sectionName))
+  const sec: SectionLike = typeof section === 'string' ? { name: section } : section
+  const group = getGradeGroup(getGrade(sec.name))
   switch (group) {
     case 'preK':      return STD_PREK
     case 'primary':   return STD_PRIMARY
     case 'middle':    return STD_MIDDLE
     case 'secondary': return STD_SECONDARY
-    case 'srSec':     return STD_SRSEC[detectStream(sectionName)] ?? STD_SRSEC.general
+    case 'srSec':     return STD_SRSEC[resolveStream(sec)] ?? STD_SRSEC.general
   }
 }
 
@@ -955,13 +1001,13 @@ export interface SeededSubject {
  * Subjects tab from just the class list.
  */
 export function seedStandardSubjects(
-  sections: ReadonlyArray<{ name: string }>,
+  sections: ReadonlyArray<SectionLike>,
   board: CurriculumBoard = 'CBSE',
 ): SeededSubject[] {
   // subject name → set of section names that take it
   const map = new Map<string, Set<string>>()
   for (const sec of sections) {
-    for (const subName of standardSubjectsForSection(sec.name, board)) {
+    for (const subName of standardSubjectsForSection(sec, board)) {
       if (!map.has(subName)) map.set(subName, new Set())
       map.get(subName)!.add(sec.name)
     }
