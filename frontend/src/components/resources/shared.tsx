@@ -124,6 +124,93 @@ export const outlineBtn: React.CSSProperties = {
   transition: 'all 0.12s',
 }
 
+// ─── First-run smart empty state ──────────────────────────────────────────────
+/**
+ * Big centered first-run choice shown when a resource tab is empty: build it for
+ * the user from the curriculum ("Let me create smartly") or start by hand ("Add
+ * manually"). Used by Subjects / Faculty / Rooms. The smart action is disabled
+ * (with a hint) when its prerequisite is missing — e.g. no classes added yet.
+ */
+export function SmartEmptyState({
+  icon, title, subtitle,
+  smartLabel, smartSubtext, onSmart, smartDisabled = false, smartDisabledHint,
+  manualLabel = 'Add manually', manualSubtext, onManual,
+  busy = false,
+}: {
+  icon: React.ReactNode
+  title: string
+  subtitle: string
+  smartLabel: string
+  smartSubtext?: string
+  onSmart: () => void
+  smartDisabled?: boolean
+  smartDisabledHint?: string
+  manualLabel?: string
+  manualSubtext?: string
+  onManual: () => void
+  busy?: boolean
+}) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '54px 24px 60px', textAlign: 'center' }}>
+      <div style={{ width: 56, height: 56, borderRadius: 16, background: P_L, border: `1.5px solid ${P_B}`, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+        {icon}
+      </div>
+      <div style={{ fontSize: 16, fontWeight: 800, color: '#13111E', marginBottom: 5 }}>{title}</div>
+      <div style={{ fontSize: 12.5, color: '#8B87AD', maxWidth: 440, lineHeight: 1.55, marginBottom: 24 }}>{subtitle}</div>
+
+      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', justifyContent: 'center', alignItems: 'stretch' }}>
+        {/* Smart create — primary, prominent */}
+        <button
+          onClick={smartDisabled || busy ? undefined : onSmart}
+          disabled={smartDisabled || busy}
+          title={smartDisabled ? smartDisabledHint : undefined}
+          style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+            minWidth: 230, padding: '16px 24px', borderRadius: 12, border: 'none',
+            background: smartDisabled ? '#C8C2EC' : `linear-gradient(135deg, ${P}, #9B8EF5)`,
+            color: '#fff', cursor: smartDisabled || busy ? 'not-allowed' : 'pointer',
+            fontFamily: 'inherit', boxShadow: smartDisabled ? 'none' : '0 6px 18px rgba(124,111,224,0.34)',
+            opacity: busy ? 0.8 : 1, transition: 'transform 0.12s, box-shadow 0.12s',
+          }}
+          onMouseEnter={e => { if (!smartDisabled && !busy) { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 10px 26px rgba(124,111,224,0.42)' } }}
+          onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = smartDisabled ? 'none' : '0 6px 18px rgba(124,111,224,0.34)' }}
+        >
+          <span style={{ fontSize: 14.5, fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+            {busy
+              ? <><span style={{ display:'inline-block', width:13, height:13, border:'2px solid rgba(255,255,255,0.45)', borderTopColor:'#fff', borderRadius:'50%', animation:'spin 0.7s linear infinite' }} />Creating…</>
+              : <>✨ {smartLabel}</>}
+          </span>
+          {smartSubtext && <span style={{ fontSize: 11, fontWeight: 500, opacity: 0.92 }}>{smartSubtext}</span>}
+        </button>
+
+        {/* Manual — secondary */}
+        <button
+          onClick={busy ? undefined : onManual}
+          disabled={busy}
+          style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+            minWidth: 230, padding: '16px 24px', borderRadius: 12,
+            border: '1.5px solid #DDD8FF', background: '#fff', color: '#4B5275',
+            cursor: busy ? 'not-allowed' : 'pointer', fontFamily: 'inherit', transition: 'all 0.12s',
+          }}
+          onMouseEnter={e => { if (!busy) { e.currentTarget.style.borderColor = P; e.currentTarget.style.background = P_L } }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = '#DDD8FF'; e.currentTarget.style.background = '#fff' }}
+        >
+          <span style={{ fontSize: 14.5, fontWeight: 800, color: '#13111E' }}>✏️ {manualLabel}</span>
+          {manualSubtext && <span style={{ fontSize: 11, fontWeight: 500, color: '#8B87AD' }}>{manualSubtext}</span>}
+        </button>
+      </div>
+
+      {smartDisabled && smartDisabledHint && (
+        <div style={{ marginTop: 16, fontSize: 11.5, color: '#D97706', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 7, padding: '6px 12px' }}>
+          {smartDisabledHint}
+        </div>
+      )}
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+    </div>
+  )
+}
+
 // ─── Undo history hook ────────────────────────────────────────────────────────
 /**
  * Ref-based undo stack. Stable function refs — safe in useEffect/onKeyDown.

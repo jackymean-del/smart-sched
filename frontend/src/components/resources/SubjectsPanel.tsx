@@ -32,7 +32,7 @@ import {
   DeleteActionButton, actionBtn, outlineBtn,
   type AllocationUnit, ALLOCATION_LABELS, ALLOCATION_SHORT,
   toDisplayValue, toEditableHours, fromDisplayValue,
-  ResourceGlobalStyles, useUndoHistory,
+  ResourceGlobalStyles, useUndoHistory, SmartEmptyState,
 } from './shared'
 import type { ChipOption } from './shared'
 import {
@@ -49,6 +49,7 @@ import {
   normalizeBoardType,
   getGrade,
   gradeKey,
+  seedStandardSubjects,
 } from './curriculum'
 
 // Re-export for step-resources-v2.tsx
@@ -1075,6 +1076,8 @@ export function SubjectsPanel({
   const [importOpen, setImportOpen] = useState(false)
   const [searchFocused, setSearchFocused] = useState(false)
   const [catMgrOpen, setCatMgrOpen] = useState(false)
+  const [manualMode, setManualMode] = useState(false)   // dismiss first-run empty state → show table
+  const [seeding,    setSeeding]    = useState(false)
   const searchRef    = useRef<HTMLInputElement>(null)
   const catMgrBtnRef = useRef<HTMLButtonElement>(null)
   const undoHistory = useUndoHistory<Subject[]>()
@@ -1187,6 +1190,32 @@ export function SubjectsPanel({
 
   function remove(id: string) { undoHistory.push(subjects); setSubjects(subjects.filter(s => s.id !== id)) }
   function add(s: Subject)    { undoHistory.push(subjects); setSubjects([...subjects, s]) }
+
+  // ── Smart create — seed the standard CBSE/NCERT subjects for the current
+  //    class list (grade + stream aware), with per-section slots. Used by the
+  //    first-run empty state's "Let me create smartly" choice.
+  function handleSmartCreate() {
+    if (!sections.length || seeding) return
+    setSeeding(true)
+    undoHistory.push(subjects)
+    const seeded = seedStandardSubjects(sections, board)
+    const created: Subject[] = seeded.map(s => ({
+      id: makeId(),
+      name:            s.name,
+      shortName:       s.shortName,
+      category:        s.category as any,
+      periodsPerWeek:  s.periodsPerWeek,
+      sessionDuration: s.sessionDuration,
+      maxPeriodsPerDay: s.maxPeriodsPerDay,
+      color:           P,
+      isOptional:      s.isOptional,
+      requiresLab:     s.requiresLab,
+      sections:        s.sections,
+      classConfigs:    s.classConfigs,
+    } as unknown as Subject))
+    setSubjects(created)
+    setSeeding(false)
+  }
 
   // ── Local AI assign (subject-only fallback) ───────────────────────────────
   // Re-evaluates ALL subjects every run — no "already assigned" guard.
@@ -1493,12 +1522,23 @@ export function SubjectsPanel({
 
       {/* Table */}
       <div style={TABLE_CARD}>
-        {subjects.length === 0 && !search ? (
-          <div style={{ textAlign: 'center', padding: '44px 0' }}>
-            <div style={{ fontSize: 28, marginBottom: 7 }}>📖</div>
-            <div style={{ fontSize: 12.5, fontWeight: 700, color: '#9896B5', marginBottom: 4 }}>No subjects yet</div>
-            <div style={{ fontSize: 11.5, color: '#C4C0DC' }}>Add subjects, then use ⚡ AI Assign to auto-fill class mappings and teacher workloads.</div>
-          </div>
+        {subjects.length === 0 && !search && !manualMode ? (
+          <SmartEmptyState
+            icon={<BookOpen size={26} color={P} />}
+            title="No subjects yet"
+            subtitle={sections.length === 0
+              ? `Add your classes first — then schedU can build a ${BOARD_LABELS[board]} curriculum for them automatically, or you can enter subjects by hand.`
+              : `Let schedU build the standard ${BOARD_LABELS[board]} subjects for your ${sections.length} class${sections.length !== 1 ? 'es' : ''} — grade- and stream-aware, with periods per week — or start from a blank table.`}
+            smartLabel="Let me create smartly"
+            smartSubtext={sections.length > 0 ? `${BOARD_LABELS[board]} subjects for ${sections.length} class${sections.length !== 1 ? 'es' : ''}` : undefined}
+            onSmart={handleSmartCreate}
+            smartDisabled={sections.length === 0}
+            smartDisabledHint="Add at least one class first — smart create reads your class list to pick the right subjects."
+            manualLabel="Add manually"
+            manualSubtext="Start with a blank table"
+            onManual={() => setManualMode(true)}
+            busy={seeding}
+          />
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
             <colgroup>

@@ -78,12 +78,34 @@ export function gradeKey(g: string): number {
   return i >= 0 ? i : 100 + g.charCodeAt(0)
 }
 
+/** Grade tokens recognised at the START of a section name, longest-first so
+ *  "VIII" matches before "V", "XII"/"XI" before "X", "12" before "1/2". */
+const GRADE_TOKENS: string[] = [
+  ...GRADE_ORDER,
+  '1','2','3','4','5','6','7','8','9','10','11','12',
+].sort((a, b) => b.length - a.length)
+
 /**
  * Extract grade from a section name.
- * "IX-Sci-A" → "IX", "VI-D" → "VI", "Nursery-A" → "Nursery"
+ * "IX-Sci-A" → "IX", "VI-D" → "VI", "Nursery-A" → "Nursery",
+ * "XI-Spark-1" → "XI", "XII-Com-A" → "XII", "10-B" → "10"
+ *
+ * Matches a known grade token at the start (robust for multi-segment names
+ * like "XI-Spark-1" where the old lastIndexOf('-') heuristic wrongly yielded
+ * "XI-Spark" and mis-grouped the section as middle school).
  */
 export function getGrade(sectionName: string): string {
   const t = sectionName.trim()
+  for (const g of GRADE_TOKENS) {
+    // token must be followed by a separator or end-of-string (so "I" never
+    // matches inside "III", and "X" never matches inside "XII")
+    if (new RegExp(`^${g}(?=$|[\\s\\-_/])`, 'i').test(t)) {
+      // normalise case for Roman/word tokens to the canonical GRADE_ORDER spelling
+      const canon = GRADE_ORDER.find(o => o.toLowerCase() === g.toLowerCase())
+      return canon ?? g
+    }
+  }
+  // Fallback: original suffix-stripping heuristic
   const idx = t.lastIndexOf('-')
   if (idx > 0 && t.slice(idx + 1).length <= 5)
     return t.slice(0, idx).replace(/-(sci|com|arts?|hum|gen|pcm|pcb|lit)$/i, '').trim()
@@ -821,4 +843,166 @@ export function getShortHint(
   }
   const level = gradeGroup ? groupLabels[gradeGroup] : rule.grades.map(g => groupLabels[g]).join('+')
   return `${BOARD_LABELS[board]} ${level} curriculum`
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  STANDARD SUBJECT SETS — the "what subjects does a class take" brain
+//
+//  suggestClassesForSubject answers "which classes take THIS subject"; it can
+//  only map subjects the user already typed. To make "add a class → its subjects
+//  appear" work, we need the inverse: given a section, the curated standard
+//  subject list for that grade + stream. These sets are derived from the CBSE/
+//  NCERT scheme of studies and validated against real 2025-26 school timetables
+//  (Nursery–XII). Activities (PE/Art/Music) and the dominant electives are
+//  included; rarely-shared options (2nd foreign language, vocational tracks) are
+//  left out so the seeded list is a sensible default a user lightly edits — not
+//  an exhaustive catalogue.
+// ════════════════════════════════════════════════════════════════════════════
+
+/** Pre-primary (Nursery, LKG, UKG) — developmental, activity-led. */
+const STD_PREK = [
+  'English', 'Number Work', 'EVS', 'Nursery Rhymes & Stories',
+  'Art & Craft', 'Music', 'Physical Education', 'G.K.',
+]
+
+/** Primary (I–V) — CBSE keeps EVS through V; Science/SST begin at VI. */
+const STD_PRIMARY = [
+  'English', 'Mathematics', 'EVS', 'Hindi',
+  'Computer Science', 'G.K.', 'Art & Craft', 'Music',
+  'Physical Education', 'Library',
+]
+
+/** Middle (VI–VIII) — unified Science + Social Studies, three languages. */
+const STD_MIDDLE = [
+  'English', 'Mathematics', 'Science', 'Social Studies',
+  'Hindi', 'Sanskrit', 'Computer Science', 'Art & Craft',
+  'Physical Education', 'Library',
+]
+
+/** Secondary (IX–X) — board-exam core + IT skill + health/PE. */
+const STD_SECONDARY = [
+  'English', 'Mathematics', 'Science', 'Social Studies',
+  'Hindi', 'Information Technology', 'Physical Education',
+]
+
+/** Sr. Secondary (XI–XII) — keyed by stream. 'science' defaults to PCM;
+ *  'pcb' is the medical/Spark biology track; unmarked sections fall back to
+ *  PCM science (the most common Indian Sr.Sec default). */
+const STD_SRSEC: Record<Stream, string[]> = {
+  science:  ['Physics', 'Chemistry', 'Mathematics', 'English', 'Computer Science', 'Physical Education'],
+  pcb:      ['Physics', 'Chemistry', 'Biology', 'English', 'Physical Education'],
+  commerce: ['Accountancy', 'Business Studies', 'Economics', 'Mathematics', 'English', 'Physical Education'],
+  arts:     ['History', 'Geography', 'Political Science', 'Economics', 'English', 'Physical Education'],
+  general:  ['Physics', 'Chemistry', 'Mathematics', 'English', 'Computer Science', 'Physical Education'],
+}
+
+/**
+ * The curated standard subject names a section should take, by grade + stream.
+ * "Nursery-A" → pre-primary set; "XI-Com-1" → commerce set; "X-B" → secondary.
+ */
+export function standardSubjectsForSection(
+  sectionName: string,
+  _board: CurriculumBoard = 'CBSE',
+): string[] {
+  const group = getGradeGroup(getGrade(sectionName))
+  switch (group) {
+    case 'preK':      return STD_PREK
+    case 'primary':   return STD_PRIMARY
+    case 'middle':    return STD_MIDDLE
+    case 'secondary': return STD_SECONDARY
+    case 'srSec':     return STD_SRSEC[detectStream(sectionName)] ?? STD_SRSEC.general
+  }
+}
+
+/** Slot fallback when the curriculum KB has no board-specific number for a
+ *  (subject, grade) pair (e.g. unified Science at secondary). */
+function fallbackSlot(name: string, group: GradeGroup): number {
+  const rule = getRule(name)
+  if (rule?.isActivity) return 1
+  if (rule?.isLanguage) return group === 'srSec' ? 4 : 4
+  // core academic default
+  return group === 'preK' ? 4 : group === 'srSec' ? 6 : 5
+}
+
+/** Category label for a seeded subject — drives the Subjects-tab grouping. */
+function seedCategory(name: string): string {
+  const rule = getRule(name)
+  if (rule?.isActivity)  return 'Activity'
+  if (rule?.isLanguage)  return 'Language'
+  return 'Compulsory'
+}
+
+export interface SeededSubject {
+  name:           string
+  shortName:      string
+  category:       string
+  periodsPerWeek: number
+  sessionDuration: number
+  maxPeriodsPerDay: number
+  requiresLab:    boolean
+  isOptional:     boolean
+  sections:       string[]
+  classConfigs:   Array<{ sectionName: string; periodsPerWeek: number; maxPeriodsPerDay: number; sessionDuration: number }>
+}
+
+/**
+ * Seed the curated standard subjects for a set of sections.
+ *
+ * Returns one entry per distinct subject, each carrying the exact sections it
+ * applies to plus per-section slot configs (board-recommended, grade-aware).
+ * The caller adds ids / colors. Idempotent in spirit — call it on a fresh,
+ * subject-less resource set ("Let me create smartly") to bootstrap the whole
+ * Subjects tab from just the class list.
+ */
+export function seedStandardSubjects(
+  sections: ReadonlyArray<{ name: string }>,
+  board: CurriculumBoard = 'CBSE',
+): SeededSubject[] {
+  // subject name → set of section names that take it
+  const map = new Map<string, Set<string>>()
+  for (const sec of sections) {
+    for (const subName of standardSubjectsForSection(sec.name, board)) {
+      if (!map.has(subName)) map.set(subName, new Set())
+      map.get(subName)!.add(sec.name)
+    }
+  }
+
+  const out: SeededSubject[] = []
+  for (const [name, secSet] of map) {
+    const secList = [...secSet]
+    const classConfigs = secList.map(sn => {
+      const group = getGradeGroup(getGrade(sn))
+      const slots = suggestSlotsPerWeek(name, group, board) ?? fallbackSlot(name, group)
+      const rule  = getRule(name)
+      return {
+        sectionName:      sn,
+        periodsPerWeek:   slots,
+        maxPeriodsPerDay: rule?.isActivity ? 1 : 2,
+        sessionDuration:  45,
+      }
+    })
+    // dominant slot = the most common per-section value (for the subject default)
+    const slotCounts = new Map<number, number>()
+    classConfigs.forEach(c => slotCounts.set(c.periodsPerWeek, (slotCounts.get(c.periodsPerWeek) ?? 0) + 1))
+    const periodsPerWeek = [...slotCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? 5
+    const rule = getRule(name)
+    out.push({
+      name,
+      shortName:        generateShortName(name),
+      category:         seedCategory(name),
+      periodsPerWeek,
+      sessionDuration:  45,
+      maxPeriodsPerDay: rule?.isActivity ? 1 : 2,
+      requiresLab:      rule?.requiresLab ?? false,
+      isOptional:       false,
+      sections:         secList,
+      classConfigs,
+    })
+  }
+
+  // Stable, human order: core academics first, activities/languages later,
+  // alphabetical within. Mirrors how a scheme of studies is usually printed.
+  const rank = (s: SeededSubject) =>
+    s.category === 'Activity' ? 2 : s.category === 'Language' ? 1 : 0
+  return out.sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name))
 }
