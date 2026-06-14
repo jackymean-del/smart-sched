@@ -441,7 +441,10 @@ export function StepStudentGroups() {
   // options — not only when it's literally tagged "Optional". We treat a
   // subject as electable if ANY of these hold:
   //   • isOptional flag, or an elective-tier category
-  //     (Optional / Elective / 4th–6th Option / R1–R3 / Additional),
+  //     (Optional / Elective / 4th–6th Option / Additional),
+  //   • a language-requirement slot WITH a student choice — R2, R3, … (R1 is
+  //     the school-set first language: compulsory, single subject, no choice,
+  //     so it is NOT electable),
   //   • it is a member of any OR/AND Subject Combo (the explicit "list of
   //     options" the user defined in the Combos tab),
   //   • it is one option of a subjectCombination (PCM+CS style) for a class.
@@ -456,7 +459,9 @@ export function StepStudentGroups() {
 
   const isElectableCategory = (cat?: string): boolean => {
     const c = (cat ?? '').toLowerCase()
-    return /option|elective|additional/.test(c) || /^r\s*[1-9]$/.test(c.trim())
+    // R1 = compulsory first language (school-set) → not a choice; R2/R3/… = the
+    // student-opted language slots → electable.
+    return /option|elective|additional/.test(c) || /^r\s*[2-9]$/.test(c.trim())
   }
 
   const optionalSubjects = useMemo(() =>
@@ -1190,7 +1195,7 @@ export function StepStudentGroups() {
                           <br />
                           <span style={{ fontSize: 11, color: '#B8B4D4' }}>
                             A subject appears here when students pick it from a list — give it an{' '}
-                            <strong style={{ color: '#7C6FE0' }}>Optional / 4th–6th Option / R1–R3</strong> category in{' '}
+                            <strong style={{ color: '#7C6FE0' }}>Optional / 4th–6th Option / R2–R3 language</strong> category in{' '}
                             <strong style={{ color: '#7C6FE0' }}>Resources → Subjects</strong>, add it to an{' '}
                             <strong style={{ color: '#7C6FE0' }}>OR / AND combo</strong> in the Combos tab, or click{' '}
                             <strong style={{ color: '#7C6FE0' }}>+</strong> above to add a column manually.
@@ -1355,7 +1360,7 @@ export function StepStudentGroups() {
       <Section title="Subject Grouping Rules" icon={<BookOpen size={15} color="#7C6FE0" />}
         hint="Set how AI groups students for each subject.">
         {allCols.length === 0 ? (
-          <EmptyState msg='Add electable subjects (Optional / Option / R1–R3 category, or members of an OR/AND combo) to configure grouping rules.' />
+          <EmptyState msg='Add electable subjects (Optional / Option / R2–R3 language category, or members of an OR/AND combo) to configure grouping rules.' />
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {allCols.map(col => {
