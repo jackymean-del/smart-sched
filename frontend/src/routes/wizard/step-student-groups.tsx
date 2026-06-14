@@ -436,10 +436,36 @@ export function StepStudentGroups() {
     return () => document.removeEventListener('mousedown', handler)
   }, [showRowPicker])
 
-  // ── Optional subjects ─────────────────────────────────────────────────────
+  // ── Electable subjects (shown in the preference matrix) ────────────────────
+  // A subject belongs in the matrix when students pick it from a list of
+  // options — not only when it's literally tagged "Optional". We treat a
+  // subject as electable if ANY of these hold:
+  //   • isOptional flag, or an elective-tier category
+  //     (Optional / Elective / 4th–6th Option / R1–R3 / Additional),
+  //   • it is a member of any OR/AND Subject Combo (the explicit "list of
+  //     options" the user defined in the Combos tab),
+  //   • it is one option of a subjectCombination (PCM+CS style) for a class.
+  const electableNames = useMemo(() => {
+    const set = new Set<string>()
+    for (const g of ((store as any).subjectGroups ?? []) as Array<{ subjects?: string[] }>)
+      for (const s of (g.subjects ?? [])) set.add(s)
+    for (const c of ((store as any).subjectCombinations ?? []) as Array<{ subjects?: string[] }>)
+      for (const s of (c.subjects ?? [])) set.add(s)
+    return set
+  }, [store])
+
+  const isElectableCategory = (cat?: string): boolean => {
+    const c = (cat ?? '').toLowerCase()
+    return /option|elective|additional/.test(c) || /^r\s*[1-9]$/.test(c.trim())
+  }
+
   const optionalSubjects = useMemo(() =>
-    (subjects as any[]).filter(s => s.isOptional === true || (s.category ?? '').toLowerCase().includes('optional'))
-  , [subjects])
+    (subjects as any[]).filter(s =>
+      s.isOptional === true ||
+      isElectableCategory(s.category) ||
+      electableNames.has(s.name)
+    )
+  , [subjects, electableNames])
 
   // Only show optional subjects that are actually assigned to at least one section.
   // A subject with no assignments (classConfigs, sections[], or subjectAllocations)
@@ -1160,12 +1186,14 @@ export function StepStudentGroups() {
                     <tr>
                       <td colSpan={4} style={{ padding: '22px 14px', textAlign: 'center' }}>
                         <div style={{ color: '#8B87AD', fontSize: 12, lineHeight: 1.7 }}>
-                          No optional subjects added yet.
+                          No electable subjects yet.
                           <br />
                           <span style={{ fontSize: 11, color: '#B8B4D4' }}>
-                            Mark subjects as <strong style={{ color: '#7C6FE0' }}>Optional</strong> (4th / 5th / 6th Optional category) in{' '}
-                            <strong style={{ color: '#7C6FE0' }}>Resources → Subjects</strong>, or click{' '}
-                            <strong style={{ color: '#7C6FE0' }}>+</strong> in the column header above to add a subject column manually.
+                            A subject appears here when students pick it from a list — give it an{' '}
+                            <strong style={{ color: '#7C6FE0' }}>Optional / 4th–6th Option / R1–R3</strong> category in{' '}
+                            <strong style={{ color: '#7C6FE0' }}>Resources → Subjects</strong>, add it to an{' '}
+                            <strong style={{ color: '#7C6FE0' }}>OR / AND combo</strong> in the Combos tab, or click{' '}
+                            <strong style={{ color: '#7C6FE0' }}>+</strong> above to add a column manually.
                           </span>
                         </div>
                       </td>
@@ -1327,7 +1355,7 @@ export function StepStudentGroups() {
       <Section title="Subject Grouping Rules" icon={<BookOpen size={15} color="#7C6FE0" />}
         hint="Set how AI groups students for each subject.">
         {allCols.length === 0 ? (
-          <EmptyState msg='Mark subjects as Optional to configure grouping rules.' />
+          <EmptyState msg='Add electable subjects (Optional / Option / R1–R3 category, or members of an OR/AND combo) to configure grouping rules.' />
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {allCols.map(col => {

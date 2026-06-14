@@ -127,7 +127,7 @@ function EditCell({ value, onSave, placeholder = '…', style: extra }: {
 
 
 /** Built-in category options — user can append custom ones */
-const BUILTIN_CATS = ['Compulsory','Language','R1','R2','R3','Optional','Practical','Activity','CCA','Skill','Others']
+const BUILTIN_CATS = ['Compulsory','Language','R1','R2','R3','Optional','4th Option','5th Option','6th Option','Elective','Practical','Activity','CCA','Skill','Others']
 
 // ─── Category dropdown (native select, always shows full list) ────────────────
 function CategorySelect({
