@@ -15,9 +15,9 @@ import { useState, useMemo, useRef, useEffect } from 'react'
 import { useTimetableStore } from '@/store/timetableStore'
 import type { AndComboGroup, AndTeachingGroup, AndGroupScope, SubjectBundle } from '@/types'
 import {
-  Layers, Shuffle, ChevronRight, ChevronLeft, Plus, Trash2,
+  Layers, Shuffle, ChevronRight, ChevronLeft, ChevronDown, Plus, Trash2,
   Sparkles, RefreshCw, Zap, CheckCircle2, AlertCircle, XCircle,
-  Wand2, Info, X, Users,
+  Wand2, Info, X, Users, Eye, EyeOff,
 } from 'lucide-react'
 import { SubjectGroupsSection } from '@/components/resources/SubjectGroupsSection'
 
@@ -288,8 +288,8 @@ function generateAndGroups(group: AndComboGroup, rooms: any[]): AndTeachingGroup
 
 // ── table styles ─────────────────────────────────────────────────────────────
 
-const SEC_W = 124
-const TOT_W = 50
+const SEC_W = 150
+const TOT_W = 52
 function stickyHead(left: number, w: number): React.CSSProperties {
   return {
     position: 'sticky', left, zIndex: 3, width: w, minWidth: w,
@@ -345,9 +345,9 @@ function Picker({
 // ── generated parallel group (last-day card style, editable room) ───────────────
 
 function ParallelGroupCard({
-  tg, color, allRoomNames, onRoom,
+  tg, color, allRoomNames, onRoom, onDelete,
 }: {
-  tg: AndTeachingGroup; color: string; allRoomNames: string[]; onRoom: (room: string) => void
+  tg: AndTeachingGroup; color: string; allRoomNames: string[]; onRoom: (room: string) => void; onDelete: () => void
 }) {
   const subject = tg.subjects[0] ?? tg.bundleName
   const secs = tg.sectionSlices.map(s => s.sectionName)
@@ -360,6 +360,10 @@ function ParallelGroupCard({
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 9px', background: 'linear-gradient(135deg, #F5F2FF, #FAFAFE)', borderBottom: '1px solid #F0EDFF' }}>
         <div style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
         <span title={title} style={{ fontSize: 10.5, fontWeight: 700, color: '#13111E', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</span>
+        <button onClick={onDelete} title="Delete this group" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#C4C0DC', padding: 1, flexShrink: 0, lineHeight: 1 }}
+          onMouseEnter={e => { e.currentTarget.style.color = '#EF4444' }} onMouseLeave={e => { e.currentTarget.style.color = '#C4C0DC' }}>
+          <X size={12} />
+        </button>
       </div>
       <div style={{ padding: '7px 9px' }}>
         <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', marginBottom: 6 }}>
@@ -397,6 +401,7 @@ function BlockCard({
   onDeleteBlock: () => void
 }) {
   const [picker, setPicker] = useState<null | { type: 'section' } | { type: 'subject'; comboId: string }>(null)
+  const [collapsed, setCollapsed] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
   const combos = block.combos
@@ -481,6 +486,8 @@ function BlockCard({
 
   const generate = () => commit(combos.map(c => ({ ...c, generatedGroups: generateAndGroups(c, rooms) })))
   const clearGroups = () => commit(combos.map(c => ({ ...c, generatedGroups: undefined })))
+  const deleteGroup = (comboId: string, groupId: string) =>
+    commit(combos.map(c => c.id !== comboId ? c : { ...c, generatedGroups: (c.generatedGroups ?? []).filter(g => g.id !== groupId) }))
 
   const allGenerated = combos.flatMap(c => c.generatedGroups ?? [])
   const colorOf = (sub: string) => {
@@ -510,10 +517,29 @@ function BlockCard({
           ))}
         </div>
 
+        <button onClick={() => setCollapsed(c => !c)} title={collapsed ? 'Show preview' : 'Hide / preview'} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, background: '#fff', border: '1.5px solid #E4E0FF', borderRadius: 6, cursor: 'pointer', color: '#7C6FE0', padding: '3px 8px', fontSize: 10, fontWeight: 700, fontFamily: 'inherit', flexShrink: 0 }}>
+          {collapsed ? <Eye size={12} /> : <EyeOff size={12} />}{collapsed ? 'Show' : 'Hide'}
+          <ChevronDown size={13} style={{ transform: collapsed ? 'rotate(-90deg)' : 'none', transition: 'transform .15s' }} />
+        </button>
         <button onClick={onDeleteBlock} title="Delete this block (all its combinations)" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#EF4444', padding: 3, flexShrink: 0 }}>
           <Trash2 size={14} />
         </button>
       </div>
+
+      {collapsed ? (
+        <div style={{ padding: '12px 14px', fontSize: 12, color: '#6B7280', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontWeight: 700, color: '#13111E' }}>Preview hidden</span>
+          <span>·</span>
+          <span>{combos.length} combination{combos.length !== 1 ? 's' : ''}</span>
+          <span>·</span>
+          <span>{sections.length} section{sections.length !== 1 ? 's' : ''}</span>
+          <span>·</span>
+          <span>{allGenerated.length} group{allGenerated.length !== 1 ? 's' : ''}</span>
+          <button onClick={() => setCollapsed(false)} style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 6, border: '1.5px solid #C4B5FD', background: '#F5F3FF', color: '#7C6FE0', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+            <Eye size={12} /> Show preview
+          </button>
+        </div>
+      ) : (<>
 
       {/* merge axes */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 12px', borderBottom: '1px solid #F0EDFF', flexWrap: 'wrap' }}>
@@ -541,11 +567,11 @@ function BlockCard({
           <thead>
             <tr>
               <th rowSpan={2} style={stickyHead(0, SEC_W)}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, position: 'relative' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 5, position: 'relative' }}>
                   Section
-                  <button onClick={() => setPicker(p => p && p.type === 'section' ? null : { type: 'section' })} title="Add class-section"
-                    style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 16, height: 16, borderRadius: 4, border: '1.5px dashed #C4B5FD', background: '#F5F3FF', color: '#7C6FE0', cursor: 'pointer', padding: 0 }}>
-                    <Plus size={10} />
+                  <button onClick={() => setPicker(p => p && p.type === 'section' ? null : { type: 'section' })} title="Add a class-section row"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '5px 10px', borderRadius: 7, border: '1.5px dashed #A78BFA', background: '#EDE9FF', color: '#6D28D9', cursor: 'pointer', fontSize: 11, fontWeight: 800, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                    <Plus size={13} /> Add section
                   </button>
                   {picker?.type === 'section' && (
                     <Picker items={allSectionNames} existing={sections} placeholder="Add section…" onAdd={addSection} onClose={() => setPicker(null)} />
@@ -565,9 +591,9 @@ function BlockCard({
                         style={{ flex: 1, minWidth: 60, padding: '2px 5px', borderRadius: 4, border: '1.5px solid transparent', background: 'transparent', fontSize: 11, fontWeight: 800, color: colColor(ci), outline: 'none', fontFamily: 'inherit' }}
                         onFocus={e => { e.currentTarget.style.border = `1.5px solid ${colColor(ci)}`; e.currentTarget.style.background = '#fff' }}
                         onBlur={e => { e.currentTarget.style.border = '1.5px solid transparent'; e.currentTarget.style.background = 'transparent' }} />
-                      <button onClick={() => setPicker(p => p && p.type === 'subject' && p.comboId === combo.id ? null : { type: 'subject', comboId: combo.id })} title="Add subject column"
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: 2, padding: '1px 6px', borderRadius: 4, border: '1.5px dashed #A7F3D0', background: '#F0FDF4', color: '#065F46', cursor: 'pointer', fontSize: 9, fontWeight: 700, fontFamily: 'inherit' }}>
-                        <Plus size={9} /> Subj
+                      <button onClick={() => setPicker(p => p && p.type === 'subject' && p.comboId === combo.id ? null : { type: 'subject', comboId: combo.id })} title="Add a subject column"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 9px', borderRadius: 6, border: '1.5px dashed #34D399', background: '#ECFDF5', color: '#047857', cursor: 'pointer', fontSize: 10.5, fontWeight: 800, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                        <Plus size={12} /> Subject
                       </button>
                       <button onClick={() => deleteCombo(combo.id)} title="Delete this combination"
                         style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#EF4444', padding: 1 }}>
@@ -580,9 +606,9 @@ function BlockCard({
                   </th>
                 )
               })}
-              <th rowSpan={2} style={{ padding: '4px 6px', borderBottom: '2px solid #E8E4FF', borderLeft: '2px solid #E8E4FF', verticalAlign: 'middle' }}>
-                <button onClick={addCombo} title="Add another combination" style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 2, padding: '6px 8px', borderRadius: 7, border: '1.5px dashed #C4B5FD', background: '#F5F3FF', color: '#7C6FE0', cursor: 'pointer', fontSize: 9, fontWeight: 800, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
-                  <Plus size={12} /> Combo
+              <th rowSpan={2} style={{ padding: '6px 10px', borderBottom: '2px solid #E8E4FF', borderLeft: '2px solid #E8E4FF', verticalAlign: 'middle' }}>
+                <button onClick={addCombo} title="Add another combination (a new optional group)" style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '10px 12px', borderRadius: 9, border: '2px dashed #A78BFA', background: '#EDE9FF', color: '#6D28D9', cursor: 'pointer', fontSize: 10.5, fontWeight: 800, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                  <Plus size={18} /> Add<br />combo
                 </button>
               </th>
             </tr>
@@ -684,11 +710,13 @@ function BlockCard({
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(168px, 1fr))', gap: 8 }}>
             {combos.flatMap(c => (c.generatedGroups ?? []).map(g => (
               <ParallelGroupCard key={g.id} tg={g} color={colorOf(g.subjects[0] ?? g.bundleName)} allRoomNames={allRoomNames}
-                onRoom={room => commit(combos.map(cc => cc.id !== c.id ? cc : { ...cc, generatedGroups: (cc.generatedGroups ?? []).map(x => x.id === g.id ? { ...x, room } : x) }))} />
+                onRoom={room => commit(combos.map(cc => cc.id !== c.id ? cc : { ...cc, generatedGroups: (cc.generatedGroups ?? []).map(x => x.id === g.id ? { ...x, room } : x) }))}
+                onDelete={() => deleteGroup(c.id, g.id)} />
             )))}
           </div>
         </div>
       )}
+      </>)}
     </div>
   )
 }
@@ -703,6 +731,7 @@ export function StepStudentGroups() {
   const [activeTab, setActiveTab] = useState<'and' | 'or'>('and')
   const [hintDismissed, setHintDismissed] = useState(false)
   const [globalScope, setGlobalScope] = useState<AndGroupScope>(DEFAULT_SCOPE)
+  const [showGuide, setShowGuide] = useState(true)
 
   const groups = andComboGroups as AndComboGroup[]
 
@@ -827,6 +856,37 @@ export function StepStudentGroups() {
             <button onClick={addBlankBlock} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, border: 'none', background: '#7C6FE0', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', boxShadow: '0 2px 8px rgba(124,111,224,0.35)' }}>
               <Plus size={13} /> New block
             </button>
+          </div>
+
+          {/* user guide */}
+          <div style={{ marginBottom: 16, borderRadius: 10, border: '1px solid #C4B5FD', background: 'linear-gradient(135deg, #F5F2FF, #FAFAFE)', overflow: 'hidden' }}>
+            <button onClick={() => setShowGuide(g => !g)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '9px 14px', border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>
+              <Info size={15} color="#7C6FE0" />
+              <span style={{ fontSize: 12.5, fontWeight: 800, color: '#4C1D95', flex: 1, textAlign: 'left' }}>How to build a combination — quick guide</span>
+              <ChevronDown size={16} color="#7C6FE0" style={{ transform: showGuide ? 'none' : 'rotate(-90deg)', transition: 'transform .15s' }} />
+            </button>
+            {showGuide && (
+              <div style={{ padding: '4px 14px 14px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
+                  {[
+                    { n: 1, t: 'Add the class-sections', d: 'Use the purple “＋ Add section” under the Section heading. They become the rows of this block.' },
+                    { n: 2, t: 'Add subjects per combo', d: 'Click the green “＋ Subject” in a combo to add its mutually-exclusive choices (e.g. Maths, Bio).' },
+                    { n: 3, t: 'Add more combinations', d: 'Use “＋ Add combo” on the right for a separate optional group (e.g. PE / Painting).' },
+                    { n: 4, t: 'Enter the headcounts', d: 'Type how many students take each subject — each combo’s row must sum to the section total (green ✓). “Split evenly” fills them fast.' },
+                    { n: 5, t: 'Set how groups merge', d: 'Use Merge (Section/Grade/Stream/Block) and the Room-capacity toggle to control pooling, then press “Generate teaching groups”.' },
+                    { n: 6, t: 'Review & assign rooms', d: 'Each generated group shows its sections & size — set a Room, delete a single group, or hit “Show / Hide” to preview.' },
+                  ].map(s => (
+                    <div key={s.n} style={{ display: 'flex', gap: 8 }}>
+                      <div style={{ flexShrink: 0, width: 20, height: 20, borderRadius: '50%', background: '#7C6FE0', color: '#fff', fontSize: 11, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{s.n}</div>
+                      <div>
+                        <div style={{ fontSize: 11.5, fontWeight: 800, color: '#13111E', marginBottom: 2 }}>{s.t}</div>
+                        <div style={{ fontSize: 10.5, color: '#6B7280', lineHeight: 1.45 }}>{s.d}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* global merge */}
