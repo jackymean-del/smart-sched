@@ -827,12 +827,12 @@ export function TeachersPanel({ staff, setStaff, sections, subjects, onScopeClic
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
             <colgroup>
-              <col style={{ width: '12%' }} />  {/* Educator */}
-              <col style={{ width: '25%' }} />  {/* Subject Assignments */}
-              <col style={{ width: '9%' }} />   {/* Slots/Wk */}
-              <col style={{ width: '17%' }} />  {/* Class Teacher Of */}
-              <col style={{ width: '17%' }} />  {/* Co-Class Teacher Of */}
-              <col style={{ width: '20%' }} />  {/* Actions */}
+              <col style={{ width: '12%' }} />
+              <col style={{ width: '25%' }} />
+              <col style={{ width: '9%' }} />
+              <col style={{ width: '17%' }} />
+              <col style={{ width: '17%' }} />
+              <col style={{ width: '20%' }} />
             </colgroup>
             <thead>
               <tr>

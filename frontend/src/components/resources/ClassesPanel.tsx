@@ -1267,9 +1267,12 @@ export function ClassesPanel({ sections, setSections, onScopeClick }: {
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <colgroup>
-              <col />                             {/* Class: sizes to content, gets extra space */}
-              <col style={{ width: 90 }} />       {/* Strength — tight */}
-              <col style={{ width: 160 }} />      {/* Actions — Scope + gap + delete */}
+              {/* Class: sizes to content, gets extra space */}
+              <col />
+              {/* Strength — tight */}
+              <col style={{ width: 90 }} />
+              {/* Actions — Scope + gap + delete */}
+              <col style={{ width: 160 }} />
             </colgroup>
             <thead>
               <tr>

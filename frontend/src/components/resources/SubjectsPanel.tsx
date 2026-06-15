@@ -681,12 +681,12 @@ function ClassSlotsExpanded({
 
       <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: '100%', maxWidth: 600 }}>
         <colgroup>
-          <col style={{ width: 110 }} />   {/* Grade */}
-          <col style={{ width: 96 }} />    {/* Slots/Wk */}
-          <col style={{ width: 64 }} />    {/* Max/day */}
-          <col />                          {/* spacer — flex */}
-          <col style={{ width: 68 }} />    {/* Lab Req */}
-          <col style={{ width: 26 }} />    {/* Remove */}
+          <col style={{ width: 110 }} />
+          <col style={{ width: 96 }} />
+          <col style={{ width: 64 }} />
+          <col />
+          <col style={{ width: 68 }} />
+          <col style={{ width: 26 }} />
         </colgroup>
         <thead>
           <tr>
@@ -1623,10 +1623,10 @@ export function SubjectsPanel({
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
             <colgroup>
-              <col style={{ width: '18%' }} />  {/* Subject */}
-              <col style={{ width: '6%' }} />   {/* Short */}
-              <col style={{ width: '52%' }} />  {/* Applicable Classes */}
-              <col style={{ width: '24%' }} />  {/* Actions */}
+              <col style={{ width: '18%' }} />
+              <col style={{ width: '6%' }} />
+              <col style={{ width: '52%' }} />
+              <col style={{ width: '24%' }} />
             </colgroup>
             <thead>
               <tr>

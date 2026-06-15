@@ -606,12 +606,12 @@ export function RoomsPanel({ rooms, setRooms, sections, setSections, subjects, o
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
             <colgroup>
-              <col style={{ width: '24%' }} />  {/* Room + block pill */}
-              <col style={{ width: '13%' }} />  {/* Type */}
-              <col style={{ width: '6%' }} />   {/* Cap */}
-              <col style={{ width: '25%' }} />  {/* Assigned Classes */}
-              <col style={{ width: '20%' }} />  {/* Special Subjects */}
-              <col style={{ width: '12%' }} />  {/* Actions */}
+              <col style={{ width: '24%' }} />
+              <col style={{ width: '13%' }} />
+              <col style={{ width: '6%' }} />
+              <col style={{ width: '25%' }} />
+              <col style={{ width: '20%' }} />
+              <col style={{ width: '12%' }} />
             </colgroup>
             <thead>
               <tr>
