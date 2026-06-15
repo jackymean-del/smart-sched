@@ -19,7 +19,7 @@ import type { AndComboGroup, AndTeachingGroup, AndGroupScope, SubjectBundle } fr
 import {
   Layers, Shuffle, ChevronRight, ChevronLeft, Plus, Trash2,
   Sparkles, RefreshCw, Zap, CheckCircle2, AlertCircle, XCircle,
-  Wand2, Info, X,
+  Wand2, Info, X, Users,
 } from 'lucide-react'
 import { SubjectGroupsSection } from '@/components/resources/SubjectGroupsSection'
 
@@ -111,9 +111,19 @@ function getCell(group: AndComboGroup, sec: string, sub: string): number {
   return group.strengthMatrix?.[sec]?.[sub] ?? 0
 }
 
-// ── AI suggestion (slot / category driven) ──────────────────────────────────────
+// ── AI suggestion (optional-group aware) ─────────────────────────────────────────
 
-interface OptInfo { sub: any; optional: boolean; slot?: string; category?: string; sections: string[] }
+interface OptInfo { sub: any; optional: boolean; slot?: string; category?: string; type: 'academic' | 'activity'; sections: string[] }
+
+/** Co-scholastic / activity subjects — kept in their own combination, never mixed
+ *  with academic electives. */
+const ACTIVITY_RE = /\b(p\.?\s?e\.?|phys(ical)?\s*(ed|education)?|sports?|games?|athletics|art|arts|paint(ing)?|drawing|music|dance|drama|theatre|theater|craft|yoga|gym|swim(ming)?|library|hobby|club|cca|scout|ncc|nss)\b/i
+function inferType(name: string, category?: string): 'academic' | 'activity' {
+  const c = (category ?? '').toLowerCase()
+  if (c.includes('co-scholastic') || c.includes('co scholastic') || c.includes('activity')) return 'activity'
+  if (c.includes('scholastic')) return 'academic'
+  return ACTIVITY_RE.test(name) ? 'activity' : 'academic'
+}
 
 function readOpt(sub: any): OptInfo {
   const cfgs = (sub.classConfigs ?? []) as any[]
@@ -122,30 +132,32 @@ function readOpt(sub: any): OptInfo {
   const category = sub.category ?? cfgs.find(c => c.category)?.category
   const fromCfg = cfgs.map(c => c.sectionName).filter(Boolean) as string[]
   const sections = [...new Set([...fromCfg, ...(sub.sections ?? [])])]
-  return { sub, optional, slot, category, sections }
+  return { sub, optional, slot, category, type: inferType(sub.name, category), sections }
 }
 
 /**
  * Auto-build combination tables from how electives were set up in Resources →
- * Subjects. Mutually-exclusive electives are grouped by:
- *   1. electiveSlotId  (explicit slot — strongest signal), else
- *   2. category + identical section signature (e.g. two "Co-scholastic" options
- *      offered to the same sections).
- * A group becomes a card ONLY when it has ≥2 distinct subjects — a lone elective
- * shared across sections is never turned into a combination (per requirement).
- * Different slots / categories stay in SEPARATE cards (Maths/Bio apart from PE/Painting).
+ * Subjects. Each card = ONE optional group (mutually-exclusive choices that
+ * together cover the whole section).
+ *
+ * Grouping key (most-specific first), with subject TYPE as a hard top-level
+ * separator so academic and activity electives are never mixed:
+ *   `${type}::${electiveSlotId ?? category ?? sectionSignature}`
+ *
+ * Result for a typical XI–XII Science setup:
+ *   • academic   → Mathematics / Biology   (one card, sums to section total)
+ *   • activity   → Physical Ed / Painting  (a SEPARATE card, sums to total)
+ *
+ * A group becomes a card only when it has ≥2 distinct subjects — a lone elective
+ * shared across sections is never turned into a combination.
  */
 function suggestAndComboGroups(subjects: any[], sections: any[]): AndComboGroup[] {
   const opts = subjects.map(readOpt).filter(o => o.optional && o.sections.length > 0)
 
   const byKey = new Map<string, OptInfo[]>()
   for (const o of opts) {
-    const key = o.slot
-      ? `slot:${o.slot}`
-      : o.category
-        ? `cat:${o.category}|${[...o.sections].sort().join(',')}`
-        : null
-    if (!key) continue
+    const refiner = o.slot ?? o.category ?? [...o.sections].sort().join(',')
+    const key = `${o.type}::${refiner}`
     if (!byKey.has(key)) byKey.set(key, [])
     byKey.get(key)!.push(o)
   }
@@ -161,7 +173,7 @@ function suggestAndComboGroups(subjects: any[], sections: any[]): AndComboGroup[
     const secs = [...new Set(members.flatMap(m => m.sections))]
       .sort((a, b) => gradeNum(parseSection(a).grade) - gradeNum(parseSection(b).grade) || a.localeCompare(b))
     out.push({
-      id: `ai_${key.replace(/[^a-z0-9]/gi, '').slice(0, 14)}_${cols.join('').replace(/[^a-z0-9]/gi, '').slice(0, 10)}`,
+      id: `ai_${key.replace(/[^a-z0-9]/gi, '').slice(0, 18)}_${cols.join('').replace(/[^a-z0-9]/gi, '').slice(0, 10)}`,
       name: autoName(cols),
       applicableSections: secs,
       subjects: cols,
@@ -172,7 +184,7 @@ function suggestAndComboGroups(subjects: any[], sections: any[]): AndComboGroup[
     })
   }
 
-  // Fallback: classic Science Maths-vs-Bio split when no slot/category produced one
+  // Fallback: classic Science Maths-vs-Bio split when nothing else produced a card
   if (out.length === 0) {
     const sci = sections.filter(s => isScienceSenior(s.name))
     if (sci.length > 0) {
@@ -341,12 +353,13 @@ function Picker({
 // ── combination card ───────────────────────────────────────────────────────────
 
 function ComboCard({
-  group, sections, allSubjectNames, allSectionNames, onUpdate, onDelete, onGenerate,
+  group, sections, allSubjectNames, allSectionNames, allRoomNames, onUpdate, onDelete, onGenerate,
 }: {
   group: AndComboGroup
   sections: any[]
   allSubjectNames: string[]
   allSectionNames: string[]
+  allRoomNames: string[]
   onUpdate: (g: AndComboGroup) => void
   onDelete: () => void
   onGenerate: () => void
@@ -412,6 +425,13 @@ function ComboCard({
   }
 
   const generatedCount = group.generatedGroups?.length ?? 0
+
+  const setGroupField = (gid: string, field: 'room' | 'teacher', val: string) => {
+    onUpdate({
+      ...group,
+      generatedGroups: (group.generatedGroups ?? []).map(g => g.id === gid ? { ...g, [field]: val } : g),
+    })
+  }
 
   return (
     <div ref={cardRef} style={{
@@ -596,18 +616,85 @@ function ComboCard({
         </button>
       </div>
 
-      {/* generated chips */}
+      {/* generated parallel groups — one card per teaching group */}
       {generatedCount > 0 && (
-        <div style={{ padding: '0 12px 10px', display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-          {group.generatedGroups!.map((g, gi) => (
-            <span key={g.id} title={g.sectionSlices.map(s => `${s.sectionName}: ${s.studentCount}`).join(', ')} style={{
-              fontSize: 9.5, fontWeight: 700, padding: '2px 7px', background: colColor(gi), color: '#fff', borderRadius: 4,
-            }}>
-              {g.subjects[0] ?? g.bundleName} · {g.totalStrength}{g.room ? ` · ${g.room}` : ''}{g.capacityWarning ? ' ⚠' : ''}
-            </span>
-          ))}
+        <div style={{ padding: '2px 12px 12px' }}>
+          <div style={{ fontSize: 9.5, fontWeight: 800, color: '#8B87AD', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '4px 0 7px' }}>
+            Parallel groups ({generatedCount})
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 8 }}>
+            {group.generatedGroups!.map((g, gi) => (
+              <ParallelGroupCard
+                key={g.id}
+                tg={g}
+                color={colColor(cols.indexOf(g.subjects[0] ?? g.bundleName) >= 0 ? cols.indexOf(g.subjects[0] ?? g.bundleName) : gi)}
+                allRoomNames={allRoomNames}
+                onRoom={room => setGroupField(g.id, 'room', room)}
+              />
+            ))}
+          </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ── one generated parallel group (last-day card style, editable room) ────────────
+
+function ParallelGroupCard({
+  tg, color, allRoomNames, onRoom,
+}: {
+  tg: AndTeachingGroup
+  color: string
+  allRoomNames: string[]
+  onRoom: (room: string) => void
+}) {
+  const subject = tg.subjects[0] ?? tg.bundleName
+  const secs = tg.sectionSlices.map(s => s.sectionName)
+  const title = secs.length === 0 ? subject
+    : secs.length <= 2 ? `${subject} · ${secs.join(', ')}`
+    : `${subject} · ${secs[0]} +${secs.length - 1}`
+  const over = tg.capacityWarning
+  return (
+    <div style={{
+      borderRadius: 9, border: `1px solid ${over ? '#FECACA' : '#E8E4FF'}`,
+      background: '#fff', overflow: 'hidden', boxShadow: '0 1px 4px rgba(124,111,224,0.07)',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 9px', background: 'linear-gradient(135deg, #F5F2FF, #FAFAFE)', borderBottom: '1px solid #F0EDFF' }}>
+        <div style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
+        <span title={title} style={{ fontSize: 10.5, fontWeight: 700, color: '#13111E', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</span>
+      </div>
+      <div style={{ padding: '7px 9px' }}>
+        {/* section chips */}
+        <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', marginBottom: 6 }}>
+          {secs.map(sn => (
+            <span key={sn} style={{ padding: '1px 6px', borderRadius: 7, background: '#EDE9FF', color: '#7C6FE0', fontSize: 9, fontWeight: 700, border: '1px solid #C4B5FD' }}>{sn}</span>
+          ))}
+        </div>
+        <div style={{ fontSize: 10, color: '#8B87AD', display: 'flex', alignItems: 'center', gap: 4, marginBottom: 6 }}>
+          <Users size={9} /> {tg.totalStrength} students
+          {tg.roomCapacity ? <span style={{ color: over ? '#DC2626' : '#15803D', fontWeight: 700 }}>{over ? ` · over cap ${tg.roomCapacity}` : ` · cap ${tg.roomCapacity} ✓`}</span> : null}
+        </div>
+        {/* editable room */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ fontSize: 12, flexShrink: 0 }}>🏫</span>
+          <input
+            list="and-rooms"
+            value={tg.room ?? ''}
+            onChange={e => onRoom(e.target.value)}
+            placeholder="Room…"
+            style={{
+              flex: 1, minWidth: 0, padding: '3px 6px', borderRadius: 5,
+              border: `1.5px solid ${over ? '#FCA5A5' : '#E4E0FF'}`,
+              fontSize: 11, fontWeight: 600, color: '#13111E', outline: 'none',
+              fontFamily: 'inherit', background: over ? '#FEF2F2' : '#FAFAFE',
+            }}
+          />
+          <datalist id="and-rooms">
+            {allRoomNames.map(r => <option key={r} value={r} />)}
+          </datalist>
+        </div>
+      </div>
     </div>
   )
 }
@@ -621,6 +708,7 @@ export function StepStudentGroups() {
 
   const [activeTab, setActiveTab] = useState<'and' | 'or'>('and')
   const [hintDismissed, setHintDismissed] = useState(false)
+  const [globalScope, setGlobalScope] = useState<AndGroupScope>(DEFAULT_SCOPE)
 
   const groups = andComboGroups as AndComboGroup[]
 
@@ -655,6 +743,11 @@ export function StepStudentGroups() {
 
   const allSubjectNames = useMemo(() => (subjects as any[]).map((s: any) => s.name), [subjects])
   const allSectionNames = useMemo(() => (sections as any[]).map((s: any) => s.name), [sections])
+  const allRoomNames    = useMemo(() => (rooms as any[]).map((r: any) => r.name ?? r.actualName).filter(Boolean), [rooms])
+
+  // Global merge: apply one scope to every card at once
+  const applyGlobalScope = (scope: AndGroupScope) =>
+    setAndComboGroups(groups.map(g => ({ ...g, groupingScope: scope })))
 
   // shared electives (hint only)
   const consumed = useMemo(() => {
@@ -743,6 +836,34 @@ export function StepStudentGroups() {
             </button>
           </div>
 
+          {/* global merge — apply one scope to every card */}
+          {groups.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', marginBottom: 14, borderRadius: 9, background: '#F5F2FF', border: '1px solid #E8E4FF', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 9.5, fontWeight: 800, color: '#7C6FE0', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Global merge:</span>
+              {SCOPE_DIMS.map(dim => (
+                <div key={dim.key} title={dim.desc} style={{ display: 'inline-flex', alignItems: 'center', borderRadius: 5, overflow: 'hidden', border: '1.5px solid #E4E0FF' }}>
+                  <span style={{ fontSize: 9, fontWeight: 700, color: '#8B87AD', padding: '2px 5px', background: '#fff' }}>{dim.label}</span>
+                  {(['same', 'cross'] as const).map(v => {
+                    const active = globalScope[dim.key] === v
+                    return (
+                      <button key={v} onClick={() => setGlobalScope(s => ({ ...s, [dim.key]: v }))} style={{
+                        padding: '2px 7px', border: 'none', fontSize: 9.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                        background: active ? (v === 'same' ? '#7C6FE0' : '#F59E0B') : '#fff',
+                        color: active ? '#fff' : '#C4C0DC',
+                      }}>{v === 'same' ? 'Same' : 'Cross'}</button>
+                    )
+                  })}
+                </div>
+              ))}
+              <button onClick={() => applyGlobalScope(globalScope)} style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 7, border: 'none',
+                background: '#7C6FE0', color: '#fff', fontSize: 10.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+              }}>
+                Apply to all {groups.length} card{groups.length !== 1 ? 's' : ''}
+              </button>
+            </div>
+          )}
+
           {/* shared-electives hint */}
           {sharedElectives.length > 0 && !hintDismissed && (
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 14px', marginBottom: 16, borderRadius: 10, background: '#FFFBEB', border: '1px solid #FDE68A' }}>
@@ -782,6 +903,7 @@ export function StepStudentGroups() {
                   sections={sections as any[]}
                   allSubjectNames={allSubjectNames}
                   allSectionNames={allSectionNames}
+                  allRoomNames={allRoomNames}
                   onUpdate={handleUpdate}
                   onDelete={() => handleDelete(group.id)}
                   onGenerate={() => handleGenerate(group.id)}
