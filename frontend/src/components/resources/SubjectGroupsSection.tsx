@@ -192,6 +192,8 @@ export interface SubjectAndOrGroup {
    *  same subject appearing in OTHER slots is an independent teaching instance.
    *  The Student-Groups matrix creates one column per (slotLabel × subjectName). */
   slotLabel?: string
+  /** AND-only: the room or venue where this parallel split runs (e.g. "Lab Block", "Room 204"). */
+  location?: string
 }
 
 // ── Palette ───────────────────────────────────────────────────────────────────
@@ -230,6 +232,7 @@ function GroupModal({
   const [sections, setSections] = useState<string[]>(initial?.sections ?? [])
   const [ppw,      setPpw]      = useState(String(initial?.periodsPerWeek ?? ''))
   const [slotLabel, setSlotLabel] = useState(initial?.slotLabel ?? '')
+  const [location, setLocation]  = useState(initial?.location ?? '')
   const [subQ,     setSubQ]     = useState('')
   const [secQ,     setSecQ]     = useState('')
 
@@ -473,6 +476,25 @@ function GroupModal({
           />
         </div>
 
+        {/* ── Room / Location — AND only ── */}
+        {logic === 'AND' && (
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: '#6B7280', display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              Room / Location <span style={{ color: '#C4C0DC', fontWeight: 400 }}>(optional)</span>
+            </label>
+            <input
+              value={location} onChange={e => setLocation(e.target.value)}
+              placeholder="e.g. Lab Block, Room 204"
+              style={{
+                width: '100%', boxSizing: 'border-box' as const,
+                padding: '6px 10px', borderRadius: 7,
+                border: '1.5px solid #E4E0FF', fontSize: 13, outline: 'none',
+                fontFamily: 'inherit', color: '#13111E', background: '#FAFAFE',
+              }}
+            />
+          </div>
+        )}
+
         {/* ── Applies to sections ── */}
         {allSections.length > 0 && (
           <div style={{ marginBottom: 18 }}>
@@ -602,6 +624,7 @@ function GroupModal({
                 sections: sections.length ? sections : undefined,
                 periodsPerWeek: ppw ? parseInt(ppw) : undefined,
                 slotLabel: logic === 'OR' && slotLabel.trim() ? slotLabel.trim() : undefined,
+                location: logic === 'AND' && location.trim() ? location.trim() : undefined,
               })
             }}
             style={{
@@ -852,10 +875,12 @@ export function SubjectGroupsSection({
                         </div>
                       )}
                       <GroupDisplay group={g} />
-                      {(g.sections?.length || g.periodsPerWeek) ? (
+                      {(g.sections?.length || g.periodsPerWeek || g.location) ? (
                         <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 3 }}>
                           {g.periodsPerWeek ? `${g.periodsPerWeek} slots/wk` : ''}
-                          {g.periodsPerWeek && g.sections?.length ? ' · ' : ''}
+                          {g.periodsPerWeek && (g.location || g.sections?.length) ? ' · ' : ''}
+                          {g.location ? `📍 ${g.location}` : ''}
+                          {g.location && g.sections?.length ? ' · ' : ''}
                           {g.sections?.length ? g.sections.join(', ') : ''}
                         </div>
                       ) : null}
