@@ -688,7 +688,7 @@ export function StepStudentGroups() {
   // ── Column actions ────────────────────────────────────────────────────────
   const addSubjectCol = useCallback((subjectName: string) => {
     if (allCols.some(c => c.key === subjectName)) return
-    if (subjectList.includes(subjectName) && hiddenCols.has(subjectName)) {
+    if (subjectList.some(s => s.key === subjectName) && hiddenCols.has(subjectName)) {
       setHiddenCols(prev => { const next = new Set(prev); next.delete(subjectName); return next })
     } else {
       setCustomCols(prev => [...prev, { key: subjectName, label: subjectName }])
@@ -713,7 +713,7 @@ export function StepStudentGroups() {
   }, [])
 
   const removeCol = useCallback((key: string) => {
-    if (subjectList.includes(key)) setHiddenCols(prev => new Set([...prev, key]))
+    if (subjectList.some(s => s.key === key)) setHiddenCols(prev => new Set([...prev, key]))
     else setCustomCols(prev => prev.filter(c => c.key !== key))
   }, [subjectList])
 
