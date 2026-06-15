@@ -1223,16 +1223,25 @@ export interface SubjectBundle {
   color?: string      // display color
 }
 
+/** How teaching groups merge sections within one AND combination. */
+export type AndGroupScope = 'PER_SECTION' | 'SAME_GRADE' | 'SAME_STREAM' | 'CROSS_GRADE'
+
 /** One AND-group card represents a single split point:
- *  "In these sections, students are divided into these bundles."
- *  E.g. "Science XI-XII: PCM vs PCB" */
+ *  "In these sections, students are divided across these mutually-exclusive subjects."
+ *  E.g. "Science XI-XII: Maths vs Bio". Rows = sections, columns = subjects. */
 export interface AndComboGroup {
   id: string
-  name: string                   // user-facing name: "Science XI-XII Combination"
-  applicableSections: string[]   // which sections this split applies to
-  bundles: SubjectBundle[]       // 2+ mutually exclusive options
-  /** Student count matrix: sectionName → bundleId → headcount.
-   *  Validation: for each section, sum(bundleHeadcounts) === section.totalStudents */
+  name: string                   // auto-named from columns, e.g. "Maths / Bio"
+  applicableSections: string[]   // rows — which sections this split applies to
+  /** Column subjects (mutually-exclusive options). Primary UI field. */
+  subjects?: string[]
+  /** Kept in sync with `subjects` (one single-subject bundle per column) so the
+   *  solver bridge keeps working. */
+  bundles: SubjectBundle[]
+  /** How sections merge into teaching groups (default PER_SECTION). */
+  groupingScope?: AndGroupScope
+  /** Student count matrix: sectionName → subjectName → headcount.
+   *  Validation: for each section, sum(subjectHeadcounts) === section.totalStudents */
   strengthMatrix: Record<string, Record<string, number>>
   /** AI-suggested? Shows a badge if true, dismissed once user edits */
   aiSuggested?: boolean
