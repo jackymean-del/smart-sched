@@ -189,6 +189,14 @@ export interface Subject {
    *  'lab' = specialized room required (Chemistry Lab, Computer Lab, etc.) */
   subjectType?: SubjectType
   isOptional?: boolean
+  /** If set, this subject belongs to a named regional-language / elective slot
+   *  (e.g. "R1", "R2", "R3"). Subjects sharing the same slot are mutually
+   *  exclusive — students pick exactly one per slot. The slot name is used as the
+   *  column-group header in the Student Groups preference matrix. For subjects
+   *  that appear in MULTIPLE slots simultaneously (e.g. Hindi in R1, R2 and R3)
+   *  the slot relationship is defined on the OR-combo's `slotLabel` instead — see
+   *  SubjectAndOrGroup. */
+  electiveSlotId?: string
   requiresLab?: boolean
   requiresConsecutiveSlots?: boolean
   periodsPerWeek: number
@@ -231,6 +239,7 @@ export const SubjectSchema = z.object({
   shortName: z.string().default(''),
   category: z.string().default('Compulsory'),
   isOptional: z.boolean().default(false),
+  electiveSlotId: z.string().optional(),
   requiresLab: z.boolean().default(false),
   requiresConsecutiveSlots: z.boolean().default(false),
   periodsPerWeek: z.number().int().min(0).default(5),
@@ -555,6 +564,7 @@ export interface OptionalBlock {
   totalCapacity?: number       // sum of option capacities
   periodsPerWeek?: number      // pinned weekly slot count (overrides subject-derived quota)
   logic?: 'AND' | 'OR'         // cell display joiner — AND = parallel split, OR = rotation (default)
+  slotId?: string              // named elective slot (R1/R2/R3) — independent teaching instance
 }
 
 export const OptionalBlockSchema = z.object({
@@ -576,6 +586,7 @@ export const OptionalBlockSchema = z.object({
   totalCapacity: z.number().int().optional(),
   periodsPerWeek: z.number().int().optional(),
   logic: z.enum(['AND', 'OR']).optional(),
+  slotId: z.string().optional(),
 })
 
 /** A subject combination — e.g. "PCM + CS" with strength.

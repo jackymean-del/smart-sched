@@ -32,6 +32,7 @@ function dlgsToOptionalBlocks(
     id: string; subject: string; sectionNames: string[]
     totalStrength: number; teacher: string; room: string
     behavior: string; day: string; periodId: string
+    slotId?: string; slotLabel?: string
   }>,
   classPeriods: Period[],
   workDays: string[],
@@ -39,7 +40,7 @@ function dlgsToOptionalBlocks(
   if (!dlgs.length) return []
 
   const validPids  = new Set(classPeriods.map(p => p.id))
-  const blockMap = new Map<string, OptionalBlock>()
+  const blockMap = new Map<string, OptionalBlock & { _secSet?: Set<string> }>()
 
   dlgs.forEach(dlg => {
     // Groups no longer carry a pinned slot — leave day/periodId EMPTY so the
@@ -49,22 +50,36 @@ function dlgsToOptionalBlocks(
     const rawPid = (dlg.periodId || '').toLowerCase()
     const periodId = validPids.has(rawPid) ? rawPid : ''
 
-    // DLGs sharing the same (sorted) sections → one OptionalBlock
-    const secKey = [...(dlg.sectionNames ?? [])].sort().join('|')
+    // Grouping key:
+    //  • slotted DLG (R1/R2/R3) → group by slotId, so all options of a slot form
+    //    ONE block (Hindi/Odia/English under R1) and a DIFFERENT slot with the
+    //    same subject (R2:Hindi) stays a SEPARATE block — the section attends
+    //    both, so the solver schedules them in different periods.
+    //  • plain DLG → group by its section set (unchanged behaviour).
+    const secKey = dlg.slotId
+      ? `slot:${dlg.slotId}`
+      : [...(dlg.sectionNames ?? [])].sort().join('|')
 
     if (!blockMap.has(secKey)) {
       const idx = blockMap.size + 1
       blockMap.set(secKey, {
-        id: `dlg-block-${idx}`,
-        name: `Optional Block ${idx}`,
-        sectionNames: dlg.sectionNames ?? [],
+        id: dlg.slotId ? `slot-${dlg.slotId}` : `dlg-block-${idx}`,
+        name: dlg.slotId ? `Slot ${dlg.slotId}` : `Optional Block ${idx}`,
+        sectionNames: [...(dlg.sectionNames ?? [])],
         day,
         periodId,
         options: [],
-      })
+        logic: 'OR',
+        slotId: dlg.slotId,
+        _secSet: new Set(dlg.sectionNames ?? []),
+      } as any)
     }
 
-    ;(blockMap.get(secKey)!.options as any[]).push({
+    const block = blockMap.get(secKey)!
+    // Union sections across a slot's options (students of each choice differ)
+    for (const sn of (dlg.sectionNames ?? [])) (block as any)._secSet.add(sn)
+    block.sectionNames = [...(block as any)._secSet]
+    ;(block.options as any[]).push({
       subject: dlg.subject,
       teacher: dlg.teacher ?? '',
       room: dlg.room ?? '',
@@ -73,7 +88,7 @@ function dlgsToOptionalBlocks(
     })
   })
 
-  return [...blockMap.values()]
+  return [...blockMap.values()].map(({ _secSet, ...b }) => b as OptionalBlock)
 }
 
 // ── Subject Combos (Step 4, Tab 2) → OptionalBlock bridge ──────────────────
@@ -96,7 +111,7 @@ function dlgsToOptionalBlocks(
 function comboGroupsToOptionalBlocks(
   groups: Array<{
     id: string; name?: string; logic: 'AND' | 'OR'
-    subjects: string[]; sections?: string[]; periodsPerWeek?: number
+    subjects: string[]; sections?: string[]; periodsPerWeek?: number; slotLabel?: string
   }>,
   subjects: any[],
   sections: any[],
@@ -151,12 +166,13 @@ function comboGroupsToOptionalBlocks(
 
     blocks.push({
       id: `combo-${g.id || gi}`,
-      name: g.name || `${g.logic} Combo ${gi + 1}`,
+      name: g.slotLabel || g.name || `${g.logic} Combo ${gi + 1}`,
       sectionNames: secNames,
       day: '', periodId: '',
       options,
       periodsPerWeek: g.periodsPerWeek && g.periodsPerWeek > 0 ? g.periodsPerWeek : undefined,
       logic: g.logic,
+      slotId: g.slotLabel || undefined,
     })
   })
   return blocks
@@ -493,6 +509,7 @@ export function Step6Generate() {
       const comboBlocks = comboGroupsToOptionalBlocks(
         (store as any).subjectGroups ?? [], resolvedSubjects, sections, staff)
       const blockSig = (b: OptionalBlock) =>
+        (b.slotId ?? '') + '::' +
         [...b.sectionNames].sort().join('|') + '::' +
         b.options.map(o => o.subject).filter(Boolean).sort().join('|')
       const seenSigs = new Set(baseBlocks.map(blockSig))

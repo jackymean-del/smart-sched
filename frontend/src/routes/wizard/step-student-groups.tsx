@@ -468,10 +468,32 @@ export function StepStudentGroups() {
     )
   , [subjects, electableNames])
 
+  // ── Elective slot map: subjectName → slot labels (R1/R2/R3…) ───────────────
+  // A subject may belong to one or many named slots. Multi-slot subjects (e.g.
+  // Hindi in R1, R2 AND R3) come from OR-combo `slotLabel`s — the same subject in
+  // different slots is an independent teaching instance. A single-slot subject can
+  // also be tagged via its own `electiveSlotId` on the Subjects tab.
+  const slotMap = useMemo(() => {
+    const m = new Map<string, string[]>()
+    const add = (subj: string, slot: string) => {
+      const arr = m.get(subj) ?? []
+      if (!arr.includes(slot)) arr.push(slot)
+      m.set(subj, arr)
+    }
+    for (const g of ((store as any).subjectGroups ?? []) as Array<{ logic?: string; subjects?: string[]; slotLabel?: string }>)
+      if (g.logic === 'OR' && g.slotLabel) for (const s of (g.subjects ?? [])) add(s, g.slotLabel)
+    for (const sub of (subjects as any[]))
+      if (sub.electiveSlotId) add(sub.name, sub.electiveSlotId)
+    return m
+  }, [store, subjects])
+
   // Only show optional subjects that are actually assigned to at least one section.
   // A subject with no assignments (classConfigs, sections[], or subjectAllocations)
   // has nothing to display in the matrix — hide it until sections are assigned.
-  const subjectList = useMemo(() =>
+  // Slot-tagged subjects emit one column PER slot, keyed "<slot>:<name>" so the
+  // same subject can appear independently in R1 / R2 / R3.
+  const subjectList = useMemo(() => {
+    const entries: Array<{ key: string; label: string; subjectName: string; slotId?: string }> = []
     optionalSubjects
       .filter((s: any) => {
         const fromConfigs = (s.classConfigs ?? []).map((c: any) => c.sectionName).filter(Boolean) as string[]
@@ -482,8 +504,17 @@ export function StepStudentGroups() {
           return raw && parseAllocation(raw).weeklyTotal > 0
         })
       })
-      .map((s: any) => s.name as string)
-  , [optionalSubjects, subjectAllocations])
+      .forEach((s: any) => {
+        const slots = slotMap.get(s.name)
+        if (slots && slots.length) {
+          for (const slotId of slots)
+            entries.push({ key: `${slotId}:${s.name}`, label: s.name, subjectName: s.name, slotId })
+        } else {
+          entries.push({ key: s.name, label: s.name, subjectName: s.name })
+        }
+      })
+    return entries
+  }, [optionalSubjects, subjectAllocations, slotMap])
 
   // ── Relevant sections ──────────────────────────────────────────────────────
   const optionalSections = useMemo(() => {
@@ -511,9 +542,12 @@ export function StepStudentGroups() {
   }, [sections, optionalSubjects, subjectAllocations])
 
   // ── Effective columns & rows ───────────────────────────────────────────────
+  // Columns carry both the storage `key` (slot-prefixed for slotted subjects)
+  // and the real `subjectName` (+ optional `slotId`) so consumers can store under
+  // the unique key but look the Subject up / schedule by its true name.
   const allCols = useMemo(() => [
-    ...subjectList.filter(s => !hiddenCols.has(s)).map(s => ({ key: s, label: colLabels[s] ?? s })),
-    ...customCols,
+    ...subjectList.filter(s => !hiddenCols.has(s.key)).map(s => ({ key: s.key, label: colLabels[s.key] ?? s.label, subjectName: s.subjectName, slotId: s.slotId as string | undefined })),
+    ...customCols.map(c => ({ key: c.key, label: c.label, subjectName: c.key, slotId: undefined as string | undefined })),
   ], [subjectList, hiddenCols, colLabels, customCols])
 
   const allRowNames = useMemo(() => [
@@ -577,7 +611,7 @@ export function StepStudentGroups() {
       const init: SectionStrength[] = allRowNames.map(name => {
         const sub_strengths: Record<string, number> = {}
         allCols.forEach(col => {
-          const sub = (subjects as any[]).find(s => s.name === col.key)
+          const sub = (subjects as any[]).find(s => s.name === col.subjectName)
           sub_strengths[col.key] = isApplicableToSection(sub, name, subjectAllocations) ? 0 : -1
         })
         const sec = (sections as any[]).find(s => s.name === name)
@@ -596,7 +630,7 @@ export function StepStudentGroups() {
       const newStrengths = { ...row.subjectStrengths }
       let rowChanged = false
       allCols.forEach(col => {
-        const sub = (subjects as any[]).find(s => s.name === col.key)
+        const sub = (subjects as any[]).find(s => s.name === col.subjectName)
         const applicable = isApplicableToSection(sub, row.sectionName, subjectAllocations)
         const val = newStrengths[col.key]
         if (val === undefined) {
@@ -814,8 +848,12 @@ export function StepStudentGroups() {
           ?? (storeRooms.length > 0 ? storeRooms[(si + gIdx) % storeRooms.length] : null)
 
         generated.push({
-          id: `${generateGroupId(col.label, gIdx)}_${ts + si * 100 + gIdx}`,
-          subject: col.label,
+          id: `${generateGroupId(col.subjectName, gIdx)}_${ts + si * 100 + gIdx}`,
+          subject: col.subjectName,
+          // Slot context (R1/R2/R3) — lets the bridge + solver treat the same
+          // subject in different slots as independent, parallel teaching groups.
+          slotId: col.slotId,
+          slotLabel: col.slotId ? `${col.slotId}: ${col.subjectName}` : undefined,
           sectionNames: groupSections.map(r => r.sectionName),
           totalStrength: totalStr,
           teacher,
@@ -842,7 +880,7 @@ export function StepStudentGroups() {
         if (totalStr < minGroupSize) return
 
         const sectionNames = groupSections.map(r => r.sectionName)
-        const candidates   = getCandidates(col.label, sectionNames)
+        const candidates   = getCandidates(col.subjectName, sectionNames)
 
         // If it fits (or no room data) → emit as one group
         if (biggestRoomCap === 0 || totalStr <= biggestRoomCap || groupSections.length <= 1) {
@@ -1068,6 +1106,14 @@ export function StepStudentGroups() {
 
                     {displayCols.map(col => (
                       <th key={col.key} style={{ ...thStyle(colW), position: 'relative' }}>
+                        {col.slotId && (
+                          <div style={{ marginBottom: 2 }}>
+                            <span title={`Elective slot ${col.slotId} — independent teaching instance`}
+                              style={{ fontSize: 8.5, fontWeight: 800, color: '#7C6FE0', background: '#EDE9FF', border: '1px solid #C4B5FD', borderRadius: 4, padding: '0 4px', letterSpacing: '0.04em' }}>
+                              {col.slotId}
+                            </span>
+                          </div>
+                        )}
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3 }}>
                           <EditableColHeader value={col.label} onChange={lbl => renameCol(col.key, lbl)} />
                           <button onClick={() => removeCol(col.key)} title={`Remove "${col.label}"`}
@@ -1151,7 +1197,7 @@ export function StepStudentGroups() {
 
                         {displayCols.map((col, ci) => {
                           const raw = row.subjectStrengths?.[col.key]
-                          const sub = (subjects as any[]).find(s => s.name === col.key)
+                          const sub = (subjects as any[]).find(s => s.name === col.subjectName)
                           // Re-check applicability at render time so stale -1 values clear immediately
                           const isNA = raw === -1 && !isApplicableToSection(sub, row.sectionName, subjectAllocations)
                           const wouldBeNA = raw === undefined && !isApplicableToSection(sub, row.sectionName, subjectAllocations)
@@ -1385,7 +1431,10 @@ export function StepStudentGroups() {
 
               return (
                 <div key={col.key} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 10, background: '#fff', border: '1px solid #E8E4FF', flexWrap: 'wrap' }}>
-                  <div style={{ minWidth: 140, fontSize: 13, fontWeight: 600, color: '#13111E' }}>{col.label}</div>
+                  <div style={{ minWidth: 140, fontSize: 13, fontWeight: 600, color: '#13111E', display: 'flex', alignItems: 'center', gap: 5 }}>
+                    {col.slotId && <span style={{ fontSize: 9, fontWeight: 800, color: '#7C6FE0', background: '#EDE9FF', border: '1px solid #C4B5FD', borderRadius: 4, padding: '0 4px' }}>{col.slotId}</span>}
+                    {col.label}
+                  </div>
                   <div style={{ flex: 1, display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
                     {/* No group */}
                     {(['NO_GROUPING'] as GroupingBehavior[]).map(beh => {

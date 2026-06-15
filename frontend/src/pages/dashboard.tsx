@@ -214,6 +214,10 @@ const TT_SNAPSHOT_FIELDS = [
   'classTT','teacherTT','substitutions','conflicts','suggestions',
   'optionalConfigs','subjectPools','participantPools','rooms',
   'facilities','teacherPools',
+  // Elective-grouping data — keep OR/AND combos, generated groups, the
+  // preference matrix and grouping rules so they survive snapshot save/restore.
+  'subjectGroups','subjectCombinations','dynamicLearningGroups',
+  'sectionStrengths','subjectGroupingRules','subjectAllocations',
 ] as const
 
 function saveTTSnapshot(id: string) {

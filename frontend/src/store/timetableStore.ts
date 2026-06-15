@@ -249,6 +249,11 @@ interface ScheduState {
     behavior: string
     day: string
     periodId: string
+    /** Named elective slot (R1/R2/R3) when this group is one option of a
+     *  multi-slot language combo. undefined for ordinary electives. Lets the
+     *  solver treat R1:Hindi and R2:Hindi as independent teaching instances. */
+    slotId?: string
+    slotLabel?: string
   }>
 
   // ─────────────────────────────────────────────────────────────

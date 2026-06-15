@@ -187,6 +187,11 @@ export interface SubjectAndOrGroup {
   subjects: string[]
   sections?: string[]      // empty → applies to all sections
   periodsPerWeek?: number
+  /** Named elective slot for multi-slot language groups (R1 / R2 / R3). When set,
+   *  subjects in this OR-group are treated as one mutually-exclusive slot; the
+   *  same subject appearing in OTHER slots is an independent teaching instance.
+   *  The Student-Groups matrix creates one column per (slotLabel × subjectName). */
+  slotLabel?: string
 }
 
 // ── Palette ───────────────────────────────────────────────────────────────────
@@ -224,6 +229,7 @@ function GroupModal({
   const [selected, setSelected] = useState<string[]>(initial?.subjects ?? [])
   const [sections, setSections] = useState<string[]>(initial?.sections ?? [])
   const [ppw,      setPpw]      = useState(String(initial?.periodsPerWeek ?? ''))
+  const [slotLabel, setSlotLabel] = useState(initial?.slotLabel ?? '')
   const [subQ,     setSubQ]     = useState('')
   const [secQ,     setSecQ]     = useState('')
 
@@ -364,6 +370,23 @@ function GroupModal({
             }}
           />
         </div>
+
+        {/* ── Slot label (OR combos only — for multi-slot regional languages) ── */}
+        {logic === 'OR' && (
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: '#6B7280', display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              Slot label <span style={{ color: '#C4C0DC', fontWeight: 400 }}>(optional — for regional-language slots)</span>
+            </label>
+            <input
+              value={slotLabel} onChange={e => setSlotLabel(e.target.value)}
+              placeholder="e.g. R1, R2, R3"
+              style={{ width: 120, boxSizing: 'border-box', padding: '6px 10px', borderRadius: 7, border: '1.5px solid #E4E0FF', fontSize: 13, outline: 'none', fontFamily: 'inherit' }}
+            />
+            <span style={{ fontSize: 10, color: '#9CA3AF', marginLeft: 10 }}>
+              The same subject in different slots = independent teaching groups
+            </span>
+          </div>
+        )}
 
         {/* ── Subject picker ── */}
         <div style={{ marginBottom: 16 }}>
@@ -578,6 +601,7 @@ function GroupModal({
                 subjects: selected,
                 sections: sections.length ? sections : undefined,
                 periodsPerWeek: ppw ? parseInt(ppw) : undefined,
+                slotLabel: logic === 'OR' && slotLabel.trim() ? slotLabel.trim() : undefined,
               })
             }}
             style={{

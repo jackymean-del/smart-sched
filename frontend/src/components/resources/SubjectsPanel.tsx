@@ -129,6 +129,27 @@ function EditCell({ value, onSave, placeholder = '…', style: extra }: {
 /** Built-in category options — user can append custom ones */
 const BUILTIN_CATS = ['Compulsory','Language','R1','R2','R3','Optional','4th Option','5th Option','6th Option','Elective','Practical','Activity','CCA','Skill','Others']
 
+/** Heuristic category from a subject's name / lab flag / class assignment —
+ *  used by the "AI Categorize" bulk button. */
+function inferCategory(sub: Subject): string {
+  const n = sub.name.toLowerCase()
+  if (sub.requiresLab) return 'Practical'
+  const has = (kws: string[]) => kws.some(kw => n.includes(kw))
+  if (has(['physical education','yoga','ncc','nss','sports','gym','dance','music','art','painting','craft','drawing']))
+    return 'Activity'
+  if (has(['english','hindi','odia','oriya','sanskrit','french','german','spanish','arabic','bengali','tamil','telugu','marathi','gujarati','punjabi','urdu','language']))
+    return 'Language'
+  if (has(['computer','informatics','information technology','coding','data science','vocational']) || /\bit\b|\bai\b/.test(n))
+    return 'Skill'
+  if (has(['cca','co-curricular','cocurricular','club','value education','moral','library','assembly']))
+    return 'CCA'
+  // Senior-secondary-only + already optional → Optional
+  const classes = getAssignedClasses(sub)
+  const onlySrSec = classes.length > 0 && classes.every(c => c.startsWith('XI') || c.startsWith('XII'))
+  if (onlySrSec && sub.isOptional) return 'Optional'
+  return 'Compulsory'
+}
+
 // ─── Category dropdown (native select, always shows full list) ────────────────
 function CategorySelect({
   value, extraCats, onChange, style: extraStyle,
@@ -398,14 +419,7 @@ function SectionSubRow({
           style={secInp}
         />
       </td>
-      <td style={{ padding: '2px 5px' }}>
-        <CategorySelect
-          value={cat}
-          extraCats={extraCats}
-          onChange={v => onUpdateSectionConfig({ category: v })}
-          style={{ fontSize: 10.5 }}
-        />
-      </td>
+      <td />{/* spacer (was Category) */}
       <td style={{ padding: '2px 6px', textAlign: 'center' as const }}>
         <input type="checkbox" checked={hasLab}
           onChange={e => onUpdateSectionConfig({ requiresLab: e.target.checked })}
@@ -534,14 +548,7 @@ function GradeSlotRow({
           />
         </td>
 
-        {/* Category — subject-level */}
-        <td style={{ padding: '3px 8px' }}>
-          <CategorySelect
-            value={sub.category ?? 'Compulsory'}
-            extraCats={extraCats}
-            onChange={v => { onChange({ category: v }); onAddCategory(v) }}
-          />
-        </td>
+        <td />{/* spacer (was Category) */}
 
         {/* Lab Required — tick-all for this grade */}
         <td style={{ padding: '3px 6px', textAlign: 'center' as const }}>
@@ -651,6 +658,25 @@ function ClassSlotsExpanded({
           />
           ⇄ Elective — chosen from options
         </label>
+        {/* Elective slot — group this subject into a named slot (R1/R2/R3…).
+            Subjects in the same slot are mutually exclusive (pick one). For a
+            subject that lives in MANY slots at once (Hindi in R1+R2+R3), define
+            the slots via OR-combos instead — those override this single value. */}
+        {sub.isOptional && (
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 10.5, fontWeight: 700, color: '#8B87AD', whiteSpace: 'nowrap' }}>
+            Slot / Group
+            <input
+              value={sub.electiveSlotId ?? ''}
+              onChange={e => onChange({ electiveSlotId: e.target.value.trim() || undefined })}
+              placeholder="e.g. R1, R2…"
+              title="Optional: group this subject into a named elective slot. Subjects in the same slot are mutually exclusive — students pick one."
+              style={{ width: 84, padding: '3px 8px', border: '1.5px solid #E4E0FF', borderRadius: 5, fontSize: 11, outline: 'none', fontFamily: 'inherit', background: '#FAFAFE' }}
+            />
+            {sub.electiveSlotId && (
+              <span style={{ fontSize: 9.5, color: P, background: P_L, borderRadius: 3, padding: '0 5px', border: `1px solid ${P_B}` }}>{sub.electiveSlotId}</span>
+            )}
+          </label>
+        )}
       </div>
 
       <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: '100%', maxWidth: 600 }}>
@@ -658,7 +684,7 @@ function ClassSlotsExpanded({
           <col style={{ width: 110 }} />   {/* Grade */}
           <col style={{ width: 96 }} />    {/* Slots/Wk */}
           <col style={{ width: 64 }} />    {/* Max/day */}
-          <col />                          {/* Category — flex */}
+          <col />                          {/* spacer — flex */}
           <col style={{ width: 68 }} />    {/* Lab Req */}
           <col style={{ width: 26 }} />    {/* Remove */}
         </colgroup>
@@ -667,7 +693,7 @@ function ClassSlotsExpanded({
             <th style={{ ...thS, textAlign: 'left' }}>Grade</th>
             <th style={{ ...thS, textAlign: 'center' }}>{ALLOCATION_SHORT[unit]}</th>
             <th style={{ ...thS, textAlign: 'center' }}>Max/day</th>
-            <th style={{ ...thS, textAlign: 'left' }}>Category</th>
+            <th style={thS} />
             <th style={{ ...thS, textAlign: 'center', whiteSpace: 'nowrap' }}>Lab Req.</th>
             <th style={{ borderBottom: '1px solid #E4E0FF' }} />
           </tr>
@@ -754,30 +780,48 @@ function AddRow({ onAdd }: { onAdd: (s: Subject) => void }) {
 }
 
 // ─── Category header row ──────────────────────────────────────────────────────
-function CategoryHeaderRow({ cat, count, collapsed, onToggle }: {
+function CategoryHeaderRow({ cat, count, collapsed, onToggle, onRename }: {
   cat: string; count: number; collapsed: boolean; onToggle: () => void
+  onRename?: (oldName: string, newName: string) => void
 }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft]     = useState(cat)
+  const inputRef = useRef<HTMLInputElement>(null)
+  useEffect(() => { if (editing) inputRef.current?.focus() }, [editing])
+  useEffect(() => { if (!editing) setDraft(cat) }, [cat, editing])
+  function commit() {
+    const v = draft.trim()
+    if (v && v !== cat) onRename?.(cat, v)
+    setEditing(false)
+  }
   return (
     <tr>
       <td colSpan={4} style={{ padding: 0 }}>
-        <button
-          onClick={onToggle}
-          style={{
-            width: '100%', display: 'flex', alignItems: 'center', gap: 7,
-            padding: '4px 12px', background: '#F3F1FF',
-            border: 'none', borderBottom: '1px solid #E8E4FF',
-            cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' as const,
-          }}
-          onMouseEnter={e => (e.currentTarget.style.background = '#EDEBFF')}
-          onMouseLeave={e => (e.currentTarget.style.background = '#F3F1FF')}
-        >
-          {collapsed
-            ? <ChevronDown size={11} color={P} />
-            : <ChevronUp size={11} color={P} />
-          }
-          <span style={{ fontSize: 10.5, fontWeight: 800, color: P_D, textTransform: 'uppercase', letterSpacing: '0.07em' }}>{cat}</span>
+        <div style={{
+          width: '100%', display: 'flex', alignItems: 'center', gap: 7,
+          padding: '4px 12px', background: '#F3F1FF', borderBottom: '1px solid #E8E4FF',
+        }}>
+          <button onClick={onToggle} title={collapsed ? 'Expand' : 'Collapse'}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', padding: 0 }}>
+            {collapsed ? <ChevronDown size={11} color={P} /> : <ChevronUp size={11} color={P} />}
+          </button>
+          {editing ? (
+            <input
+              ref={inputRef} value={draft}
+              onChange={e => setDraft(e.target.value)}
+              onBlur={commit}
+              onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setDraft(cat); setEditing(false) }; e.stopPropagation() }}
+              style={{ fontSize: 10.5, fontWeight: 800, color: P_D, textTransform: 'uppercase', letterSpacing: '0.07em', border: `1.5px solid ${P_B}`, borderRadius: 4, padding: '1px 6px', outline: 'none', background: '#fff', fontFamily: 'inherit' }}
+            />
+          ) : (
+            <span onClick={() => onRename && setEditing(true)} title={onRename ? 'Click to rename category — applies to all its subjects' : undefined}
+              style={{ fontSize: 10.5, fontWeight: 800, color: P_D, textTransform: 'uppercase', letterSpacing: '0.07em', cursor: onRename ? 'text' : 'default', padding: '1px 4px', borderRadius: 3 }}
+              onMouseEnter={e => { if (onRename) e.currentTarget.style.background = '#EDE9FF' }}
+              onMouseLeave={e => (e.currentTarget.style.background = '')}
+            >{cat}</span>
+          )}
           <span style={{ fontSize: 9.5, fontWeight: 700, color: P, background: P_L, borderRadius: 8, padding: '0 5px', border: `1px solid ${P_B}` }}>{count}</span>
-        </button>
+        </div>
       </td>
     </tr>
   )
@@ -1119,6 +1163,19 @@ export function SubjectsPanel({
       localStorage.setItem('schedu-subject-extra-cats', JSON.stringify(next))
       return next
     })
+  }
+
+  // Rename a category group inline → relabel every subject in it (+ the
+  // custom-category list if it was a user-added category).
+  function renameCategory(oldName: string, newName: string) {
+    if (!newName || newName === oldName) return
+    undoHistory.push(subjects)
+    setSubjects(subjects.map(s => (s.category ?? 'Compulsory') === oldName ? { ...s, category: newName as any } : s))
+    if (extraCats.includes(oldName)) {
+      const next = extraCats.map(c => c === oldName ? newName : c)
+      setExtraCats(next)
+      localStorage.setItem('schedu-subject-extra-cats', JSON.stringify(next))
+    }
   }
 
   // Academic Load Unit — applies to per-class slots in expanded view
@@ -1464,6 +1521,14 @@ export function SubjectsPanel({
               onClose={() => setCatMgrOpen(false)}
             />
           )}
+          {/* AI Categorize — bulk-assign categories from subject names */}
+          <button
+            onClick={() => { undoHistory.push(subjects); setSubjects(subjects.map(s => ({ ...s, category: inferCategory(s) as any }))) }}
+            title="AI auto-assign categories based on subject names (undo with Ctrl+Z)"
+            style={outlineBtn}
+            onMouseEnter={e => { e.currentTarget.style.background = P_L; e.currentTarget.style.borderColor = P_B; e.currentTarget.style.color = P_D }}
+            onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#DDD8FF'; e.currentTarget.style.color = '#6B6891' }}
+          >✦ AI Categorize</button>
           {onScopeClick && (
             <button
               title="Set availability scope for all subjects"
@@ -1574,7 +1639,7 @@ export function SubjectsPanel({
             <tbody>
               {groupedByCategory.map(([cat, subs]) => (
                 <Fragment key={`cat-${cat}`}>
-                  <CategoryHeaderRow cat={cat} count={subs.length} collapsed={collapsedCats.has(cat)} onToggle={() => toggleCat(cat)} />
+                  <CategoryHeaderRow cat={cat} count={subs.length} collapsed={collapsedCats.has(cat)} onToggle={() => toggleCat(cat)} onRename={renameCategory} />
                   {!collapsedCats.has(cat) && subs.map(sub => (
                     <SubjectRow
                       key={sub.id}
