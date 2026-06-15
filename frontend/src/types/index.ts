@@ -1247,6 +1247,13 @@ export interface AndComboGroup {
   /** Kept in sync with `subjects` (one single-subject bundle per column) so the
    *  solver bridge keeps working. */
   bundles: SubjectBundle[]
+  /** Combos that share a blockId render together under one fixed Section/Total
+   *  rail (a "block"). Set from class-group or a custom name. */
+  blockId?: string
+  blockName?: string
+  /** When false, room capacity is ignored when generating teaching groups —
+   *  all pooled sections go into a single group regardless of size. Default true. */
+  roomCapacitySensitive?: boolean
   /** How sections merge into teaching groups (default PER_SECTION). */
   groupingScope?: AndGroupScope
   /** Student count matrix: sectionName → subjectName → headcount.
