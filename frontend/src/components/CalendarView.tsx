@@ -805,13 +805,13 @@ export function CalendarView({
   // Bell-accurate times when available (matches the class grid); else fall back
   // to summing period durations from the day start.
   const timesFor = useCallback((secName: string, ps: Period[]): Map<string,{start:number;end:number}> => {
+    // Always start from the duration-summed base so EVERY id in `ps` has an entry
+    // (assembly / dispersal / breaks etc.), then override with bell-accurate times
+    // where the schedule provides them. Prevents undefined lookups.
+    const base = calcTimes(ps, dayStartMin)
     const rec = sectionTimes?.[secName]
-    if (rec) {
-      const m = new Map<string,{start:number;end:number}>()
-      for (const [k, v] of Object.entries(rec)) m.set(k, v)
-      if (m.size) return m
-    }
-    return calcTimes(ps, dayStartMin)
+    if (rec) for (const [k, v] of Object.entries(rec)) base.set(k, v)
+    return base
   }, [sectionTimes, dayStartMin])
 
   // All rooms from timetable
