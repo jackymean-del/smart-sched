@@ -1043,9 +1043,15 @@ function SubjectCell({ subject, teacher, room, isClassTeacher, isSub, subTeacher
   // shows its OWN subject + teacher + room (always — they're what distinguishes
   // the groups), with an explicit OR chip between choices.
   if (options && options.length > 1) {
+    // AND = parallel split (run simultaneously); OR = alternatives. Derived from
+    // the cell subject string the engine built ("Maths AND Bio" / "Phy OR Chem").
+    const sepLabel = (subject ?? '').includes(' AND ') ? 'AND' : 'OR'
     return (
       <td style={{ ...dragTdStyle(!!isDropTarget, isConflict, true), position:"relative" as const }} onClick={onClick} {...sharedTdProps}>
-        <div style={{ borderRadius:5, padding:"3px 5px", minHeight:44, background:"linear-gradient(135deg,#F5F2FF 0%,#FAFAFE 100%)", borderLeft:"3px solid #7C6FE0", border:"1px solid #D8D2FF", position:"relative" as const, cursor:onClick?"pointer":"default" }}>
+        <div className={isSrc ? "tt-drag-src" : undefined}
+          draggable={isDraggable}
+          onDragStart={isDraggable ? onDragStart : undefined}
+          style={{ borderRadius:5, padding:"3px 5px", minHeight:44, background:"linear-gradient(135deg,#F5F2FF 0%,#FAFAFE 100%)", borderLeft:"3px solid #7C6FE0", border:"1px solid #D8D2FF", position:"relative" as const, cursor:isDraggable?(isDropTarget?"default":"grab"):onClick?"pointer":"default" }}>
           {absentHighlight && <span style={{ position:"absolute" as const, top:2, left:3, fontSize:8, color:"#D4920E" }}>⚠</span>}
           <div style={{ fontSize:7, fontWeight:800, letterSpacing:"0.08em", color:"#8B7FE8", textTransform:"uppercase" as const, marginBottom:2 }}>Parallel groups</div>
           {options.map((opt, i) => {
@@ -1055,16 +1061,16 @@ function SubjectCell({ subject, teacher, room, isClassTeacher, isSub, subTeacher
                 {i > 0 && (
                   <div style={{ display:"flex", alignItems:"center", gap:4, margin:"2px 0" }}>
                     <span style={{ flex:1, height:1, background:"#E4DEFF" }} />
-                    <span style={{ fontSize:7, fontWeight:800, color:"#9B8EF5", letterSpacing:"0.06em" }}>OR</span>
+                    <span style={{ fontSize:7, fontWeight:800, color: sepLabel==='AND' ? '#7C6FE0' : '#9B8EF5', letterSpacing:"0.06em" }}>{sepLabel}</span>
                     <span style={{ flex:1, height:1, background:"#E4DEFF" }} />
                   </div>
                 )}
                 <div className={oc} style={{ borderRadius:3, padding:"2px 4px" }}>
                   <div style={{ fontSize:10, fontWeight:700, lineHeight:1.3 }}>{dSub(opt.subject)}</div>
-                  {(opt.teacher || opt.room) && (
+                  {((showTeacher && opt.teacher) || (showRoom && opt.room)) && (
                     <div style={{ fontSize:8.5, opacity:0.8, display:"flex", justifyContent:"space-between", gap:4 }}>
-                      <span>{dTch(opt.teacher)}</span>
-                      {opt.room && <span style={{ opacity:0.75 }}>{dRm(opt.room)}</span>}
+                      <span>{showTeacher ? dTch(opt.teacher) : ''}</span>
+                      {showRoom && opt.room && <span style={{ opacity:0.75 }}>{dRm(opt.room)}</span>}
                     </div>
                   )}
                 </div>

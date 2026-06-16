@@ -385,6 +385,49 @@ function Picker({
   )
 }
 
+/** Editable field with a dropdown that ALWAYS lists every option (filtered only
+ *  by what you type) — unlike a native datalist, which hides options once the
+ *  field already has a value. */
+function ComboField({ value, options, placeholder, title, onChange }: {
+  value: string; options: string[]; placeholder: string; title?: string; onChange: (v: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [q, setQ] = useState<string | null>(null) // null = show full list
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) { setOpen(false); setQ(null) } }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [open])
+  const filter = (q ?? '').toLowerCase()
+  const shown = options.filter(o => o.toLowerCase().includes(filter))
+  return (
+    <div ref={ref} style={{ position: 'relative', flex: 1, minWidth: 0 }}>
+      <input
+        value={q === null ? value : q}
+        title={title}
+        onFocus={() => { setOpen(true); setQ('') }}
+        onChange={e => { setQ(e.target.value); onChange(e.target.value) }}
+        placeholder={placeholder}
+        style={{ width: '100%', boxSizing: 'border-box', padding: '3px 6px', borderRadius: 5, border: '1.5px solid #E4E0FF', fontSize: 11, fontWeight: 600, color: '#13111E', outline: 'none', fontFamily: 'inherit', background: '#FAFAFE' }}
+      />
+      {open && shown.length > 0 && (
+        <div style={{ position: 'absolute', zIndex: 700, top: '100%', left: 0, right: 0, marginTop: 3, background: '#fff', border: '1.5px solid #E4E0FF', borderRadius: 8, boxShadow: '0 8px 28px rgba(0,0,0,0.16)', maxHeight: 180, overflowY: 'auto' }}>
+          {shown.map(o => (
+            <button key={o} onMouseDown={() => { onChange(o); setQ(null); setOpen(false) }} style={{
+              display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', border: 'none',
+              background: o === value ? '#F5F2FF' : 'none', fontSize: 11, color: '#374151', cursor: 'pointer', fontFamily: 'inherit',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = '#F5F2FF' }}
+            onMouseLeave={e => { e.currentTarget.style.background = o === value ? '#F5F2FF' : 'none' }}>{o}</button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── generated parallel group (last-day card style, editable room) ───────────────
 
 function ParallelGroupCard({
@@ -420,15 +463,11 @@ function ParallelGroupCard({
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 5 }}>
           <span style={{ fontSize: 12, flexShrink: 0 }} title="Faculty">👤</span>
-          <input list="and-teachers" value={tg.teacher ?? ''} onChange={e => onTeacher(e.target.value)} placeholder="Teacher…"
-            style={{ flex: 1, minWidth: 0, padding: '3px 6px', borderRadius: 5, border: '1.5px solid #E4E0FF', fontSize: 11, fontWeight: 600, color: '#13111E', outline: 'none', fontFamily: 'inherit', background: '#FAFAFE' }} />
-          <datalist id="and-teachers">{allTeacherNames.map(t => <option key={t} value={t} />)}</datalist>
+          <ComboField value={tg.teacher ?? ''} options={allTeacherNames} placeholder="Teacher…" title="Assign faculty" onChange={onTeacher} />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           <span style={{ fontSize: 12, flexShrink: 0 }} title="Room / venue">🏫</span>
-          <input list="and-rooms" value={tg.room ?? ''} onChange={e => onRoom(e.target.value)} placeholder="Room…"
-            style={{ flex: 1, minWidth: 0, padding: '3px 6px', borderRadius: 5, border: '1.5px solid #E4E0FF', fontSize: 11, fontWeight: 600, color: '#13111E', outline: 'none', fontFamily: 'inherit', background: '#FAFAFE' }} />
-          <datalist id="and-rooms">{allRoomNames.map(r => <option key={r} value={r} />)}</datalist>
+          <ComboField value={tg.room ?? ''} options={allRoomNames} placeholder="Room…" title="Assign room / venue" onChange={onRoom} />
         </div>
       </div>
     </div>
