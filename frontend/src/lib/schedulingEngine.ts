@@ -833,13 +833,22 @@ export function solveTimetable(input: SolverInput): SolverOutput {
     // the Student-Groups page — decide how many periods a group runs.
     const optSubjects = block.options.map(o => o.subject).filter(Boolean)
     const refSec = block.sectionNames[0]
-    // A block-level periodsPerWeek (set by Subject Combos) pins the weekly
-    // slot count; otherwise derive it from the option subjects' own quotas.
-    const needed = block.periodsPerWeek && block.periodsPerWeek > 0
-      ? block.periodsPerWeek
-      : Math.max(1, ...optSubjects.map(sub =>
-          targetPeriods[refSec]?.[sub] ?? subjects.find(s => s.name === sub)?.periodsPerWeek ?? 0))
+    // OR combo is a SPECIAL extra slot (e.g. "Physics OR Chemistry") that runs
+    // IN ADDITION to the individual Physics / Chemistry periods — so it must be
+    // rare (1–2/week, default 1) and must NOT consume the subjects' own quotas.
+    // AND combo is a parallel split (students divide) and IS the subjects' period,
+    // so it takes the full subject quota.
+    const isOR = (block.logic ?? 'OR') !== 'AND'
+    const needed = isOR
+      ? Math.min(2, Math.max(1, block.periodsPerWeek ?? 1))
+      : (block.periodsPerWeek && block.periodsPerWeek > 0
+          ? block.periodsPerWeek
+          : Math.max(1, ...optSubjects.map(sub =>
+              targetPeriods[refSec]?.[sub] ?? subjects.find(s => s.name === sub)?.periodsPerWeek ?? 0)))
     const blockRoom = block.options[0]?.room ?? ''
+    // Period 1 is reserved for the class teacher — combos avoid it and only fall
+    // back to it as a last resort when no other slot is free.
+    const period1Id = classPeriods[0]?.id
 
     const slotOk = (day: string, pid: string): boolean => {
       if (!block.sectionNames.every(sn => !sectionOffDays.get(sn)?.has(day) && !classTT[sn]?.[day]?.[pid])) return false
@@ -849,10 +858,13 @@ export function solveTimetable(input: SolverInput): SolverOutput {
     }
     const slots: Array<{ day: string; periodId: string }> = []
     const seenSlot = new Set<string>()
-    if (block.day && block.periodId && slotOk(block.day, block.periodId)) {
+    // Honor a pinned slot only if it isn't Period 1 (reserved for class teacher).
+    if (block.day && block.periodId && block.periodId !== period1Id && slotOk(block.day, block.periodId)) {
       slots.push({ day: block.day, periodId: block.periodId }); seenSlot.add(`${block.day}|${block.periodId}`)
     }
+    // Primary pass: skip Period 1.
     for (const p of classPeriods) {
+      if (p.id === period1Id) continue
       for (const day of workDays) {
         if (slots.length >= needed) break
         const key = `${day}|${p.id}`
@@ -860,6 +872,15 @@ export function solveTimetable(input: SolverInput): SolverOutput {
         slots.push({ day, periodId: p.id }); seenSlot.add(key)
       }
       if (slots.length >= needed) break
+    }
+    // Last-resort: only if still short, allow Period 1.
+    if (slots.length < needed && period1Id) {
+      for (const day of workDays) {
+        if (slots.length >= needed) break
+        const key = `${day}|${period1Id}`
+        if (seenSlot.has(key) || !slotOk(day, period1Id)) continue
+        slots.push({ day, periodId: period1Id }); seenSlot.add(key)
+      }
     }
 
     // OR combo = alternatives ("Physics OR Painting"); AND combo = parallel
@@ -881,18 +902,22 @@ export function solveTimetable(input: SolverInput): SolverOutput {
       block.options.forEach(opt => {
         if (opt.teacher) { ensureBusy(opt.teacher); teacherBusy[opt.teacher][day].add(periodId) }
       })
-      // Count toward quota AND cap the target so Pass 2 never schedules the same
-      // subject again as an individual period for a block-covered section.
-      block.sectionNames.forEach(secName => {
-        if (!subjectCount[secName]) subjectCount[secName] = {}
-        if (!targetPeriods[secName]) targetPeriods[secName] = {}
-        block.options.forEach(opt => {
-          if (opt.subject) {
-            subjectCount[secName][opt.subject] = (subjectCount[secName][opt.subject] ?? 0) + 1
-            targetPeriods[secName][opt.subject] = subjectCount[secName][opt.subject]
-          }
+      // AND (parallel split) IS the subjects' period → count toward quota and cap
+      // the target so Pass 2 won't also schedule them individually.
+      // OR is an EXTRA slot → do NOT count, so the individual Physics / Chemistry
+      // periods are still scheduled in full, with the OR combo on top.
+      if (!isOR) {
+        block.sectionNames.forEach(secName => {
+          if (!subjectCount[secName]) subjectCount[secName] = {}
+          if (!targetPeriods[secName]) targetPeriods[secName] = {}
+          block.options.forEach(opt => {
+            if (opt.subject) {
+              subjectCount[secName][opt.subject] = (subjectCount[secName][opt.subject] ?? 0) + 1
+              targetPeriods[secName][opt.subject] = subjectCount[secName][opt.subject]
+            }
+          })
         })
-      })
+      }
     })
   })
 
