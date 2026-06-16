@@ -1656,11 +1656,19 @@ export function CalendarView({
                     const W = c.type!=="class" ? BCOL_W : PCOL_W
                     // ── Full-break column (Assembly, Morning Break) ──
                     if (c.type !== "class") {
+                      // Section-specific break time (staggered-aware); fall back to column time.
+                      const slot = entClassKey ? groupSchedules.get(entClassKey)?.get(c.periodId) : undefined
+                      const bs = slot?.start ?? c.start, be = slot?.end ?? c.end
+                      const secLabel = viewMode === "class" ? ent.label : ""
                       return <td key={`${day}|${c.key}`} style={{
                         width:W, minWidth:W, height:48, textAlign:"center" as const, verticalAlign:"middle" as const,
-                        background:"#FEF9EC", color:"#B45309", fontSize:8.5, fontWeight:600, fontStyle:"italic",
+                        background:"#FEF9EC", color:"#B45309", fontSize:8.5, fontWeight:600, fontStyle:"italic", lineHeight:1.3,
                         borderLeft:leftBorder, borderRight:"1px solid #E2E8F0", borderBottom:"1px solid #E2E8F0",
-                      }}>{c.name}</td>
+                      }}>
+                        <div>{c.name}</div>
+                        {secLabel && <div style={{ fontSize:7.5, fontWeight:800, fontStyle:"normal" as const, color:"#92400E", whiteSpace:"nowrap" as const }}>{secLabel}</div>}
+                        <div style={{ fontSize:7.5, opacity:0.8, fontStyle:"normal" as const, whiteSpace:"nowrap" as const }}>{fmtTime(bs,timeFormat)}–{fmtTime(be,timeFormat)}</div>
+                      </td>
                     }
                     const b = bySlot.get(`${c.periodId}@${c.start}`) ?? null
                     // ── Drag/drop wiring (matrix) ──
