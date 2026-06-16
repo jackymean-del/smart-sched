@@ -217,7 +217,7 @@ export function GroupDisplay({ group }: { group: SubjectAndOrGroup }) {
 
 // ── Modal ─────────────────────────────────────────────────────────────────────
 function GroupModal({
-  initial, allSubjects, allSections, subjectSectionsMap, onSave, onClose,
+  initial, allSubjects, allSections, subjectSectionsMap, onSave, onClose, orOnly = false,
 }: {
   initial?: SubjectAndOrGroup | null
   allSubjects: string[]
@@ -225,8 +225,9 @@ function GroupModal({
   subjectSectionsMap?: Record<string, string[]>
   onSave: (g: SubjectAndOrGroup) => void
   onClose: () => void
+  orOnly?: boolean
 }) {
-  const [logic,    setLogic]    = useState<'AND' | 'OR'>(initial?.logic ?? 'OR')
+  const [logic,    setLogic]    = useState<'AND' | 'OR'>(orOnly ? 'OR' : (initial?.logic ?? 'OR'))
   const [name,     setName]     = useState(initial?.name ?? '')
   const [selected, setSelected] = useState<string[]>(initial?.subjects ?? [])
   const [sections, setSections] = useState<string[]>(initial?.sections ?? [])
@@ -297,7 +298,8 @@ function GroupModal({
           </button>
         </div>
 
-        {/* ── Logic type ── */}
+        {/* ── Logic type (hidden in OR-only mode) ── */}
+        {!orOnly && (
         <div style={{ marginBottom: 18 }}>
           <label style={{ fontSize: 11, fontWeight: 700, color: '#6B7280', display: 'block', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
             Logic type
@@ -357,6 +359,7 @@ function GroupModal({
             </div>
           )}
         </div>
+        )}
 
         {/* ── Group name (optional) ── */}
         <div style={{ marginBottom: 14 }}>
@@ -655,6 +658,7 @@ export function SubjectGroupsSection({
   allSectionNames,
   subjectSectionsMap,
   defaultOpen = false,
+  orOnly = false,
 }: {
   groups: SubjectAndOrGroup[]
   setGroups: (g: SubjectAndOrGroup[]) => void
@@ -664,6 +668,8 @@ export function SubjectGroupsSection({
   subjectSectionsMap?: Record<string, string[]>
   /** Start the collapsible panel open (default false; set true when used as primary content) */
   defaultOpen?: boolean
+  /** Hide all AND (parallel-split) UI — OR rotations only. */
+  orOnly?: boolean
 }) {
   const [open,               setOpen]               = useState(defaultOpen)
   const [editTarget,         setEditTarget]         = useState<SubjectAndOrGroup | null>(null)
@@ -686,8 +692,10 @@ export function SubjectGroupsSection({
   const dismissSug = (id: string) => setDismissedSugs(prev => new Set([...prev, id]))
 
   const suggestions = useMemo(
-    () => generateSuggestions(allSubjectNames, subjectSectionsMap ?? {}, groups).filter(s => !dismissedSugs.has(s.id)),
-    [allSubjectNames, subjectSectionsMap, groups, dismissedSugs],
+    () => generateSuggestions(allSubjectNames, subjectSectionsMap ?? {}, groups)
+      .filter(s => !dismissedSugs.has(s.id))
+      .filter(s => !orOnly || s.logic === 'OR'),
+    [allSubjectNames, subjectSectionsMap, groups, dismissedSugs, orOnly],
   )
 
   const handleSave = (g: SubjectAndOrGroup) => {
@@ -721,7 +729,7 @@ export function SubjectGroupsSection({
           }}
         >
           <span style={{ fontSize: 12, fontWeight: 700, color: '#374151', flex: 1, textAlign: 'left' }}>
-            Subject OR / AND Combos
+            {orOnly ? 'Elective Rotation Slots (OR)' : 'Subject OR / AND Combos'}
           </span>
           {groups.length > 0 && (
             <span style={{
@@ -744,14 +752,16 @@ export function SubjectGroupsSection({
                 <span style={{ fontSize: 8, fontWeight: 900, background: OR_TAG, color: '#fff', borderRadius: 2, padding: '0 3px' }}>OR</span>
                 <strong>Rotation</strong> — one subject per slot
               </span>
-              <span style={{
-                display: 'inline-flex', alignItems: 'center', gap: 5,
-                fontSize: 11, color: AND_TEXT, background: AND_BG,
-                border: `1px solid ${AND_BDR}`, borderRadius: 6, padding: '3px 9px',
-              }}>
-                <span style={{ fontSize: 8, fontWeight: 900, background: AND_TAG, color: '#fff', borderRadius: 2, padding: '0 3px' }}>AND</span>
-                <strong>Parallel split</strong> — same slot, students divide
-              </span>
+              {!orOnly && (
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  fontSize: 11, color: AND_TEXT, background: AND_BG,
+                  border: `1px solid ${AND_BDR}`, borderRadius: 6, padding: '3px 9px',
+                }}>
+                  <span style={{ fontSize: 8, fontWeight: 900, background: AND_TAG, color: '#fff', borderRadius: 2, padding: '0 3px' }}>AND</span>
+                  <strong>Parallel split</strong> — same slot, students divide
+                </span>
+              )}
             </div>
 
             {/* ── AI Suggestions ── */}
@@ -919,6 +929,7 @@ export function SubjectGroupsSection({
           allSubjects={allSubjectNames}
           allSections={allSectionNames}
           subjectSectionsMap={subjectSectionsMap}
+          orOnly={orOnly}
           onSave={handleSave}
           onClose={() => setModalOpen(false)}
         />

@@ -512,6 +512,7 @@ function BlockCard({
   const deleteCombo = (comboId: string) => commit(combos.filter(c => c.id !== comboId))
 
   const setScope = (s: AndGroupScope) => commit(combos.map(c => ({ ...c, groupingScope: s })))
+  const setComboScope = (comboId: string, s: AndGroupScope) => commit(combos.map(c => c.id === comboId ? { ...c, groupingScope: s } : c))
   const setRoomSensitive = (b: boolean) => commit(combos.map(c => ({ ...c, roomCapacitySensitive: b })))
   const renameBlock = (name: string) => commitRaw(combos.map(c => ({ ...c, blockName: name })))
 
@@ -574,6 +575,9 @@ function BlockCard({
           ))}
         </div>
 
+        <button onClick={addCombo} title="Add another combination (a new optional group)" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#7C6FE0', border: 'none', borderRadius: 6, cursor: 'pointer', color: '#fff', padding: '5px 11px', fontSize: 10.5, fontWeight: 800, fontFamily: 'inherit', flexShrink: 0, boxShadow: '0 2px 6px rgba(124,111,224,0.35)' }}>
+          <Plus size={13} /> Add combo
+        </button>
         <button onClick={() => setCollapsed(c => !c)} title={collapsed ? 'Show preview' : 'Hide / preview'} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, background: '#fff', border: '1.5px solid #E4E0FF', borderRadius: 6, cursor: 'pointer', color: '#7C6FE0', padding: '3px 8px', fontSize: 10, fontWeight: 700, fontFamily: 'inherit', flexShrink: 0 }}>
           {collapsed ? <Eye size={12} /> : <EyeOff size={12} />}{collapsed ? 'Show' : 'Hide'}
           <ChevronDown size={13} style={{ transform: collapsed ? 'rotate(-90deg)' : 'none', transition: 'transform .15s' }} />
@@ -598,76 +602,33 @@ function BlockCard({
         </div>
       ) : (<>
 
-      {/* merge axes */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 12px', borderBottom: '1px solid #F0EDFF', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 9.5, fontWeight: 700, color: '#8B87AD', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Merge:</span>
-        {SCOPE_DIMS.map(dim => (
-          <div key={dim.key} title={dim.desc} style={{ display: 'inline-flex', alignItems: 'center', borderRadius: 5, overflow: 'hidden', border: '1.5px solid #E4E0FF' }}>
-            <span style={{ fontSize: 9, fontWeight: 700, color: '#8B87AD', padding: '2px 5px', background: '#F8F7FF' }}>{dim.label}</span>
-            {(['same', 'cross'] as const).map(v => {
-              const active = scope[dim.key] === v
-              return (
-                <button key={v} onClick={() => setScope({ ...scope, [dim.key]: v })} style={{
-                  padding: '2px 7px', border: 'none', fontSize: 9.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-                  background: active ? (v === 'same' ? '#7C6FE0' : '#F59E0B') : '#fff',
-                  color: active ? '#fff' : '#C4C0DC',
-                }}>{v === 'same' ? 'Same' : 'Cross'}</button>
-              )
-            })}
-          </div>
-        ))}
-      </div>
-
       {/* the shared table */}
       <div style={{ overflowX: 'auto', position: 'relative' }}>
         <table style={{ borderCollapse: 'collapse', width: '100%' }}>
           <thead>
             <tr>
-              <th rowSpan={2} style={stickyHead(0, SEC_W)}>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 5, position: 'relative' }}>
-                  Section
-                  <button onClick={() => setPicker(p => p && p.type === 'section' ? null : { type: 'section' })} title="Add a class-section row"
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '5px 10px', borderRadius: 7, border: '1.5px dashed #A78BFA', background: '#EDE9FF', color: '#6D28D9', cursor: 'pointer', fontSize: 11, fontWeight: 800, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
-                    <Plus size={13} /> Add section
-                  </button>
-                  {picker?.type === 'section' && (
-                    <Picker items={allSectionNames} existing={sections} placeholder="Add section…" onAdd={addSection} onClose={() => setPicker(null)} />
-                  )}
-                </div>
-              </th>
+              <th rowSpan={2} style={stickyHead(0, SEC_W)}>Section</th>
               <th rowSpan={2} style={{ ...stickyHead(SEC_W, TOT_W), textAlign: 'center' }}>Tot</th>
               {combos.map((combo, ci) => {
                 const cols = getCols(combo)
                 return (
-                  <th key={combo.id} colSpan={Math.max(cols.length, 1) + 1} style={{
+                  <th key={combo.id} colSpan={(cols.length || 1) + 2} style={{
                     padding: '5px 8px', background: colColor(ci) + '14', borderBottom: `2px solid ${colColor(ci)}55`,
                     borderLeft: '2px solid #E8E4FF', whiteSpace: 'nowrap',
                   }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, position: 'relative' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                       <input value={combo.name} onChange={e => renameCombo(combo.id, e.target.value)} placeholder={`Combo ${ci + 1}`}
                         style={{ flex: 1, minWidth: 60, padding: '2px 5px', borderRadius: 4, border: '1.5px solid transparent', background: 'transparent', fontSize: 11, fontWeight: 800, color: colColor(ci), outline: 'none', fontFamily: 'inherit' }}
                         onFocus={e => { e.currentTarget.style.border = `1.5px solid ${colColor(ci)}`; e.currentTarget.style.background = '#fff' }}
                         onBlur={e => { e.currentTarget.style.border = '1.5px solid transparent'; e.currentTarget.style.background = 'transparent' }} />
-                      <button onClick={() => setPicker(p => p && p.type === 'subject' && p.comboId === combo.id ? null : { type: 'subject', comboId: combo.id })} title="Add a subject column"
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 9px', borderRadius: 6, border: '1.5px dashed #34D399', background: '#ECFDF5', color: '#047857', cursor: 'pointer', fontSize: 10.5, fontWeight: 800, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
-                        <Plus size={12} /> Subject
-                      </button>
                       <button onClick={() => deleteCombo(combo.id)} title="Delete this combination"
                         style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#EF4444', padding: 1 }}>
                         <X size={12} />
                       </button>
-                      {picker?.type === 'subject' && picker.comboId === combo.id && (
-                        <Picker items={allSubjectNames} existing={cols} placeholder="Add subject…" onAdd={s => addSubject(combo.id, s)} onClose={() => setPicker(null)} />
-                      )}
                     </div>
                   </th>
                 )
               })}
-              <th rowSpan={2} style={{ padding: '6px 10px', borderBottom: '2px solid #E8E4FF', borderLeft: '2px solid #E8E4FF', verticalAlign: 'middle' }}>
-                <button onClick={addCombo} title="Add another combination (a new optional group)" style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '10px 12px', borderRadius: 9, border: '2px dashed #A78BFA', background: '#EDE9FF', color: '#6D28D9', cursor: 'pointer', fontSize: 10.5, fontWeight: 800, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
-                  <Plus size={18} /> Add<br />combo
-                </button>
-              </th>
             </tr>
             <tr>
               {combos.map((combo, ci) => {
@@ -688,15 +649,22 @@ function BlockCard({
                       ) : 'add →'}
                     </th>
                   )),
-                  <th key={combo.id + 'val'} style={{ padding: '4px 6px', fontSize: 9.5, fontWeight: 800, color: '#8B87AD', background: '#FAFAFE', borderBottom: '2px solid #E8E4FF', textAlign: 'center', minWidth: 44 }}>✓</th>,
+                  <th key={combo.id + 'val'} style={{ padding: '4px 6px', fontSize: 11, fontWeight: 800, color: '#15803D', background: '#FAFAFE', borderBottom: '2px solid #E8E4FF', textAlign: 'center', width: 40, minWidth: 40 }}>✓</th>,
+                  <th key={combo.id + 'addsubj'} style={{ padding: '4px 6px', background: '#FAFAFE', borderBottom: '2px solid #E8E4FF', textAlign: 'center', width: 78, minWidth: 78, position: 'relative' }}>
+                    <button onClick={() => setPicker(p => p && p.type === 'subject' && p.comboId === combo.id ? null : { type: 'subject', comboId: combo.id })} title="Add a subject column to this combination"
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '4px 8px', borderRadius: 6, border: '1.5px dashed #34D399', background: '#ECFDF5', color: '#047857', cursor: 'pointer', fontSize: 10, fontWeight: 800, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                      <Plus size={11} /> Subject
+                    </button>
+                    {picker?.type === 'subject' && picker.comboId === combo.id && (
+                      <Picker items={allSubjectNames} existing={cols} placeholder="Add subject…" onAdd={s => addSubject(combo.id, s)} onClose={() => setPicker(null)} />
+                    )}
+                  </th>,
                 ]
               })}
             </tr>
           </thead>
           <tbody>
-            {sections.length === 0 ? (
-              <tr><td colSpan={99} style={{ padding: '18px', textAlign: 'center', color: '#B8B4D4', fontSize: 12 }}>Add a class-section with the + beside “Section”.</td></tr>
-            ) : sections.map((sec, ri) => {
+            {sections.map((sec, ri) => {
               const bg = ri % 2 === 0 ? '#fff' : '#FAFAFE'
               const total = getTotal(sec)
               return (
@@ -726,22 +694,70 @@ function BlockCard({
                           ) : <span style={{ fontSize: 10, color: '#D1D5DB' }}>—</span>}
                         </td>
                       )),
-                      <td key={combo.id + 'val'} style={{ padding: '4px 6px', textAlign: 'center', borderBottom: '1px solid #F0EDFF' }}>
+                      <td key={combo.id + 'val'} style={{ width: 40, textAlign: 'center', borderBottom: '1px solid #F0EDFF' }}>
                         {total === 0 ? <span style={{ fontSize: 10, color: '#C4C0DC' }}>—</span>
-                          : isMatch ? <CheckCircle2 size={13} color="#15803D" />
+                          : isMatch ? <CheckCircle2 size={14} color="#15803D" />
                           : isOver ? <span style={{ color: '#DC2626', fontSize: 10.5, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 1 }}><XCircle size={11} />+{sum - total}</span>
                           : sum > 0 ? <span style={{ color: '#D97706', fontSize: 10.5, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 1 }}><AlertCircle size={11} />−{total - sum}</span>
                           : <span style={{ fontSize: 10, color: '#C4C0DC' }}>○</span>}
                       </td>,
+                      <td key={combo.id + 'addsubj'} style={{ width: 78, borderBottom: '1px solid #F0EDFF' }} />,
                     ]
                   })}
-                  <td style={{ borderBottom: '1px solid #F0EDFF', borderLeft: '2px solid #E8E4FF' }} />
                 </tr>
               )
             })}
+            {/* add-section row — always directly below the last section */}
+            <tr>
+              <td style={{ ...stickyCell(0, SEC_W, '#fff'), position: 'relative' }}>
+                <button onClick={() => setPicker(p => p && p.type === 'section' ? null : { type: 'section' })} title="Add a class-section row"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '5px 10px', borderRadius: 7, border: '1.5px dashed #A78BFA', background: '#EDE9FF', color: '#6D28D9', cursor: 'pointer', fontSize: 11, fontWeight: 800, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                  <Plus size={13} /> Add section
+                </button>
+                {picker?.type === 'section' && (
+                  <Picker items={allSectionNames} existing={sections} placeholder="Add section…" onAdd={addSection} onClose={() => setPicker(null)} />
+                )}
+              </td>
+              <td style={stickyCell(SEC_W, TOT_W, '#fff')} />
+              {combos.map(combo => (
+                <td key={combo.id + 'addrow'} colSpan={(getCols(combo).length || 1) + 2} style={{ borderLeft: '2px solid #E8E4FF' }} />
+              ))}
+            </tr>
           </tbody>
         </table>
       </div>
+
+      {/* per-combo merge bars */}
+      {combos.length > 0 && (
+        <div style={{ padding: '8px 12px', borderTop: '1px solid #F0EDFF', display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <span style={{ fontSize: 9, fontWeight: 800, color: '#8B87AD', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Merge each combination into teaching groups by:</span>
+          {combos.map((combo, ci) => {
+            const cs = getScope(combo)
+            return (
+              <div key={combo.id} style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 10, fontWeight: 800, color: colColor(ci), minWidth: 96, maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {combo.name || `Combo ${ci + 1}`}
+                </span>
+                {SCOPE_DIMS.map(dim => (
+                  <div key={dim.key} title={dim.desc} style={{ display: 'inline-flex', alignItems: 'center', borderRadius: 5, overflow: 'hidden', border: '1.5px solid #E4E0FF' }}>
+                    <span style={{ fontSize: 9, fontWeight: 700, color: '#8B87AD', padding: '2px 5px', background: '#F8F7FF' }}>{dim.label}</span>
+                    {(['same', 'cross'] as const).map(v => {
+                      const active = cs[dim.key] === v
+                      return (
+                        <button key={v} onClick={() => setComboScope(combo.id, { ...cs, [dim.key]: v })} style={{
+                          padding: '2px 7px', border: 'none', fontSize: 9.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                          background: active ? (v === 'same' ? '#7C6FE0' : '#F59E0B') : '#fff',
+                          color: active ? '#fff' : '#C4C0DC',
+                        }}>{v === 'same' ? 'Same' : 'Cross'}</button>
+                      )
+                    })}
+                  </div>
+                ))}
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       {/* footer actions */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderTop: '1px dashed #E8E4FF' }}>
@@ -749,9 +765,10 @@ function BlockCard({
           style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '7px 12px', borderRadius: 7, border: '1.5px solid #FDE68A', background: '#FFFBEB', color: '#92400E', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>
           <Wand2 size={12} /> Split evenly
         </button>
-        <button onClick={generate} style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '11px 16px', borderRadius: 9, border: 'none', background: 'linear-gradient(135deg, #7C6FE0, #9B8EF5)', color: '#fff', fontSize: 13.5, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', boxShadow: '0 3px 10px rgba(124,111,224,0.4)' }}>
-          <RefreshCw size={15} /> Generate teaching groups
+        <button onClick={generate} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, #7C6FE0, #9B8EF5)', color: '#fff', fontSize: 12, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', boxShadow: '0 2px 8px rgba(124,111,224,0.35)', flexShrink: 0 }}>
+          <RefreshCw size={13} /> Generate groups
         </button>
+        <div style={{ flex: 1 }} />
       </div>
 
       {/* generated groups */}
@@ -783,7 +800,18 @@ function BlockCard({
 export function StepStudentGroups() {
   const store = useTimetableStore() as any
   const { sections, subjects, setStep, andComboGroups, setAndComboGroups } = store
-  const rooms: any[] = useMemo(() => store.rooms ?? [], [store])
+  // All venues across every store source (rooms / classrooms / facilities), deduped by name.
+  const rooms: any[] = useMemo(() => {
+    const seen = new Set<string>()
+    const out: any[] = []
+    for (const r of [...(store.rooms ?? []), ...(store.classrooms ?? []), ...(store.facilities ?? [])]) {
+      const name = r?.name ?? r?.actualName ?? r?.roomName ?? r?.label
+      if (!name || seen.has(name)) continue
+      seen.add(name)
+      out.push({ ...r, name, capacity: r?.capacity ?? r?.seats ?? r?.size ?? 0 })
+    }
+    return out
+  }, [store.rooms, store.classrooms, store.facilities])
 
   const [activeTab, setActiveTab] = useState<'and' | 'or'>('and')
   const [hintDismissed, setHintDismissed] = useState(false)
@@ -847,7 +875,7 @@ export function StepStudentGroups() {
 
   const allSubjectNames = useMemo(() => (subjects as any[]).map((s: any) => s.name), [subjects])
   const allSectionNames = useMemo(() => (sections as any[]).map((s: any) => s.name), [sections])
-  const allRoomNames    = useMemo(() => (rooms as any[]).map((r: any) => r.name ?? r.actualName).filter(Boolean), [rooms])
+  const allRoomNames    = useMemo(() => rooms.map((r: any) => r.name), [rooms])
 
   const consumed = useMemo(() => { const set = new Set<string>(); for (const g of groups) for (const c of getCols(g)) set.add(c); return set }, [groups])
   const sharedElectives = useMemo(() => detectSharedElectives(subjects as any[], consumed), [subjects, consumed])
@@ -1030,10 +1058,10 @@ export function StepStudentGroups() {
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '14px 16px', marginBottom: 20, borderRadius: 10, background: '#FFFBEB', border: '1px solid #FDE68A' }}>
             <Shuffle size={18} color="#D97706" style={{ flexShrink: 0, marginTop: 2 }} />
             <div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#92400E', marginBottom: 4 }}>OR / AND Subject Combos</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#92400E', marginBottom: 4 }}>OR Elective Slots</div>
               <div style={{ fontSize: 12, color: '#78350F', lineHeight: 1.65 }}>
-                <strong>OR combo</strong> — one of the listed subjects runs per slot; whichever teacher is free takes that period.<br />
-                <strong>AND combo</strong> — all subjects share one slot in parallel; students divide into groups.
+                <strong>OR slot</strong> — one of the listed subjects runs per slot; each student picks one and whichever teacher is free takes that period (e.g. a Third-Language slot: Hindi / French / German).<br />
+                Parallel splits where a section divides simultaneously belong in the <strong>AND Groups</strong> tab.
               </div>
             </div>
           </div>
@@ -1045,6 +1073,7 @@ export function StepStudentGroups() {
             allSectionNames={allSectionNames}
             subjectSectionsMap={subjectSectionsMap}
             defaultOpen
+            orOnly
           />
 
           <div style={{ display: 'flex', gap: 10, marginTop: 20, flexWrap: 'wrap', alignItems: 'center' }}>
