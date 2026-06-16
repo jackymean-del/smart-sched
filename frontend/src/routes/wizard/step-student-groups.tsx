@@ -12,6 +12,7 @@
  */
 
 import { useState, useMemo, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useTimetableStore } from '@/store/timetableStore'
 import type { AndComboGroup, AndTeachingGroup, AndGroupScope, SubjectBundle } from '@/types'
 import {
@@ -393,38 +394,57 @@ function ComboField({ value, options, placeholder, title, onChange }: {
 }) {
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState<string | null>(null) // null = show full list
-  const ref = useRef<HTMLDivElement>(null)
+  const [rect, setRect] = useState<{ left: number; top: number; width: number } | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const place = () => {
+    const r = inputRef.current?.getBoundingClientRect()
+    if (r) setRect({ left: r.left, top: r.bottom + 3, width: r.width })
+  }
   useEffect(() => {
     if (!open) return
-    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) { setOpen(false); setQ(null) } }
-    document.addEventListener('mousedown', h)
-    return () => document.removeEventListener('mousedown', h)
+    place()
+    const close = (e: MouseEvent) => { if (inputRef.current && e.target !== inputRef.current) { setOpen(false); setQ(null) } }
+    const reposition = () => place()
+    // close on outside click; reposition on scroll/resize (portal is fixed)
+    window.addEventListener('mousedown', close)
+    window.addEventListener('scroll', reposition, true)
+    window.addEventListener('resize', reposition)
+    return () => { window.removeEventListener('mousedown', close); window.removeEventListener('scroll', reposition, true); window.removeEventListener('resize', reposition) }
   }, [open])
+
   const filter = (q ?? '').toLowerCase()
   const shown = options.filter(o => o.toLowerCase().includes(filter))
   return (
-    <div ref={ref} style={{ position: 'relative', flex: 1, minWidth: 0 }}>
+    <>
       <input
+        ref={inputRef}
         value={q === null ? value : q}
         title={title}
         onFocus={() => { setOpen(true); setQ('') }}
         onChange={e => { setQ(e.target.value); onChange(e.target.value) }}
         placeholder={placeholder}
-        style={{ width: '100%', boxSizing: 'border-box', padding: '3px 6px', borderRadius: 5, border: '1.5px solid #E4E0FF', fontSize: 11, fontWeight: 600, color: '#13111E', outline: 'none', fontFamily: 'inherit', background: '#FAFAFE' }}
+        style={{ flex: 1, minWidth: 0, boxSizing: 'border-box', padding: '3px 6px', borderRadius: 5, border: '1.5px solid #E4E0FF', fontSize: 11, fontWeight: 600, color: '#13111E', outline: 'none', fontFamily: 'inherit', background: '#FAFAFE' }}
       />
-      {open && shown.length > 0 && (
-        <div style={{ position: 'absolute', zIndex: 700, top: '100%', left: 0, right: 0, marginTop: 3, background: '#fff', border: '1.5px solid #E4E0FF', borderRadius: 8, boxShadow: '0 8px 28px rgba(0,0,0,0.16)', maxHeight: 180, overflowY: 'auto' }}>
-          {shown.map(o => (
-            <button key={o} onMouseDown={() => { onChange(o); setQ(null); setOpen(false) }} style={{
-              display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', border: 'none',
-              background: o === value ? '#F5F2FF' : 'none', fontSize: 11, color: '#374151', cursor: 'pointer', fontFamily: 'inherit',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.background = '#F5F2FF' }}
-            onMouseLeave={e => { e.currentTarget.style.background = o === value ? '#F5F2FF' : 'none' }}>{o}</button>
-          ))}
-        </div>
+      {open && rect && createPortal(
+        <div
+          onMouseDown={e => e.preventDefault()} // keep input focus; let onMouseDown on items fire
+          style={{ position: 'fixed', zIndex: 4000, left: rect.left, top: rect.top, width: Math.max(rect.width, 150), background: '#fff', border: '1.5px solid #E4E0FF', borderRadius: 8, boxShadow: '0 10px 30px rgba(0,0,0,0.18)', maxHeight: 200, overflowY: 'auto' }}
+        >
+          {shown.length === 0
+            ? <div style={{ padding: '8px 12px', fontSize: 11, color: '#C4C0DC' }}>No matches</div>
+            : shown.map(o => (
+              <button key={o} onMouseDown={() => { onChange(o); setQ(null); setOpen(false) }} style={{
+                display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', border: 'none',
+                background: o === value ? '#F5F2FF' : '#fff', fontSize: 11, color: '#374151', cursor: 'pointer', fontFamily: 'inherit',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = '#F5F2FF' }}
+              onMouseLeave={e => { e.currentTarget.style.background = o === value ? '#F5F2FF' : '#fff' }}>{o}</button>
+            ))}
+        </div>,
+        document.body,
       )}
-    </div>
+    </>
   )
 }
 

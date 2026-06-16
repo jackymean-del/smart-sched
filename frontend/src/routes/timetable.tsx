@@ -1301,6 +1301,19 @@ export function TimetablePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sections, classPeriods, cwBreaksGlobal, config.startTime])
 
+  // Bell-accurate per-section times for the Calendar view (sectionName → id → {start,end}).
+  const calSectionTimes = useMemo(() => {
+    const out: Record<string, Record<string, { start: number; end: number }>> = {}
+    sections.forEach(s => {
+      const sched = allSectionSchedules.get(getSectionClassKey(s.name))
+      if (!sched) return
+      const rec: Record<string, { start: number; end: number }> = {}
+      sched.forEach((v, id) => { rec[id] = { start: v.startMin, end: v.endMin } })
+      out[s.name] = rec
+    })
+    return out
+  }, [sections, allSectionSchedules])
+
   // School-wide period-split / owning-label info for column header chips.
   const globalOwningInfo = useMemo(
     () => buildOwningInfo(sections.map(s=>s.name), classPeriods, cwBreaksGlobal, config),
@@ -2984,6 +2997,7 @@ export function TimetablePage() {
         periods={periods}
         workDays={config.workDays}
         startTime={config.startTime ?? "09:00"}
+        sectionTimes={calSectionTimes}
         timeFormat={config.timeFormat as "12h" | "24h" | undefined}
         staff={staff}
         sections={sections}

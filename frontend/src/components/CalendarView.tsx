@@ -42,6 +42,10 @@ export interface CalendarViewProps {
   periods: Period[]
   workDays: string[]
   startTime: string
+  /** Bell-accurate wall-clock minutes per section: sectionName → id → {start,end}.
+   *  When provided, these override the duration-summed fallback so the calendar
+   *  matches the real (staggered/break-aware) bell schedule. */
+  sectionTimes?: Record<string, Record<string, { start: number; end: number }>>
   timeFormat?: "12h" | "24h"
   staff: Staff[]
   sections: Section[]
@@ -760,7 +764,7 @@ function DropZone({
 // CalendarView — main component
 // ─────────────────────────────────────────────
 export function CalendarView({
-  classTT, periods, workDays, startTime, timeFormat="12h",
+  classTT, periods, workDays, startTime, sectionTimes, timeFormat="12h",
   staff, sections, subjects, substitutions, viewMode, selectedEntity,
   showTeacher, showRoom, showTime=false, shortNames=false, editMode=false,
   onCellClick, onCellEdit, onCellDelete, onCellSwap, absentHighlights, classwiseBreaks,
@@ -798,6 +802,18 @@ export function CalendarView({
 
   const dayStartMin = useMemo(()=>parseTime(startTime),[startTime])
 
+  // Bell-accurate times when available (matches the class grid); else fall back
+  // to summing period durations from the day start.
+  const timesFor = useCallback((secName: string, ps: Period[]): Map<string,{start:number;end:number}> => {
+    const rec = sectionTimes?.[secName]
+    if (rec) {
+      const m = new Map<string,{start:number;end:number}>()
+      for (const [k, v] of Object.entries(rec)) m.set(k, v)
+      if (m.size) return m
+    }
+    return calcTimes(ps, dayStartMin)
+  }, [sectionTimes, dayStartMin])
+
   // All rooms from timetable
   const allRooms = useMemo(()=>{
     const s=new Set<string>()
@@ -825,8 +841,8 @@ export function CalendarView({
   const repSecTimes = useCallback((dayKey:string)=>{
     const repSec=sections[0]?.name
     if(!repSec) return calcTimes(periods,dayStartMin)
-    return calcTimes(buildSecPeriods(repSec,periods,classwiseBreaks),dayStartMin)
-  },[sections,periods,classwiseBreaks,dayStartMin])
+    return timesFor(repSec, buildSecPeriods(repSec,periods,classwiseBreaks))
+  },[sections,periods,classwiseBreaks,dayStartMin,timesFor])
 
   // Distinct teaching slots across ALL class groups — mirrors the traditional
   // teacher view's "unified time-slot column model". With staggered breaks a
@@ -841,7 +857,7 @@ export function CalendarView({
       if (seenGroups.has(k)) return
       seenGroups.add(k)
       const ps = buildSecPeriods(sec.name, periods, classwiseBreaks)
-      const tm = calcTimes(ps, dayStartMin)
+      const tm = timesFor(sec.name, ps)
       ps.forEach(p=>{
         if (p.type!=="class") return
         const t = tm.get(p.id)!
@@ -860,7 +876,7 @@ export function CalendarView({
       const k = secKey(sec.name)
       if (seen.has(k)) return; seen.add(k)
       const ps = buildSecPeriods(sec.name, periods, classwiseBreaks)
-      const tm = calcTimes(ps, dayStartMin)
+      const tm = timesFor(sec.name, ps)
       const sm = new Map<string,{start:number;end:number;name:string;type:Period["type"]}>()
       ps.forEach(p=>{ const t=tm.get(p.id)!; sm.set(p.id, {start:t.start, end:t.end, name:p.name, type:p.type}) })
       m.set(k, sm)
@@ -932,7 +948,7 @@ export function CalendarView({
   // ── Block builders ───────────────────────────────────────────────────
   const buildClassBlocks = useCallback((secName:string, dayKey:string): TimeBlock[] => {
     const ps=buildSecPeriods(secName,periods,classwiseBreaks)
-    const tm=calcTimes(ps,dayStartMin)
+    const tm=timesFor(secName, ps)
     return ps.map(p=>{
       const t=tm.get(p.id)!
       const cell=classTT[secName]?.[dayKey]?.[p.id]
@@ -953,7 +969,7 @@ export function CalendarView({
 
   const buildTeacherBlocks = useCallback((tName:string, dayKey:string): TimeBlock[] => {
     const blocks:TimeBlock[]=[]
-    const gTm=calcTimes(periods,dayStartMin)
+    const gTm=timesFor(sections[0]?.name ?? '', periods)
     const rTm=repSecTimes(dayKey)
     // Global breaks — only FULL (school-wide) breaks render as solid blocks.
     // Partial/classwise breaks are skipped; in-session teaching blocks fill them.
@@ -977,7 +993,7 @@ export function CalendarView({
     const taughtBySlot = new Map<string, TimeBlock>()
     sections.forEach(sec=>{
       const ps=buildSecPeriods(sec.name,periods,classwiseBreaks)
-      const tm=calcTimes(ps,dayStartMin)
+      const tm=timesFor(sec.name, ps)
       ps.forEach(p=>{
         if(p.type!=="class") return
         const cell=classTT[sec.name]?.[dayKey]?.[p.id]
@@ -1029,7 +1045,7 @@ export function CalendarView({
 
   const buildRoomBlocks = useCallback((roomName:string, dayKey:string): TimeBlock[] => {
     const blocks:TimeBlock[]=[]
-    const gTm=calcTimes(periods,dayStartMin)
+    const gTm=timesFor(sections[0]?.name ?? '', periods)
     const rTm=repSecTimes(dayKey)
     // Global breaks — only FULL (school-wide) breaks render as solid blocks.
     periods.forEach(p=>{
@@ -1048,7 +1064,7 @@ export function CalendarView({
     const occBySlot = new Map<string, TimeBlock>()
     sections.forEach(sec=>{
       const ps=buildSecPeriods(sec.name,periods,classwiseBreaks)
-      const tm=calcTimes(ps,dayStartMin)
+      const tm=timesFor(sec.name, ps)
       ps.forEach(p=>{
         if(p.type!=="class") return
         const cell=classTT[sec.name]?.[dayKey]?.[p.id]
@@ -1097,7 +1113,7 @@ export function CalendarView({
 
   const buildSubjectBlocks = useCallback((subjectName:string, dayKey:string): TimeBlock[] => {
     const blocks:TimeBlock[]=[]
-    const gTm=calcTimes(periods,dayStartMin)
+    const gTm=timesFor(sections[0]?.name ?? '', periods)
     const rTm=repSecTimes(dayKey)
     // Global breaks — only FULL (school-wide) breaks render as solid blocks.
     periods.forEach(p=>{
@@ -1114,7 +1130,7 @@ export function CalendarView({
     // For subject view, multiple sections CAN have the same subject at the same time
     sections.forEach(sec=>{
       const ps=buildSecPeriods(sec.name,periods,classwiseBreaks)
-      const tm=calcTimes(ps,dayStartMin)
+      const tm=timesFor(sec.name, ps)
       ps.forEach(p=>{
         if(p.type!=="class") return
         const cell=classTT[sec.name]?.[dayKey]?.[p.id]
