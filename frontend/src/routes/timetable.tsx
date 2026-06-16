@@ -2996,11 +2996,11 @@ export function TimetablePage() {
         teacherTT={teacherTT}
         periods={periods}
         workDays={config.workDays}
-        startTime={config.startTime ?? "09:00"}
+        startTime={activeBlock ? activeBlock.startTime : (config.startTime ?? "09:00")}
         sectionTimes={calSectionTimes}
         timeFormat={config.timeFormat as "12h" | "24h" | undefined}
         staff={staff}
-        sections={sections}
+        sections={activeBlock ? sections.filter(s => activeBlock.sectionNames.includes(s.name)) : sections}
         subjects={subjects}
         substitutions={substitutions}
         viewMode={calEntityMode}
