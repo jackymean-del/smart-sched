@@ -503,7 +503,7 @@ export function extractDynamicLearningGroups(
         totalStrength: opt.allocatedStrength ?? opt.capacity ?? 0,
         teacher: opt.teacher ?? '',
         room: opt.room ?? '',
-        behavior: sub?.groupingBehavior ?? 'FLEXIBLE_GROUPING',
+        behavior: (b as any).behavior ?? sub?.groupingBehavior ?? 'FLEXIBLE_GROUPING',
         day: b.day,
         periodId: b.periodId,
       })

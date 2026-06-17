@@ -572,6 +572,9 @@ export interface OptionalBlock {
   periodsPerWeek?: number      // pinned weekly slot count (overrides subject-derived quota)
   logic?: 'AND' | 'OR'         // cell display joiner — AND = parallel split, OR = rotation (default)
   slotId?: string              // named elective slot (R1/R2/R3) — independent teaching instance
+  /** Grouping behaviour derived from the Groups-step merge rule (Same/Cross ×
+   *  section/grade/stream/block). Overrides the per-subject default when set. */
+  behavior?: string
 }
 
 export const OptionalBlockSchema = z.object({

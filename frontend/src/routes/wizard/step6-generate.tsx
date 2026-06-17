@@ -185,6 +185,18 @@ function comboGroupsToOptionalBlocks(
 // time slot becomes an AND-logic OptionalBlock. We create one OptionalBlock
 // per AndComboGroup that has generated teaching groups — the solver then
 // knows to run all bundles simultaneously in the same period.
+/** Map the Groups-step merge rule (Same/Cross × section/grade/stream/block) to a
+ *  behaviour key the views label (NO_GROUPING/SAME_GRADE_ONLY/SAME_STREAM_ONLY/
+ *  SAME_GRADE_STREAM/CROSS_GRADE_ALLOWED). */
+function scopeToBehavior(scope: any): string {
+  if (!scope || typeof scope !== 'object') return 'FLEXIBLE_GROUPING'
+  if (scope.section === 'same') return 'NO_GROUPING'          // each section its own group
+  if (scope.grade === 'same' && scope.stream === 'same') return 'SAME_GRADE_STREAM'
+  if (scope.grade === 'same') return 'SAME_GRADE_ONLY'
+  if (scope.stream === 'same') return 'SAME_STREAM_ONLY'
+  return 'CROSS_GRADE_ALLOWED'
+}
+
 function andGroupsToOptionalBlocks(
   andGroups: import('@/types').AndComboGroup[],
   subjects: any[],
@@ -242,6 +254,7 @@ function andGroupsToOptionalBlocks(
           day: '', periodId: '',
           options,
           logic: 'AND',
+          behavior: scopeToBehavior(group.groupingScope),
         })
       }
     } else {
@@ -264,6 +277,7 @@ function andGroupsToOptionalBlocks(
           day: '', periodId: '',
           options,
           logic: 'AND',
+          behavior: scopeToBehavior(group.groupingScope),
         })
       }
     }

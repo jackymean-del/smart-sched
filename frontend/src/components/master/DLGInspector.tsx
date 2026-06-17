@@ -23,8 +23,10 @@ const DAY_LABEL: Record<string, string> = {
 }
 
 const BEHAVIOR_STYLE: Record<string, { bg: string; fg: string; label: string }> = {
-  NO_GROUPING:         { bg: '#F1F5F9', fg: '#475569', label: 'Isolated' },
+  NO_GROUPING:         { bg: '#F1F5F9', fg: '#475569', label: 'Per section' },
   SAME_GRADE_ONLY:     { bg: '#FEF3C7', fg: '#92400E', label: 'Same grade' },
+  SAME_STREAM_ONLY:    { bg: '#FFF7ED', fg: '#C2410C', label: 'Same stream' },
+  SAME_GRADE_STREAM:   { bg: '#FCE7F3', fg: '#9D174D', label: 'Grade + stream' },
   CROSS_GRADE_ALLOWED: { bg: '#DBEAFE', fg: '#1D4ED8', label: 'Cross grade' },
   FLEXIBLE_GROUPING:   { bg: '#EDE9FF', fg: '#7C6FE0', label: 'Flexible' },
 }
