@@ -775,6 +775,7 @@ export function CalendarView({
   const [calMode,    setCalMode]    = useState<CalMode>("matrix")
   const [zoom,       setZoom]       = useState<ZoomLevel>("60min")
   const [showBreaks, setShowBreaks] = useState(true)   // toggle: show/hide Assembly + breaks
+  const [density,    setDensity]    = useState<"comfortable" | "compact">("comfortable")  // matrix row density
   const [curDate,    setCurDate]    = useState(new Date())
   const [tooltip,    setTooltip]    = useState<{lines:string[];x:number;y:number}|null>(null)
   const [activeD,    setActiveD]    = useState<ActiveDetail|null>(null)
@@ -1561,6 +1562,7 @@ export function CalendarView({
     // Breaks toggle: when off, drop Assembly/break columns — teaching periods only.
     const cols = showBreaks ? matrixColumns : matrixColumns.filter(c => c.type === "class")
     const PCOL_W = 104, BCOL_W = 58
+    const cellH = density === "compact" ? 32 : 48
     const periodShort = (name:string) => name.replace(/period\s*/i, "P").replace(/\s+/g, "")
     const fmtRange = (s:number,e:number) => `${fmtTime(s,timeFormat)}–${fmtTime(e,timeFormat)}`
 
@@ -1663,7 +1665,7 @@ export function CalendarView({
                       const bs = slot?.start ?? c.start, be = slot?.end ?? c.end
                       const secLabel = viewMode === "class" ? ent.label : ""
                       return <td key={`${day}|${c.key}`} style={{
-                        width:W, minWidth:W, height:48, textAlign:"center" as const, verticalAlign:"middle" as const,
+                        width:W, minWidth:W, height:cellH, textAlign:"center" as const, verticalAlign:"middle" as const,
                         background:"#FEF9EC", color:"#B45309", fontSize:8.5, fontWeight:600, fontStyle:"italic", lineHeight:1.3,
                         borderLeft:leftBorder, borderRight:"1px solid #E2E8F0", borderBottom:"1px solid #E2E8F0",
                       }}>
@@ -1721,7 +1723,7 @@ export function CalendarView({
                       const secD = b.sectionName
                       return (
                         <td key={`${day}|${c.key}`} onClick={()=>onClick(b, day)} {...mDropProps}
-                          style={{ width:W, minWidth:W, height:48, padding:2, cursor: editMode ? "grab" : "pointer", position:"relative" as const,
+                          style={{ width:W, minWidth:W, height:cellH, padding:2, cursor: editMode ? "grab" : "pointer", position:"relative" as const,
                             ...(overOutline ? { outline:overOutline, outlineOffset:"-2px" } : {}),
                             background: dropTint ?? undefined,
                             borderLeft:leftBorder, borderRight:"1px solid #E2E8F0", borderBottom:"1px solid #E2E8F0" }}>
@@ -1746,7 +1748,7 @@ export function CalendarView({
                     if (entClassKey && showBreaks) {
                       const lunch = lunchOverlay(entClassKey, c.start, c.end)
                       if (lunch) return (
-                        <td key={`${day}|${c.key}`} style={{ width:W, minWidth:W, height:48, textAlign:"center" as const, verticalAlign:"middle" as const,
+                        <td key={`${day}|${c.key}`} style={{ width:W, minWidth:W, height:cellH, textAlign:"center" as const, verticalAlign:"middle" as const,
                           background:"#FFFBEB", color:"#D4920E", fontSize:8.5, fontStyle:"italic", fontWeight:600, lineHeight:1.3,
                           borderLeft:leftBorder, borderRight:"1px solid #E2E8F0", borderBottom:"1px solid #E2E8F0" }}>
                           <div>{lunch.name}</div>
@@ -1758,7 +1760,7 @@ export function CalendarView({
                     if (!entClassKey && showBreaks) {
                       const ov = schoolLunchOverlay(c.start, c.end)
                       if (ov) return (
-                        <td key={`${day}|${c.key}`} style={{ width:W, minWidth:W, height:48, textAlign:"center" as const, verticalAlign:"middle" as const,
+                        <td key={`${day}|${c.key}`} style={{ width:W, minWidth:W, height:cellH, textAlign:"center" as const, verticalAlign:"middle" as const,
                           background:"#FFFBEB", color:"#D4920E", fontSize:8.5, fontStyle:"italic", fontWeight:600, lineHeight:1.3,
                           borderLeft:leftBorder, borderRight:"1px solid #E2E8F0", borderBottom:"1px solid #E2E8F0" }}>
                           <div>{ov.name} · {ov.label}</div>
@@ -1768,7 +1770,7 @@ export function CalendarView({
                     }
                     // ── Empty (droppable) ──
                     return <td key={`${day}|${c.key}`} {...mDropProps}
-                      style={{ width:W, minWidth:W, height:48, position:"relative" as const,
+                      style={{ width:W, minWidth:W, height:cellH, position:"relative" as const,
                         ...(overOutline ? { outline:overOutline, outlineOffset:"-2px" } : {}),
                         background: dropTint ?? (ri%2===0 ? "#fff" : "#FCFDFE"),
                         borderLeft:leftBorder, borderRight:"1px solid #E2E8F0", borderBottom:"1px solid #E2E8F0" }}>{dropBadge}</td>
@@ -2133,6 +2135,24 @@ export function CalendarView({
             <span style={{ fontSize:12 }}>{showBreaks ? "☕" : "📚"}</span>
             {showBreaks ? "Breaks: On" : "Breaks: Off"}
           </button>
+        )}
+
+        {/* Density (matrix only) */}
+        {calMode==="matrix"&&(
+          <div style={{ display:"flex",alignItems:"center",gap:5 }}>
+            <span style={{ fontSize:9.5,color:"#94A3B8",fontWeight:600 }}>Density</span>
+            <div style={{ display:"flex",border:"1px solid #E5EBF5",borderRadius:6,overflow:"hidden" }}>
+              {([["comfortable","Comfortable"],["compact","Compact"]] as ["comfortable"|"compact",string][]).map(([d,lbl])=>(
+                <button key={d} onClick={()=>setDensity(d)}
+                  style={{
+                    padding:"3px 9px",border:"none",cursor:"pointer",
+                    background:density===d?"#7C6FE0":"#fff",
+                    color:density===d?"#fff":"#64748b",
+                    fontSize:9.5,fontWeight:density===d?700:400,
+                  }}>{lbl}</button>
+              ))}
+            </div>
+          </div>
         )}
 
         {/* Zoom (non-month views) */}
