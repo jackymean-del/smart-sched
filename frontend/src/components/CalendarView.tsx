@@ -1732,7 +1732,7 @@ export function CalendarView({
                             opacity: isSrcCell ? 0.25 : 1, filter: isSrcCell ? "grayscale(70%)" : undefined,
                             cursor: editMode && !b.isClassTeacher ? "grab" : "pointer" }}>
                             <div style={{ fontSize:10.5, fontWeight:700, color:col.accent, lineHeight:1.25, overflow:"hidden", textOverflow:"ellipsis" as const, whiteSpace:"nowrap" as const }}>{subD}</div>
-                            {viewMode!=="class" && secD && <div style={{ fontSize:9, fontWeight:700, color:"#374151", whiteSpace:"nowrap" as const, overflow:"hidden", textOverflow:"ellipsis" as const }}>{secD}</div>}
+                            {viewMode!=="class" && secD && <div title={secD} style={{ fontSize:8.5, fontWeight:700, color:"#374151", lineHeight:1.25, wordBreak:"break-word" as const, display:"-webkit-box", WebkitLineClamp:3, WebkitBoxOrient:"vertical" as const, overflow:"hidden" }}>{secD}</div>}
                             {viewMode!=="teacher" && tchD && <div style={{ fontSize:9, color:"#555", whiteSpace:"nowrap" as const, overflow:"hidden", textOverflow:"ellipsis" as const }}>{b.isClassTeacher?"★ ":""}{tchD}</div>}
                             {showRoom && b.room && viewMode!=="room" && <div style={{ fontSize:8.5, color:"#777", fontFamily:"monospace", whiteSpace:"nowrap" as const, overflow:"hidden", textOverflow:"ellipsis" as const }}>{shortNames?shortRoom(b.room):b.room}</div>}
                           </div>
