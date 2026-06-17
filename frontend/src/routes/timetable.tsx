@@ -3352,6 +3352,15 @@ export function TimetablePage() {
     </button>
   )
 
+  // Small uppercase label that prefixes a toolbar control cluster.
+  const TBGROUP: React.CSSProperties = { fontSize:9.5, fontWeight:700, color:"#94A3B8", textTransform:"uppercase", letterSpacing:"0.06em", marginRight:2, whiteSpace:"nowrap" }
+  // Readable conflict summary for the conflict-pill click-through.
+  const formatConflicts = (cs: typeof conflicts): string =>
+    cs.slice(0, 12).map((c, i) => {
+      const where = [c.classId, c.day, c.period].filter(Boolean).join(" · ")
+      return `${i + 1}. ${c.message}${where ? `  (${where})` : ""}`
+    }).join("\n") + (cs.length > 12 ? `\n…and ${cs.length - 12} more` : "")
+
   const entities = getEntityList()
   const VIEW_TABS: { key: ViewMode; label: string }[] = [
     { key:"class",   label: org.sectionLabel || "Section" },
@@ -3622,17 +3631,20 @@ export function TimetablePage() {
             background:"#F8FAFC", borderBottom:"1px solid #E5EBF5",
             padding:"6px 14px", display:"flex", alignItems:"center", gap:6, flexShrink:0, flexWrap:"wrap" as const,
           }}>
+            <span style={TBGROUP}>Show</span>
             {TBtn(showTeacher, () => setShowTeacher(!showTeacher), "Faculty", "👤")}
             {TBtn(showRoom,    () => setShowRoom(!showRoom),       "Room",    "🚪")}
             {TBtn(showTime,    () => setShowTime(!showTime),       "Time",    "⏱")}
             {TBtn(shortNames,  () => setShortNames(!shortNames),   "Short",   "⇥")}
             <div style={{ flex:1 }} />
-            <span style={{ padding:"3px 10px", borderRadius:16, fontSize:10.5, fontWeight:600,
+            <button onClick={() => conflicts.length && setConflictWarning(formatConflicts(conflicts))}
+              title={conflicts.length ? "View conflict details" : "No scheduling conflicts"}
+              style={{ padding:"3px 10px", borderRadius:16, fontSize:10.5, fontWeight:600, cursor:conflicts.length?"pointer":"default",
               background:conflicts.length===0?"#f0fdf4":"#fff7ed",
               color:conflicts.length===0?"#166534":"#c2410c",
               border:`1px solid ${conflicts.length===0?"#86EFAC":"#fed7aa"}` }}>
               {conflicts.length===0 ? "✓ No conflicts" : `⚠ ${conflicts.length} conflict${conflicts.length>1?"s":""}`}
-            </span>
+            </button>
           </div>
         )}
 
@@ -3643,16 +3655,19 @@ export function TimetablePage() {
             padding:"6px 14px", display:"flex", alignItems:"center", gap:6, flexShrink:0, flexWrap:"wrap" as const,
           }}>
             {/* Normal / Transposed */}
+            <span style={TBGROUP}>View</span>
             <div style={{ display:"flex", border:"1px solid #E5EBF5", borderRadius:6, overflow:"hidden" }}>
               <button onClick={() => startViewTransition(() => setTransposed(false))} style={{ padding:"4px 11px", border:"none", background:!transposed?"#374151":"#fff", color:!transposed?"#fff":"#64748b", fontSize:11, fontWeight:500, cursor:"pointer" }}>☰ Normal</button>
               <button onClick={() => startViewTransition(() => setTransposed(true))}  style={{ padding:"4px 11px", border:"none", background:transposed?"#374151":"#fff",  color:transposed?"#fff":"#64748b",  fontSize:11, fontWeight:500, cursor:"pointer" }}>⊞ Transposed</button>
             </div>
             <div style={{ width:1, height:18, background:"#CBD5E1" }} />
+            <span style={TBGROUP}>Show</span>
             {TBtn(showTeacher, () => setShowTeacher(!showTeacher), "Faculty", "👤")}
             {TBtn(showRoom,    () => setShowRoom(!showRoom),       "Room",    "🚪")}
             {TBtn(showTime,    () => setShowTime(!showTime),       "Time",    "⏱")}
             {TBtn(shortNames,  () => setShortNames(!shortNames),   "Short",   "⇥")}
             <div style={{ width:1, height:18, background:"#CBD5E1" }} />
+            <span style={TBGROUP}>Tools</span>
             <button onClick={() => setSubPanelOpen(o => !o)}
               style={{ display:"flex", alignItems:"center", gap:4, padding:"4px 11px", borderRadius:6, border:`1px solid ${subPanelOpen?"#f59e0b":"#E5EBF5"}`, background:subPanelOpen?"#fff7ed":"#fff", color:"#92400e", fontSize:11, fontWeight:500, cursor:"pointer" }}>
               🔄 Sub{activeSubCount > 0 ? ` (${activeSubCount})` : ""}
@@ -3662,12 +3677,14 @@ export function TimetablePage() {
               📦 Pool{poolTotalDeficit > 0 ? ` (${poolTotalDeficit})` : ""}
             </button>
             <div style={{ flex:1 }} />
-            <span style={{ padding:"3px 10px", borderRadius:16, fontSize:10.5, fontWeight:600,
+            <button onClick={() => conflicts.length && setConflictWarning(formatConflicts(conflicts))}
+              title={conflicts.length ? "View conflict details" : "No scheduling conflicts"}
+              style={{ padding:"3px 10px", borderRadius:16, fontSize:10.5, fontWeight:600, cursor:conflicts.length?"pointer":"default",
               background:conflicts.length===0?"#f0fdf4":"#fff7ed",
               color:conflicts.length===0?"#166534":"#c2410c",
               border:`1px solid ${conflicts.length===0?"#86EFAC":"#fed7aa"}` }}>
               {conflicts.length===0 ? "✓ No conflicts" : `⚠ ${conflicts.length} conflict${conflicts.length>1?"s":""}`}
-            </span>
+            </button>
           </div>
         )}
 
