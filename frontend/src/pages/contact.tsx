@@ -1,5 +1,5 @@
 /**
- * Contact page — contact form (mailto) + details.
+ * Contact page — contact form (mailto) + details. Styled with Tailwind.
  */
 import { useState } from 'react'
 import { MarketingChrome } from '@/components/marketing/MarketingChrome'
@@ -10,15 +10,9 @@ const CHANNELS = [
   { icon: '🚀', title: 'Start free', value: 'Create a timetable now', href: '/wizard' },
 ]
 
-const inputStyle: React.CSSProperties = {
-  width: '100%', padding: '11px 14px', borderRadius: 8,
-  border: '1px solid #E8E4FF', background: '#fff',
-  fontSize: 14, color: '#13111E', fontFamily: 'inherit', outline: 'none',
-}
-
-const labelStyle: React.CSSProperties = {
-  display: 'block', fontSize: 12, fontWeight: 600, color: '#4B5275', marginBottom: 6,
-}
+const inputClass =
+  'w-full rounded-lg border border-[#E8E4FF] bg-white px-3.5 py-[11px] text-sm text-[#13111E] outline-none focus:border-[#7C6FE0]'
+const labelClass = 'mb-1.5 block text-xs font-semibold text-[#4B5275]'
 
 export function ContactPage() {
   const [name, setName] = useState('')
@@ -35,66 +29,52 @@ export function ContactPage() {
   return (
     <MarketingChrome>
       {/* Hero */}
-      <section style={{
-        background: 'linear-gradient(180deg, #F8F7FF 0%, #ffffff 100%)',
-        padding: '72px 24px 40px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center',
-      }}>
-        <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#8B87AD', marginBottom: 18 }}>
-          Contact
-        </p>
-        <h1 style={{
-          fontFamily: "'Plus Jakarta Sans', Georgia, serif",
-          fontSize: 'clamp(30px, 5vw, 46px)', lineHeight: 1.15, fontWeight: 400,
-          letterSpacing: '-1px', color: '#13111E', maxWidth: 640, marginBottom: 14,
-        }}>
-          Let's talk{' '}
-          <span style={{ color: '#7C6FE0', fontStyle: 'italic' }}>scheduling.</span>
+      <section className="flex flex-col items-center bg-gradient-to-b from-[#F8F7FF] to-white px-6 pb-10 pt-[72px] text-center">
+        <p className="mb-[18px] text-[11px] font-bold uppercase tracking-[0.14em] text-[#8B87AD]">Contact</p>
+        <h1 className="mb-3.5 max-w-[640px] text-[clamp(30px,5vw,46px)] font-normal leading-[1.15] tracking-[-1px] text-[#13111E]">
+          Let's talk <span className="italic text-[#7C6FE0]">scheduling.</span>
         </h1>
-        <p style={{ fontSize: 16, color: '#4B5275', maxWidth: 520, lineHeight: 1.8 }}>
+        <p className="max-w-[520px] text-base leading-[1.8] text-[#4B5275]">
           Questions about schedU, a demo for your institution, or help getting set up — we'd love to hear from you.
         </p>
       </section>
 
       {/* Body: form + channels */}
-      <section style={{ background: '#fff', padding: '40px 24px 72px', display: 'flex', justifyContent: 'center' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 28, maxWidth: 900, width: '100%', alignItems: 'start' }}>
+      <section className="flex justify-center bg-white px-6 pb-[72px] pt-10">
+        <div className="grid w-full max-w-[900px] grid-cols-[repeat(auto-fit,minmax(280px,1fr))] items-start gap-7">
 
           {/* Form */}
-          <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: '28px 26px', borderRadius: 14, border: '1px solid #E8E4FF', background: '#FAFAFE' }}>
+          <form onSubmit={onSubmit} className="flex flex-col gap-4 rounded-[14px] border border-[#E8E4FF] bg-[#FAFAFE] px-[26px] py-7">
             <div>
-              <label style={labelStyle} htmlFor="c-name">Name</label>
-              <input id="c-name" style={inputStyle} value={name} onChange={e => setName(e.target.value)} placeholder="Your name" required />
+              <label className={labelClass} htmlFor="c-name">Name</label>
+              <input id="c-name" className={inputClass} value={name} onChange={e => setName(e.target.value)} placeholder="Your name" required />
             </div>
             <div>
-              <label style={labelStyle} htmlFor="c-email">Email</label>
-              <input id="c-email" type="email" style={inputStyle} value={email} onChange={e => setEmail(e.target.value)} placeholder="you@institution.edu" required />
+              <label className={labelClass} htmlFor="c-email">Email</label>
+              <input id="c-email" type="email" className={inputClass} value={email} onChange={e => setEmail(e.target.value)} placeholder="you@institution.edu" required />
             </div>
             <div>
-              <label style={labelStyle} htmlFor="c-msg">Message</label>
-              <textarea id="c-msg" style={{ ...inputStyle, minHeight: 120, resize: 'vertical' }} value={message} onChange={e => setMessage(e.target.value)} placeholder="How can we help?" required />
+              <label className={labelClass} htmlFor="c-msg">Message</label>
+              <textarea id="c-msg" className={`${inputClass} min-h-[120px] resize-y`} value={message} onChange={e => setMessage(e.target.value)} placeholder="How can we help?" required />
             </div>
-            <button type="submit" style={{
-              padding: '12px 18px', borderRadius: 8, border: 'none', background: '#7C6FE0', color: '#fff',
-              fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-              boxShadow: '0 4px 14px rgba(124,111,224,0.32)',
-            }}>
+            <button type="submit" className="rounded-lg bg-[#7C6FE0] px-[18px] py-3 text-sm font-bold text-white shadow-[0_4px_14px_rgba(124,111,224,0.32)]">
               Send message
             </button>
-            <p style={{ fontSize: 11, color: '#8B87AD', lineHeight: 1.5 }}>
+            <p className="text-[11px] leading-[1.5] text-[#8B87AD]">
               This opens your email app pre-filled. Prefer to write directly? Email{' '}
-              <a href="mailto:hello@bhusku.com" style={{ color: '#7C6FE0', fontWeight: 600, textDecoration: 'none' }}>hello@bhusku.com</a>.
+              <a href="mailto:hello@bhusku.com" className="font-semibold text-[#7C6FE0] no-underline">hello@bhusku.com</a>.
             </p>
           </form>
 
           {/* Channels */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div className="flex flex-col gap-3.5">
             {CHANNELS.map(c => (
-              <a key={c.title} href={c.href} style={{ textDecoration: 'none' }}>
-                <div className="lp-feat" style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '18px 20px', borderRadius: 14, border: '1px solid #E8E4FF', background: '#fff' }}>
-                  <div style={{ fontSize: 24, lineHeight: 1 }}>{c.icon}</div>
+              <a key={c.title} href={c.href} className="no-underline">
+                <div className="flex items-center gap-3.5 rounded-[14px] border border-[#E8E4FF] bg-white px-5 py-[18px] transition-all hover:-translate-y-[3px] hover:border-[#D8D2FF] hover:shadow-[0_8px_24px_rgba(124,111,224,0.10)]">
+                  <div className="text-2xl leading-none">{c.icon}</div>
                   <div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: '#13111E' }}>{c.title}</div>
-                    <div style={{ fontSize: 13, color: '#7C6FE0', marginTop: 2 }}>{c.value}</div>
+                    <div className="text-sm font-bold text-[#13111E]">{c.title}</div>
+                    <div className="mt-0.5 text-[13px] text-[#7C6FE0]">{c.value}</div>
                   </div>
                 </div>
               </a>

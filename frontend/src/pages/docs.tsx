@@ -1,5 +1,5 @@
 /**
- * Docs page — getting-started hub + quick links.
+ * Docs page — getting-started hub + quick links. Styled with Tailwind.
  */
 import { MarketingChrome } from '@/components/marketing/MarketingChrome'
 
@@ -19,66 +19,58 @@ const TOPICS = [
   { icon: '💬', title: 'Support', desc: 'Stuck on something? Reach the team and we will help you out.', href: '/contact' },
 ]
 
+const cardHover =
+  'transition-all hover:-translate-y-[3px] hover:shadow-[0_8px_24px_rgba(124,111,224,0.10)] hover:border-[#D8D2FF]'
+
 export function DocsPage() {
   return (
     <MarketingChrome>
       {/* Hero */}
-      <section style={{
-        background: 'linear-gradient(180deg, #F8F7FF 0%, #ffffff 100%)',
-        padding: '72px 24px 48px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center',
-      }}>
-        <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#8B87AD', marginBottom: 18 }}>
-          Documentation
-        </p>
-        <h1 style={{
-          fontFamily: "'Plus Jakarta Sans', Georgia, serif",
-          fontSize: 'clamp(30px, 5vw, 46px)', lineHeight: 1.15, fontWeight: 400,
-          letterSpacing: '-1px', color: '#13111E', maxWidth: 640, marginBottom: 14,
-        }}>
+      <section className="flex flex-col items-center bg-gradient-to-b from-[#F8F7FF] to-white px-6 pb-12 pt-[72px] text-center">
+        <p className="mb-[18px] text-[11px] font-bold uppercase tracking-[0.14em] text-[#8B87AD]">Documentation</p>
+        <h1 className="mb-3.5 max-w-[640px] text-[clamp(30px,5vw,46px)] font-normal leading-[1.15] tracking-[-1px] text-[#13111E]">
           Everything you need to{' '}
-          <span style={{ color: '#7C6FE0', fontStyle: 'italic' }}>get scheduling.</span>
+          <span className="italic text-[#7C6FE0]">get scheduling.</span>
         </h1>
-        <p style={{ fontSize: 16, color: '#4B5275', maxWidth: 520, lineHeight: 1.8 }}>
+        <p className="max-w-[520px] text-base leading-[1.8] text-[#4B5275]">
           A quick tour of how schedU works, from your first timetable to advanced electives and exports.
         </p>
       </section>
 
       {/* Quick start steps */}
-      <section style={{ background: '#fff', padding: '56px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-        <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#8B87AD', marginBottom: 28 }}>
-          Quick start
-        </p>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, maxWidth: 920, width: '100%' }}>
+      <section className="flex flex-col items-center bg-white px-6 py-14">
+        <p className="mb-7 text-[11px] font-bold uppercase tracking-[0.14em] text-[#8B87AD]">Quick start</p>
+        <div className="grid w-full max-w-[920px] grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
           {STEPS.map(s => (
-            <div key={s.n} className="lp-step" style={{ padding: '22px 20px', borderRadius: 12, border: '1px solid #E8E4FF', background: '#fff' }}>
-              <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '3px 10px', borderRadius: 20, background: '#EDE9FF', marginBottom: 14, fontSize: 10, fontWeight: 800, color: '#7C6FE0', letterSpacing: '0.04em' }}>
+            <div key={s.n} className={`rounded-xl border border-[#E8E4FF] bg-white px-5 py-[22px] ${cardHover}`}>
+              <div className="mb-3.5 inline-flex items-center justify-center rounded-full bg-[#EDE9FF] px-2.5 py-[3px] text-[10px] font-extrabold tracking-[0.04em] text-[#7C6FE0]">
                 Step {s.n}
               </div>
-              <h3 style={{ fontSize: 14, fontWeight: 700, color: '#13111E', marginBottom: 7 }}>{s.title}</h3>
-              <p style={{ fontSize: 12.5, color: '#4B5275', lineHeight: 1.65 }}>{s.desc}</p>
+              <h3 className="mb-[7px] text-sm font-bold text-[#13111E]">{s.title}</h3>
+              <p className="text-[12.5px] leading-[1.65] text-[#4B5275]">{s.desc}</p>
             </div>
           ))}
         </div>
       </section>
 
       {/* Topics */}
-      <section style={{ background: '#F8F7FF', borderTop: '1px solid #F0EDFF', padding: '56px 24px 72px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-        <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#8B87AD', marginBottom: 28 }}>
-          Browse by topic
-        </p>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 18, maxWidth: 920, width: '100%' }}>
+      <section className="flex flex-col items-center border-t border-[#F0EDFF] bg-[#F8F7FF] px-6 pb-[72px] pt-14">
+        <p className="mb-7 text-[11px] font-bold uppercase tracking-[0.14em] text-[#8B87AD]">Browse by topic</p>
+        <div className="grid w-full max-w-[920px] grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-[18px]">
           {TOPICS.map(t => (
-            <a key={t.title} href={t.href} style={{ textDecoration: 'none' }}>
-              <div className="lp-feat" style={{ height: '100%', padding: '24px 22px', borderRadius: 14, border: '1px solid #E8E4FF', background: '#fff' }}>
-                <div style={{ fontSize: 26, marginBottom: 12, lineHeight: 1 }}>{t.icon}</div>
-                <h3 style={{ fontSize: 15, fontWeight: 700, color: '#13111E', marginBottom: 7 }}>{t.title}</h3>
-                <p style={{ fontSize: 13, color: '#4B5275', lineHeight: 1.65 }}>{t.desc}</p>
+            <a key={t.title} href={t.href} className="no-underline">
+              <div className={`h-full rounded-[14px] border border-[#E8E4FF] bg-white px-[22px] py-6 ${cardHover}`}>
+                <div className="mb-3 text-[26px] leading-none">{t.icon}</div>
+                <h3 className="mb-[7px] text-[15px] font-bold text-[#13111E]">{t.title}</h3>
+                <p className="text-[13px] leading-[1.65] text-[#4B5275]">{t.desc}</p>
               </div>
             </a>
           ))}
         </div>
-        <p style={{ fontSize: 13, color: '#8B87AD', marginTop: 28, textAlign: 'center', maxWidth: 460, lineHeight: 1.6 }}>
-          Looking for something specific? <a href="/contact" style={{ color: '#7C6FE0', fontWeight: 600, textDecoration: 'none' }}>Get in touch</a> and we'll point you the right way.
+        <p className="mt-7 max-w-[460px] text-center text-[13px] leading-[1.6] text-[#8B87AD]">
+          Looking for something specific?{' '}
+          <a href="/contact" className="font-semibold text-[#7C6FE0] no-underline">Get in touch</a>{' '}
+          and we'll point you the right way.
         </p>
       </section>
     </MarketingChrome>

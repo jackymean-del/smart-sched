@@ -5,7 +5,12 @@
    lining numerals, true italics, full glyph coverage. DM Mono for timetable digits. */
 
 /* ── Base ── */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+*, *::before, *::after { box-sizing: border-box; }
+/* Zero default margins/padding globally, EXCEPT inside marketing pages
+   ([data-mk]) where Tailwind's own spacing utilities must take effect.
+   :where() keeps specificity at 0 so behaviour outside marketing is
+   identical to the previous `* { margin:0; padding:0 }` reset. */
+*:where(:not([data-mk], [data-mk] *)) { margin: 0; padding: 0; }
 html { font-size: 13px; }
 body {
   font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
