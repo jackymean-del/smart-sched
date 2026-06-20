@@ -200,6 +200,56 @@ export const DOC_ARTICLES: DocArticle[] = [
           { p: 'Export to PDF for printing and sharing, or Excel for further editing. You can also print directly from the browser.' },
         ],
       },
+      {
+        heading: 'Share by link',
+        blocks: [
+          { p: 'Instead of sending a file, publish a read-only link to the timetable — like sharing a calendar. Open the Export menu and choose “Share via link”.' },
+          { p: 'Anyone with the link can view a snapshot of the timetable in their browser, no account needed. The snapshot is frozen at the moment you shared it, so later edits don’t change what others see.' },
+          { note: 'Need a fresh snapshot after changes? Just share again to get a new link.' },
+        ],
+      },
+    ],
+  },
+  {
+    slug: 'share-by-link',
+    icon: '🔗',
+    title: 'Sharing timetables by link',
+    description: 'Publish a read-only timetable link anyone can open — like sharing a calendar.',
+    readMins: 3,
+    intro:
+      'schedU lets you share a published timetable as a public, read-only link — no file to email, and no account for the viewer.',
+    sections: [
+      {
+        heading: 'Create a share link',
+        blocks: [
+          {
+            ol: [
+              'Open the timetable you want to share.',
+              'Click Export, then “Share via link”.',
+              'Copy the link and send it to staff, students, or parents.',
+            ],
+          },
+        ],
+      },
+      {
+        heading: 'What the link shows',
+        blocks: [
+          { p: 'The link opens a clean, read-only view of the timetable grid — days, periods, subjects, teachers, and rooms — branded as a schedU share.' },
+          {
+            ul: [
+              'No login required to view.',
+              'Read-only — viewers can’t edit anything.',
+              'A frozen snapshot — it won’t change if you later edit the timetable.',
+            ],
+          },
+        ],
+      },
+      {
+        heading: 'Updating or revoking',
+        blocks: [
+          { p: 'To share updated content, generate a new link after your changes. Each link is independent, so you control exactly which version each audience sees.' },
+        ],
+      },
     ],
   },
 ]

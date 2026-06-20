@@ -104,8 +104,9 @@ func main() {
 	// API v1
 	h := handlers.New(pool)
 
-	// Public marketing endpoints (no auth)
+	// Public endpoints (no auth)
 	app.Post("/api/contact", h.SubmitContact)
+	app.Get("/api/share/:token", h.GetShare) // public read-only timetable shares
 
 	api := app.Group("/api/v1", middleware.Auth())
 
@@ -118,6 +119,7 @@ func main() {
 	api.Post("/timetables/generate",         h.GenerateTimetable)
 	api.Post("/timetables/:id/export",       h.ExportTimetable)
 	api.Post("/timetables/:id/substitute",   h.Substitute)
+	api.Post("/timetables/share",            h.CreateShare)
 	api.Get("/org-config",                   h.GetOrgConfig)
 
 	// --- Curriculum routes ---

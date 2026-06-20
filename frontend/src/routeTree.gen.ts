@@ -13,6 +13,7 @@ import { PricingPage }   from "./pages/pricing"
 import { DocsPage }      from "./pages/docs"
 import { DocArticlePage } from "./pages/doc-article"
 import { ContactPage }   from "./pages/contact"
+import { SharedTimetablePage } from "./pages/shared-timetable"
 
 const rootRoute      = createRootRoute({ component: RootLayout })
 const indexRoute     = createRoute({ getParentRoute: () => rootRoute, path: "/",           component: HomePage })
@@ -28,11 +29,13 @@ const pricingRoute    = createRoute({ getParentRoute: () => rootRoute, path: "/p
 const docsRoute       = createRoute({ getParentRoute: () => rootRoute, path: "/docs",        component: DocsPage })
 const docArticleRoute = createRoute({ getParentRoute: () => rootRoute, path: "/docs/$slug",  component: DocArticlePage })
 const contactRoute    = createRoute({ getParentRoute: () => rootRoute, path: "/contact",     component: ContactPage })
+const sharedRoute     = createRoute({ getParentRoute: () => rootRoute, path: "/share/$token", component: SharedTimetablePage })
 
 export const routeTree = rootRoute.addChildren([
   indexRoute, loginRoute, registerRoute, dashboardRoute,
   wizardRoute, timetableRoute, demoRoute, masterDataRoute,
   featuresRoute, pricingRoute, docsRoute, docArticleRoute, contactRoute,
+  sharedRoute,
 ])
 export const router = createRouter({ routeTree })
 

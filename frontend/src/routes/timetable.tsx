@@ -5,6 +5,7 @@ import { CalendarView } from "@/components/CalendarView"
 import { ORG_CONFIGS, getCountry, getSubjectColor } from "@/lib/orgData"
 import { shiftPeriod, rebuildTeacherTT } from "@/lib/aiEngine"
 import { useExport } from "@/hooks/useExport"
+import { buildShareSnapshot, createShareLink } from "@/lib/share"
 import type { Period } from "@/types"
 
 type ViewMode = "class" | "teacher" | "subject" | "room"
@@ -1203,6 +1204,28 @@ export function TimetablePage() {
   const [shortNames, setShortNames] = useState(false)
   const [showInsights, setShowInsights] = useState(false)
   const [showLegend, setShowLegend] = useState(false)
+  // Share-by-link state
+  const [shareUrl, setShareUrl] = useState<string | null>(null)
+  const [sharing, setSharing] = useState(false)
+  const [shareError, setShareError] = useState("")
+  const [shareCopied, setShareCopied] = useState(false)
+
+  const handleShare = async () => {
+    setShowExportMenu(false)
+    setSharing(true)
+    setShareError("")
+    setShareUrl(null)
+    setShareCopied(false)
+    try {
+      const snapshot = buildShareSnapshot((config as any).name)
+      const url = await createShareLink(snapshot)
+      setShareUrl(url)
+    } catch (err) {
+      setShareError(err instanceof Error ? err.message : "Could not create share link.")
+    } finally {
+      setSharing(false)
+    }
+  }
   const [viewMode, setViewMode] = useState<ViewMode>("class")
   const [transposed, setTransposed] = useState(false)
   const [selectedEntity, setSelectedEntity] = useState<string>("ALL")
@@ -3557,9 +3580,60 @@ export function TimetablePage() {
                     <span style={{ fontSize:14 }}>📄</span> {label as string}
                   </button>
                 ))}
+                <div style={{ height:1, background:"#E5EBF5", margin:"6px 0" }} />
+                {/* Share by link */}
+                <div style={{ padding:"4px 14px 4px", fontSize:10, fontWeight:700, color:"#94A3B8", textTransform:"uppercase" as const, letterSpacing:"0.08em" }}>
+                  Share
+                </div>
+                <button onClick={handleShare}
+                  style={{ display:"flex", alignItems:"center", gap:8, width:"100%", padding:"7px 14px", border:"none", background:"none", textAlign:"left" as const, fontSize:12, color:"#374151", cursor:"pointer" }}>
+                  <span style={{ fontSize:14 }}>🔗</span> Share via link
+                </button>
               </div>
             )}
           </div>
+
+          {/* Share-link modal */}
+          {(sharing || shareUrl || shareError) && (
+            <div onClick={() => { setShareUrl(null); setShareError("") }}
+              style={{ position:"fixed" as const, inset:0, zIndex:500, background:"rgba(19,17,30,0.45)", display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
+              <div onClick={e=>e.stopPropagation()}
+                style={{ width:"100%", maxWidth:460, background:"#fff", borderRadius:14, border:"1px solid #E8E4FF", boxShadow:"0 16px 48px rgba(124,111,224,0.2)", padding:24 }}>
+                <div style={{ fontSize:16, fontWeight:700, color:"#13111E", marginBottom:6 }}>🔗 Share this timetable</div>
+                {sharing && <div style={{ fontSize:13, color:"#8B87AD", padding:"12px 0" }}>Creating link…</div>}
+                {shareError && (
+                  <div style={{ fontSize:13, color:"#DC2626", lineHeight:1.5, padding:"8px 0" }}>
+                    {shareError} You can still export to PDF or Excel above.
+                  </div>
+                )}
+                {shareUrl && (
+                  <>
+                    <p style={{ fontSize:13, color:"#4B5275", lineHeight:1.6, marginBottom:14 }}>
+                      Anyone with this link can view a read-only copy of this timetable — no account needed.
+                    </p>
+                    <div style={{ display:"flex", gap:8 }}>
+                      <input readOnly value={shareUrl} onFocus={e=>e.currentTarget.select()}
+                        style={{ flex:1, padding:"10px 12px", borderRadius:8, border:"1px solid #E8E4FF", background:"#FAFAFE", fontSize:12.5, color:"#13111E" }} />
+                      <button onClick={() => { navigator.clipboard?.writeText(shareUrl); setShareCopied(true); setTimeout(()=>setShareCopied(false), 1800) }}
+                        style={{ padding:"10px 16px", borderRadius:8, border:"none", background:"#7C6FE0", color:"#fff", fontSize:12.5, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" as const }}>
+                        {shareCopied ? "Copied!" : "Copy"}
+                      </button>
+                    </div>
+                    <a href={shareUrl} target="_blank" rel="noreferrer"
+                      style={{ display:"inline-block", marginTop:12, fontSize:12, fontWeight:600, color:"#7C6FE0", textDecoration:"none" }}>
+                      Open in new tab →
+                    </a>
+                  </>
+                )}
+                <div style={{ marginTop:18, textAlign:"right" as const }}>
+                  <button onClick={() => { setShareUrl(null); setShareError("") }}
+                    style={{ padding:"8px 16px", borderRadius:8, border:"1px solid #E8E4FF", background:"#fff", fontSize:12.5, fontWeight:600, color:"#4B5275", cursor:"pointer" }}>
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* ── Insights + Legend ── */}
           <div style={{ display:"flex", alignItems:"center", gap:6, padding:"0 8px", borderRight:"1px solid #E5EBF5" }}>

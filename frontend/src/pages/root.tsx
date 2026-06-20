@@ -20,7 +20,8 @@ export function RootLayout() {
   // Public marketing pages bring their own nav/footer (MarketingChrome)
   const isMarketing =
     ['/features', '/pricing', '/docs', '/contact'].includes(path) ||
-    path.startsWith('/docs/')
+    path.startsWith('/docs/') ||
+    path.startsWith('/share/') // public read-only timetable viewer
 
   // These pages own their full-screen layout — no app topbar
   if (isAuthPage || isDashboard || isHome || isMarketing) return <Outlet />
