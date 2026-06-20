@@ -1,10 +1,8 @@
 /**
- * Landing page — schedU global marketing home
- *
- * Layout identical to product screenshot (nav · hero · demo card ·
- * features · stats · boards · steps · CTA · footer).
- * Copy is worldwide-neutral — no region lock.
+ * Landing page — schedU global marketing home.
+ * Chrome (nav + footer) comes from MarketingChrome; sections use Tailwind.
  */
+import { MarketingChrome } from '@/components/marketing/MarketingChrome'
 
 const BOARDS = [
   'IB (MYP / DP)', 'Cambridge IGCSE', 'Common Core', 'GCSE / A-Level',
@@ -13,278 +11,127 @@ const BOARDS = [
   'Korean CSAT', 'Japanese Gakuryoku', '…and any custom curriculum',
 ]
 
+const FEATURES = [
+  { icon: '🧠', title: 'AI period allocation', desc: 'AI suggests balanced period distributions per class and board — no manual tables needed.' },
+  { icon: '👨‍🏫', title: 'Smart teacher allocation', desc: 'Workload-balanced, expertise-matched teacher assignments with vertical continuity rules.' },
+  { icon: '👥', title: 'Dynamic cross-class groups', desc: 'Elective and activity groups auto-created across sections — no manual group setup.' },
+]
+
+const STATS = [
+  { value: '1,200+', label: 'Schools using schedU' },
+  { value: '4.8 min', label: 'Avg. timetable generation time' },
+  { value: '98%', label: 'Conflict-free first generation' },
+  { value: '180+', label: 'Countries & territories' },
+]
+
+const STEPS = [
+  { n: 1, title: 'Enter basics', desc: 'Name, board, class range, teachers, rooms.' },
+  { n: 2, title: 'AI generates', desc: 'Allocations, groups, and constraints auto-built.' },
+  { n: 3, title: 'Review & refine', desc: 'AI inlines like a spreadsheet. AI explains every choice.' },
+  { n: 4, title: 'Export & publish', desc: 'PDF, Excel, print — class-wise, teacher-wise, room-wise.' },
+]
+
+const DEMO_CELLS = [
+  { label: 'Mathematics', value: '7', hi: false },
+  { label: 'Science', value: '5+1', hi: false },
+  { label: 'English', value: '6', hi: false },
+  { label: 'History', value: '4', hi: false },
+  { label: 'Geography', value: '3', hi: false },
+  { label: 'Languages', value: '3', hi: false },
+  { label: 'PE / Arts', value: '2', hi: false },
+  { label: 'Capacity', value: '34', hi: true },
+]
+
+const TIERS = [
+  {
+    name: 'Starter', price: 'Free', period: '',
+    desc: 'Everything a small team needs to try AI scheduling.',
+    cta: 'Start free', href: '/wizard', popular: false,
+    features: ['Up to 2 classes', 'Up to 20 subjects', 'AI auto-schedule', 'Real-time conflict detection', 'PDF export'],
+  },
+  {
+    name: 'Pro', price: '$29', period: '/mo',
+    desc: 'For a single institution running multiple streams and electives.',
+    cta: 'Start free', href: '/wizard', popular: true,
+    features: ['Unlimited classes', 'Unlimited subjects', 'Elective OR/AND groups', 'Multi-stream support', 'Room & resource planning', 'Priority support'],
+  },
+  {
+    name: 'Enterprise', price: '$99', period: '/mo',
+    desc: 'For groups managing many campuses or institutions.',
+    cta: 'Talk to sales', href: 'mailto:hello@bhusku.com', popular: false,
+    features: ['Everything in Pro', 'Multi-campus management', 'API access', 'SSO / SAML', 'Dedicated success manager'],
+  },
+]
+
+const TESTIMONIALS = [
+  { quote: 'schedU turned a three-week scheduling marathon into an afternoon. The conflict detection alone has saved us from a dozen timetable headaches this term.', name: 'Priya Nair', role: 'Vice Principal, Greenwood International School' },
+  { quote: 'Managing electives across three streams used to be guesswork. Now the OR/AND groups just work, and every student gets a clash-free schedule.', name: 'Daniel Osei', role: 'Registrar, Northgate College' },
+  { quote: 'Rolling schedU out across all our campuses was painless. SSO and the API meant every institution in the group was generating timetables in the same week.', name: 'Maria Gonzalez', role: 'Director of Operations, Atlas Education Group' },
+]
+
+const cardHover =
+  'transition-all hover:-translate-y-[3px] hover:shadow-[0_8px_24px_rgba(124,111,224,0.10)] hover:border-[#D8D2FF]'
+
 export function HomePage() {
   return (
-    <div style={{ fontFamily: "'Plus Jakarta Sans', -apple-system, sans-serif", background: '#fff', color: '#13111E', minHeight: '100vh' }}>
-
-      <style>{`
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        body { overflow-x: hidden; }
-
-        @keyframes floatCard {
-          0%, 100% { transform: translateY(0px);   }
-          50%       { transform: translateY(-8px);  }
-        }
-        @keyframes fadeUp {
-          from { opacity: 0; transform: translateY(18px); }
-          to   { opacity: 1; transform: translateY(0);    }
-        }
-
-        .lp-nav-link {
-          font-size: 14px; color: #4B5275; text-decoration: none;
-          font-weight: 500; transition: color 0.15s; white-space: nowrap;
-        }
-        .lp-nav-link:hover { color: #7C6FE0; }
-
-        .lp-ghost { transition: border-color 0.15s, color 0.15s; }
-        .lp-ghost:hover { border-color: #7C6FE0 !important; color: #7C6FE0 !important; }
-
-        .lp-feat {
-          transition: transform 0.18s, box-shadow 0.18s, border-color 0.18s;
-        }
-        .lp-feat:hover {
-          transform: translateY(-3px);
-          box-shadow: 0 8px 24px rgba(124,111,224,0.10);
-          border-color: #D8D2FF !important;
-        }
-
-        .lp-step {
-          transition: transform 0.18s, box-shadow 0.18s, border-color 0.18s;
-        }
-        .lp-step:hover {
-          transform: translateY(-3px);
-          box-shadow: 0 8px 24px rgba(124,111,224,0.10);
-          border-color: #D8D2FF !important;
-        }
-
-        .lp-board-tag {
-          display: inline-block;
-          padding: 5px 12px; border-radius: 20px;
-          border: 1px solid #E8E4FF; background: #FAFAFE;
-          font-size: 12px; font-weight: 500; color: #4B5275;
-          white-space: nowrap; transition: background 0.15s, border-color 0.15s, color 0.15s;
-        }
-        .lp-board-tag:hover {
-          background: #EDE9FF; border-color: #C4B5FD; color: #7C6FE0;
-        }
-
-        .lp-hero-animate { animation: fadeUp 0.55s ease both; }
-      `}</style>
-
-
-      {/* ════════════════════════════════════════════════════
-          STICKY NAV
-      ════════════════════════════════════════════════════ */}
-      <nav style={{
-        height: 58, background: '#fff',
-        borderBottom: '1px solid #F0EDFF',
-        display: 'flex', alignItems: 'center',
-        padding: '0 48px', gap: 0,
-        position: 'sticky', top: 0, zIndex: 200,
-      }}>
-
-        {/* Logo — left */}
-        <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 9, textDecoration: 'none', flexShrink: 0 }}>
-          <div style={{
-            width: 32, height: 32, borderRadius: 9,
-            background: '#7C6FE0',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <svg width="19" height="19" viewBox="0 0 52 52" fill="none">
-              <rect x="12" y="9" width="8" height="33" rx="4" fill="white"/>
-              <path d="M 20 22 C 23 14 40 15 40 30 C 40 45 23 46 20 42"
-                    stroke="white" strokeWidth="8" fill="none" strokeLinecap="round"/>
-              <circle cx="39" cy="10" r="4.5" fill="#D4920E"/>
-            </svg>
-          </div>
-          <span style={{
-            fontFamily: "'Plus Jakarta Sans', sans-serif",
-            fontSize: 17, fontWeight: 900, letterSpacing: '-0.4px', color: '#13111E',
-          }}>
-            sched<span style={{
-              color: '#7C6FE0',
-              fontFamily: "'Plus Jakarta Sans', Georgia, serif",
-              fontStyle: 'italic',
-            }}>U</span>
-          </span>
-        </a>
-
-        {/* Spacer pushes everything right */}
-        <div style={{ flex: 1 }} />
-
-        {/* Nav links — right of centre, before auth */}
-        <div style={{ display: 'flex', gap: 28, alignItems: 'center', marginRight: 32 }}>
-          {[
-            { label: 'Features', href: '/features' },
-            { label: 'Pricing', href: '/pricing' },
-            { label: 'Docs', href: '/docs' },
-            { label: 'Contact', href: '/contact' },
-          ].map(l => (
-            <a key={l.label} href={l.href} className="lp-nav-link">{l.label}</a>
-          ))}
-        </div>
-
-        {/* Auth buttons */}
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexShrink: 0 }}>
-          <a href="/login" style={{ textDecoration: 'none' }}>
-            <button className="lp-ghost" style={{
-              padding: '7px 18px', borderRadius: 7,
-              border: '1px solid #E8E4FF', background: '#fff',
-              fontSize: 13, fontWeight: 600, color: '#4B5275', cursor: 'pointer',
-              fontFamily: 'inherit',
-            }}>Sign in</button>
-          </a>
-          <a href="/wizard" style={{ textDecoration: 'none' }}>
-            <button style={{
-              padding: '8px 18px', borderRadius: 7,
-              background: '#13111E', color: '#fff', border: 'none',
-              fontSize: 13, fontWeight: 600, cursor: 'pointer',
-              fontFamily: 'inherit',
-            }}>Get started</button>
-          </a>
-        </div>
-      </nav>
-
-
-      {/* ════════════════════════════════════════════════════
-          HERO
-      ════════════════════════════════════════════════════ */}
-      <section style={{
-        background: 'linear-gradient(180deg, #F8F7FF 0%, #ffffff 100%)',
-        padding: '72px 24px 60px',
-        display: 'flex', flexDirection: 'column',
-        alignItems: 'center', textAlign: 'center',
-      }}>
-
-        {/* Badge */}
-        <div className="lp-hero-animate" style={{
-          animationDelay: '0s',
-          display: 'inline-flex', alignItems: 'center', gap: 7,
-          padding: '5px 16px', borderRadius: 20,
-          background: '#F0FDF4', border: '1px solid #86EFAC',
-          fontSize: 12, fontWeight: 600, color: '#15803D',
-          marginBottom: 28,
-        }}>
-          <span style={{
-            width: 7, height: 7, borderRadius: '50%',
-            background: '#22C55E', display: 'inline-block',
-            flexShrink: 0,
-          }} />
+    <MarketingChrome>
+      {/* Hero */}
+      <section className="flex flex-col items-center bg-gradient-to-b from-[#F8F7FF] to-white px-6 pb-[60px] pt-[72px] text-center">
+        <div className="mb-7 inline-flex animate-[fadeUp_0.55s_ease_both] items-center gap-[7px] rounded-full border border-[#86EFAC] bg-[#F0FDF4] px-4 py-[5px] text-xs font-semibold text-[#15803D]">
+          <span className="inline-block size-[7px] shrink-0 rounded-full bg-[#22C55E]" />
           AI-native timetable engine
         </div>
 
-        {/* Headline */}
-        <h1 className="lp-hero-animate" style={{
-          animationDelay: '0.08s',
-          fontFamily: "'Plus Jakarta Sans', Georgia, serif",
-          fontSize: 'clamp(34px, 6.5vw, 56px)',
-          lineHeight: 1.1, fontWeight: 400, letterSpacing: '-1.5px',
-          color: '#13111E', maxWidth: 720, marginBottom: 18,
-        }}>
+        <h1 className="mb-[18px] max-w-[720px] animate-[fadeUp_0.55s_ease_both] text-[clamp(34px,6.5vw,56px)] font-normal leading-[1.1] tracking-[-1.5px] text-[#13111E] [animation-delay:0.08s]">
           Schedule with schedU,<br />
-          <span style={{ color: '#7C6FE0', fontStyle: 'italic' }}>at the speed of light.</span>
+          <span className="italic text-[#7C6FE0]">at the speed of light.</span>
         </h1>
 
-        {/* Sub-copy */}
-        <p className="lp-hero-animate" style={{
-          animationDelay: '0.16s',
-          fontSize: 16, color: '#4B5275', maxWidth: 560,
-          lineHeight: 1.8, marginBottom: 36, fontWeight: 400,
-        }}>
+        <p className="mb-9 max-w-[560px] animate-[fadeUp_0.55s_ease_both] text-base leading-[1.8] text-[#4B5275] [animation-delay:0.16s]">
           schedU intelligently allocates resources — slots, courses, educators, and locations —
           and builds conflict-free timetables in minutes. Designed for schools, colleges,
           universities, coaching institutes, training centres, and academic organizations
           of every scale. Works with any board, any curriculum, anywhere in the world.
         </p>
 
-        {/* CTAs */}
-        <div className="lp-hero-animate" style={{
-          animationDelay: '0.22s',
-          display: 'flex', gap: 12, flexWrap: 'wrap',
-          justifyContent: 'center', marginBottom: 52,
-        }}>
-          <a href="/wizard" style={{ textDecoration: 'none' }}>
-            <button style={{
-              padding: '13px 30px', borderRadius: 9, border: 'none',
-              background: '#7C6FE0', color: '#fff',
-              fontSize: 14, fontWeight: 700, cursor: 'pointer',
-              boxShadow: '0 4px 18px rgba(124,111,224,0.38)',
-              fontFamily: 'inherit',
-            }}>
+        <div className="mb-[52px] flex animate-[fadeUp_0.55s_ease_both] flex-wrap justify-center gap-3 [animation-delay:0.22s]">
+          <a href="/wizard" className="no-underline">
+            <button className="rounded-[9px] bg-[#7C6FE0] px-[30px] py-[13px] text-sm font-bold text-white shadow-[0_4px_18px_rgba(124,111,224,0.38)]">
               Start free — no credit card
             </button>
           </a>
-          <a href="/demo" style={{ textDecoration: 'none' }}>
-            <button className="lp-ghost" style={{
-              padding: '13px 28px', borderRadius: 9,
-              border: '1.5px solid #E8E4FF', background: '#fff',
-              fontSize: 14, fontWeight: 600, color: '#4B5275', cursor: 'pointer',
-              fontFamily: 'inherit',
-            }}>
+          <a href="/demo" className="no-underline">
+            <button className="rounded-[9px] border-[1.5px] border-[#E8E4FF] bg-white px-7 py-[13px] text-sm font-semibold text-[#4B5275] transition-colors hover:border-[#7C6FE0] hover:text-[#7C6FE0]">
               See a demo
             </button>
           </a>
         </div>
 
         {/* Floating demo card */}
-        <div className="lp-hero-animate" style={{
-          animationDelay: '0.3s',
-          width: '100%', maxWidth: 540,
-          background: '#fff', borderRadius: 14,
-          border: '1px solid #E8E4FF',
-          boxShadow: '0 16px 48px rgba(124,111,224,0.14)',
-          overflow: 'hidden',
-          animation: 'floatCard 6s ease-in-out 0.6s infinite',
-        }}>
-          {/* Chrome bar */}
-          <div style={{
-            background: '#F8F7FF', padding: '10px 16px',
-            borderBottom: '1px solid #E8E4FF',
-            display: 'flex', alignItems: 'center', gap: 10,
-          }}>
-            <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
-              {['#FC6058','#FDBC2C','#34C749'].map(c => (
-                <div key={c} style={{
-                  width: 10, height: 10, borderRadius: '50%', background: c,
-                }} />
-              ))}
+        <div className="w-full max-w-[540px] animate-[floatCard_6s_ease-in-out_0.6s_infinite] overflow-hidden rounded-[14px] border border-[#E8E4FF] bg-white shadow-[0_16px_48px_rgba(124,111,224,0.14)]">
+          <div className="flex items-center gap-2.5 border-b border-[#E8E4FF] bg-[#F8F7FF] px-4 py-2.5">
+            <div className="flex shrink-0 gap-[5px]">
+              <span className="size-[10px] rounded-full bg-[#FC6058]" />
+              <span className="size-[10px] rounded-full bg-[#FDBC2C]" />
+              <span className="size-[10px] rounded-full bg-[#34C749]" />
             </div>
-            <span style={{
-              fontSize: 11, color: '#8B87AD', fontWeight: 500,
-              fontFamily: "'DM Mono', monospace",
-            }}>
+            <span className="font-mono text-[11px] font-medium text-[#8B87AD]">
               schedU — AI Period Allocation — Grade 8A
             </span>
           </div>
-
-          {/* Allocation grid */}
-          <div style={{ padding: '16px 18px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
-              {[
-                { label: 'Mathematics', value: '7',   hi: false },
-                { label: 'Science',     value: '5+1', hi: false },
-                { label: 'English',     value: '6',   hi: false },
-                { label: 'History',     value: '4',   hi: false },
-                { label: 'Geography',   value: '3',   hi: false },
-                { label: 'Languages',   value: '3',   hi: false },
-                { label: 'PE / Arts',   value: '2',   hi: false },
-                { label: 'Capacity',    value: '34',  hi: true  },
-              ].map(({ label, value, hi }) => (
-                <div key={label} style={{
-                  padding: '10px 10px', borderRadius: 9, textAlign: 'center',
-                  background: hi ? '#EDE9FF' : '#FAFAFE',
-                  border: `1px solid ${hi ? '#C4B5FD' : '#E8E4FF'}`,
-                }}>
-                  <div style={{
-                    fontSize: 10.5, fontWeight: 600, marginBottom: 5,
-                    color: hi ? '#7C6FE0' : '#8B87AD',
-                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                  }}>{label}</div>
-                  <div style={{
-                    fontSize: 20, fontWeight: 800, lineHeight: 1,
-                    fontFamily: "'DM Mono', monospace",
-                    color: hi ? '#7C6FE0' : '#13111E',
-                  }}>{value}</div>
+          <div className="px-[18px] py-4">
+            <div className="grid grid-cols-4 gap-2">
+              {DEMO_CELLS.map(({ label, value, hi }) => (
+                <div
+                  key={label}
+                  className={`rounded-[9px] p-2.5 text-center ${hi ? 'border border-[#C4B5FD] bg-[#EDE9FF]' : 'border border-[#E8E4FF] bg-[#FAFAFE]'}`}
+                >
+                  <div className={`mb-[5px] overflow-hidden text-ellipsis whitespace-nowrap text-[10.5px] font-semibold ${hi ? 'text-[#7C6FE0]' : 'text-[#8B87AD]'}`}>
+                    {label}
+                  </div>
+                  <div className={`font-mono text-xl font-extrabold leading-none ${hi ? 'text-[#7C6FE0]' : 'text-[#13111E]'}`}>
+                    {value}
+                  </div>
                 </div>
               ))}
             </div>
@@ -292,268 +139,107 @@ export function HomePage() {
         </div>
       </section>
 
-
-      {/* ════════════════════════════════════════════════════
-          3 FEATURE COLUMNS
-      ════════════════════════════════════════════════════ */}
-      <section id="features" style={{
-        background: '#fff', padding: '64px 24px',
-        display: 'flex', flexDirection: 'column', alignItems: 'center',
-      }}>
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-          gap: 20, maxWidth: 920, width: '100%',
-        }}>
-          {[
-            {
-              icon: '🧠',
-              title: 'AI period allocation',
-              desc: 'AI suggests balanced period distributions per class and board — no manual tables needed.',
-            },
-            {
-              icon: '👨‍🏫',
-              title: 'Smart teacher allocation',
-              desc: 'Workload-balanced, expertise-matched teacher assignments with vertical continuity rules.',
-            },
-            {
-              icon: '👥',
-              title: 'Dynamic cross-class groups',
-              desc: 'Elective and activity groups auto-created across sections — no manual group setup.',
-            },
-          ].map(f => (
-            <div key={f.title} className="lp-feat" style={{
-              padding: '26px 22px', borderRadius: 12,
-              border: '1px solid #E8E4FF', background: '#FAFAFE',
-            }}>
-              <div style={{ fontSize: 30, marginBottom: 14, lineHeight: 1 }}>{f.icon}</div>
-              <h3 style={{
-                fontSize: 15, fontWeight: 700, color: '#13111E',
-                marginBottom: 8, fontFamily: 'inherit',
-              }}>{f.title}</h3>
-              <p style={{ fontSize: 13, color: '#4B5275', lineHeight: 1.7 }}>{f.desc}</p>
+      {/* 3 feature columns */}
+      <section id="features" className="flex flex-col items-center bg-white px-6 py-16">
+        <div className="grid w-full max-w-[920px] grid-cols-[repeat(auto-fit,minmax(250px,1fr))] gap-5">
+          {FEATURES.map(f => (
+            <div key={f.title} className={`rounded-xl border border-[#E8E4FF] bg-[#FAFAFE] px-[22px] py-[26px] ${cardHover}`}>
+              <div className="mb-3.5 text-[30px] leading-none">{f.icon}</div>
+              <h3 className="mb-2 text-[15px] font-bold text-[#13111E]">{f.title}</h3>
+              <p className="text-[13px] leading-[1.7] text-[#4B5275]">{f.desc}</p>
             </div>
           ))}
         </div>
       </section>
 
-
-      {/* ════════════════════════════════════════════════════
-          STATS BAND
-      ════════════════════════════════════════════════════ */}
-      <section style={{
-        background: '#F8F7FF',
-        borderTop: '1px solid #F0EDFF', borderBottom: '1px solid #F0EDFF',
-        padding: '44px 24px',
-        display: 'flex', justifyContent: 'center',
-      }}>
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
-          gap: 0, maxWidth: 860, width: '100%',
-        }}>
-          {[
-            { value: '1,200+',   label: 'Schools using schedU' },
-            { value: '4.8 min',  label: 'Avg. timetable generation time' },
-            { value: '98%',      label: 'Conflict-free first generation' },
-            { value: '180+',     label: 'Countries & territories' },
-          ].map((s, i, arr) => (
-            <div key={s.label} style={{
-              textAlign: 'center', padding: '16px 12px',
-              borderRight: i < arr.length - 1 ? '1px solid #E8E4FF' : 'none',
-            }}>
-              <div style={{
-                fontFamily: "'Plus Jakarta Sans', Georgia, serif",
-                fontSize: 30, fontWeight: 400, color: '#13111E',
-                lineHeight: 1, marginBottom: 7,
-              }}>{s.value}</div>
-              <div style={{ fontSize: 12, color: '#8B87AD', lineHeight: 1.5 }}>{s.label}</div>
+      {/* Stats band */}
+      <section className="flex justify-center border-y border-[#F0EDFF] bg-[#F8F7FF] px-6 py-11">
+        <div className="grid w-full max-w-[860px] grid-cols-[repeat(auto-fit,minmax(170px,1fr))]">
+          {STATS.map((s, i) => (
+            <div key={s.label} className={`px-3 py-4 text-center ${i < STATS.length - 1 ? 'border-r border-[#E8E4FF]' : ''}`}>
+              <div className="mb-[7px] text-[30px] font-normal leading-none text-[#13111E]">{s.value}</div>
+              <div className="text-xs leading-[1.5] text-[#8B87AD]">{s.label}</div>
             </div>
           ))}
         </div>
       </section>
 
-
-      {/* ════════════════════════════════════════════════════
-          GLOBAL BOARD SUPPORT
-      ════════════════════════════════════════════════════ */}
-      <section style={{
-        background: '#fff', padding: '56px 24px',
-        display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center',
-      }}>
-        <p style={{
-          fontSize: 11, fontWeight: 700, letterSpacing: '0.14em',
-          textTransform: 'uppercase', color: '#8B87AD', marginBottom: 20,
-        }}>
+      {/* Global board support */}
+      <section className="flex flex-col items-center bg-white px-6 py-14 text-center">
+        <p className="mb-5 text-[11px] font-bold uppercase tracking-[0.14em] text-[#8B87AD]">
           Works with every curriculum worldwide
         </p>
-        <div style={{
-          display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center',
-          maxWidth: 820,
-        }}>
+        <div className="flex max-w-[820px] flex-wrap justify-center gap-2">
           {BOARDS.map(b => (
-            <span key={b} className="lp-board-tag">{b}</span>
+            <span key={b} className="inline-block whitespace-nowrap rounded-full border border-[#E8E4FF] bg-[#FAFAFE] px-3 py-[5px] text-xs font-medium text-[#4B5275] transition-colors hover:border-[#C4B5FD] hover:bg-[#EDE9FF] hover:text-[#7C6FE0]">
+              {b}
+            </span>
           ))}
         </div>
-        <p style={{ fontSize: 13, color: '#8B87AD', marginTop: 20, lineHeight: 1.6, maxWidth: 480 }}>
+        <p className="mt-5 max-w-[480px] text-[13px] leading-[1.6] text-[#8B87AD]">
           No built-in board restrictions. Enter your own period counts, subject names,
           and grading labels — schedU adapts to you.
         </p>
       </section>
 
-
-      {/* ════════════════════════════════════════════════════
-          4-STEP HOW IT WORKS
-      ════════════════════════════════════════════════════ */}
-      <section style={{
-        background: '#F8F7FF',
-        borderTop: '1px solid #F0EDFF',
-        padding: '64px 24px',
-        display: 'flex', flexDirection: 'column', alignItems: 'center',
-      }}>
-        <p style={{
-          fontSize: 11, fontWeight: 700, letterSpacing: '0.14em',
-          textTransform: 'uppercase', color: '#8B87AD', marginBottom: 28,
-        }}>How it works</p>
-
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))',
-          gap: 16, maxWidth: 900, width: '100%',
-        }}>
-          {[
-            {
-              n: 1, title: 'Enter basics',
-              desc: 'Name, board, class range, teachers, rooms.',
-            },
-            {
-              n: 2, title: 'AI generates',
-              desc: 'Allocations, groups, and constraints auto-built.',
-            },
-            {
-              n: 3, title: 'Review & refine',
-              desc: 'AI inlines like a spreadsheet. AI explains every choice.',
-            },
-            {
-              n: 4, title: 'Export & publish',
-              desc: 'PDF, Excel, print — class-wise, teacher-wise, room-wise.',
-            },
-          ].map(s => (
-            <div key={s.n} className="lp-step" style={{
-              padding: '22px 20px', borderRadius: 12,
-              border: '1px solid #E8E4FF', background: '#fff',
-            }}>
-              <div style={{
-                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                padding: '3px 10px', borderRadius: 20,
-                background: '#EDE9FF', marginBottom: 14,
-                fontSize: 10, fontWeight: 800, color: '#7C6FE0', letterSpacing: '0.04em',
-              }}>
+      {/* How it works */}
+      <section className="flex flex-col items-center border-t border-[#F0EDFF] bg-[#F8F7FF] px-6 py-16">
+        <p className="mb-7 text-[11px] font-bold uppercase tracking-[0.14em] text-[#8B87AD]">How it works</p>
+        <div className="grid w-full max-w-[900px] grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-4">
+          {STEPS.map(s => (
+            <div key={s.n} className={`rounded-xl border border-[#E8E4FF] bg-white px-5 py-[22px] ${cardHover}`}>
+              <div className="mb-3.5 inline-flex items-center justify-center rounded-full bg-[#EDE9FF] px-2.5 py-[3px] text-[10px] font-extrabold tracking-[0.04em] text-[#7C6FE0]">
                 Step {s.n}
               </div>
-              <h4 style={{
-                fontSize: 14, fontWeight: 700, color: '#13111E',
-                marginBottom: 7, fontFamily: 'inherit',
-              }}>{s.title}</h4>
-              <p style={{ fontSize: 12.5, color: '#4B5275', lineHeight: 1.65 }}>{s.desc}</p>
+              <h4 className="mb-[7px] text-sm font-bold text-[#13111E]">{s.title}</h4>
+              <p className="text-[12.5px] leading-[1.65] text-[#4B5275]">{s.desc}</p>
             </div>
           ))}
         </div>
       </section>
 
-
-      {/* ════════════════════════════════════════════════════
-          PRICING
-      ════════════════════════════════════════════════════ */}
-      <section id="pricing" style={{
-        background: '#fff', borderTop: '1px solid #F0EDFF',
-        padding: '64px 24px',
-        display: 'flex', flexDirection: 'column', alignItems: 'center',
-      }}>
-        <p style={{
-          fontSize: 11, fontWeight: 700, letterSpacing: '0.14em',
-          textTransform: 'uppercase', color: '#8B87AD', marginBottom: 14,
-        }}>Pricing</p>
-        <h2 style={{
-          fontFamily: "'Plus Jakarta Sans', Georgia, serif",
-          fontSize: 30, fontWeight: 400, color: '#13111E',
-          marginBottom: 8, lineHeight: 1.2, textAlign: 'center',
-        }}>
-          Simple pricing that scales with you
-        </h2>
-        <p style={{
-          fontSize: 14, color: '#8B87AD', marginBottom: 38,
-          lineHeight: 1.6, textAlign: 'center', maxWidth: 440,
-        }}>
+      {/* Pricing */}
+      <section id="pricing" className="flex flex-col items-center border-t border-[#F0EDFF] bg-white px-6 py-16">
+        <p className="mb-3.5 text-[11px] font-bold uppercase tracking-[0.14em] text-[#8B87AD]">Pricing</p>
+        <h2 className="mb-2 text-center text-[30px] font-normal leading-[1.2] text-[#13111E]">Simple pricing that scales with you</h2>
+        <p className="mb-[38px] max-w-[440px] text-center text-sm leading-[1.6] text-[#8B87AD]">
           Start free, upgrade when your institution grows. No hidden fees.
         </p>
-
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-          gap: 18, maxWidth: 920, width: '100%', alignItems: 'stretch',
-        }}>
-          {[
-            {
-              name: 'Starter', price: 'Free', period: '',
-              desc: 'Everything a small team needs to try AI scheduling.',
-              cta: 'Start free', href: '/wizard', popular: false,
-              features: ['Up to 2 classes', 'Up to 20 subjects', 'AI auto-schedule', 'Real-time conflict detection', 'PDF export'],
-            },
-            {
-              name: 'Pro', price: '$29', period: '/mo',
-              desc: 'For a single institution running multiple streams and electives.',
-              cta: 'Start free', href: '/wizard', popular: true,
-              features: ['Unlimited classes', 'Unlimited subjects', 'Elective OR/AND groups', 'Multi-stream support', 'Room & resource planning', 'Priority support'],
-            },
-            {
-              name: 'Enterprise', price: '$99', period: '/mo',
-              desc: 'For groups managing many campuses or institutions.',
-              cta: 'Talk to sales', href: 'mailto:hello@bhusku.com', popular: false,
-              features: ['Everything in Pro', 'Multi-campus management', 'API access', 'SSO / SAML', 'Dedicated success manager'],
-            },
-          ].map(t => (
-            <div key={t.name} className="lp-feat" style={{
-              display: 'flex', flexDirection: 'column',
-              padding: '28px 24px', borderRadius: 14, background: '#fff',
-              border: t.popular ? '1.5px solid #7C6FE0' : '1px solid #E8E4FF',
-              boxShadow: t.popular ? '0 12px 32px rgba(124,111,224,0.16)' : 'none',
-              position: 'relative',
-            }}>
+        <div className="grid w-full max-w-[920px] grid-cols-[repeat(auto-fit,minmax(260px,1fr))] items-stretch gap-[18px]">
+          {TIERS.map(t => (
+            <div
+              key={t.name}
+              className={`relative flex flex-col rounded-[14px] bg-white px-6 py-7 ${cardHover} ${
+                t.popular ? 'border-[1.5px] border-[#7C6FE0] shadow-[0_12px_32px_rgba(124,111,224,0.16)]' : 'border border-[#E8E4FF]'
+              }`}
+            >
               {t.popular && (
-                <span style={{
-                  position: 'absolute', top: 16, right: 16,
-                  padding: '3px 10px', borderRadius: 20,
-                  background: '#EDE9FF', color: '#7C6FE0',
-                  fontSize: 10, fontWeight: 800, letterSpacing: '0.04em',
-                }}>
+                <span className="absolute right-4 top-4 rounded-full bg-[#EDE9FF] px-2.5 py-[3px] text-[10px] font-extrabold tracking-[0.04em] text-[#7C6FE0]">
                   Most popular
                 </span>
               )}
-              <h3 style={{ fontSize: 16, fontWeight: 700, color: '#13111E', fontFamily: 'inherit' }}>{t.name}</h3>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, margin: '14px 0 6px' }}>
-                <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 34, fontWeight: 700, color: '#13111E', lineHeight: 1 }}>{t.price}</span>
-                {t.period && <span style={{ fontSize: 13, color: '#8B87AD' }}>{t.period}</span>}
+              <h3 className="text-base font-bold text-[#13111E]">{t.name}</h3>
+              <div className="mb-1.5 mt-3.5 flex items-baseline gap-1">
+                <span className="font-mono text-[34px] font-bold leading-none text-[#13111E]">{t.price}</span>
+                {t.period && <span className="text-[13px] text-[#8B87AD]">{t.period}</span>}
               </div>
-              <p style={{ fontSize: 13, color: '#4B5275', lineHeight: 1.6, marginBottom: 18, minHeight: 42 }}>{t.desc}</p>
-              <a href={t.href} style={{ textDecoration: 'none' }}>
-                <button className={t.popular ? undefined : 'lp-ghost'} style={{
-                  width: '100%', padding: '11px 18px', borderRadius: 8,
-                  border: t.popular ? 'none' : '1.5px solid #E8E4FF',
-                  background: t.popular ? '#7C6FE0' : '#fff',
-                  color: t.popular ? '#fff' : '#4B5275',
-                  fontSize: 13, fontWeight: 700, cursor: 'pointer',
-                  fontFamily: 'inherit',
-                  boxShadow: t.popular ? '0 4px 14px rgba(124,111,224,0.32)' : 'none',
-                }}>
+              <p className="mb-[18px] min-h-[42px] text-[13px] leading-[1.6] text-[#4B5275]">{t.desc}</p>
+              <a href={t.href} className="no-underline">
+                <button
+                  className={`w-full rounded-lg px-[18px] py-[11px] text-[13px] font-bold ${
+                    t.popular
+                      ? 'bg-[#7C6FE0] text-white shadow-[0_4px_14px_rgba(124,111,224,0.32)]'
+                      : 'border-[1.5px] border-[#E8E4FF] bg-white text-[#4B5275] transition-colors hover:border-[#7C6FE0] hover:text-[#7C6FE0]'
+                  }`}
+                >
                   {t.cta}
                 </button>
               </a>
-              <ul style={{ listStyle: 'none', margin: '20px 0 0', padding: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <ul className="mt-5 flex list-none flex-col gap-2.5 p-0">
                 {t.features.map(f => (
-                  <li key={f} style={{ display: 'flex', alignItems: 'flex-start', gap: 9, fontSize: 13, color: '#13111E' }}>
-                    <span style={{ color: '#7C6FE0', fontWeight: 800, lineHeight: 1.4 }}>✓</span>
-                    <span style={{ lineHeight: 1.4 }}>{f}</span>
+                  <li key={f} className="flex items-start gap-[9px] text-[13px] text-[#13111E]">
+                    <span className="font-extrabold leading-[1.4] text-[#7C6FE0]">✓</span>
+                    <span className="leading-[1.4]">{f}</span>
                   </li>
                 ))}
               </ul>
@@ -562,116 +248,37 @@ export function HomePage() {
         </div>
       </section>
 
-
-      {/* ════════════════════════════════════════════════════
-          TESTIMONIALS
-      ════════════════════════════════════════════════════ */}
-      <section id="testimonials" style={{
-        background: '#F8F7FF', borderTop: '1px solid #F0EDFF',
-        padding: '64px 24px',
-        display: 'flex', flexDirection: 'column', alignItems: 'center',
-      }}>
-        <p style={{
-          fontSize: 11, fontWeight: 700, letterSpacing: '0.14em',
-          textTransform: 'uppercase', color: '#8B87AD', marginBottom: 14,
-        }}>Loved by teams worldwide</p>
-        <h2 style={{
-          fontFamily: "'Plus Jakarta Sans', Georgia, serif",
-          fontSize: 30, fontWeight: 400, color: '#13111E',
-          marginBottom: 38, lineHeight: 1.2, textAlign: 'center',
-        }}>
+      {/* Testimonials */}
+      <section id="testimonials" className="flex flex-col items-center border-t border-[#F0EDFF] bg-[#F8F7FF] px-6 py-16">
+        <p className="mb-3.5 text-[11px] font-bold uppercase tracking-[0.14em] text-[#8B87AD]">Loved by teams worldwide</p>
+        <h2 className="mb-[38px] text-center text-[30px] font-normal leading-[1.2] text-[#13111E]">
           Trusted by institutions that hate scheduling
         </h2>
-
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-          gap: 18, maxWidth: 920, width: '100%', alignItems: 'stretch',
-        }}>
-          {[
-            { quote: 'schedU turned a three-week scheduling marathon into an afternoon. The conflict detection alone has saved us from a dozen timetable headaches this term.', name: 'Priya Nair', role: 'Vice Principal, Greenwood International School' },
-            { quote: 'Managing electives across three streams used to be guesswork. Now the OR/AND groups just work, and every student gets a clash-free schedule.', name: 'Daniel Osei', role: 'Registrar, Northgate College' },
-            { quote: 'Rolling schedU out across all our campuses was painless. SSO and the API meant every institution in the group was generating timetables in the same week.', name: 'Maria Gonzalez', role: 'Director of Operations, Atlas Education Group' },
-          ].map(t => (
-            <div key={t.name} style={{
-              display: 'flex', flexDirection: 'column', gap: 18,
-              padding: '24px 22px', borderRadius: 14,
-              border: '1px solid #E8E4FF', background: '#fff',
-            }}>
-              <p style={{ flex: 1, fontSize: 14, lineHeight: 1.7, color: '#13111E' }}>
-                &ldquo;{t.quote}&rdquo;
-              </p>
+        <div className="grid w-full max-w-[920px] grid-cols-[repeat(auto-fit,minmax(260px,1fr))] items-stretch gap-[18px]">
+          {TESTIMONIALS.map(t => (
+            <div key={t.name} className="flex flex-col gap-[18px] rounded-[14px] border border-[#E8E4FF] bg-white px-[22px] py-6">
+              <p className="flex-1 text-sm leading-[1.7] text-[#13111E]">&ldquo;{t.quote}&rdquo;</p>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#13111E' }}>{t.name}</div>
-                <div style={{ fontSize: 12, color: '#8B87AD', marginTop: 2 }}>{t.role}</div>
+                <div className="text-[13px] font-bold text-[#13111E]">{t.name}</div>
+                <div className="mt-0.5 text-xs text-[#8B87AD]">{t.role}</div>
               </div>
             </div>
           ))}
         </div>
       </section>
 
-
-      {/* ════════════════════════════════════════════════════
-          BOTTOM CTA
-      ════════════════════════════════════════════════════ */}
-      <section style={{
-        background: '#fff', borderTop: '1px solid #F0EDFF',
-        padding: '72px 24px',
-        display: 'flex', flexDirection: 'column',
-        alignItems: 'center', textAlign: 'center',
-      }}>
-        <h2 style={{
-          fontFamily: "'Plus Jakarta Sans', Georgia, serif",
-          fontSize: 32, fontWeight: 400, color: '#13111E', marginBottom: 10,
-          lineHeight: 1.2,
-        }}>
-          Ready to build your timetable?
-        </h2>
-        <p style={{
-          fontSize: 15, color: '#8B87AD', marginBottom: 32,
-          lineHeight: 1.6, maxWidth: 380,
-        }}>
+      {/* Bottom CTA */}
+      <section className="flex flex-col items-center border-t border-[#F0EDFF] bg-white px-6 py-[72px] text-center">
+        <h2 className="mb-2.5 text-[32px] font-normal leading-[1.2] text-[#13111E]">Ready to build your timetable?</h2>
+        <p className="mb-8 max-w-[380px] text-[15px] leading-[1.6] text-[#8B87AD]">
           Start free. No setup. No training required.
         </p>
-        <a href="/wizard" style={{ textDecoration: 'none' }}>
-          <button style={{
-            padding: '14px 36px', borderRadius: 9, border: 'none',
-            background: '#7C6FE0', color: '#fff',
-            fontSize: 15, fontWeight: 700, cursor: 'pointer',
-            boxShadow: '0 4px 18px rgba(124,111,224,0.38)',
-            fontFamily: 'inherit',
-            display: 'inline-flex', alignItems: 'center', gap: 8,
-          }}>
+        <a href="/wizard" className="no-underline">
+          <button className="inline-flex items-center gap-2 rounded-[9px] bg-[#7C6FE0] px-9 py-3.5 text-[15px] font-bold text-white shadow-[0_4px_18px_rgba(124,111,224,0.38)]">
             Create your first timetable →
           </button>
         </a>
       </section>
-
-
-      {/* ════════════════════════════════════════════════════
-          FOOTER
-      ════════════════════════════════════════════════════ */}
-      <footer style={{
-        borderTop: '1px solid #F0EDFF',
-        padding: '20px 48px',
-        display: 'flex', alignItems: 'center',
-        justifyContent: 'space-between', flexWrap: 'wrap', gap: 12,
-      }}>
-        <div style={{ display: 'flex', gap: 24 }}>
-          {['Privacy', 'Terms', 'Support', 'Status'].map(l => (
-            <a key={l} href="#" style={{
-              color: '#8B87AD', textDecoration: 'none',
-              fontSize: 12, fontWeight: 500,
-              transition: 'color 0.15s',
-            }}
-              onMouseOver={e => (e.currentTarget.style.color = '#7C6FE0')}
-              onMouseOut={e  => (e.currentTarget.style.color = '#8B87AD')}
-            >{l}</a>
-          ))}
-        </div>
-        <span style={{ fontSize: 12, color: '#8B87AD' }}>© 2025 schedU</span>
-      </footer>
-
-    </div>
+    </MarketingChrome>
   )
 }

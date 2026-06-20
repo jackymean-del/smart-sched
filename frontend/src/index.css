@@ -12,6 +12,19 @@
    identical to the previous `* { margin:0; padding:0 }` reset. */
 *:where(:not([data-mk], [data-mk] *)) { margin: 0; padding: 0; }
 html { font-size: 13px; }
+/* Marketing pages opt into a 16px root so Tailwind's rem-based utilities
+   resolve to their intended sizes; the product UI stays at 13px. */
+html:has([data-mk]) { font-size: 16px; }
+
+/* Landing-hero entrance + float animations (used by marketing pages). */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes floatCard {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-8px); }
+}
 body {
   font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
   background-color: #f7f6f2;
