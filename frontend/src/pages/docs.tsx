@@ -3,21 +3,13 @@
  */
 import { MarketingChrome } from '@/components/marketing/MarketingChrome'
 import { Seo } from '@/components/marketing/Seo'
+import { DOC_ARTICLES } from '@/content/docs'
 
 const STEPS = [
   { n: 1, title: 'Enter the basics', desc: 'Name your institution, pick a board (or define your own), and add class ranges, teachers, and rooms.' },
   { n: 2, title: 'Let the AI generate', desc: 'schedU builds period allocations, cross-class groups, and constraints automatically — no manual tables.' },
   { n: 3, title: 'Review & refine', desc: 'Edit inline like a spreadsheet. schedU re-validates on every change and explains each choice.' },
   { n: 4, title: 'Export & publish', desc: 'Download class-wise, teacher-wise, and room-wise timetables as PDF or Excel, or print them directly.' },
-]
-
-const TOPICS = [
-  { icon: '🚀', title: 'Getting started', desc: 'Create your first conflict-free timetable in under five minutes.', href: '/wizard' },
-  { icon: '🔀', title: 'Electives & groups', desc: 'Model OR/AND elective groups and parallel sections that always stay clash-free.', href: '/features' },
-  { icon: '🏛️', title: 'Rooms & resources', desc: 'Tag labs, halls, and shared spaces so schedU places them automatically.', href: '/features' },
-  { icon: '📄', title: 'Exporting timetables', desc: 'Publish print-ready PDF and Excel grids for staff and students.', href: '/features' },
-  { icon: '🔌', title: 'API & integrations', desc: 'Programmatic access to generate and sync timetables (Enterprise plan).', href: '/pricing' },
-  { icon: '💬', title: 'Support', desc: 'Stuck on something? Reach the team and we will help you out.', href: '/contact' },
 ]
 
 const cardHover =
@@ -63,12 +55,13 @@ export function DocsPage() {
       <section className="flex flex-col items-center border-t border-[#F0EDFF] bg-[#F8F7FF] px-6 pb-[72px] pt-14">
         <p className="mb-7 text-[11px] font-bold uppercase tracking-[0.14em] text-[#8B87AD]">Browse by topic</p>
         <div className="grid w-full max-w-[920px] grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-[18px]">
-          {TOPICS.map(t => (
-            <a key={t.title} href={t.href} className="no-underline">
+          {DOC_ARTICLES.map(d => (
+            <a key={d.slug} href={`/docs/${d.slug}`} className="no-underline">
               <div className={`h-full rounded-[14px] border border-[#E8E4FF] bg-white px-[22px] py-6 ${cardHover}`}>
-                <div className="mb-3 text-[26px] leading-none">{t.icon}</div>
-                <h3 className="mb-[7px] text-[15px] font-bold text-[#13111E]">{t.title}</h3>
-                <p className="text-[13px] leading-[1.65] text-[#4B5275]">{t.desc}</p>
+                <div className="mb-3 text-[26px] leading-none">{d.icon}</div>
+                <h3 className="mb-[7px] text-[15px] font-bold text-[#13111E]">{d.title}</h3>
+                <p className="text-[13px] leading-[1.65] text-[#4B5275]">{d.description}</p>
+                <span className="mt-3 inline-block text-[12px] font-semibold text-[#7C6FE0]">Read →</span>
               </div>
             </a>
           ))}

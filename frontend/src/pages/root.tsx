@@ -18,7 +18,9 @@ export function RootLayout() {
   const isDashboard = path === '/dashboard'
   const isHome      = path === '/'
   // Public marketing pages bring their own nav/footer (MarketingChrome)
-  const isMarketing = ['/features', '/pricing', '/docs', '/contact'].includes(path)
+  const isMarketing =
+    ['/features', '/pricing', '/docs', '/contact'].includes(path) ||
+    path.startsWith('/docs/')
 
   // These pages own their full-screen layout — no app topbar
   if (isAuthPage || isDashboard || isHome || isMarketing) return <Outlet />

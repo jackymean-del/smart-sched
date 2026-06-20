@@ -11,6 +11,7 @@ import { MasterDataPage } from "./pages/master-data"
 import { FeaturesPage }  from "./pages/features"
 import { PricingPage }   from "./pages/pricing"
 import { DocsPage }      from "./pages/docs"
+import { DocArticlePage } from "./pages/doc-article"
 import { ContactPage }   from "./pages/contact"
 
 const rootRoute      = createRootRoute({ component: RootLayout })
@@ -25,12 +26,13 @@ const masterDataRoute = createRoute({ getParentRoute: () => rootRoute, path: "/m
 const featuresRoute   = createRoute({ getParentRoute: () => rootRoute, path: "/features",    component: FeaturesPage })
 const pricingRoute    = createRoute({ getParentRoute: () => rootRoute, path: "/pricing",     component: PricingPage })
 const docsRoute       = createRoute({ getParentRoute: () => rootRoute, path: "/docs",        component: DocsPage })
+const docArticleRoute = createRoute({ getParentRoute: () => rootRoute, path: "/docs/$slug",  component: DocArticlePage })
 const contactRoute    = createRoute({ getParentRoute: () => rootRoute, path: "/contact",     component: ContactPage })
 
 export const routeTree = rootRoute.addChildren([
   indexRoute, loginRoute, registerRoute, dashboardRoute,
   wizardRoute, timetableRoute, demoRoute, masterDataRoute,
-  featuresRoute, pricingRoute, docsRoute, contactRoute,
+  featuresRoute, pricingRoute, docsRoute, docArticleRoute, contactRoute,
 ])
 export const router = createRouter({ routeTree })
 
