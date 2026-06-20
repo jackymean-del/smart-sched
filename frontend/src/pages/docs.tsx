@@ -2,6 +2,7 @@
  * Docs page — getting-started hub + quick links. Styled with Tailwind.
  */
 import { MarketingChrome } from '@/components/marketing/MarketingChrome'
+import { Seo } from '@/components/marketing/Seo'
 
 const STEPS = [
   { n: 1, title: 'Enter the basics', desc: 'Name your institution, pick a board (or define your own), and add class ranges, teachers, and rooms.' },
@@ -25,6 +26,11 @@ const cardHover =
 export function DocsPage() {
   return (
     <MarketingChrome>
+      <Seo
+        title="Documentation"
+        description="Learn how schedU works — from your first conflict-free timetable to advanced electives, room planning, and exports. Guides for schools, colleges, and universities."
+        path="/docs"
+      />
       {/* Hero */}
       <section className="flex flex-col items-center bg-gradient-to-b from-[#F8F7FF] to-white px-6 pb-12 pt-[72px] text-center">
         <p className="mb-[18px] text-[11px] font-bold uppercase tracking-[0.14em] text-[#8B87AD]">Documentation</p>

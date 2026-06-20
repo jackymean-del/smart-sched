@@ -3,6 +3,7 @@
  */
 import { useState } from 'react'
 import { MarketingChrome } from '@/components/marketing/MarketingChrome'
+import { Seo } from '@/components/marketing/Seo'
 
 const CHANNELS = [
   { icon: '✉️', title: 'Email', value: 'hello@bhusku.com', href: 'mailto:hello@bhusku.com' },
@@ -28,6 +29,11 @@ export function ContactPage() {
 
   return (
     <MarketingChrome>
+      <Seo
+        title="Contact"
+        description="Questions about schedU, a demo for your institution, or help getting set up? Get in touch with the schedU team."
+        path="/contact"
+      />
       {/* Hero */}
       <section className="flex flex-col items-center bg-gradient-to-b from-[#F8F7FF] to-white px-6 pb-10 pt-[72px] text-center">
         <p className="mb-[18px] text-[11px] font-bold uppercase tracking-[0.14em] text-[#8B87AD]">Contact</p>

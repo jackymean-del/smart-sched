@@ -3,6 +3,7 @@
  * Chrome (nav + footer) comes from MarketingChrome; sections use Tailwind.
  */
 import { MarketingChrome } from '@/components/marketing/MarketingChrome'
+import { Seo } from '@/components/marketing/Seo'
 
 const BOARDS = [
   'IB (MYP / DP)', 'Cambridge IGCSE', 'Common Core', 'GCSE / A-Level',
@@ -75,6 +76,11 @@ const cardHover =
 export function HomePage() {
   return (
     <MarketingChrome>
+      <Seo
+        title="schedU — AI Timetable Scheduling for Any Institution"
+        description="schedU uses AI to auto-generate conflict-free timetables for any institution — schools, colleges, universities, and beyond. Works with any board, any curriculum, anywhere."
+        path="/"
+      />
       {/* Hero */}
       <section className="flex flex-col items-center bg-gradient-to-b from-[#F8F7FF] to-white px-6 pb-[60px] pt-[72px] text-center">
         <div className="mb-7 inline-flex animate-[fadeUp_0.55s_ease_both] items-center gap-[7px] rounded-full border border-[#86EFAC] bg-[#F0FDF4] px-4 py-[5px] text-xs font-semibold text-[#15803D]">
