@@ -8,6 +8,10 @@ import { WizardPage }     from "./pages/wizard"
 import { TimetablePage }  from "./pages/timetable"
 import { DemoPage }       from "./pages/demo"
 import { MasterDataPage } from "./pages/master-data"
+import { FeaturesPage }  from "./pages/features"
+import { PricingPage }   from "./pages/pricing"
+import { DocsPage }      from "./pages/docs"
+import { ContactPage }   from "./pages/contact"
 
 const rootRoute      = createRootRoute({ component: RootLayout })
 const indexRoute     = createRoute({ getParentRoute: () => rootRoute, path: "/",           component: HomePage })
@@ -18,10 +22,15 @@ const wizardRoute     = createRoute({ getParentRoute: () => rootRoute, path: "/w
 const timetableRoute  = createRoute({ getParentRoute: () => rootRoute, path: "/timetable",   component: TimetablePage })
 const demoRoute       = createRoute({ getParentRoute: () => rootRoute, path: "/demo",        component: DemoPage })
 const masterDataRoute = createRoute({ getParentRoute: () => rootRoute, path: "/master-data", component: MasterDataPage })
+const featuresRoute   = createRoute({ getParentRoute: () => rootRoute, path: "/features",    component: FeaturesPage })
+const pricingRoute    = createRoute({ getParentRoute: () => rootRoute, path: "/pricing",     component: PricingPage })
+const docsRoute       = createRoute({ getParentRoute: () => rootRoute, path: "/docs",        component: DocsPage })
+const contactRoute    = createRoute({ getParentRoute: () => rootRoute, path: "/contact",     component: ContactPage })
 
 export const routeTree = rootRoute.addChildren([
   indexRoute, loginRoute, registerRoute, dashboardRoute,
   wizardRoute, timetableRoute, demoRoute, masterDataRoute,
+  featuresRoute, pricingRoute, docsRoute, contactRoute,
 ])
 export const router = createRouter({ routeTree })
 

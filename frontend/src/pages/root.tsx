@@ -17,9 +17,11 @@ export function RootLayout() {
   const isAuthPage  = path === '/login' || path === '/register'
   const isDashboard = path === '/dashboard'
   const isHome      = path === '/'
+  // Public marketing pages bring their own nav/footer (MarketingChrome)
+  const isMarketing = ['/features', '/pricing', '/docs', '/contact'].includes(path)
 
   // These pages own their full-screen layout — no app topbar
-  if (isAuthPage || isDashboard || isHome) return <Outlet />
+  if (isAuthPage || isDashboard || isHome || isMarketing) return <Outlet />
 
   return (
     <div style={{ minHeight:'100vh', background:'#F9F8FF', display:'flex', flexDirection:'column' }}>

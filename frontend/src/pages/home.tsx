@@ -115,10 +115,10 @@ export function HomePage() {
         {/* Nav links — right of centre, before auth */}
         <div style={{ display: 'flex', gap: 28, alignItems: 'center', marginRight: 32 }}>
           {[
-            { label: 'Features', href: '#features' },
-            { label: 'Pricing', href: '#pricing' },
-            { label: 'Docs', href: '#' },
-            { label: 'Contact', href: 'mailto:hello@bhusku.com' },
+            { label: 'Features', href: '/features' },
+            { label: 'Pricing', href: '/pricing' },
+            { label: 'Docs', href: '/docs' },
+            { label: 'Contact', href: '/contact' },
           ].map(l => (
             <a key={l.label} href={l.href} className="lp-nav-link">{l.label}</a>
           ))}
