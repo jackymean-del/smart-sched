@@ -559,23 +559,26 @@ function CreateTimetableModal({
         <div style={{ marginBottom: 6 }}>
           <label style={lbl}>Class range <span style={{ color: '#EF4444' }}>*</span></label>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <select
+            <input
               className="ct-select"
+              list="schedu-grade-options"
               value={fromGrade}
               onChange={e => setFromGrade(e.target.value)}
-            >
-              {GRADES.map(g => <option key={g} value={g}>{g}</option>)}
-            </select>
-            <select
+              placeholder="From — e.g. Nursery"
+            />
+            <input
               className="ct-select"
+              list="schedu-grade-options"
               value={toGrade}
               onChange={e => setToGrade(e.target.value)}
-            >
-              {GRADES.map(g => <option key={g} value={g}>{g}</option>)}
-            </select>
+              placeholder="To — e.g. Class XII"
+            />
           </div>
+          <datalist id="schedu-grade-options">
+            {GRADES.map(g => <option key={g} value={g} />)}
+          </datalist>
           <p style={{ fontSize: 12, color: '#6B7280', marginTop: 6 }}>
-            AI will auto-generate classes and sections within this range.
+            Pick a standard grade or type your own (e.g. “Grade R”, “Form 1”). schedU groups them automatically.
           </p>
         </div>
 
@@ -871,13 +874,19 @@ function EditTimetableModal({
             ] as const).map(f => (
               <div key={f.label}>
                 <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 4 }}>{f.label}</div>
-                <select value={f.val} onChange={e => f.set(e.target.value)} style={selectStyle}>
-                  <option value="">— select —</option>
-                  {GRADES.map(g => <option key={g} value={g}>{g}</option>)}
-                </select>
+                <input
+                  list="schedu-grade-options"
+                  value={f.val}
+                  onChange={e => f.set(e.target.value)}
+                  style={selectStyle}
+                  placeholder={f.label === 'From' ? 'e.g. Nursery' : 'e.g. Class XII'}
+                />
               </div>
             ))}
           </div>
+          <datalist id="schedu-grade-options">
+            {GRADES.map(g => <option key={g} value={g} />)}
+          </datalist>
           {(!fromGrade || !toGrade) && (
             <p style={{ fontSize: 11.5, color: '#F59E0B', marginTop: 6, fontWeight: 500 }}>
               ⚠ Please set both grade boundaries.
