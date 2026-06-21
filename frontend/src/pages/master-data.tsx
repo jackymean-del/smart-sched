@@ -17,6 +17,8 @@ import { useTimetableStore } from '@/store/timetableStore'
 import { useAuthStore } from '@/store/authStore'
 import type { Subject, Section, Staff, SectionStrength, ScopeMatrix } from '@/types'
 import { PageHeader } from '@/components/layout/PageHeader'
+import { ExportControls } from '@/components/ExportControls'
+import type { ExportSheet } from '@/lib/exportData'
 import { DataGrid, DataGridColumn } from '@/components/DataGrid/DataGrid'
 import { ScopeMatrixModal } from '@/components/DataGrid/ScopeMatrixModal'
 import {
@@ -92,6 +94,18 @@ export function MasterDataPage() {
     { key: 'strengths', label: 'Strengths', icon: <Grid3x3       size={14} />, count: sectionStrengths?.length ?? 0 },
   ]
 
+  // One Excel sheet per reference entity (built lazily on export).
+  const buildExportSheets = (): ExportSheet[] => [
+    { name: 'Classes',  rows: [['Class', 'Grade', 'Strength', 'Room', 'Class Teacher'],
+      ...sections.map((s: any) => [s.name ?? '', s.grade ?? '', s.strength ?? '', s.room ?? '', s.classTeacher ?? ''])] },
+    { name: 'Subjects', rows: [['Subject', 'Category', 'Periods/Week'],
+      ...subjects.map((s: any) => [s.name ?? '', s.category ?? '', s.periodsPerWeek ?? ''])] },
+    { name: 'Teachers', rows: [['Teacher', 'Subjects'],
+      ...staff.map((t: any) => [t.name ?? '', (t.subjects ?? []).join(', ')])] },
+    { name: 'Rooms',    rows: [['Room', 'Type', 'Capacity', 'Building', 'Floor'],
+      ...rooms.map((r: any) => [r.name ?? '', r.type ?? '', r.capacity ?? '', r.building ?? '', r.floor ?? ''])] },
+  ]
+
   return (
     <div style={{ minHeight: '100vh', background: '#F5F2FF' }}>
 
@@ -101,12 +115,15 @@ export function MasterDataPage() {
         description="Live-edit every reference entity. Autosaves on each change."
         status="saved"
         actions={
-          <div style={{
-            padding: '3px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600,
-            background: '#EDE9FF', color: '#7C6FE0', border: '1px solid #D8D2FF',
-            display: 'flex', alignItems: 'center', gap: 5,
-          }}>
-            <Sparkles size={11} /> Spreadsheet mode
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{
+              padding: '3px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600,
+              background: '#EDE9FF', color: '#7C6FE0', border: '1px solid #D8D2FF',
+              display: 'flex', alignItems: 'center', gap: 5,
+            }}>
+              <Sparkles size={11} /> Spreadsheet mode
+            </div>
+            <ExportControls filename="schedu-master-data.xlsx" sheets={buildExportSheets} />
           </div>
         }
       />
