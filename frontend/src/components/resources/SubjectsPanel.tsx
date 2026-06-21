@@ -137,8 +137,9 @@ function inferCategory(sub: Subject): string {
     'physical education','yoga','ncc','nss','sports','gym','dance','music',
     'art','painting','craft','drawing','scout','guide','library','assembly',
     'morning meeting','cca','co-curricular','cocurricular','club',
-    'value education','moral science','moral','free play','nursery rhyme',
-    'activity','story','rhyme',
+    'value education','moral science','free play',
+    // NOTE: do NOT match 'story'/'rhyme' here — 'history' contains 'story',
+    // and Nursery Rhymes & Stories is a pre-primary language (scholastic) subject.
   ])) return 'Co-scholastic'
   return 'Scholastic'
 }

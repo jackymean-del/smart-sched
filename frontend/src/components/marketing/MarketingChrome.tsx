@@ -5,6 +5,7 @@
  * values); the global reset + keyframes live in src/index.css.
  */
 import type { ReactNode } from 'react'
+import { appStartHref } from '@/lib/nav'
 
 const NAV_LINKS = [
   { label: 'Features', href: '/features' },
@@ -57,7 +58,7 @@ export function MarketingChrome({ children }: { children: ReactNode }) {
               Sign in
             </button>
           </a>
-          <a href="/wizard" className="no-underline">
+          <a href={appStartHref()} className="no-underline">
             <button className="rounded-[7px] bg-[#13111E] px-[18px] py-2 text-[13px] font-semibold text-white">
               Get started
             </button>

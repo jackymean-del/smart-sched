@@ -4,6 +4,7 @@
  */
 import { useEffect, useState } from 'react'
 import { Seo } from '@/components/marketing/Seo'
+import { appStartHref } from '@/lib/nav'
 import type { SharedTimetable } from '@/lib/share'
 
 export function SharedTimetablePage() {
@@ -116,7 +117,7 @@ export function SharedTimetablePage() {
         </a>
         <div className="flex items-center gap-3">
           <span className="rounded-full bg-[#EDE9FF] px-2.5 py-1 text-[11px] font-semibold text-[#7C6FE0]">View only</span>
-          <a href="/wizard" className="rounded-[8px] bg-[#13111E] px-4 py-2 text-[12px] font-semibold text-white no-underline">
+          <a href={appStartHref()} className="rounded-[8px] bg-[#13111E] px-4 py-2 text-[12px] font-semibold text-white no-underline">
             Create your own
           </a>
         </div>

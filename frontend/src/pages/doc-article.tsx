@@ -4,6 +4,7 @@
  */
 import { MarketingChrome } from '@/components/marketing/MarketingChrome'
 import { Seo } from '@/components/marketing/Seo'
+import { appStartHref } from '@/lib/nav'
 import { DOC_ARTICLES, getDoc, type DocBlock } from '@/content/docs'
 
 function Block({ block }: { block: DocBlock }) {
@@ -107,7 +108,7 @@ export function DocArticlePage() {
           {/* Footer CTA */}
           <div className="mt-14 flex flex-wrap items-center gap-3 rounded-[14px] border border-[#E8E4FF] bg-[#F8F7FF] px-6 py-5">
             <span className="text-[15px] font-medium text-[#13111E]">Ready to try it?</span>
-            <a href="/wizard" className="rounded-[9px] bg-[#7C6FE0] px-5 py-2.5 text-[13px] font-bold text-white no-underline shadow-[0_4px_14px_rgba(124,111,224,0.32)]">
+            <a href={appStartHref()} className="rounded-[9px] bg-[#7C6FE0] px-5 py-2.5 text-[13px] font-bold text-white no-underline shadow-[0_4px_14px_rgba(124,111,224,0.32)]">
               Start free
             </a>
             <a href="/contact" className="text-[13px] font-semibold text-[#7C6FE0] no-underline">Talk to us →</a>

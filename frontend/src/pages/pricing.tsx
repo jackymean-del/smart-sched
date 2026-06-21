@@ -3,6 +3,7 @@
  */
 import { MarketingChrome } from '@/components/marketing/MarketingChrome'
 import { Seo } from '@/components/marketing/Seo'
+import { appStartHref } from '@/lib/nav'
 
 const TIERS = [
   {
@@ -78,7 +79,7 @@ export function PricingPage() {
                 {t.period && <span className="text-[13px] text-[#8B87AD]">{t.period}</span>}
               </div>
               <p className="mb-[18px] min-h-[42px] text-[13px] leading-[1.6] text-[#4B5275]">{t.desc}</p>
-              <a href={t.href} className="no-underline">
+              <a href={t.href === '/wizard' ? appStartHref() : t.href} className="no-underline">
                 <button
                   className={`w-full rounded-lg px-[18px] py-[11px] text-[13px] font-bold ${
                     t.popular

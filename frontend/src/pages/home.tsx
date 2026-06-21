@@ -4,6 +4,7 @@
  */
 import { MarketingChrome } from '@/components/marketing/MarketingChrome'
 import { Seo } from '@/components/marketing/Seo'
+import { appStartHref } from '@/lib/nav'
 
 const BOARDS = [
   'IB (MYP / DP)', 'Cambridge IGCSE', 'Common Core', 'GCSE / A-Level',
@@ -101,7 +102,7 @@ export function HomePage() {
         </p>
 
         <div className="mb-[52px] flex animate-[fadeUp_0.55s_ease_both] flex-wrap justify-center gap-3 [animation-delay:0.22s]">
-          <a href="/wizard" className="no-underline">
+          <a href={appStartHref()} className="no-underline">
             <button className="rounded-[9px] bg-[#7C6FE0] px-[30px] py-[13px] text-sm font-bold text-white shadow-[0_4px_18px_rgba(124,111,224,0.38)]">
               Start free — no credit card
             </button>

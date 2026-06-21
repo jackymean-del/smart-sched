@@ -413,7 +413,8 @@ export const CURRICULUM: Record<string, SubjectRule> = {
   // ── Pre-K only ────────────────────────────────────────────────────────────────
   'Nursery Rhymes & Stories': {
     grades: ['preK'],
-    isActivity: true,
+    // Pre-primary LANGUAGE subject (like Number Work is pre-primary numeracy) —
+    // scholastic, not a co-scholastic activity.
     slots: { preK: 3 },
     hint: 'Pre-primary only — language development through rhymes and storytelling',
   },
