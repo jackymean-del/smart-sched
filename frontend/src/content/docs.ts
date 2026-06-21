@@ -118,9 +118,9 @@ export const DOC_ARTICLES: DocArticle[] = [
       {
         heading: 'OR — a flexible period slot',
         blocks: [
-          { p: 'An OR slot is a single period that runs one of several subjects — not all at once. The section stays together; which subject (and teacher) takes the slot can change day to day, based on the syllabus need.' },
-          { p: 'Example: a period set as “Physics OR Chemistry”. On one day the Chemistry teacher takes it; on another, the Physics teacher does — whatever the syllabus needs that day. Never both at the same time.' },
-          { note: 'schedU keeps the slot reserved and assigns whichever teacher is needed, so it’s never double-booked.' },
+          { p: 'An OR slot is a single period that runs one of several subjects — not all at once. The section stays together, and your institution decides which subject (and teacher) takes the slot on a given day, based on what the syllabus needs.' },
+          { p: 'Example: a period set as “Physics OR Chemistry”. One day the Chemistry teacher takes it; another day the Physics teacher does — whatever you need that day. Never both at the same time.' },
+          { note: 'schedU only reserves the slot and keeps every listed teacher free for it — it does not pick the subject for you. It can’t know which part of the syllabus is pending, so that choice stays with your institution.' },
         ],
       },
       {
