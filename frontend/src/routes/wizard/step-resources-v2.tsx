@@ -223,6 +223,10 @@ function buildDefaultSubjects(board: CurriculumBoard = 'CBSE', sections: Section
   const PRIMARY_ONLY_SUBJECTS = new Set([
     'Number Work','Nursery Rhymes & Stories','Activity / Free Play','EVS',
   ])
+  // Pre-primary-only subjects — exclude when there are no pre-primary sections.
+  const PREK_ONLY_SUBJECTS = new Set([
+    'Number Work','Nursery Rhymes & Stories','Activity / Free Play',
+  ])
   // Subjects that are lower-school focused (drop when school is XI-XII only)
   const PRESRSEC_SUBJECTS = new Set([
     'Science','Social Studies','Hindi','Sanskrit / MIL',
@@ -250,6 +254,10 @@ function buildDefaultSubjects(board: CurriculumBoard = 'CBSE', sections: Section
       if (presentGroups.size > 0 && !presentGroups.has('srSec')) {
         // No sr-sec sections — drop sr-sec-only subjects
         if (SRSEC_ONLY_SUBJECTS.has(d.name)) return false
+      }
+      if (presentGroups.size > 0 && !presentGroups.has('preK')) {
+        // No pre-primary sections — drop pre-primary-only subjects
+        if (PREK_ONLY_SUBJECTS.has(d.name)) return false
       }
       return true
     })
