@@ -74,6 +74,52 @@ function buildDefaultSections(): Section[] {
   return out
 }
 
+// ─── Range-aware section builder (respects the onboarding class range) ────────
+const FULL_GRADE_ORDER = ['Nursery','LKG','UKG','I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII']
+function normRangeGrade(g?: string): string { return (g ?? '').trim().replace(/^class\s+/i, '') }
+
+/** Default section suffixes for a grade (matches buildDefaultSections). */
+function sectionSuffixes(grade: string): string[] {
+  if (['Nursery','LKG','UKG','I','II','III','IV','V'].includes(grade)) return ['A','B','C']
+  if (['XI','XII'].includes(grade))                                    return ['Sci-A','Sci-B','Com-A','Arts']
+  return ['A','B','C','D'] // VI–X
+}
+
+/** Grades belonging to a configured grade-group key (e.g. "primary" → I–V). */
+function gradesForGroup(group: string): string[] {
+  const k = group.toLowerCase().replace(/[^a-z]/g, '')
+  if (k.startsWith('prek') || k.startsWith('prep') || k.startsWith('nursery') || k.startsWith('kinder')) return ['Nursery','LKG','UKG']
+  if (k.startsWith('primary'))                       return ['I','II','III','IV','V']
+  if (k.startsWith('middle') || k.startsWith('upper')) return ['VI','VII','VIII']
+  if (k.startsWith('srsec') || k.startsWith('senior')) return ['XI','XII']
+  if (k.startsWith('secondary'))                     return ['IX','X']
+  return []
+}
+
+/** Grades in the configured range: explicit grades → from/to → grade groups. */
+function rangeGradesFromConfig(cfg: any): string[] {
+  const explicit = Array.isArray(cfg?.grades) ? cfg.grades.map(normRangeGrade).filter(Boolean) : []
+  if (explicit.length) return explicit
+  const fi = FULL_GRADE_ORDER.indexOf(normRangeGrade(cfg?.fromGrade))
+  const ti = FULL_GRADE_ORDER.indexOf(normRangeGrade(cfg?.toGrade))
+  if (fi >= 0 && ti >= fi) return FULL_GRADE_ORDER.slice(fi, ti + 1)
+  if (Array.isArray(cfg?.gradeGroups) && cfg.gradeGroups.length) {
+    const grades = cfg.gradeGroups.flatMap((g: string) => gradesForGroup(g))
+    if (grades.length) return grades
+  }
+  return []
+}
+
+function buildSectionsForGrades(grades: string[]): Section[] {
+  const out: Section[] = []
+  grades.forEach(g =>
+    sectionSuffixes(g).forEach(s =>
+      out.push({ id: makeId(), name: `${g}-${s}`, grade: g, room: `Room ${100 + out.length + 1}`, classTeacher: '' } as Section),
+    ),
+  )
+  return out
+}
+
 /**
  * Build sections from the class list configured in Shift & Timing (Step 1).
  * Creates `sectionsPerClass` sections per class.
@@ -553,11 +599,14 @@ export function StepResourcesV2() {
   const configuredStreamMap = (config as any).configuredClassStreamMap as
     Record<string, string | string[]> | undefined
 
-  /** Build sections using Step-1 classes when available, otherwise fall back to default. */
-  const buildSections = (perClass = 3) =>
-    configuredClassDefs?.length
-      ? buildSectionsFromDefs(configuredClassDefs, configuredStreamMap ?? {}, perClass)
-      : buildDefaultSections()
+  /** Build sections: prefer Step-2 class defs, else the onboarding class range,
+   *  else (no range configured) the full default set. */
+  const buildSections = (perClass = 3) => {
+    if (configuredClassDefs?.length)
+      return buildSectionsFromDefs(configuredClassDefs, configuredStreamMap ?? {}, perClass)
+    const rangeGrades = rangeGradesFromConfig(config as any)
+    return rangeGrades.length ? buildSectionsForGrades(rangeGrades) : buildDefaultSections()
+  }
 
   // Auto-seed sections on first mount when the store is still empty
   // (happens right after Save & Continue from Shift & Timing)

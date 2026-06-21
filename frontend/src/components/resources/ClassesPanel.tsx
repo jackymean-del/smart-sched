@@ -36,6 +36,15 @@ function normalizeGrade(g?: string): string { return (g ?? '').trim().replace(/^
 
 /** The grades to seed when "Create smartly" is used — from the onboarding
  *  range (config.grades, else config.fromGrade/toGrade), with a sane fallback. */
+function gradesForGroup(group: string): string[] {
+  const k = group.toLowerCase().replace(/[^a-z]/g, '')
+  if (k.startsWith('prek') || k.startsWith('prep') || k.startsWith('nursery') || k.startsWith('kinder')) return ['Nursery','LKG','UKG']
+  if (k.startsWith('primary'))                        return ['I','II','III','IV','V']
+  if (k.startsWith('middle') || k.startsWith('upper')) return ['VI','VII','VIII']
+  if (k.startsWith('srsec') || k.startsWith('senior')) return ['XI','XII']
+  if (k.startsWith('secondary'))                      return ['IX','X']
+  return []
+}
 function smartRangeGrades(): string[] {
   const cfg = useTimetableStore.getState().config as any
   const explicit = Array.isArray(cfg?.grades) ? cfg.grades.map(normalizeGrade).filter(Boolean) : []
@@ -43,6 +52,10 @@ function smartRangeGrades(): string[] {
   const fi = GRADE_ORDER.indexOf(normalizeGrade(cfg?.fromGrade))
   const ti = GRADE_ORDER.indexOf(normalizeGrade(cfg?.toGrade))
   if (fi >= 0 && ti >= fi) return GRADE_ORDER.slice(fi, ti + 1)
+  if (Array.isArray(cfg?.gradeGroups) && cfg.gradeGroups.length) {
+    const grades = cfg.gradeGroups.flatMap((g: string) => gradesForGroup(g))
+    if (grades.length) return grades
+  }
   return GRADE_ORDER.slice(3, 13) // fallback: Class I–X
 }
 
