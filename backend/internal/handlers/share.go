@@ -1,14 +1,27 @@
 package handlers
 
 import (
+	"crypto/rand"
 	"encoding/json"
+	"fmt"
 	"log/slog"
+	"math/big"
 	"net/mail"
 	"strings"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/google/uuid"
+	"github.com/jackymean-del/smart-sched/internal/mailer"
 )
+
+// gen6 returns a zero-padded, cryptographically-random 6-digit code.
+func gen6() string {
+	n, err := rand.Int(rand.Reader, big.NewInt(1_000_000))
+	if err != nil {
+		return "000000"
+	}
+	return fmt.Sprintf("%06d", n.Int64())
+}
 
 // normalizeEmails trims, lower-cases, validates and de-duplicates a list.
 func normalizeEmails(in []string) []string {
@@ -147,6 +160,87 @@ func (h *Handler) AccessShare(c fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusNotFound, "this share link is invalid or has expired")
 	}
 
+	if visibility == "restricted" && !contains(allowed, email) {
+		return fiber.NewError(fiber.StatusForbidden, "this email doesn’t have access to this timetable")
+	}
+
+	h.bumpViews(c, token)
+	return c.JSON(fiber.Map{"title": title, "timetable": json.RawMessage(payload)})
+}
+
+// RequestShareCode emails a one-time code to an allow-listed email so the
+// viewer can prove ownership before seeing a restricted share. Public.
+func (h *Handler) RequestShareCode(c fiber.Ctx) error {
+	token := c.Params("token")
+	var body struct {
+		Email string `json:"email"`
+	}
+	if err := c.Bind().JSON(&body); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid body")
+	}
+	email := strings.ToLower(strings.TrimSpace(body.Email))
+	if email == "" {
+		return fiber.NewError(fiber.StatusBadRequest, "email is required")
+	}
+
+	_, visibility, _, allowed, err := h.shareRow(c, token)
+	if err != nil {
+		return fiber.NewError(fiber.StatusNotFound, "this share link is invalid or has expired")
+	}
+	if visibility != "restricted" {
+		return c.JSON(fiber.Map{"sent": false, "public": true})
+	}
+	if !contains(allowed, email) {
+		return fiber.NewError(fiber.StatusForbidden, "this email doesn’t have access to this timetable")
+	}
+
+	code := gen6()
+	if _, err := h.db.Exec(c.Context(), `
+		INSERT INTO share_access_codes (token, email, code, expires_at)
+		VALUES ($1, $2, $3, NOW() + INTERVAL '10 minutes')`,
+		token, email, code,
+	); err != nil {
+		slog.Error("share: code insert failed", "err", err)
+		return fiber.NewError(fiber.StatusInternalServerError, "could not send a code, please try again")
+	}
+
+	mailer.SendShareCode(email, code)
+	return c.JSON(fiber.Map{"sent": true})
+}
+
+// VerifyShareCode checks a one-time code and, if valid, returns the timetable.
+func (h *Handler) VerifyShareCode(c fiber.Ctx) error {
+	token := c.Params("token")
+	var body struct {
+		Email string `json:"email"`
+		Code  string `json:"code"`
+	}
+	if err := c.Bind().JSON(&body); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid body")
+	}
+	email := strings.ToLower(strings.TrimSpace(body.Email))
+	code := strings.TrimSpace(body.Code)
+	if email == "" || code == "" {
+		return fiber.NewError(fiber.StatusBadRequest, "email and code are required")
+	}
+
+	var ok bool
+	if err := h.db.QueryRow(c.Context(), `
+		SELECT EXISTS (
+			SELECT 1 FROM share_access_codes
+			WHERE token = $1 AND email = $2 AND code = $3 AND expires_at > NOW()
+		)`, token, email, code,
+	).Scan(&ok); err != nil || !ok {
+		return fiber.NewError(fiber.StatusBadRequest, "that code is invalid or has expired")
+	}
+
+	// One-time use — consume all codes for this token+email.
+	_, _ = h.db.Exec(c.Context(), `DELETE FROM share_access_codes WHERE token = $1 AND email = $2`, token, email)
+
+	title, visibility, payload, allowed, err := h.shareRow(c, token)
+	if err != nil {
+		return fiber.NewError(fiber.StatusNotFound, "this share link is invalid or has expired")
+	}
 	if visibility == "restricted" && !contains(allowed, email) {
 		return fiber.NewError(fiber.StatusForbidden, "this email doesn’t have access to this timetable")
 	}

@@ -106,8 +106,10 @@ func main() {
 
 	// Public endpoints (no auth)
 	app.Post("/api/contact", h.SubmitContact)
-	app.Get("/api/share/:token", h.GetShare)          // public read-only timetable shares
-	app.Post("/api/share/:token/access", h.AccessShare) // unlock a restricted share by email
+	app.Get("/api/share/:token", h.GetShare)                    // public read-only timetable shares
+	app.Post("/api/share/:token/access", h.AccessShare)         // unlock a restricted share by email (no verification)
+	app.Post("/api/share/:token/request-code", h.RequestShareCode) // email a one-time code (magic-link)
+	app.Post("/api/share/:token/verify", h.VerifyShareCode)     // verify the code, return the timetable
 
 	api := app.Group("/api/v1", middleware.Auth())
 

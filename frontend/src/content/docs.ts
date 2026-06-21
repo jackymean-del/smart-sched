@@ -205,7 +205,7 @@ export const DOC_ARTICLES: DocArticle[] = [
           {
             ul: [
               'Anyone with the link — a public, read-only view, no account needed.',
-              'Specific people — only the email addresses you list can open it; viewers confirm their email first.',
+              'Specific people — only the email addresses you list can open it; viewers verify their email with a one-time code first.',
             ],
           },
           { p: 'The shared link is a frozen snapshot, so later edits don’t change what others see.' },

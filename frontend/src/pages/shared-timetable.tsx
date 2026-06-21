@@ -12,8 +12,10 @@ export function SharedTimetablePage() {
   const [title, setTitle] = useState('Shared timetable')
   const [status, setStatus] = useState<'loading' | 'ready' | 'restricted' | 'error'>('loading')
 
-  // Email gate (restricted shares)
+  // Email gate (restricted shares) — two steps: request code, then verify it
   const [email, setEmail] = useState('')
+  const [code, setCode] = useState('')
+  const [gateStep, setGateStep] = useState<'email' | 'code'>('email')
   const [unlocking, setUnlocking] = useState(false)
   const [accessError, setAccessError] = useState('')
 
@@ -42,26 +44,48 @@ export function SharedTimetablePage() {
     }
   }, [token])
 
-  const unlock = async (e: React.FormEvent) => {
+  const requestCode = async (e: React.FormEvent) => {
     e.preventDefault()
     setUnlocking(true)
     setAccessError('')
     try {
-      const res = await fetch(`/api/share/${token}/access`, {
+      const res = await fetch(`/api/share/${token}/request-code`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
       })
       if (!res.ok) {
         const d = await res.json().catch(() => ({}))
-        throw new Error(d.error || 'This email doesn’t have access to this timetable.')
+        throw new Error(d.error || 'Could not send a code, please try again.')
+      }
+      setGateStep('code')
+    } catch (err) {
+      setAccessError(err instanceof Error ? err.message : 'Could not send a code.')
+    } finally {
+      setUnlocking(false)
+    }
+  }
+
+  const verifyCode = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setUnlocking(true)
+    setAccessError('')
+    try {
+      const res = await fetch(`/api/share/${token}/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, code }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        throw new Error(d.error || 'That code is invalid or has expired.')
       }
       const json = await res.json()
       setData(json.timetable as SharedTimetable)
       setTitle(json.title || 'Shared timetable')
       setStatus('ready')
     } catch (err) {
-      setAccessError(err instanceof Error ? err.message : 'Could not unlock this timetable.')
+      setAccessError(err instanceof Error ? err.message : 'Could not verify this code.')
     } finally {
       setUnlocking(false)
     }
@@ -105,27 +129,63 @@ export function SharedTimetablePage() {
           <div className="mx-auto max-w-[420px] py-20 text-center">
             <div className="text-4xl">🔒</div>
             <h1 className="mt-4 text-[24px] font-normal text-[#13111E]">{title}</h1>
-            <p className="mt-2 text-[15px] leading-[1.7] text-[#8B87AD]">
-              This timetable is shared privately. Enter your email to confirm you have access.
-            </p>
-            <form onSubmit={unlock} className="mx-auto mt-6 flex max-w-[360px] flex-col gap-3">
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                placeholder="you@institution.edu"
-                className="w-full rounded-lg border border-[#E8E4FF] bg-white px-3.5 py-[11px] text-sm text-[#13111E] outline-none focus:border-[#7C6FE0]"
-              />
-              <button
-                type="submit"
-                disabled={unlocking}
-                className="rounded-[9px] bg-[#7C6FE0] px-6 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {unlocking ? 'Checking…' : 'View timetable'}
-              </button>
-              {accessError && <p className="text-[12px] text-[#DC2626]">{accessError}</p>}
-            </form>
+
+            {gateStep === 'email' ? (
+              <>
+                <p className="mt-2 text-[15px] leading-[1.7] text-[#8B87AD]">
+                  This timetable is shared privately. Enter your email and we’ll send you a one-time code.
+                </p>
+                <form onSubmit={requestCode} className="mx-auto mt-6 flex max-w-[360px] flex-col gap-3">
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    placeholder="you@institution.edu"
+                    className="w-full rounded-lg border border-[#E8E4FF] bg-white px-3.5 py-[11px] text-sm text-[#13111E] outline-none focus:border-[#7C6FE0]"
+                  />
+                  <button
+                    type="submit"
+                    disabled={unlocking}
+                    className="rounded-[9px] bg-[#7C6FE0] px-6 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {unlocking ? 'Sending…' : 'Send me a code'}
+                  </button>
+                  {accessError && <p className="text-[12px] text-[#DC2626]">{accessError}</p>}
+                </form>
+              </>
+            ) : (
+              <>
+                <p className="mt-2 text-[15px] leading-[1.7] text-[#8B87AD]">
+                  We sent a 6-digit code to <span className="font-semibold text-[#13111E]">{email}</span>. Enter it below.
+                </p>
+                <form onSubmit={verifyCode} className="mx-auto mt-6 flex max-w-[360px] flex-col gap-3">
+                  <input
+                    inputMode="numeric"
+                    required
+                    value={code}
+                    onChange={e => setCode(e.target.value)}
+                    placeholder="123456"
+                    className="w-full rounded-lg border border-[#E8E4FF] bg-white px-3.5 py-[11px] text-center text-lg tracking-[0.3em] text-[#13111E] outline-none focus:border-[#7C6FE0]"
+                  />
+                  <button
+                    type="submit"
+                    disabled={unlocking}
+                    className="rounded-[9px] bg-[#7C6FE0] px-6 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {unlocking ? 'Checking…' : 'View timetable'}
+                  </button>
+                  {accessError && <p className="text-[12px] text-[#DC2626]">{accessError}</p>}
+                  <button
+                    type="button"
+                    onClick={() => { setGateStep('email'); setCode(''); setAccessError('') }}
+                    className="text-[12px] font-semibold text-[#7C6FE0]"
+                  >
+                    Use a different email
+                  </button>
+                </form>
+              </>
+            )}
           </div>
         )}
 
