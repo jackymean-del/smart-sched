@@ -113,6 +113,19 @@ Vite proxies `/api` to `localhost:8080`, and the API's CORS already allows
 
 The marketing site / SPA is deployed separately (Vercel static build of
 `frontend/`). For the contact form and share links to work in production, the
-deployed frontend must be able to reach the Go API (e.g. a Vercel rewrite from
-`/api/*` to the hosted API, or serving the SPA from the Go container as in this
-compose). Locally, everything is wired through the nginx `/api` proxy.
+deployed frontend must be able to reach the Go API. This is wired via a Vercel
+rewrite in `vercel.json`:
+
+```jsonc
+"rewrites": [
+  { "source": "/api/:path*", "destination": "https://api.schedu.bhusku.com/api/:path*" },
+  { "source": "/(.*)",       "destination": "/index.html" }
+]
+```
+
+**Action required:** change `https://api.schedu.bhusku.com` to wherever your Go
+API is actually hosted (Fly.io, Railway, Render, a VPS, etc.). The `/api`
+rewrite must come **before** the SPA catch-all. Until the API is deployed and
+this host is correct, the contact form and share links fall back gracefully
+(email fallback / "link not found"). Locally, everything is wired through the
+nginx `/api` proxy instead.
