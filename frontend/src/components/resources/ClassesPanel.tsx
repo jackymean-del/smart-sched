@@ -6,6 +6,7 @@
 
 import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react'
 import type { Section } from '@/types'
+import { useTimetableStore } from '@/store/timetableStore'
 import { Layers, X, CalendarRange, ChevronDown } from 'lucide-react'
 import {
   P, P_D, P_L, P_B,
@@ -29,6 +30,21 @@ const inp: React.CSSProperties = {
 
 const GRADE_ORDER = ['Nursery','LKG','UKG','I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII']
 function gradeKey(g: string) { const i = GRADE_ORDER.indexOf(g); return i >= 0 ? i : 100 + g.charCodeAt(0) }
+
+/** Normalise a grade label ("Class I" → "I") for matching against GRADE_ORDER. */
+function normalizeGrade(g?: string): string { return (g ?? '').trim().replace(/^class\s+/i, '') }
+
+/** The grades to seed when "Create smartly" is used — from the onboarding
+ *  range (config.grades, else config.fromGrade/toGrade), with a sane fallback. */
+function smartRangeGrades(): string[] {
+  const cfg = useTimetableStore.getState().config as any
+  const explicit = Array.isArray(cfg?.grades) ? cfg.grades.map(normalizeGrade).filter(Boolean) : []
+  if (explicit.length) return explicit
+  const fi = GRADE_ORDER.indexOf(normalizeGrade(cfg?.fromGrade))
+  const ti = GRADE_ORDER.indexOf(normalizeGrade(cfg?.toGrade))
+  if (fi >= 0 && ti >= fi) return GRADE_ORDER.slice(fi, ti + 1)
+  return GRADE_ORDER.slice(3, 13) // fallback: Class I–X
+}
 
 // ─── Class-group hierarchy (Group → Grade → Section) ──────────────────────────
 const GROUP_DEFS: Array<{ name: string; emoji: string; grades: string[] }> = [
@@ -871,6 +887,21 @@ export function ClassesPanel({ sections, setSections, onScopeClick }: {
   const [showStreamCreate, setShowStreamCreate] = useState(false)
   const [showAddGroup,     setShowAddGroup]     = useState(false)
   const [importOpen,       setImportOpen]       = useState(false)
+  const [manual,           setManual]           = useState(false)
+
+  // "Create smartly" — auto-seed grade sections from the onboarding range.
+  // Pre-primary grades get one section; others get A–D. All editable after.
+  const smartCreate = () => {
+    const preK = new Set(['Nursery', 'LKG', 'UKG'])
+    const out: SectionExt[] = []
+    smartRangeGrades().forEach(g => {
+      const isPreK = preK.has(normalizeGrade(g))
+      ;(isPreK ? ['A'] : ['A', 'B', 'C', 'D']).forEach(t =>
+        out.push({ id: makeId(), name: `${g}-${t}`, grade: g, room: '', classTeacher: '', strength: isPreK ? 25 : 40 } as SectionExt),
+      )
+    })
+    if (out.length) setSections(out as unknown as Section[])
+  }
 
   // Dynamic group definitions — user can rename or create new groups
   const [groupDefs, setGroupDefs] = useState(() => GROUP_DEFS.map(g => ({ ...g })))
@@ -1256,11 +1287,31 @@ export function ClassesPanel({ sections, setSections, onScopeClick }: {
 
       {/* Table */}
       <div style={TABLE_CARD}>
-        {sections.length === 0 && !search ? (
+        {sections.length === 0 && !search && !manual ? (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '40px 20px', textAlign: 'center' }}>
+            <div style={{ fontSize: 30, marginBottom: 8 }}>🎓</div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#13111E', marginBottom: 6 }}>No classes yet</div>
+            <div style={{ fontSize: 12.5, color: '#8B87AD', maxWidth: 420, lineHeight: 1.6, marginBottom: 20 }}>
+              Let schedU create starter classes from your class range — pre-primary gets one section, other grades get A–D. Rename and tune afterwards.
+            </div>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
+              <button onClick={smartCreate}
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2, padding: '14px 22px', borderRadius: 12, border: 'none', background: '#7C6FE0', color: '#fff', cursor: 'pointer', fontFamily: 'inherit', minWidth: 200, boxShadow: '0 4px 14px rgba(124,111,224,0.32)' }}>
+                <span style={{ fontSize: 14, fontWeight: 800 }}>✨ Let me create smartly</span>
+                <span style={{ fontSize: 11.5, opacity: 0.9 }}>Classes for your whole range</span>
+              </button>
+              <button onClick={() => setManual(true)}
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2, padding: '14px 22px', borderRadius: 12, border: '1px solid #E8E4FF', background: '#fff', color: '#13111E', cursor: 'pointer', fontFamily: 'inherit', minWidth: 200 }}>
+                <span style={{ fontSize: 14, fontWeight: 800 }}>✏️ Add manually</span>
+                <span style={{ fontSize: 11.5, color: '#8B87AD' }}>Start with a blank table</span>
+              </button>
+            </div>
+          </div>
+        ) : sections.length === 0 && !search ? (
           <div style={{ textAlign: 'center', padding: '44px 0' }}>
             <div style={{ fontSize: 28, marginBottom: 7 }}>🎓</div>
             <div style={{ fontSize: 12.5, fontWeight: 700, color: '#9896B5', marginBottom: 4 }}>No classes yet</div>
-            <div style={{ fontSize: 11.5, color: '#C4C0DC' }}>Use "Bulk Create" to generate grade sections quickly.</div>
+            <div style={{ fontSize: 11.5, color: '#C4C0DC' }}>Use “Bulk Create”, “+ Stream” or “+ Group” above to add classes.</div>
           </div>
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
