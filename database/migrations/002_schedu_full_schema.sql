@@ -150,12 +150,19 @@ CREATE TABLE IF NOT EXISTS classrooms (
 );
 CREATE INDEX IF NOT EXISTS classrooms_org_idx ON classrooms(organization_id);
 
--- Now add FK constraints to classes
-ALTER TABLE classes
-  ADD CONSTRAINT IF NOT EXISTS classes_room_fk
-    FOREIGN KEY (room_id) REFERENCES classrooms(id) ON DELETE SET NULL,
-  ADD CONSTRAINT IF NOT EXISTS classes_teacher_fk
-    FOREIGN KEY (class_teacher_id) REFERENCES teachers(id) ON DELETE SET NULL;
+-- Now add FK constraints to classes (Postgres has no ADD CONSTRAINT IF NOT
+-- EXISTS, so guard each with a DO block to stay idempotent).
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'classes_room_fk') THEN
+    ALTER TABLE classes ADD CONSTRAINT classes_room_fk
+      FOREIGN KEY (room_id) REFERENCES classrooms(id) ON DELETE SET NULL;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'classes_teacher_fk') THEN
+    ALTER TABLE classes ADD CONSTRAINT classes_teacher_fk
+      FOREIGN KEY (class_teacher_id) REFERENCES teachers(id) ON DELETE SET NULL;
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS students (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),

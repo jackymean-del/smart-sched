@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v3"
@@ -83,15 +84,12 @@ func main() {
 	app.Use(recover.New())
 	app.Use(logger.New())
 	app.Use(cors.New(cors.Config{
-		AllowOrigins: []string{getenv("ALLOWED_ORIGINS", "http://localhost:5173")},
+		// ALLOWED_ORIGINS is a comma-separated list — split it into individual
+		// origins (Fiber rejects a single string containing commas).
+		AllowOrigins: splitAndTrim(getenv("ALLOWED_ORIGINS", "http://localhost:5173")),
 		AllowHeaders: []string{"Origin", "Content-Type", "Accept", "Authorization"},
 		AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 	}))
-
-	// Serve built frontend (Fiber v3 — Static is removed; use a 404 fallback)
-	app.Get("/*", func(c fiber.Ctx) error {
-		return c.SendFile("../frontend/dist/" + c.Params("*"))
-	})
 
 	// Health
 	app.Get("/health", func(c fiber.Ctx) error {
@@ -150,6 +148,12 @@ func main() {
 	// POST /curriculum/reset — restore built-in seed templates
 	api.Post("/curriculum/reset",  cur.ResetTemplates)
 
+	// Serve built frontend LAST so it only catches paths not handled by an
+	// explicit route above (otherwise this greedy wildcard shadows the API).
+	app.Get("/*", func(c fiber.Ctx) error {
+		return c.SendFile("../frontend/dist/" + c.Params("*"))
+	})
+
 	port := getenv("PORT", "8080")
 	slog.Info("SmartSched API starting", "port", port)
 	if err := app.Listen(":" + port); err != nil {
@@ -164,6 +168,17 @@ func customError(c fiber.Ctx, err error) error {
 		code = e.Code
 	}
 	return c.Status(code).JSON(fiber.Map{"error": err.Error(), "code": code})
+}
+
+// splitAndTrim turns "a, b ,c" into ["a","b","c"], dropping empties.
+func splitAndTrim(s string) []string {
+	out := []string{}
+	for _, p := range strings.Split(s, ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 func getenv(key, fallback string) string {
