@@ -1,13 +1,11 @@
 /**
- * Reusable Export control — a dropdown offering Excel export and Print/PDF with
- * orientation + paper-size options. Drop it on any page; pass a lazy `sheets`
- * builder for the Excel data.
+ * Reusable export controls — a simple Export dropdown (Excel + PDF) plus a
+ * prominent Print button. Paper size + orientation are chosen in the printer
+ * dialog, so there are no size/orientation options here. Drop it on any page;
+ * pass a lazy `sheets` builder for the data.
  */
 import { useState, useRef, useEffect } from 'react'
-import {
-  exportSheetsToXLSX, printSheets,
-  type ExportSheet, type Orientation, type PaperSize,
-} from '@/lib/exportData'
+import { exportSheetsToXLSX, printSheets, type ExportSheet } from '@/lib/exportData'
 
 export function ExportControls({ filename, sheets, title = 'Report' }: {
   filename: string
@@ -16,8 +14,6 @@ export function ExportControls({ filename, sheets, title = 'Report' }: {
   title?: string
 }) {
   const [open, setOpen] = useState(false)
-  const [orientation, setOrientation] = useState<Orientation>('portrait')
-  const [paper, setPaper] = useState<PaperSize>('A4')
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -26,54 +22,40 @@ export function ExportControls({ filename, sheets, title = 'Report' }: {
     return () => document.removeEventListener('mousedown', h)
   }, [])
 
-  const sel: React.CSSProperties = {
-    width: '100%', marginTop: 3, padding: '4px 6px', borderRadius: 6,
-    border: '1px solid #E5EBF5', fontSize: 11.5, color: '#374151', background: '#fff',
+  const menuItem: React.CSSProperties = {
+    display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '9px 14px',
+    border: 'none', background: 'none', textAlign: 'left', fontSize: 12.5, color: '#374151', cursor: 'pointer',
   }
 
   return (
-    <div ref={ref} style={{ position: 'relative' }}>
-      <button onClick={() => setOpen(o => !o)}
-        style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', border: '1px solid #E5EBF5', borderRadius: 7, background: '#fff', color: '#374151', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-        ↑ Export ▾
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      {/* Export dropdown — Excel + PDF */}
+      <div ref={ref} style={{ position: 'relative' }}>
+        <button onClick={() => setOpen(o => !o)}
+          style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '8px 14px', border: '1px solid #E5EBF5', borderRadius: 8, background: '#fff', color: '#374151', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>
+          ↑ Export ▾
+        </button>
+        {open && (
+          <div onClick={e => e.stopPropagation()}
+            style={{ position: 'absolute', top: 'calc(100% + 4px)', right: 0, zIndex: 300, background: '#fff', border: '1px solid #E5EBF5', borderRadius: 10, boxShadow: '0 8px 30px rgba(0,0,0,0.12)', minWidth: 200, padding: '6px 0' }}>
+            <button style={menuItem}
+              onClick={() => { exportSheetsToXLSX(filename, sheets()); setOpen(false) }}>
+              <span style={{ fontSize: 15 }}>📊</span> Export to Excel
+            </button>
+            <button style={menuItem}
+              onClick={() => { printSheets(sheets(), { title }); setOpen(false) }}>
+              <span style={{ fontSize: 15 }}>📄</span> Export to PDF
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Prominent Print button — opens the browser print / Save-as-PDF dialog */}
+      <button onClick={() => printSheets(sheets(), { title })}
+        title="Print this page (choose paper size & orientation in the print dialog)"
+        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 20px', border: 'none', borderRadius: 8, background: '#7C6FE0', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 14px rgba(124,111,224,0.35)' }}>
+        🖨️ Print
       </button>
-      {open && (
-        <div onClick={e => e.stopPropagation()}
-          style={{ position: 'absolute', top: 'calc(100% + 4px)', right: 0, zIndex: 300, background: '#fff', border: '1px solid #E5EBF5', borderRadius: 10, boxShadow: '0 8px 30px rgba(0,0,0,0.12)', minWidth: 230, padding: '6px 0' }}>
-          <button
-            onClick={() => { exportSheetsToXLSX(filename, sheets()); setOpen(false) }}
-            style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 14px', border: 'none', background: 'none', textAlign: 'left', fontSize: 12, color: '#374151', cursor: 'pointer' }}>
-            <span style={{ fontSize: 14 }}>📊</span> Export to Excel
-          </button>
-          <div style={{ height: 1, background: '#E5EBF5', margin: '6px 0' }} />
-          <div style={{ padding: '2px 14px 4px', fontSize: 10, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-            Print / PDF
-          </div>
-          <div style={{ display: 'flex', gap: 8, padding: '2px 14px 8px' }}>
-            <label style={{ flex: 1, fontSize: 10, color: '#94A3B8', fontWeight: 600 }}>
-              Orientation
-              <select value={orientation} onChange={e => setOrientation(e.target.value as Orientation)} style={sel}>
-                <option value="portrait">Portrait</option>
-                <option value="landscape">Landscape</option>
-              </select>
-            </label>
-            <label style={{ flex: 1, fontSize: 10, color: '#94A3B8', fontWeight: 600 }}>
-              Paper
-              <select value={paper} onChange={e => setPaper(e.target.value as PaperSize)} style={sel}>
-                <option value="A4">A4</option>
-                <option value="A3">A3</option>
-                <option value="Letter">Letter</option>
-                <option value="Legal">Legal</option>
-              </select>
-            </label>
-          </div>
-          <button
-            onClick={() => { printSheets(sheets(), orientation, paper, { title }); setOpen(false) }}
-            style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 14px', border: 'none', background: 'none', textAlign: 'left', fontSize: 12, color: '#374151', cursor: 'pointer' }}>
-            <span style={{ fontSize: 14 }}>🖨️</span> Print…
-          </button>
-        </div>
-      )}
     </div>
   )
 }

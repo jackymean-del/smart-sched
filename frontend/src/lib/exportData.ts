@@ -62,12 +62,12 @@ export function institutionInfo(): { name: string; logo?: string; address?: stri
 
 /**
  * Print a branded document built from `sheets`. Each sheet renders as a titled
- * table. Hidden-iframe based, so no pop-up blocker and no app chrome.
+ * table. Hidden-iframe based, so no pop-up blocker and no app chrome. Paper
+ * size + orientation are chosen in the printer dialog (we set @page margin
+ * only), so they're no longer passed in.
  */
 export function printSheets(
   sheets: ExportSheet[],
-  orientation: Orientation,
-  paper: PaperSize,
   opts: { title: string },
 ): void {
   const inst = institutionInfo()
@@ -107,7 +107,7 @@ export function printSheets(
   // the data tables live inside a single tbody cell and flow across pages.
   const html = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(inst.name)} — ${esc(opts.title)}</title>
 <style>
-  @page { size: ${paper} ${orientation}; margin: 12mm; }
+  @page { margin: 12mm; }
   * { box-sizing: border-box; }
   html, body { margin: 0; }
   body { font-family: 'Plus Jakarta Sans', Arial, Helvetica, sans-serif; color: #13111E; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
