@@ -35,6 +35,24 @@ function calcTimes(periods: any[], config: any): Map<string,{start:string;end:st
   return map
 }
 
+// ── Compact a list of section names ────────────────────────
+// Groups sections sharing a prefix (everything before the last "-") and merges
+// their suffixes, e.g. ["I-A","I-B","II-A","II-B"] → "I-A&B, II-A&B".
+function compactSections(secs: string[]): string {
+  const groups = new Map<string, string[]>()
+  for (const s of secs) {
+    const i = s.lastIndexOf("-")
+    const prefix = i > 0 ? s.slice(0, i) : s
+    const suffix = i > 0 ? s.slice(i + 1).trim() : ""
+    const arr = groups.get(prefix) ?? []
+    if (suffix && !arr.includes(suffix)) arr.push(suffix)
+    groups.set(prefix, arr)
+  }
+  return [...groups.entries()]
+    .map(([p, sfx]) => (sfx.length ? `${p}-${sfx.join("&")}` : p))
+    .join(", ")
+}
+
 // ── Class key from section name ────────────────────────────
 // e.g. "Nursery-A" → "nur", "LKG-B" → "lkg", "XI-Sci-A" → "xi"
 function getSectionClassKey(sectionName: string): string {
@@ -2218,6 +2236,60 @@ export function TimetablePage() {
     )
   }
 
+  // Compact "subject (classes)" summary of everything a teacher is allotted,
+  // derived from the live timetable — e.g. "Maths (I-A&B, II-A&B), Physics (XI-C)".
+  const teacherSubjectSummary = (tn: string): string => {
+    const map = new Map<string, string[]>()  // subject → ordered, unique sections
+    const seen = new Set<string>()
+    for (const sec of sections) {
+      for (const d of config.workDays) {
+        const day = classTT[sec.name]?.[d]
+        if (!day) continue
+        for (const pid in day) {
+          const c: any = (day as any)[pid]
+          if (!c || !cellHasTeacher(c, tn)) continue
+          const subj = cellSubjectForTeacher(c, tn) || c.subject
+          if (!subj) continue
+          const key = `${subj}|${sec.name}`
+          if (seen.has(key)) continue
+          seen.add(key)
+          const arr = map.get(subj) ?? []
+          arr.push(sec.name)
+          map.set(subj, arr)
+        }
+      }
+    }
+    return [...map.entries()].map(([subj, secs]) => `${subj} (${compactSections(secs)})`).join(", ")
+  }
+
+  // Compact "subject (classes)" summary of everything allotted to a room.
+  const roomSubjectSummary = (roomName: string): string => {
+    const map = new Map<string, string[]>()
+    const seen = new Set<string>()
+    for (const sec of sections) {
+      for (const d of config.workDays) {
+        const day = classTT[sec.name]?.[d]
+        if (!day) continue
+        for (const pid in day) {
+          const c: any = (day as any)[pid]
+          if (!c) continue
+          const entries: { room?: string; subject?: string }[] = [{ room: c.room, subject: c.subject }]
+          if (Array.isArray(c.options)) for (const o of c.options) entries.push({ room: o.room, subject: o.subject })
+          for (const e of entries) {
+            if (e.room !== roomName || !e.subject) continue
+            const key = `${e.subject}|${sec.name}`
+            if (seen.has(key)) continue
+            seen.add(key)
+            const arr = map.get(e.subject) ?? []
+            arr.push(sec.name)
+            map.set(e.subject, arr)
+          }
+        }
+      }
+    }
+    return [...map.entries()].map(([subj, secs]) => `${subj} (${compactSections(secs)})`).join(", ")
+  }
+
   // ═══════════════════════════════════════════════════════════
   // RENDER: Teacher Timetable (Normal)
   // ═══════════════════════════════════════════════════════════
@@ -2235,7 +2307,8 @@ export function TimetablePage() {
     const draggedCellTeacher = dragItem ? classTT[dragItem.section]?.[dragItem.day]?.[dragItem.periodId]?.teacher : null
     const isSameTeacherDrag  = isDragging && draggedCellTeacher === tn
     const loadColor = pct>100?"#dc2626":pct>85?"#D4920E":"#7C6FE0"
-    const assignedStr = (st?.subjects ?? []).filter(s => s.includes("::")).map(s => { const [cls,sub]=s.split("::"); return `${cls}: ${sub}` }).join(" · ") || (st?.subjects??[]).join(", ") || "—"
+    const assignedStr = teacherSubjectSummary(tn)
+      || ((st?.subjects ?? []).filter(s => s.includes("::")).map(s => { const [cls,sub]=s.split("::"); return `${cls}: ${sub}` }).join(" · ") || (st?.subjects??[]).join(", ") || "—")
 
     // ── Use pre-computed teacher cache (avoids recomputation on drag re-renders) ──
     const cwBreaksTT   = cwBreaksGlobal
@@ -2833,7 +2906,7 @@ export function TimetablePage() {
       <div>
         <div style={{ padding:"12px 16px", background:"#FAFAFE", borderBottom:"1px solid #E8E4FF" }}>
           <div style={{ fontSize:15, fontWeight:700, color:"#1e293b" }}>🚪 {roomName}</div>
-          <div style={{ fontSize:11, color:"#4B5275" }}>Room occupancy schedule</div>
+          <div style={{ fontSize:11, color:"#4B5275", marginTop:2 }}>{roomSubjectSummary(roomName) || "Room occupancy schedule"}</div>
         </div>
         <div style={{ overflowX:"auto" }}>
           <table style={{ borderCollapse:"collapse", fontSize:11, width:"100%" }}>
@@ -3176,6 +3249,7 @@ export function TimetablePage() {
       <PrintPreview
         open
         title={typeLabel}
+        session={(config as any).academicYear}
         subtitle={`${typeLabel} · ${entities.length} timetable${entities.length !== 1 ? "s" : ""}`}
         items={items}
         onClose={() => setPrintJob(null)}
@@ -4305,7 +4379,7 @@ function SectionHeader({ name, classTeacher, meta }: { name:string; classTeacher
         <div style={{ fontSize:15, fontWeight:700, color:"#1e293b", fontFamily:"'Plus Jakarta Sans',Georgia,serif" }}>{name}</div>
         {classTeacher && <div style={{ fontSize:11, color:"#4B5275", marginTop:1 }}>Class Teacher: <strong>{classTeacher}</strong></div>}
       </div>
-      {meta && <div style={{ marginLeft:"auto", fontSize:11, color:"#8B87AD" }}>{meta}</div>}
+      {meta && <div className="tt-section-meta" style={{ marginLeft:"auto", fontSize:11, color:"#8B87AD" }}>{meta}</div>}
     </div>
   )
 }

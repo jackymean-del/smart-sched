@@ -11,8 +11,8 @@ import { useState, useEffect, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { institutionInfo, SCHEDU_MARK, type ExportSheet } from '@/lib/exportData'
 
-/** Institution header (always printed, foreground): logo + name + address + title. */
-export function InstitutionHeader({ title }: { title: string }) {
+/** Institution header (always printed, foreground): logo + name + address + title + session. */
+export function InstitutionHeader({ title, session }: { title: string; session?: string }) {
   const inst = institutionInfo()
   return (
     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, borderBottom: '2px solid #7C6FE0', paddingBottom: 10, marginBottom: 12 }}>
@@ -25,6 +25,7 @@ export function InstitutionHeader({ title }: { title: string }) {
       </div>
       <div style={{ textAlign: 'right', flexShrink: 0 }}>
         <div style={{ fontSize: 14, fontWeight: 700, color: '#7C6FE0' }}>{title}</div>
+        {session && <div style={{ fontSize: 11, color: '#8B87AD', marginTop: 2 }}>Session {session}</div>}
       </div>
     </div>
   )
@@ -79,10 +80,12 @@ export interface PrintItem { key: string; node: ReactNode }
  * (institution header + content + footer) that the printer can pack onto a page
  * (paper-saving) or isolate one-per-page. Renders nothing when `open` is false.
  */
-export function PrintPreview({ open, title, subtitle, items, onClose }: {
+export function PrintPreview({ open, title, session, subtitle, items, onClose }: {
   open: boolean
   /** Document title shown on the right of every header. */
   title: string
+  /** Academic session/year shown under the title (e.g. "2025-26"). */
+  session?: string
   /** Secondary text in the toolbar (e.g. "Master Data · 4 tables"). */
   subtitle?: string
   items: PrintItem[]
@@ -134,7 +137,7 @@ export function PrintPreview({ open, title, subtitle, items, onClose }: {
         <div className="schedu-print-root" data-saving={paperSaving ? 'true' : 'false'}>
           {items.map(it => (
             <div className="schedu-print-entity" key={it.key}>
-              <InstitutionHeader title={title} />
+              <InstitutionHeader title={title} session={session} />
               {it.node}
               <PrintFooter />
             </div>

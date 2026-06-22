@@ -182,6 +182,8 @@ select, input[type="checkbox"], input[type="radio"] { cursor: pointer; }
 .schedu-data-table thead th { background: #EDE9FF; color: #13111E; font-weight: 700; }
 .schedu-data-table tbody tr:nth-child(even) { background: #FAFAFE; }
 .schedu-data-empty { text-align: center; color: #8B87AD; font-style: italic; }
+/* The "N days/week · N periods/day" meta is hidden in the print document. */
+.schedu-print-root .tt-section-meta { display: none !important; }
 .schedu-print-fab {
   position: fixed; right: 28px; bottom: 26px; z-index: 4100;
   display: flex; align-items: center; gap: 8px;
