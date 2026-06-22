@@ -1,5 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback, useTransition } from "react"
+import { createPortal } from "react-dom"
 import { useTimetableStore } from "@/store/timetableStore"
+import { institutionInfo, SCHEDU_MARK } from "@/lib/exportData"
 import { EditCellModal } from "@/components/modals/EditCellModal"
 import { CalendarView } from "@/components/CalendarView"
 import { ORG_CONFIGS, getCountry, getSubjectColor } from "@/lib/orgData"
@@ -1300,9 +1302,13 @@ export function TimetablePage() {
   const [printPaper, setPrintPaper] = useState<"A4"|"A3"|"Letter"|"Legal">("A4")
 
   // ── PDF print trigger ────────────────────────────────────
+  // We render the live grids into a top-level portal (.schedu-print-root) and
+  // isolate it for print via display (see index.css). This guarantees ALL
+  // entities appear (no LazyCard / content-visibility skipping), each on a
+  // clean page with a branded header, fit to the chosen paper + orientation.
+  const [printJob, setPrintJob] = useState<{ type: "class"|"teacher"|"room"; scope: "combined"|"individual" } | null>(null)
+
   const triggerPrint = (type: "class"|"teacher"|"room", scope: "combined"|"individual") => {
-    document.body.setAttribute("data-print-type", type)
-    document.body.setAttribute("data-print-scope", scope)
     // Apply the chosen paper size + orientation via a dynamic @page rule.
     let pageStyle = document.getElementById("schedu-print-page") as HTMLStyleElement | null
     if (!pageStyle) {
@@ -1310,13 +1316,25 @@ export function TimetablePage() {
       pageStyle.id = "schedu-print-page"
       document.head.appendChild(pageStyle)
     }
-    pageStyle.textContent = `@page { size: ${printPaper} ${printOrientation}; margin: 8mm; }`
-    window.print()
-    setTimeout(() => {
-      document.body.removeAttribute("data-print-type")
-      document.body.removeAttribute("data-print-scope")
-    }, 1000)
+    pageStyle.textContent = `@page { size: ${printPaper} ${printOrientation}; margin: 10mm; }`
+    document.body.setAttribute("data-print-doc", type)
+    setPrintJob({ type, scope })
   }
+
+  // Once the print portal has mounted + laid out, open the print dialog, then
+  // tear the portal down again so it never lingers on screen.
+  useEffect(() => {
+    if (!printJob) return
+    let raf2 = 0
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        window.print()
+        document.body.removeAttribute("data-print-doc")
+        setPrintJob(null)
+      })
+    })
+    return () => { cancelAnimationFrame(raf1); if (raf2) cancelAnimationFrame(raf2) }
+  }, [printJob])
 
   const org = ORG_CONFIGS[config.orgType ?? "school"]
   const country = getCountry(config.countryCode ?? "IN")
@@ -3170,6 +3188,54 @@ export function TimetablePage() {
   }
 
   // ═══════════════════════════════════════════════════════════
+  // RENDER: Print document (portal) — branded, paginated, fit-to-page
+  // ═══════════════════════════════════════════════════════════
+  const PrintBrandHeader = ({ subtitle }: { subtitle: string }) => {
+    const inst = institutionInfo()
+    return (
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:16, borderBottom:"2px solid #7C6FE0", paddingBottom:10, marginBottom:12 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+          <div style={{ width:34, height:34, borderRadius:9, background:"#7C6FE0", display:"flex", alignItems:"center", justifyContent:"center", WebkitPrintColorAdjust:"exact" as any }}
+            dangerouslySetInnerHTML={{ __html: SCHEDU_MARK }} />
+          <div>
+            <div style={{ fontSize:8, letterSpacing:"0.14em", textTransform:"uppercase" as const, color:"#8B87AD" }}>By Bhusku</div>
+            <div style={{ fontSize:18, fontWeight:800, letterSpacing:"-0.3px", lineHeight:1, color:"#13111E" }}>sched<span style={{ color:"#7C6FE0", fontStyle:"italic" }}>U</span></div>
+          </div>
+        </div>
+        <div style={{ display:"flex", alignItems:"center", gap:10, textAlign:"right" as const }}>
+          {inst.logo && <img src={inst.logo} alt="" style={{ height:34, maxWidth:120, objectFit:"contain" as const }} />}
+          <div>
+            <div style={{ fontSize:16, fontWeight:700, color:"#13111E" }}>{inst.name}</div>
+            <div style={{ fontSize:11, color:"#8B87AD" }}>{subtitle}</div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const renderPrintDoc = () => {
+    if (!printJob) return null
+    const { type, scope } = printJob
+    const today = new Date().toLocaleDateString(undefined, { year:"numeric", month:"short", day:"numeric" })
+    const typeLabel = type === "class" ? "Class Timetable" : type === "teacher" ? "Teacher Timetable" : "Room Timetable"
+    const entities = type === "class" ? sections.map(s => s.name)
+      : type === "teacher" ? staff.map(s => s.name)
+      : allRooms
+    const renderOne = (e: string) =>
+      type === "class" ? renderClassTT(e) : type === "teacher" ? renderTeacherTT(e) : renderRoomTT(e)
+    return (
+      <div className="schedu-print-root" data-scope={scope}>
+        {entities.map(e => (
+          <div className="schedu-print-entity" key={e} style={{ padding:"2px 2px 8px" }}>
+            <PrintBrandHeader subtitle={`${typeLabel} · ${today}`} />
+            <div className="warm-tt">{renderOne(e)}</div>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  // ═══════════════════════════════════════════════════════════
   // RENDER: Period Pool right-sidebar panel
   // ═══════════════════════════════════════════════════════════
   const renderPoolPanel = () => (
@@ -4299,6 +4365,9 @@ export function TimetablePage() {
           </div>
         </div>
       )}
+
+      {/* Print/PDF document — branded, paginated portal (off-screen until print) */}
+      {printJob && createPortal(renderPrintDoc(), document.body)}
     </div>
   )
 }

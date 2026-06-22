@@ -145,75 +145,75 @@ select, input[type="checkbox"], input[type="radio"] { cursor: pointer; }
 }
 
 /* ══ Print / PDF styles ══════════════════════════════════════════════════
-   Activated by window.print()
-   Strategy: hide everything via visibility, show only .warm-tt content
+   Timetable Print/PDF (class/teacher/room) renders the live grids into a
+   top-level portal (.schedu-print-root) that the timetable mounts during a
+   print job. We isolate it with display (NOT visibility) so the document
+   flows from the top and paginates correctly across pages — no app chrome,
+   no buttons, no scrollbars, and no overlap.
+
+   (Master Data / Saved Schedules use a separate hidden-iframe document; see
+   printSheets in lib/exportData.ts.)
    ========================================================================= */
+
+/* Portal is render-only for print — never shown on screen. */
+.schedu-print-root { display: none; }
+
 @media print {
-  /* Timetable-only print: hide everything except .warm-tt. SCOPED to
-     body[data-print-type] (set by the timetable's print trigger) so generic
-     page prints (Export → Print) render the page normally instead of blank. */
+  /* Isolate the print document: hide the app, show only the portal. The
+     portal is a direct <body> child, so this paginates from page 1 cleanly. */
+  body[data-print-doc] > *:not(.schedu-print-root) { display: none !important; }
+  body[data-print-doc] .schedu-print-root { display: block !important; }
 
-  /* 1. Hide the entire page */
-  body[data-print-type] * { visibility: hidden !important; }
-
-  /* 2. Show only the timetable and its children */
-  body[data-print-type] .warm-tt,
-  body[data-print-type] .warm-tt * { visibility: visible !important; }
-
-  /* 3. Position the timetable at the top-left corner of the page */
-  .warm-tt {
-    position: absolute !important;
-    left: 0 !important;
-    top: 0 !important;
-    width: 100% !important;
-    background: #fff !important;
+  .schedu-print-root {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
+    background: #fff;
+    padding: 0;
   }
 
-  /* Table styles */
-  .warm-tt table { width: 100%; border-collapse: collapse; font-size: 8pt; }
-  .warm-tt th, .warm-tt td {
-    border: 1px solid #9CA3AF !important;
-    padding: 4pt 5pt !important;
-    vertical-align: top;
-  }
-  .warm-tt thead th {
-    background: #E5EBF5 !important;
-    color: #1e293b !important;
-    font-weight: 700 !important;
-    font-size: 7pt !important;
-    text-align: center;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
+  /* One entity per printed block. Never split a timetable across a page
+     boundary (no partial view); each block carries its own branded header. */
+  .schedu-print-entity { break-inside: avoid; page-break-inside: avoid; }
+  /* Individual scope = one entity per page. */
+  .schedu-print-root[data-scope="individual"] .schedu-print-entity { page-break-after: always; }
+  .schedu-print-root[data-scope="individual"] .schedu-print-entity:last-child { page-break-after: auto; }
 
-  /* Cell background colors preserved */
-  .warm-tt [class*="bg-"] {
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
+  /* Repeat column headers if a single entity is taller than one page. */
+  .schedu-print-root thead { display: table-header-group; }
 
-  /* All text black */
-  .warm-tt * { color: #111 !important; }
+  /* Drop any interactive chrome that rode along inside the grids. */
+  .schedu-print-root button,
+  .schedu-print-root input,
+  .schedu-print-root select,
+  .schedu-print-root .tt-cell-actions { display: none !important; }
 
-  /* Section dividers */
-  .warm-tt tr[style*="height: 3px"],
-  .warm-tt tr[style*="height:3px"] td {
-    background: #374151 !important;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
+  /* Tables fit the page width regardless of paper size / orientation. With
+     a fixed layout + zeroed min-widths the columns always share the page,
+     and text wraps instead of clipping (no partial cells). */
+  .schedu-print-root table { width: 100% !important; border-collapse: collapse !important; table-layout: fixed !important; }
+  .schedu-print-root .warm-tt { box-shadow: none !important; border-radius: 0 !important; overflow: visible !important; font-size: 9px; }
+  .schedu-print-root th,
+  .schedu-print-root td { min-width: 0 !important; white-space: normal !important; word-break: break-word; overflow: visible !important; padding: 3px 4px !important; }
+  /* The grid cells reserve 44px min-height on screen — collapse that for print. */
+  .schedu-print-root td > div { min-height: 0 !important; }
+  .schedu-print-root [style*="overflow-x"],
+  .schedu-print-root [style*="overflow:auto"],
+  .schedu-print-root [style*="overflow: auto"] { overflow: visible !important; }
 
-  /* Hide interactive controls inside the table */
-  .warm-tt button,
-  .warm-tt input,
-  .warm-tt select { display: none !important; visibility: hidden !important; }
-
-  /* NOTE: Export → Print (Master Data, Saved Schedules) no longer relies on
-     @media print of the live page. It renders a standalone branded document
-     into a hidden iframe (see printSheets in lib/exportData.ts), so the output
-     never includes app chrome, buttons or scrollbars. */
+  /* Preserve subject cell colors (soft palette mirrors the on-screen view). */
+  .schedu-print-root [class*="bg-"] { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  .schedu-print-root .warm-tt [class*="bg-violet-100"] { background-color:#FFF9EC !important; }
+  .schedu-print-root .warm-tt [class*="bg-pink-100"]   { background-color:#FFF0F0 !important; }
+  .schedu-print-root .warm-tt [class*="bg-blue-100"]   { background-color:#EFF6FF !important; }
+  .schedu-print-root .warm-tt [class*="bg-green-100"]  { background-color:#F0FFF4 !important; }
+  .schedu-print-root .warm-tt [class*="bg-yellow-100"] { background-color:#FFFBEB !important; }
+  .schedu-print-root .warm-tt [class*="bg-red-100"]    { background-color:#FFF5F5 !important; }
+  .schedu-print-root .warm-tt [class*="bg-purple-100"] { background-color:#FAF5FF !important; }
+  .schedu-print-root .warm-tt [class*="bg-orange-100"] { background-color:#FFF8F0 !important; }
+  .schedu-print-root .warm-tt [class*="bg-teal-100"]   { background-color:#F0FDFA !important; }
+  .schedu-print-root .warm-tt [class*="bg-cyan-100"]   { background-color:#ECFEFF !important; }
+  .schedu-print-root .warm-tt [class*="bg-indigo-100"] { background-color:#EEF2FF !important; }
+  .schedu-print-root .warm-tt [class*="bg-lime-100"]   { background-color:#F7FEE7 !important; }
 }
 .shadow-sm   { box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); }
 .shadow-md   { box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
