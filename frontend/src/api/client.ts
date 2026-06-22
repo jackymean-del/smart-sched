@@ -18,8 +18,18 @@ export const apiClient = axios.create({
   headers: { 'Content-Type': 'application/json' },
 })
 
-apiClient.interceptors.request.use((config) => {
-  const token = localStorage.getItem('auth_token')
+// Token source. When Clerk is active, ClerkAuthSync registers a getter that
+// returns a fresh Clerk session token; otherwise we fall back to a token in
+// localStorage (mock auth).
+let tokenGetter: (() => Promise<string | null>) | null = null
+export function setTokenGetter(fn: (() => Promise<string | null>) | null) { tokenGetter = fn }
+
+apiClient.interceptors.request.use(async (config) => {
+  let token: string | null = null
+  if (tokenGetter) {
+    try { token = await tokenGetter() } catch { /* fall through */ }
+  }
+  if (!token) token = localStorage.getItem('auth_token')
   if (token) config.headers.Authorization = `Bearer ${token}`
   return config
 })
@@ -34,6 +44,12 @@ apiClient.interceptors.response.use(
     return Promise.reject(err)
   }
 )
+
+/** Ensure a DB user row exists for the signed-in Clerk user; returns plan/role. */
+export const meApi = {
+  sync: (data: { email?: string; name?: string; schoolName?: string }) =>
+    apiClient.post<{ id: string; email: string; name: string; plan: string; role?: string }>('/me', data),
+}
 
 // ─────────────────────────────────────────────────────────────
 // ORGANIZATION & SESSION

@@ -111,6 +111,9 @@ func main() {
 
 	api := app.Group("/api/v1", middleware.Auth())
 
+	// --- Auth / current user ---
+	api.Post("/me", h.Me) // upsert + return the signed-in user (Clerk-backed)
+
 	// --- Timetable routes ---
 	api.Get("/timetables",                   h.ListTimetables)
 	api.Post("/timetables",                  h.CreateTimetable)

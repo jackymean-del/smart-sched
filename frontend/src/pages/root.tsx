@@ -1,6 +1,7 @@
 import { Outlet } from "@tanstack/react-router"
 import { Topbar } from "@/components/layout/Topbar"
 import { useTimetableStore } from "@/store/timetableStore"
+import { AuthGuard } from "@/components/auth/AuthGuard"
 
 const STEP_LABELS = [
   'Resources',
@@ -23,17 +24,23 @@ export function RootLayout() {
     path.startsWith('/docs/') ||
     path.startsWith('/share/') // public read-only timetable viewer
 
-  // These pages own their full-screen layout — no app topbar
-  if (isAuthPage || isDashboard || isHome || isMarketing) return <Outlet />
+  // Pages requiring a signed-in user (real auth via Clerk; open in mock mode).
+  const PROTECTED = ['/dashboard', '/wizard', '/timetable', '/master-data']
+  const isProtected = PROTECTED.some(p => path === p || path.startsWith(p + '/'))
 
-  return (
-    <div style={{ minHeight:'100vh', background:'#F9F8FF', display:'flex', flexDirection:'column' }}>
-      <Topbar
-        step={isWizard ? step : undefined}
-        totalSteps={isWizard ? 5 : undefined}
-        stepLabel={isWizard ? STEP_LABELS[step - 1] : undefined}
-      />
-      <Outlet />
-    </div>
-  )
+  // These pages own their full-screen layout — no app topbar
+  const inner = (isAuthPage || isDashboard || isHome || isMarketing)
+    ? <Outlet />
+    : (
+      <div style={{ minHeight:'100vh', background:'#F9F8FF', display:'flex', flexDirection:'column' }}>
+        <Topbar
+          step={isWizard ? step : undefined}
+          totalSteps={isWizard ? 5 : undefined}
+          stepLabel={isWizard ? STEP_LABELS[step - 1] : undefined}
+        />
+        <Outlet />
+      </div>
+    )
+
+  return isProtected ? <AuthGuard>{inner}</AuthGuard> : inner
 }

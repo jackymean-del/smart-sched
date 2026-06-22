@@ -9,7 +9,9 @@
  */
 
 import { useState } from 'react'
+import { SignUp } from '@clerk/clerk-react'
 import { useAuthStore } from '@/store/authStore'
+import { CLERK_ENABLED } from '@/lib/clerk'
 import { Loader2 } from 'lucide-react'
 import { AppFooter } from '@/components/AppFooter'
 
@@ -106,6 +108,30 @@ export function RegisterPage() {
   const [error,       setError]       = useState('')
 
   const busy = loading || googleLoading
+
+  if (CLERK_ENABLED) {
+    return (
+      <div style={{ minHeight: '100vh', background: '#F5F4F0', display: 'flex', flexDirection: 'column', fontFamily: "'Plus Jakarta Sans', -apple-system, sans-serif" }}>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '32px 16px' }}>
+          <div style={{ textAlign: 'center' }}>
+            <a href="/" style={{ textDecoration: 'none', display: 'inline-block', marginBottom: 4 }}>
+              <span style={{ fontSize: 22, fontWeight: 900, letterSpacing: '-0.4px', color: '#13111E' }}>
+                sched<span style={{ color: '#7C6FE0', fontFamily: "'Plus Jakarta Sans', Georgia, serif", fontStyle: 'italic' }}>U</span>
+              </span>
+            </a>
+            <p style={{ fontSize: 13, color: '#6B7280', margin: '2px 0 16px' }}>Create your free account</p>
+            <SignUp
+              routing="hash"
+              signInUrl="/login"
+              forceRedirectUrl="/wizard"
+              appearance={{ variables: { colorPrimary: '#7C6FE0' } }}
+            />
+          </div>
+        </div>
+        <AppFooter />
+      </div>
+    )
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

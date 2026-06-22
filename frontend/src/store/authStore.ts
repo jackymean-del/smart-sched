@@ -28,6 +28,11 @@ interface AuthState {
 function makeId() { return Math.random().toString(36).slice(2, 10) }
 function makeToken() { return `schedu_${makeId()}${makeId()}` }
 
+// When Clerk is active, ClerkAuthSync registers its signOut here so the app's
+// existing logout() buttons also end the Clerk session.
+let clerkSignOut: (() => void) | null = null
+export function setClerkSignOut(fn: (() => void) | null) { clerkSignOut = fn }
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
@@ -63,7 +68,11 @@ export const useAuthStore = create<AuthState>()(
         set({ user, token: makeToken(), isAuthenticated: true })
       },
 
-      logout: () => set({ user: null, token: null, isAuthenticated: false }),
+      logout: () => {
+        try { clerkSignOut?.() } catch { /* ignore */ }
+        localStorage.removeItem('auth_token')
+        set({ user: null, token: null, isAuthenticated: false })
+      },
 
       updateUser: (patch) =>
         set(s => ({ user: s.user ? { ...s.user, ...patch } : null })),

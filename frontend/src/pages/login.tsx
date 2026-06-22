@@ -12,7 +12,9 @@
  */
 
 import { useState } from 'react'
+import { SignIn } from '@clerk/clerk-react'
 import { useAuthStore } from '@/store/authStore'
+import { CLERK_ENABLED } from '@/lib/clerk'
 import { Loader2, Info } from 'lucide-react'
 import { AppFooter } from '@/components/AppFooter'
 
@@ -132,6 +134,15 @@ export function LoginPage() {
           </p>
         </div>
 
+        {CLERK_ENABLED ? (
+          <SignIn
+            routing="hash"
+            signUpUrl="/register"
+            forceRedirectUrl="/dashboard"
+            appearance={{ variables: { colorPrimary: '#7C6FE0' } }}
+          />
+        ) : (
+        <>
         {/* Heading */}
         <h1 style={{
           fontSize: 22, fontWeight: 700, color: '#13111E',
@@ -254,6 +265,8 @@ export function LoginPage() {
             </a>
           </span>
         </div>
+        </>
+        )}
 
       </div>
     </div>
