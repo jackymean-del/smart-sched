@@ -123,12 +123,12 @@ export function MasterDataPage() {
             }}>
               <Sparkles size={11} /> Spreadsheet mode
             </div>
-            <ExportControls filename="schedu-master-data.xlsx" sheets={buildExportSheets} />
+            <ExportControls filename="schedu-master-data.xlsx" sheets={buildExportSheets} title="Master Data" />
           </div>
         }
       />
 
-      <div data-print-content style={{ padding: '20px 28px', maxWidth: 1400, margin: '0 auto' }}>
+      <div style={{ padding: '20px 28px', maxWidth: 1400, margin: '0 auto' }}>
 
         {/* Tabs */}
         <div style={{

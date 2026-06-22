@@ -1480,7 +1480,7 @@ export function DashboardPage() {
               </p>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <ExportControls filename="schedu-schedules.xlsx" sheets={buildScheduleSheets} />
+              <ExportControls filename="schedu-schedules.xlsx" sheets={buildScheduleSheets} title="Saved Schedules" />
               <button
                 onClick={() => setShowCreate(true)}
                 className="db-new-btn"
@@ -1573,7 +1573,7 @@ export function DashboardPage() {
               </div>
             )}
 
-            <div data-print-content style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {ttList.length === 0 && (
                 <div style={{
                   background: '#fff', borderRadius: 10, border: '1px solid #E5E7EB',

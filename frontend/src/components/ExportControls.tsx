@@ -5,13 +5,15 @@
  */
 import { useState, useRef, useEffect } from 'react'
 import {
-  exportSheetsToXLSX, printWithProperties,
+  exportSheetsToXLSX, printSheets,
   type ExportSheet, type Orientation, type PaperSize,
 } from '@/lib/exportData'
 
-export function ExportControls({ filename, sheets }: {
+export function ExportControls({ filename, sheets, title = 'Report' }: {
   filename: string
   sheets: () => ExportSheet[]
+  /** Document heading shown in the printed/PDF header (e.g. "Master Data"). */
+  title?: string
 }) {
   const [open, setOpen] = useState(false)
   const [orientation, setOrientation] = useState<Orientation>('portrait')
@@ -66,7 +68,7 @@ export function ExportControls({ filename, sheets }: {
             </label>
           </div>
           <button
-            onClick={() => { printWithProperties(orientation, paper); setOpen(false) }}
+            onClick={() => { printSheets(sheets(), orientation, paper, { title }); setOpen(false) }}
             style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 14px', border: 'none', background: 'none', textAlign: 'left', fontSize: 12, color: '#374151', cursor: 'pointer' }}>
             <span style={{ fontSize: 14 }}>🖨️</span> Print…
           </button>
