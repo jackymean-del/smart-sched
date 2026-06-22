@@ -13,6 +13,8 @@ import { useState, useMemo, useEffect } from 'react'
 import { useAuthStore } from '@/store/authStore'
 import { useTimetableStore } from '@/store/timetableStore'
 import { AppFooter } from '@/components/AppFooter'
+import { ExportControls } from '@/components/ExportControls'
+import type { ExportSheet } from '@/lib/exportData'
 import {
   Home, CalendarDays, Calendar, BarChart2,
   Users, Database, Settings,
@@ -981,6 +983,20 @@ export function DashboardPage() {
   const [sidebarOpen,   setSidebarOpen]   = useState(false)
   const [showCreate,    setShowCreate]    = useState(false)
   const [ttList,        setTTList]        = useState<TTEntry[]>(loadTTList)
+
+  // Excel export of the saved-schedules list.
+  const buildScheduleSheets = (): ExportSheet[] => [{
+    name: 'Schedules',
+    rows: [
+      ['Name', 'Status', 'Board', 'Classes', 'Teachers', 'Start', 'End', 'Created'],
+      ...ttList.map(tt => [
+        tt.name ?? '', tt.status ?? '', tt.board ?? '',
+        tt.approxClasses ?? '', tt.approxTeachers ?? '',
+        tt.startDate ?? '', tt.endDate ?? '',
+        tt.createdAt ? new Date(tt.createdAt).toLocaleDateString() : '',
+      ]),
+    ],
+  }]
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [editingTT,     setEditingTT]     = useState<TTEntry | null>(null)
 
@@ -1463,19 +1479,22 @@ export function DashboardPage() {
                 {schoolName} · AY 2025–26 · {(store.config as any)?.boardName ?? 'CBSE'}
               </p>
             </div>
-            <button
-              onClick={() => setShowCreate(true)}
-              className="db-new-btn"
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 7,
-                padding: '8px 16px', borderRadius: 8,
-                border: '1px solid #D1D5DB', background: '#fff',
-                fontSize: 13, fontWeight: 600, color: '#13111E',
-                cursor: 'pointer', fontFamily: 'inherit',
-              }}
-            >
-              <Plus size={14} /> New timetable
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <ExportControls filename="schedu-schedules.xlsx" sheets={buildScheduleSheets} />
+              <button
+                onClick={() => setShowCreate(true)}
+                className="db-new-btn"
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 7,
+                  padding: '8px 16px', borderRadius: 8,
+                  border: '1px solid #D1D5DB', background: '#fff',
+                  fontSize: 13, fontWeight: 600, color: '#13111E',
+                  cursor: 'pointer', fontFamily: 'inherit',
+                }}
+              >
+                <Plus size={14} /> New timetable
+              </button>
+            </div>
           </div>
 
           {/* Stats row */}
