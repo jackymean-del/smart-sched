@@ -28,7 +28,11 @@ export function exportSheetsToXLSX(filename: string, sheets: ExportSheet[]): voi
   XLSX.writeFile(wb, filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`)
 }
 
-/** Print the current page with a chosen paper size + orientation. */
+/**
+ * Print the current page with a chosen paper size + orientation. If the page
+ * marks a printable region with [data-print-content], only that region is
+ * printed (app chrome hidden); otherwise the whole page prints.
+ */
 export function printWithProperties(orientation: Orientation, paper: PaperSize): void {
   let el = document.getElementById('app-print-page') as HTMLStyleElement | null
   if (!el) {
@@ -37,5 +41,15 @@ export function printWithProperties(orientation: Orientation, paper: PaperSize):
     document.head.appendChild(el)
   }
   el.textContent = `@page { size: ${paper} ${orientation}; margin: 10mm; }`
+
+  const hasArea = !!document.querySelector('[data-print-content]')
+  if (hasArea) {
+    document.body.setAttribute('data-print-area', '')
+    const cleanup = () => {
+      document.body.removeAttribute('data-print-area')
+      window.removeEventListener('afterprint', cleanup)
+    }
+    window.addEventListener('afterprint', cleanup)
+  }
   window.print()
 }

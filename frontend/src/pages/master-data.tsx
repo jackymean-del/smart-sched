@@ -128,7 +128,7 @@ export function MasterDataPage() {
         }
       />
 
-      <div style={{ padding: '20px 28px', maxWidth: 1400, margin: '0 auto' }}>
+      <div data-print-content style={{ padding: '20px 28px', maxWidth: 1400, margin: '0 auto' }}>
 
         {/* Tabs */}
         <div style={{

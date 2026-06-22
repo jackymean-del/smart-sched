@@ -209,6 +209,22 @@ select, input[type="checkbox"], input[type="radio"] { cursor: pointer; }
   .warm-tt button,
   .warm-tt input,
   .warm-tt select { display: none !important; visibility: hidden !important; }
+
+  /* ── Generic clean print ──────────────────────────────────────────────
+     Export → Print sets body[data-print-area]; pages mark their printable
+     region with [data-print-content]. Show only that region, hiding the app
+     chrome (top nav, sidebar, page header, toolbars). */
+  body[data-print-area] * { visibility: hidden !important; }
+  body[data-print-area] [data-print-content],
+  body[data-print-area] [data-print-content] * { visibility: visible !important; }
+  body[data-print-area] [data-print-content] {
+    position: absolute !important;
+    left: 0 !important; top: 0 !important; width: 100% !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  /* Drop toolbar buttons / the export menu inside the printed region */
+  body[data-print-area] [data-print-content] .no-print { display: none !important; }
 }
 .shadow-sm   { box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); }
 .shadow-md   { box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
