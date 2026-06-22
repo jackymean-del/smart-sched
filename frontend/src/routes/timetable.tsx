@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback, useTransition } from "react"
 import { useTimetableStore } from "@/store/timetableStore"
+import { useAuthStore } from "@/store/authStore"
 import { PrintPreview } from "@/components/PrintDoc"
 import { EditCellModal } from "@/components/modals/EditCellModal"
 import { CalendarView } from "@/components/CalendarView"
@@ -35,9 +36,18 @@ function calcTimes(periods: any[], config: any): Map<string,{start:string;end:st
   return map
 }
 
+// ── English list join ──────────────────────────────────────
+// ["A"] → "A"; ["A","B"] → "A & B"; ["A","B","C","D"] → "A, B, C & D"
+function humanList(items: string[]): string {
+  if (items.length <= 1) return items[0] ?? ""
+  if (items.length === 2) return `${items[0]} & ${items[1]}`
+  return `${items.slice(0, -1).join(", ")} & ${items[items.length - 1]}`
+}
+
 // ── Compact a list of section names ────────────────────────
-// Groups sections sharing a prefix (everything before the last "-") and merges
-// their suffixes, e.g. ["I-A","I-B","II-A","II-B"] → "I-A&B, II-A&B".
+// Groups sections sharing a prefix (everything before the last "-") and joins
+// their suffixes in English, e.g. ["I-A","I-B","II-A","II-B"] → "I-A & B, II-A & B"
+// and ["Nursery-A".."D"] → "Nursery-A, B, C & D".
 function compactSections(secs: string[]): string {
   const groups = new Map<string, string[]>()
   for (const s of secs) {
@@ -49,7 +59,7 @@ function compactSections(secs: string[]): string {
     groups.set(prefix, arr)
   }
   return [...groups.entries()]
-    .map(([p, sfx]) => (sfx.length ? `${p}-${sfx.join("&")}` : p))
+    .map(([p, sfx]) => (sfx.length ? `${p}-${humanList(sfx)}` : p))
     .join(", ")
 }
 
@@ -1314,6 +1324,10 @@ export function TimetablePage() {
 
   const { exportXLSX } = useExport()
 
+  // Teacher workload (period load) is internal — only admins/authorities see it,
+  // and it's never printed (hidden in the print document via CSS).
+  const isAdmin = useAuthStore(s => (s.user?.role ?? "admin")) === "admin"
+
   // ── PDF print / preview ──────────────────────────────────
   // A print action opens an in-app preview (a portal) that renders the live
   // grids — guaranteeing ALL entities appear (no LazyCard / content-visibility
@@ -2329,13 +2343,16 @@ export function TimetablePage() {
               {st?.role && <div style={{ fontSize:11, color:"#4B5275" }}>{st.role}</div>}
               {assignedStr !== "—" && <div style={{ fontSize:11, color:"#4B5275", marginTop:2 }}><span style={{ fontWeight:600 }}>Teaches: </span>{assignedStr}</div>}
             </div>
-            <div style={{ textAlign:"right" as const }}>
-              <div style={{ fontSize:14, fontWeight:700, fontFamily:"monospace", color:loadColor }}>{total}/{max} periods</div>
-              <div style={{ fontSize:10, color:loadColor }}>{pct}% loaded</div>
-              <div style={{ width:90, height:5, background:"#E8E4FF", borderRadius:3, marginTop:5, overflow:"hidden" }}>
-                <div style={{ height:"100%", width:`${Math.min(100,pct)}%`, background:loadColor, borderRadius:3, transition:"width 0.3s" }} />
+            {/* Period load is internal (admins only on screen; never printed). */}
+            {isAdmin && (
+              <div className="tt-teacher-load" style={{ textAlign:"right" as const }}>
+                <div style={{ fontSize:14, fontWeight:700, fontFamily:"monospace", color:loadColor }}>{total}/{max} periods</div>
+                <div style={{ fontSize:10, color:loadColor }}>{pct}% loaded</div>
+                <div style={{ width:90, height:5, background:"#E8E4FF", borderRadius:3, marginTop:5, overflow:"hidden" }}>
+                  <div style={{ height:"100%", width:`${Math.min(100,pct)}%`, background:loadColor, borderRadius:3, transition:"width 0.3s" }} />
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
         {swapInsight && swapInsightTeacher === tn && (
@@ -2531,7 +2548,7 @@ export function TimetablePage() {
       <div>
         <div style={{ padding:"10px 16px", background:"#FAFAFE", borderBottom:"1px solid #E8E4FF", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
           <div style={{ fontSize:15, fontWeight:700, color:"#1e293b" }}>{tn} <span style={{ fontSize:11, fontWeight:400, color:"#4B5275" }}>— {st?.role}</span></div>
-          <span style={{ fontSize:12, fontWeight:700, fontFamily:"monospace", color:loadColor }}>{total}/{max} periods · {pct}% loaded</span>
+          {isAdmin && <span className="tt-teacher-load" style={{ fontSize:12, fontWeight:700, fontFamily:"monospace", color:loadColor }}>{total}/{max} periods · {pct}% loaded</span>}
         </div>
         {swapInsight && swapInsightTeacher === tn && (
           <InsightBanner message={swapInsight} onClose={clearSwapInsight} />
