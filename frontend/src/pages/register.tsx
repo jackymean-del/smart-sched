@@ -330,8 +330,8 @@ function ClerkRegister() {
     if (!isLoaded || !signUp) return
     await signUp.authenticateWithRedirect({
       strategy: 'oauth_google',
-      redirectUrl: '/sso-callback',
-      redirectUrlComplete: '/wizard',
+      redirectUrl: `${window.location.origin}/sso-callback`,
+      redirectUrlComplete: `${window.location.origin}/wizard`,
     })
   }
 

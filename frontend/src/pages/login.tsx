@@ -173,8 +173,8 @@ function ClerkLogin() {
     if (!isLoaded || !signIn) return
     await signIn.authenticateWithRedirect({
       strategy: 'oauth_google',
-      redirectUrl: '/sso-callback',
-      redirectUrlComplete: '/dashboard',
+      redirectUrl: `${window.location.origin}/sso-callback`,
+      redirectUrlComplete: `${window.location.origin}/dashboard`,
     })
   }
   return <LoginCard onEmailSignIn={onEmailSignIn} onGoogle={onGoogle} />
