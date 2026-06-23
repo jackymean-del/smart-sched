@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { CLERK_ENABLED } from '@/lib/clerk'
 
 export interface AuthUser {
   id: string
@@ -18,6 +19,10 @@ interface AuthState {
   user: AuthUser | null
   token: string | null
   isAuthenticated: boolean
+  /** False until auth has been resolved on this page load (Clerk finished
+   *  loading). Lets protected pages show a loader instead of flashing the
+   *  login form. Always true in mock-auth dev (resolves synchronously). */
+  authReady: boolean
 
   login: (email: string, password: string) => Promise<void>
   register: (name: string, email: string, password: string, schoolName?: string) => Promise<void>
@@ -44,6 +49,9 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       token: null,
       isAuthenticated: false,
+      // When Clerk is active, wait for ClerkAuthSync to flip this true once the
+      // session is known. In mock mode there's no async load, so start ready.
+      authReady: !CLERK_ENABLED,
 
       login: async (email, _password) => {
         // Simulate network delay
@@ -86,6 +94,11 @@ export const useAuthStore = create<AuthState>()(
       updateUser: (patch) =>
         set(s => ({ user: s.user ? { ...s.user, ...patch } : null })),
     }),
-    { name: 'schedu-auth' }
+    {
+      name: 'schedu-auth',
+      // authReady is per-page-load runtime state — never persist it, or a stale
+      // `true` would skip the loader and reintroduce the login-form flash.
+      partialize: (s) => ({ user: s.user, token: s.token, isAuthenticated: s.isAuthenticated }),
+    }
   )
 )

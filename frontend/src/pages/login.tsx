@@ -12,6 +12,7 @@ import { useAuthStore } from '@/store/authStore'
 import { CLERK_ENABLED, authErrorMessage } from '@/lib/clerk'
 import { Loader2, Info } from 'lucide-react'
 import { AppFooter } from '@/components/AppFooter'
+import { BrandedLoader } from '@/components/BrandedLoader'
 
 function GoogleMark() {
   return (
@@ -190,6 +191,10 @@ function ClerkLogin() {
       redirectUrlComplete: `${window.location.origin}/dashboard`,
     })
   }
+  // While Clerk is still resolving the session, or an already-signed-in user is
+  // being redirected to the app, show the branded loader — not the form. This
+  // kills the "login form flashes for a moment after sign-in" glitch.
+  if (!authLoaded || isSignedIn) return <BrandedLoader label="Signing you in…" />
   return <LoginCard onEmailSignIn={onEmailSignIn} onGoogle={onGoogle} />
 }
 

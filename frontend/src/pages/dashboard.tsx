@@ -14,6 +14,7 @@ import { useAuthStore, openUserProfile } from '@/store/authStore'
 import { CLERK_ENABLED } from '@/lib/clerk'
 import { useTimetableStore } from '@/store/timetableStore'
 import * as ttRepo from '@/api/timetables'
+import { BrandedLoader } from '@/components/BrandedLoader'
 import { AppFooter } from '@/components/AppFooter'
 import { ExportControls } from '@/components/ExportControls'
 import type { ExportSheet } from '@/lib/exportData'
@@ -1004,7 +1005,7 @@ function EditTimetableModal({
 //  DashboardPage
 // ══════════════════════════════════════════════════════════════
 export function DashboardPage() {
-  const { user, logout } = useAuthStore()
+  const { user, logout, authReady } = useAuthStore()
   const store = useTimetableStore() as any
   const { sections, staff } = store
 
@@ -1268,6 +1269,10 @@ export function DashboardPage() {
     handleContinue(updated)
   }
 
+  // Wait for auth to resolve before deciding — otherwise a fresh load (or the
+  // OAuth return) briefly sees no user and flashes the login form. Show the
+  // branded loader until Clerk has loaded, then redirect only if truly signed out.
+  if (!authReady) return <BrandedLoader label="Loading your dashboard…" />
   if (!user) { window.location.href = '/login'; return null }
 
   const firstName  = user.name?.split(' ')[0] ?? 'there'

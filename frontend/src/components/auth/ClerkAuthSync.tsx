@@ -27,6 +27,9 @@ export function ClerkAuthSync() {
   // Mirror the Clerk user into the app store.
   useEffect(() => {
     if (!isLoaded) return
+    // Auth is now resolved for this page load — let protected pages render
+    // (or redirect) instead of showing the loader indefinitely.
+    useAuthStore.setState({ authReady: true })
     if (!isSignedIn || !user) {
       useAuthStore.setState({ user: null, token: null, isAuthenticated: false })
       return
