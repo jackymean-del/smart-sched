@@ -6,8 +6,8 @@
  * store otherwise. Email/password uses signIn.create; Google uses Clerk OAuth.
  */
 
-import { useState } from 'react'
-import { useSignIn } from '@clerk/clerk-react'
+import { useState, useEffect } from 'react'
+import { useSignIn, useAuth } from '@clerk/clerk-react'
 import { useAuthStore } from '@/store/authStore'
 import { CLERK_ENABLED, authErrorMessage } from '@/lib/clerk'
 import { Loader2, Info } from 'lucide-react'
@@ -166,7 +166,12 @@ function LoginCard({ onEmailSignIn, onGoogle, mock = false }: {
 
 // ── Clerk-backed controller ───────────────────────────────────
 function ClerkLogin() {
+  const { isLoaded: authLoaded, isSignedIn } = useAuth()
   const { isLoaded, signIn, setActive } = useSignIn()
+  // Already signed in (e.g. returning from Google OAuth) → go to the app.
+  useEffect(() => {
+    if (authLoaded && isSignedIn) window.location.replace('/dashboard')
+  }, [authLoaded, isSignedIn])
   const onEmailSignIn = async (email: string, password: string) => {
     if (!isLoaded || !signIn) throw new Error('Authentication is still loading — please try again.')
     const res = await signIn.create({ identifier: email, password })

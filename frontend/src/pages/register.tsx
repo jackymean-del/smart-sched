@@ -8,8 +8,8 @@
  * Extra (non-Clerk) fields are saved to Clerk unsafeMetadata.
  */
 
-import { useState } from 'react'
-import { useSignUp } from '@clerk/clerk-react'
+import { useState, useEffect } from 'react'
+import { useSignUp, useAuth } from '@clerk/clerk-react'
 import { useAuthStore } from '@/store/authStore'
 import { CLERK_ENABLED, authErrorMessage } from '@/lib/clerk'
 import { Loader2 } from 'lucide-react'
@@ -282,7 +282,12 @@ function RegisterCard({ phase, pendingEmail, onSubmit, onGoogle, onVerify, onRes
 
 // ── Clerk-backed controller ───────────────────────────────────
 function ClerkRegister() {
+  const { isLoaded: authLoaded, isSignedIn } = useAuth()
   const { isLoaded, signUp, setActive } = useSignUp()
+  // Already signed in (e.g. returning from Google OAuth) → go to the app.
+  useEffect(() => {
+    if (authLoaded && isSignedIn) window.location.replace('/dashboard')
+  }, [authLoaded, isSignedIn])
   const [phase, setPhase] = useState<'form' | 'verify'>('form')
   const [pendingEmail, setPendingEmail] = useState('')
 
