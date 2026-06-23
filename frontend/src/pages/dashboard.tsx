@@ -9,7 +9,7 @@
  * "New timetable" → opens CreateTimetableModal (Page 5 — Wizard Step 0)
  */
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useAuthStore } from '@/store/authStore'
 import { useTimetableStore } from '@/store/timetableStore'
 import { AppFooter } from '@/components/AppFooter'
@@ -21,7 +21,7 @@ import {
   LifeBuoy, BookOpen, Video,
   Bell, Plus, Sparkles, MoreHorizontal,
   ChevronRight, ArrowRight, ChevronLeft,
-  Zap, X, Trash2, Pencil,
+  Zap, X, Trash2, Pencil, LogOut,
 } from 'lucide-react'
 
 // ── helpers ────────────────────────────────────────────────────
@@ -981,6 +981,14 @@ export function DashboardPage() {
   const [activeTab,     setActiveTab]     = useState<NavTab>('dashboard')
   const [activeSideKey, setActiveSideKey] = useState<SideNavKey>('dashboard')
   const [sidebarOpen,   setSidebarOpen]   = useState(false)
+  const [userMenuOpen,  setUserMenuOpen]  = useState(false)
+  const userMenuRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!userMenuOpen) return
+    const h = (e: MouseEvent) => { if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) setUserMenuOpen(false) }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [userMenuOpen])
   const [showCreate,    setShowCreate]    = useState(false)
   const [ttList,        setTTList]        = useState<TTEntry[]>(loadTTList)
 
@@ -1317,22 +1325,46 @@ export function DashboardPage() {
               background: '#EF4444', border: '1.5px solid #fff',
             }} />
           </button>
-          <div style={{
-            width: 30, height: 30, borderRadius: '50%',
-            background: '#7C6FE0', color: '#fff',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 12, fontWeight: 700, cursor: 'pointer', flexShrink: 0,
-          }}>
-            {initials}
+          <div ref={userMenuRef} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <button onClick={() => setUserMenuOpen(o => !o)} aria-label="Account menu"
+              style={{
+                width: 30, height: 30, borderRadius: '50%',
+                background: '#7C6FE0', color: '#fff', border: 'none',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 12, fontWeight: 700, cursor: 'pointer', flexShrink: 0,
+              }}>
+              {initials}
+            </button>
+            <button onClick={() => setUserMenuOpen(o => !o)} aria-label="Account menu"
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                padding: 4, color: '#6B7280',
+                display: 'flex', alignItems: 'center',
+              }}>
+              <MoreHorizontal size={18} />
+            </button>
+
+            {userMenuOpen && (
+              <div style={{
+                position: 'absolute', top: 'calc(100% + 8px)', right: 0, zIndex: 400,
+                minWidth: 220, background: '#fff', border: '1px solid #E5EBF5',
+                borderRadius: 10, boxShadow: '0 8px 30px rgba(0,0,0,0.14)', padding: '6px 0',
+              }}>
+                <div style={{ padding: '8px 14px 10px', borderBottom: '1px solid #F1F1F7' }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#13111E' }}>{user?.name ?? 'Account'}</div>
+                  {user?.email && <div style={{ fontSize: 11.5, color: '#8B87AD', marginTop: 1 }}>{user.email}</div>}
+                </div>
+                <button onClick={() => { setUserMenuOpen(false); logout(); window.location.href = '/login' }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 9, width: '100%',
+                    padding: '9px 14px', border: 'none', background: 'none',
+                    textAlign: 'left', fontSize: 13, fontWeight: 500, color: '#DC2626', cursor: 'pointer',
+                  }}>
+                  <LogOut size={15} /> Log out
+                </button>
+              </div>
+            )}
           </div>
-          <button onClick={() => { logout(); window.location.href = '/login' }}
-            style={{
-              background: 'none', border: 'none', cursor: 'pointer',
-              padding: 4, color: '#6B7280',
-              display: 'flex', alignItems: 'center',
-            }}>
-            <MoreHorizontal size={18} />
-          </button>
         </div>
       </header>
 
