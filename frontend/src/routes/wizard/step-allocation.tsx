@@ -596,6 +596,40 @@ export function StepAllocation() {
     setTimeout(() => setSyncDone(false), 2500)
   }, [derivePeriodsFromResources, handleAITeacherAllocate, store, syncing])
 
+  // ── Hard guarantee: AI never leaves an over-capacity section ──────────────────
+  // Whatever produced the allocations (resource sync, stale data, raw subject
+  // periods), scale any section whose total exceeds its capacity down to fit.
+  // Idempotent: after a pass every section total ≤ capacity, so it won't loop.
+  const clampToCapacity = useCallback(() => {
+    const current = subjectAllocations ?? {}
+    let changed = false
+    const next: Record<string, Record<string, string>> = { ...current }
+    ;(sections as Section[]).forEach(sec => {
+      const row = current[sec.name] ?? {}
+      const cap = capFor(sec.name)
+      if (cap <= 0) return
+      const entries = Object.entries(row)
+        .map(([sub, raw]) => { const p = parseAllocation(String(raw)); return { sub, total: p.valid ? p.weeklyTotal : 0 } })
+        .filter(e => e.total > 0)
+      const total = entries.reduce((a, e) => a + e.total, 0)
+      if (total <= cap) return
+      // Scale down proportionally; give any leftover to the last subject.
+      const scale = cap / total
+      let allocated = 0
+      const newRow: Record<string, string> = {}
+      entries.forEach((e, i) => {
+        const isLast = i === entries.length - 1
+        const v = isLast ? Math.max(0, cap - allocated) : Math.max(1, Math.floor(e.total * scale))
+        if (v > 0) newRow[e.sub] = String(v)
+        allocated += v
+      })
+      next[sec.name] = newRow
+      changed = true
+    })
+    if (changed) store.setSubjectAllocations?.(next)
+    return changed
+  }, [sections, subjectAllocations, capFor, store])
+
   // ── Auto-derive on first entry: run if allocations empty OR hard conflicts exist ──
   const autoRanRef = useRef(false)
   useEffect(() => {
@@ -609,6 +643,12 @@ export function StepAllocation() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // intentionally mount-only — autoRanRef prevents double-fire in StrictMode
+
+  // Safety net: any time an over-capacity hard conflict exists, clamp it away.
+  useEffect(() => {
+    if (hardConflicts.some(c => c.includes('> capacity'))) clampToCapacity()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hardConflicts])
 
   // ── Export helpers ──────────────────────────────────────────────────────────
   const exportPeriodAllocation = useCallback(async (fmt: 'xlsx' | 'csv') => {
