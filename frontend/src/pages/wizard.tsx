@@ -104,6 +104,36 @@ class StepErrorBoundary extends Component<
   }
 }
 
+// ── Step-0 gate screen ────────────────────────────────────────
+function WizardSetupGate() {
+  return (
+    <div style={{
+      minHeight: 'calc(100vh - 52px)', background: '#F5F4F0',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+      fontFamily: "'Plus Jakarta Sans', -apple-system, sans-serif",
+    }}>
+      <div style={{ maxWidth: 460, textAlign: 'center' }}>
+        <div style={{
+          width: 60, height: 60, borderRadius: 16, background: '#EDE9FF',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 18px',
+          fontSize: 28,
+        }}>🗓️</div>
+        <h2 style={{ fontSize: 20, fontWeight: 800, color: '#13111E', margin: '0 0 8px' }}>
+          Let’s set up your timetable first
+        </h2>
+        <p style={{ fontSize: 13.5, color: '#6B7280', lineHeight: 1.6, margin: '0 0 22px' }}>
+          Before the wizard can help, it needs the basics — a name, your class range and
+          approximate counts. Create a timetable to get started; you’ll land right back here.
+        </p>
+        <a href="/dashboard?new=1" style={{
+          display: 'inline-block', padding: '11px 22px', borderRadius: 9,
+          background: '#7C6FE0', color: '#fff', fontSize: 13.5, fontWeight: 700, textDecoration: 'none',
+        }}>+ Create a timetable</a>
+      </div>
+    </div>
+  )
+}
+
 // ── Main ──────────────────────────────────────────────────────
 export function WizardPage() {
   const { step, setStep, config } = useTimetableStore()
@@ -114,6 +144,13 @@ export function WizardPage() {
 
   const ttName = (config as any).timetableName
     || (user?.schoolName ? `${user.schoolName} · Timetable` : 'Untitled timetable')
+
+  // ── Step-0 gate ──────────────────────────────────────────────
+  // The wizard needs a configured timetable (name + class range/counts), which
+  // is captured by the "New timetable" dialog. If someone lands here directly
+  // (e.g. a sidebar link) with nothing set up, guide them to create one first.
+  const isConfigured = Boolean((config as any).timetableName)
+  if (!isConfigured) return <WizardSetupGate />
 
   return (
     <div style={{

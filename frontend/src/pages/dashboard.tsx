@@ -1067,7 +1067,9 @@ export function DashboardPage() {
     document.addEventListener('mousedown', h)
     return () => document.removeEventListener('mousedown', h)
   }, [userMenuOpen])
-  const [showCreate,    setShowCreate]    = useState(false)
+  const [showCreate,    setShowCreate]    = useState(
+    () => typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('new') === '1'
+  )
   const [ttList,        setTTList]        = useState<TTEntry[]>(loadTTList)
 
   // Namespace the local snapshot cache to this user (prevents one account from
