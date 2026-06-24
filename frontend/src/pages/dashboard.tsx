@@ -203,24 +203,6 @@ const SIDE_SECTIONS: SideSection[] = [
   },
 ]
 
-// ── Demo timetable rows ────────────────────────────────────────
-const DEMO_TT = [
-  {
-    id: 'tt1', name: 'AY 2025–26 · Main',
-    meta: '52 classes · 84 teachers · Generated 3 days ago',
-    status: 'active' as const,
-  },
-  {
-    id: 'tt2', name: 'AY 2025–26 · Revised (Post-annual)',
-    meta: '52 classes · 84 teachers · In wizard · Step 3',
-    status: 'draft' as const,
-  },
-  {
-    id: 'tt3', name: 'AY 2024–25 · Archive',
-    meta: '49 classes · 80 teachers · Archived',
-    status: 'archived' as const,
-  },
-]
 
 const STATUS_META = {
   active:   { label: 'Active',   bg: '#DCFCE7', fg: '#15803D', border: '#BBF7D0' },
@@ -433,7 +415,7 @@ function CreateTimetableModal({
   const thisYear  = new Date().getFullYear()
   const nextYear  = thisYear + 1
 
-  const [name,       setName]       = useState(`AY ${thisYear}–${String(nextYear).slice(-2)} · Main Timetable`)
+  const [name,       setName]       = useState('')
   const [startDate,  setStartDate]  = useState(`${thisYear}-04-01`)
   const [endDate,    setEndDate]    = useState(`${nextYear}-03-31`)
   const [board,      setBoard]      = useState<BoardKey>('CBSE')
@@ -1694,29 +1676,6 @@ export function DashboardPage() {
               </div>
             ))}
           </div>
-
-          {/* AI insight — only shown once there's real timetable data (demo copy) */}
-          {hasTimetables && sections.length > 0 && staff.length > 0 && (
-          <div style={{
-            background: '#F0FDF4', border: '1px solid #86EFAC', borderRadius: 10,
-            padding: '12px 16px', marginBottom: 20,
-            display: 'flex', alignItems: 'center', gap: 12,
-          }}>
-            <Sparkles size={16} color="#15803D" style={{ flexShrink: 0 }} />
-            <p style={{ flex: 1, fontSize: 13, color: '#166534', lineHeight: 1.55 }}>
-              <strong>AI insight:</strong> Mr. Sharma is overloaded by 6 periods in the AY 2025–26 draft.
-              Reassigning Chemistry XI to Ms. Nair would balance both workloads within capacity.
-            </p>
-            <button style={{
-              display: 'inline-flex', alignItems: 'center', gap: 5,
-              padding: '6px 14px', borderRadius: 7, border: 'none',
-              background: '#16A34A', color: '#fff',
-              fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0,
-            }}>
-              Fix <ChevronRight size={12} />
-            </button>
-          </div>
-          )}
 
           {/* Timetables */}
           <div style={{ marginBottom: 24 }}>
