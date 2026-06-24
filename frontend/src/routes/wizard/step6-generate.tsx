@@ -384,7 +384,13 @@ function lockEarlyDispersal(
 ): any[] {
   return secs.map(sec => {
     const tc = countFor(sec.name)
-    if (tc == null || tc >= classPeriods.length) return sec
+    // Apply early dispersal only for a GENUINE partial day. An implausibly low
+    // count (relative to the grid) means the bell isn't really configured for
+    // this section — locking on it would wrongly seal off most of the day and
+    // leave everything unplaced. Require the section to teach at least half the
+    // grid's periods before we lock the tail.
+    const minGenuine = Math.max(4, Math.ceil(classPeriods.length / 2))
+    if (tc == null || tc >= classPeriods.length || tc < minGenuine) return sec
     const scope = JSON.parse(JSON.stringify(sec.scope ?? {}))
     scope.cells ??= {}
     for (const day of workDays) {
