@@ -15,6 +15,11 @@ import { DocArticlePage } from "./pages/doc-article"
 import { ContactPage }   from "./pages/contact"
 import { SharedTimetablePage } from "./pages/shared-timetable"
 import { SSOCallbackPage } from "./pages/sso-callback"
+import { SettingsPage }  from "./pages/settings"
+import { InsightsPage }  from "./pages/insights"
+import { UsersPage }     from "./pages/users"
+import { CalendarPage }  from "./pages/calendar"
+import { SupportPage }   from "./pages/support"
 
 const rootRoute      = createRootRoute({ component: RootLayout })
 const indexRoute     = createRoute({ getParentRoute: () => rootRoute, path: "/",           component: HomePage })
@@ -32,12 +37,18 @@ const docArticleRoute = createRoute({ getParentRoute: () => rootRoute, path: "/d
 const contactRoute    = createRoute({ getParentRoute: () => rootRoute, path: "/contact",     component: ContactPage })
 const sharedRoute     = createRoute({ getParentRoute: () => rootRoute, path: "/share/$token", component: SharedTimetablePage })
 const ssoCallbackRoute = createRoute({ getParentRoute: () => rootRoute, path: "/sso-callback", component: SSOCallbackPage })
+const settingsRoute   = createRoute({ getParentRoute: () => rootRoute, path: "/settings",   component: SettingsPage })
+const insightsRoute   = createRoute({ getParentRoute: () => rootRoute, path: "/insights",   component: InsightsPage })
+const usersRoute      = createRoute({ getParentRoute: () => rootRoute, path: "/users",      component: UsersPage })
+const calendarRoute   = createRoute({ getParentRoute: () => rootRoute, path: "/calendar",   component: CalendarPage })
+const supportRoute    = createRoute({ getParentRoute: () => rootRoute, path: "/support",    component: SupportPage })
 
 export const routeTree = rootRoute.addChildren([
   indexRoute, loginRoute, registerRoute, dashboardRoute,
   wizardRoute, timetableRoute, demoRoute, masterDataRoute,
   featuresRoute, pricingRoute, docsRoute, docArticleRoute, contactRoute,
   sharedRoute, ssoCallbackRoute,
+  settingsRoute, insightsRoute, usersRoute, calendarRoute, supportRoute,
 ])
 export const router = createRouter({ routeTree })
 

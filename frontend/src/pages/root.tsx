@@ -25,7 +25,8 @@ export function RootLayout() {
     path.startsWith('/share/') // public read-only timetable viewer
 
   // Pages requiring a signed-in user (real auth via Clerk; open in mock mode).
-  const PROTECTED = ['/dashboard', '/wizard', '/timetable', '/master-data']
+  const PROTECTED = ['/dashboard', '/wizard', '/timetable', '/master-data',
+    '/settings', '/insights', '/users', '/calendar', '/support']
   const isProtected = PROTECTED.some(p => path === p || path.startsWith(p + '/'))
 
   // These pages own their full-screen layout — no app topbar

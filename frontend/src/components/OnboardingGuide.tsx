@@ -39,6 +39,9 @@ export function OnboardingGuide() {
 
   // Only for signed-in users.
   if (!user) return null
+  // Once the profile is set up, the guide disappears entirely — no floating
+  // button. Editing the organization lives in Settings from then on.
+  if (complete) return null
 
   const save = async () => {
     const trimmed = fName.trim()

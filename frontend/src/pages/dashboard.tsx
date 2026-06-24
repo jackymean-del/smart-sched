@@ -181,24 +181,24 @@ const SIDE_SECTIONS: SideSection[] = [
     items: [
       { key: 'dashboard', icon: Home,         label: 'Dashboard',  href: '/dashboard' },
       { key: 'schedules', icon: CalendarDays, label: 'Schedules',  href: '/wizard'    },
-      { key: 'calendar',  icon: Calendar,     label: 'Calendar',   href: '#'          },
-      { key: 'insights',  icon: BarChart2,    label: 'Insights',   href: '#'          },
+      { key: 'calendar',  icon: Calendar,     label: 'Calendar',   href: '/calendar'  },
+      { key: 'insights',  icon: BarChart2,    label: 'Insights',   href: '/insights'  },
     ],
   },
   {
     heading: 'ADMINISTRATION',
     items: [
-      { key: 'users',     icon: Users,    label: 'Users',     href: '#'           },
+      { key: 'users',     icon: Users,    label: 'Users',     href: '/users'       },
       { key: 'resources', icon: Database, label: 'Resources', href: '/master-data' },
-      { key: 'settings',  icon: Settings, label: 'Settings',  href: '#'           },
+      { key: 'settings',  icon: Settings, label: 'Settings',  href: '/settings'    },
     ],
   },
   {
     heading: 'HELP & SUPPORT',
     items: [
-      { key: 'support', icon: LifeBuoy, label: 'Support Center', href: '#'              },
-      { key: 'docs',    icon: BookOpen, label: 'Documentation',  href: '#', external: true },
-      { key: 'demo',    icon: Video,    label: 'Book a Demo',    href: '#', external: true },
+      { key: 'support', icon: LifeBuoy, label: 'Support Center', href: '/support'        },
+      { key: 'docs',    icon: BookOpen, label: 'Documentation',  href: '/docs'                  },
+      { key: 'demo',    icon: Video,    label: 'Book a Demo',    href: '/demo'                  },
     ],
   },
 ]
