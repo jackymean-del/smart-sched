@@ -79,6 +79,12 @@ func main() {
 	app := fiber.New(fiber.Config{
 		AppName:      "SmartSched API v3.0",
 		ErrorHandler: customError,
+		// fasthttp's default ReadBufferSize is 4KB, which is too small for a
+		// real browser request once Clerk's session cookies + the Authorization
+		// JWT + standard headers are combined — those alone can exceed 4KB,
+		// causing the server to reject the request with 431 "Request Header
+		// Fields Too Large" before it ever reaches our auth middleware.
+		ReadBufferSize: 16384,
 	})
 
 	app.Use(recover.New())
