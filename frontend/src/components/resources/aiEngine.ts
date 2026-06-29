@@ -28,11 +28,23 @@ import {
 export interface SubjectMapping { subject: string; classes: string[] }
 export type StaffExt = Staff & { subjectMappings?: SubjectMapping[] }
 
+/** A subject/class combination that couldn't be given a teacher without
+ *  exceeding someone's safe workload cap — i.e. current staff supply is short. */
+export interface StaffingGap {
+  subject:     string
+  classes:     string[]
+  unmetPeriods: number
+  /** Rough estimate of how many additional teachers would close this gap. */
+  suggestedExtraTeachers: number
+}
+
 export interface AIAssignResult {
   subjects: Subject[]
   sections: Section[]
   staff:    Staff[]
   rooms:    RoomExt[]
+  /** Empty when every class got a teacher within a safe workload. */
+  staffingGaps: StaffingGap[]
 }
 
 export interface AISnapshot {
@@ -74,7 +86,10 @@ function recommendedSlots(
   return suggestSlotsPerWeek(sub.name, grp, board) ?? sub.periodsPerWeek
 }
 
-/** Pick the best teacher for a new (subject, batch) assignment */
+/** Pick the best teacher for a new (subject, batch) assignment, or null if NO
+ *  teacher has room within their safe workload cap — the caller must never
+ *  force an assignment past this; a null means the load should be reported
+ *  as an unmet staffing need instead. */
 function pickTeacher(
   staff: Staff[],
   teacherLoad: Map<string, number>,
@@ -90,9 +105,14 @@ function pickTeacher(
     const load       = teacherLoad.get(t.id) ?? 0
     const subCount   = teacherSubjectCount.get(t.id) ?? 0
     const hasSub     = (teacherMappings.get(t.id) ?? []).some(m => m.subject === subjectName)
+    // Each teacher's own configured cap, falling back to the global default —
+    // never the other way around, so a custom (lower) cap is always honored.
+    const cap = (t as any).maxPeriodsPerWeek ?? MAX_SLOTS
 
-    // Hard cap
-    if (load + batchLoad > MAX_SLOTS) continue
+    // Hard cap — skip any teacher this assignment would push over their limit.
+    // No exceptions: if nobody fits, bestId stays null and the caller records
+    // this as an unmet staffing need instead of overloading someone.
+    if (load + batchLoad > cap) continue
 
     // Score: lower is better
     // Reward: already teaching this subject (continuity), lower load
@@ -106,14 +126,6 @@ function pickTeacher(
     if (score < bestScore) { bestScore = score; bestId = t.id }
   }
 
-  if (bestId !== null) return bestId
-
-  // Fallback: least loaded
-  let minLoad = Infinity
-  for (const t of staff) {
-    const load = teacherLoad.get(t.id) ?? 0
-    if (load < minLoad) { minLoad = load; bestId = t.id }
-  }
   return bestId
 }
 
@@ -211,7 +223,7 @@ export function runAIAssignment(
 ): AIAssignResult {
 
   if (subjects.length === 0 || sections.length === 0) {
-    return { subjects, sections, staff, rooms }
+    return { subjects, sections, staff, rooms, staffingGaps: [] }
   }
 
   // ── 1. Map subjects → classes + update slots/week ─────────────────────────
@@ -250,6 +262,23 @@ export function runAIAssignment(
     teacherSubjectCount.set(t.id, 0)
   }
 
+  // subject name → classes that couldn't be placed within ANY teacher's safe
+  // workload cap — surfaced to the caller as staffingGaps instead of ever
+  // forcing an over-cap assignment.
+  const gapsBySubject = new Map<string, string[]>()
+
+  const applyAssignment = (tid: string, classesToAdd: string[], load: number, subjectName: string) => {
+    const maps = teacherMappings.get(tid)!
+    const existing = maps.find(m => m.subject === subjectName)
+    if (existing) {
+      existing.classes.push(...classesToAdd)
+    } else {
+      maps.push({ subject: subjectName, classes: classesToAdd })
+      teacherSubjectCount.set(tid, (teacherSubjectCount.get(tid) ?? 0) + 1)
+    }
+    teacherLoad.set(tid, (teacherLoad.get(tid) ?? 0) + load)
+  }
+
   if (staff.length > 0) {
     // Sort subjects by priority: core first, activities last
     const sorted = [...updatedSubjects].sort(
@@ -274,20 +303,48 @@ export function runAIAssignment(
           staff, teacherLoad, teacherMappings, teacherSubjectCount,
           sub.name, batchLoad,
         )
-        if (!tid) continue
-
-        const maps = teacherMappings.get(tid)!
-        const existing = maps.find(m => m.subject === sub.name)
-        if (existing) {
-          existing.classes.push(...batch)
-        } else {
-          maps.push({ subject: sub.name, classes: batch })
-          teacherSubjectCount.set(tid, (teacherSubjectCount.get(tid) ?? 0) + 1)
+        if (tid) {
+          applyAssignment(tid, batch, batchLoad, sub.name)
+          continue
         }
-        teacherLoad.set(tid, (teacherLoad.get(tid) ?? 0) + batchLoad)
+
+        // The full batch doesn't fit anywhere as one block — never force it
+        // onto whoever's least loaded (that's how a teacher ends up at 49/32).
+        // Instead try placing each class individually, so partial capacity on
+        // OTHER teachers isn't wasted; anything still unplaced becomes a gap.
+        const stillUnplaced: string[] = []
+        for (const cls of batch) {
+          const single = pickTeacher(
+            staff, teacherLoad, teacherMappings, teacherSubjectCount,
+            sub.name, ppw,
+          )
+          if (single) applyAssignment(single, [cls], ppw, sub.name)
+          else stillUnplaced.push(cls)
+        }
+        if (stillUnplaced.length) {
+          gapsBySubject.set(sub.name, [...(gapsBySubject.get(sub.name) ?? []), ...stillUnplaced])
+        }
       }
     }
+  } else {
+    // No staff at all — every assigned class is an unmet staffing need.
+    for (const sub of updatedSubjects) {
+      const classes = subjectClassMap.get(sub.id) ?? []
+      if (classes.length > 0) gapsBySubject.set(sub.name, classes)
+    }
   }
+
+  const staffingGaps: StaffingGap[] = [...gapsBySubject].map(([subjectName, classes]) => {
+    const sub = updatedSubjects.find(s => s.name === subjectName)
+    const ppw = sub?.periodsPerWeek || 1
+    const unmetPeriods = classes.length * ppw
+    return {
+      subject: subjectName,
+      classes,
+      unmetPeriods,
+      suggestedExtraTeachers: Math.max(1, Math.ceil(unmetPeriods / TARGET_SLOTS)),
+    }
+  })
 
   // ── 3. Build updated staff ────────────────────────────────────────────────
   const updatedStaff: Staff[] = staff.map(t => {
@@ -313,6 +370,7 @@ export function runAIAssignment(
     sections: updatedSections,
     staff:    updatedStaff,
     rooms:    updatedRooms,
+    staffingGaps,
   }
 }
 

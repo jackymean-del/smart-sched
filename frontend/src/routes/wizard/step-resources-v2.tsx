@@ -27,7 +27,7 @@ import { ClassesPanel }  from '@/components/resources/ClassesPanel'
 import { SubjectsPanel, generateShortName, inferCategory } from '@/components/resources/SubjectsPanel'
 import { suggestSlotsPerWeek, normalizeBoardType, getGrade, getGradeGroup, standardSubjectsForSection, subjectAppliesToSections, type CurriculumBoard } from '@/components/resources/curriculum'
 import { RoomsPanel, type RoomExt } from '@/components/resources/RoomsPanel'
-import { runAIAssignment, type AISnapshot } from '@/components/resources/aiEngine'
+import { runAIAssignment, type AISnapshot, type StaffingGap } from '@/components/resources/aiEngine'
 import {
   Sparkles, Users, BookOpen, Building2, GraduationCap,
   ChevronLeft, ChevronRight, RefreshCw, CheckCircle2,
@@ -326,6 +326,10 @@ export function StepResourcesV2() {
   const [aiLoading,          setAiLoading]          = useState(false)
   const [aiStatus,           setAiStatus]           = useState('')
   const [aiSnapshot,         setAiSnapshot]         = useState<AISnapshot | null>(null)
+  // Classes that couldn't get a teacher within a safe workload after the last
+  // AI assignment — e.g. "need ~2 more teachers for Drawing covering III-A,
+  // III-B...". Empty means every class got a teacher within their cap.
+  const [staffingGaps,       setStaffingGaps]       = useState<StaffingGap[]>([])
   const [facultyAiApplied,   setFacultyAiApplied]   = useState(false)
   const [roomsAiApplied,     setRoomsAiApplied]     = useState(false)
   const [subjectsAiApplied,  setSubjectsAiApplied]  = useState(false)
@@ -414,6 +418,7 @@ export function StepResourcesV2() {
     setSubjects(result.subjects)
     setStaff(result.staff)
     setRooms(result.rooms)
+    setStaffingGaps(result.staffingGaps)
     setAiStatus(`✓ ${board} curriculum assigned`)
     setAiLoading(false)
     setTimeout(() => setAiStatus(''), 3500)
@@ -445,10 +450,13 @@ export function StepResourcesV2() {
     const maxPeriods = boardPeriods[board] ?? 28
     setAiStatus('Assigning teacher workloads & subjects…')
     await sleep(480)
-    const result = runAIAssignment(subjects, sections, staff, rooms, board)
-    // Apply AI staff but preserve max periods from board standard
-    const newStaff = result.staff.map((t: any) => ({ ...t, maxPeriodsPerWeek: maxPeriods }))
-    setStaff(newStaff)
+    // Apply the board-standard cap BEFORE assigning, so pickTeacher's hard cap
+    // (and any staffing-gap calculation) reflects the cap teachers will
+    // actually have — not a stale/default value overwritten afterwards.
+    const cappedStaff = (staff as any[]).map(t => ({ ...t, maxPeriodsPerWeek: maxPeriods }))
+    const result = runAIAssignment(subjects, sections, cappedStaff, rooms, board)
+    setStaff(result.staff)
+    setStaffingGaps(result.staffingGaps)
     setAiStatus('✓ Faculty assignments updated')
     setAiLoading(false)
     setFacultyAiApplied(true)
@@ -703,6 +711,7 @@ export function StepResourcesV2() {
     setStaff(assigned.staff)
     setSubjects(assigned.subjects)
     setRooms(assigned.rooms)
+    setStaffingGaps(assigned.staffingGaps)
     if (sections.length > 0) setSections(assigned.sections)
     store.setConfig?.({
       ...config,
@@ -819,6 +828,34 @@ export function StepResourcesV2() {
       {/* ══ Content area ═════════════════════════════════════════════════════ */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
         <div style={{ flex: 1, padding: '12px 18px 6px', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+
+          {/* ── Staffing gaps — classes that couldn't get a teacher within a
+                safe workload. Never silently overloaded; always surfaced. ──── */}
+          {staffingGaps.length > 0 && (
+            <div style={{
+              background: '#FEF2F2', border: '1.5px solid #FECACA', borderRadius: 9,
+              padding: '11px 14px', marginBottom: 14,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 800, color: '#991B1B' }}>
+                  ⚠ More teachers needed — {staffingGaps.reduce((a, g) => a + g.classes.length, 0)} class{staffingGaps.reduce((a, g) => a + g.classes.length, 0) !== 1 ? 'es' : ''} couldn't be assigned within a safe workload
+                </div>
+                <button onClick={() => setStaffingGaps([])}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#991B1B', fontSize: 13, padding: 0 }}>×</button>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {staffingGaps.map(g => (
+                  <div key={g.subject} style={{ fontSize: 12, color: '#7F1D1D' }}>
+                    <strong>{g.subject}</strong> — need ~{g.suggestedExtraTeachers} more teacher{g.suggestedExtraTeachers !== 1 ? 's' : ''}
+                    {' '}({g.unmetPeriods} periods/week short) for {g.classes.slice(0, 6).join(', ')}{g.classes.length > 6 ? ` +${g.classes.length - 6} more` : ''}
+                  </div>
+                ))}
+              </div>
+              <div style={{ fontSize: 11, color: '#B91C1C', marginTop: 6 }}>
+                Add more teachers for these subjects, then re-run Generate — no class will be assigned a teacher beyond their safe weekly workload.
+              </div>
+            </div>
+          )}
 
           {/* ── Empty state ───────────────────────────────────────────────── */}
           {!hasAnyData && (
