@@ -1095,6 +1095,12 @@ function loadSaved(): SavedBell | null {
 interface SavedBell {
   shiftName: string; startTime: string; use12h: boolean
   periodDur: number; maxPeriods: number; workDays: string[]; rows: BellRow[]
+  periodDurMin?: number
+  // 'fixed' = single exact period length (P.Min locked to P.Max); 'range' = P.Min–P.Max band.
+  periodDurationMode?: 'range' | 'fixed'
+  // True until the user manually edits Max/day; while true, Max/day is derived
+  // from the bell window ÷ period length instead of being a fixed input.
+  maxPeriodsAuto?: boolean
   // Mode
   scheduleMode?: 'standard' | 'advanced'
   // Rhythm
@@ -2136,6 +2142,16 @@ export function StepBell() {
   const [periodDur,    setPeriodDur]    = useState<number>(() => _saved?.periodDur    ?? (config.defaultSessionDuration ?? 40))
   const [periodDurMin, setPeriodDurMin] = useState<number>(() => (_saved as any)?.periodDurMin ?? Math.max(10, Math.round((_saved?.periodDur ?? (config.defaultSessionDuration ?? 40)) * 0.5)))
   const [maxPeriods,   setMaxPeriods]   = useState<number>(() => _saved?.maxPeriods   ?? (config.periodsPerDay ?? 8))
+  // 'range' = P.Min–P.Max band (default, current behavior); 'fixed' = a single
+  // exact period length (P.Min is locked equal to P.Max, no variation).
+  const [periodDurationMode, setPeriodDurationMode] =
+    useState<'range' | 'fixed'>(() => _saved?.periodDurationMode ?? 'range')
+  // True until the user manually edits Max/day. While auto, Max/day is DERIVED
+  // from the bell window ÷ period length whenever the period length changes.
+  // Once the user types into Max/day, it becomes pinned and period durations
+  // adjust instead (last period first) to keep the school day's end time fixed.
+  const [maxPeriodsAuto, setMaxPeriodsAuto] =
+    useState<boolean>(() => _saved?.maxPeriodsAuto ?? true)
   const [workDays,   setWorkDays]   = useState<string[]>(() => {
     if (_saved?.workDays?.length) return _saved.workDays
     return config.workDays?.length ? config.workDays.map(d => d.charAt(0) + d.slice(1, 3).toLowerCase()) : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
@@ -2288,7 +2304,7 @@ export function StepBell() {
   // ── Persistence ───────────────────────────────────────────────
   useEffect(() => {
     localStorage.setItem(bellKey, JSON.stringify({
-      shiftName, startTime, use12h, periodDur, periodDurMin, maxPeriods, workDays, rows,
+      shiftName, startTime, use12h, periodDur, periodDurMin, maxPeriods, periodDurationMode, maxPeriodsAuto, workDays, rows,
       cycleWeeks, useDayNames, cycleStartDate, fixedDuration, rotationDays,
       weekWorkDays, dayStartTimes, dayPeriodDurs, dayOffRules, cwRows, varyByDay, dayRows,
       scheduleMode, shifts, activeShiftId, shiftRows, customClasses, customGroups,
@@ -2298,7 +2314,7 @@ export function StepBell() {
       concurrentPeriodMode: concurrentMode, concurrentPeriodDur: concurrentDur, lunchBreakDur,
       bellCustomized, setupChoice, areaMode, dayboarding,
     } as SavedBell))
-  }, [shiftName, startTime, use12h, periodDur, periodDurMin, maxPeriods, workDays, rows,
+  }, [shiftName, startTime, use12h, periodDur, periodDurMin, maxPeriods, periodDurationMode, maxPeriodsAuto, workDays, rows,
       cycleWeeks, useDayNames, cycleStartDate, fixedDuration, rotationDays,
       weekWorkDays, dayStartTimes, dayPeriodDurs, dayOffRules, cwRows, varyByDay, dayRows,
       scheduleMode, shifts, activeShiftId, shiftRows, customClasses, customGroups,
@@ -2836,6 +2852,28 @@ export function StepBell() {
     })
   }
 
+  /**
+   * Recompute Max/day from the current bell window ÷ a period duration, and
+   * rebuild the periods at that uniform duration. Used (a) whenever the
+   * period length changes while Max/day is still in "auto" mode, and (b) when
+   * the user clicks "↺ Auto" to un-pin a manually-set Max/day.
+   * Scoped to Standard mode (not multi-shift/vary-by-day) to keep this safe.
+   */
+  const recomputeAutoMaxPeriods = (durOverride?: number) => {
+    const dur = Math.max(10, durOverride ?? activePeriodDur)
+    const windowMins = toMins(endTime) - toMins(activeStartTime)
+    const nonTeachMins = displayRows.filter(r => r.type !== 'teaching').reduce((a, r) => a + r.duration, 0)
+    const count = Math.max(1, Math.min(16, Math.floor(Math.max(0, windowMins - nonTeachMins) / dur)))
+    setMaxPeriods(count)
+    setDisplayRows(prev => {
+      const asm  = prev.find(r => r.type === 'assembly')  ?? mkAssembly()
+      const dis  = prev.find(r => r.type === 'dispersal') ?? mkDispersal()
+      const brks = prev.filter(r => r.type === 'short-break' || r.type === 'lunch')
+      const prs  = Array.from({ length: count }, (_, i) => mkPeriod(i + 1, dur))
+      return [asm, ...prs, ...brks, dis]
+    })
+  }
+
   const handlePeriodDurChange = (d: number) => {
     const v = Math.max(10, d)
     // Only update the DEFAULT — rows that still match the old default are also nudged,
@@ -2849,8 +2887,16 @@ export function StepBell() {
       setDisplayRows(prev => prev.map(r => r.type === 'teaching' && r.duration === oldDur ? { ...r, duration: v } : r))
     } else {
       setPeriodDur(v)
-      setDisplayRows(prev => prev.map(r => r.type === 'teaching' && r.duration === oldDur ? { ...r, duration: v } : r))
+      if (maxPeriodsAuto) {
+        // Auto Max/day: keep the school day's window, recompute the COUNT to
+        // fit the new period length instead of just resizing existing rows.
+        recomputeAutoMaxPeriods(v)
+      } else {
+        setDisplayRows(prev => prev.map(r => r.type === 'teaching' && r.duration === oldDur ? { ...r, duration: v } : r))
+      }
     }
+    // Fixed mode: P.Min always tracks the single duration value exactly.
+    if (periodDurationMode === 'fixed') setPeriodDurMin(v)
   }
 
   /** Explicitly force every teaching row to the current default duration. */
@@ -2936,11 +2982,20 @@ export function StepBell() {
 
   const handleMaxPeriodsChange = (n: number) => {
     const v = Math.max(1, Math.min(16, n))
+    // The user is now manually pinning Max/day — period durations adapt to it
+    // (instead of Max/day adapting to period duration) until they hit "Auto" again.
+    setMaxPeriodsAuto(false)
     if (isAdvanced) {
       updateActiveShift({ maxPeriods: v })
     } else {
       setMaxPeriods(v)
     }
+    // Preserve the day's current end time: capture it before the row count
+    // changes, then re-absorb any resulting surplus/deficit by adjusting
+    // periods from the LAST one backward — the same mechanism already used
+    // for direct end-time edits — instead of silently shifting the end time.
+    const targetEndMins = toMins(endTime)
+    const minDur = Math.max(5, periodDurMin)
     setDisplayRows(prev => {
       const asm  = prev.find(r => r.type === 'assembly')  ?? mkAssembly()
       const dis  = prev.find(r => r.type === 'dispersal') ?? mkDispersal()
@@ -2949,7 +3004,23 @@ export function StepBell() {
         const ex = prev.find(r => r.id === `p${i + 1}`)
         return ex ? { ...ex, duration: activePeriodDur } : mkPeriod(i + 1, activePeriodDur)
       })
-      return [asm, ...prs, ...brks, dis]
+      const next = [asm, ...prs, ...brks, dis]
+
+      const sumMins = next.reduce((a, r) => a + r.duration, 0)
+      let diff = (targetEndMins - toMins(activeStartTime)) - sumMins
+      for (let i = next.length - 1; i >= 0 && diff !== 0; i--) {
+        if (next[i].type !== 'teaching') continue
+        if (diff < 0) {
+          const canReduce = floor5(next[i].duration - minDur)
+          const reduce = Math.min(-diff, canReduce)
+          if (reduce > 0) { next[i] = { ...next[i], duration: next[i].duration - reduce }; diff += reduce }
+        } else {
+          const add = snap5(diff)
+          next[i] = { ...next[i], duration: next[i].duration + add }
+          diff = 0
+        }
+      }
+      return next
     })
   }
 
@@ -3373,7 +3444,8 @@ export function StepBell() {
     // Writing it here guarantees re-mount reads the correct values.
     try {
       localStorage.setItem(bellKey, JSON.stringify({
-        shiftName, startTime, use12h, periodDur, maxPeriods, workDays, rows,
+        shiftName, startTime, use12h, periodDur, periodDurMin, maxPeriods,
+        periodDurationMode, maxPeriodsAuto, workDays, rows,
         cycleWeeks, useDayNames, cycleStartDate, fixedDuration, rotationDays,
         weekWorkDays, dayStartTimes, dayPeriodDurs, dayOffRules, cwRows, varyByDay, dayRows,
         scheduleMode, shifts, activeShiftId, shiftRows, customClasses, customGroups,
@@ -3849,24 +3921,66 @@ export function StepBell() {
                   </div>
                   )
                 })()}
-                {/* Period Min */}
-                <div style={{ flex: '0 0 80px' }}>
-                  <div style={FL}>P. Min (min)</div>
-                  <NumInput className="b-input" value={periodDurMin} min={10} max={periodDur - 5}
-                    onChange={v => setPeriodDurMin(Math.min(v, periodDur - 5))}
-                    style={{ width: '100%', textAlign: 'center', fontFamily: "'DM Mono',monospace", fontWeight: 800, fontSize: 16 }} />
-                </div>
-                {/* Period Max */}
-                <div style={{ flex: '0 0 80px' }}>
-                  <div style={FL}>P. Max (min)</div>
-                  <NumInput className="b-input" value={periodDur} min={periodDurMin + 5} max={240} onChange={handlePeriodDurChange}
-                    style={{ width: '100%', textAlign: 'center', fontFamily: "'DM Mono',monospace", fontWeight: 800, fontSize: 16 }} />
+                {/* Period duration — Range (P.Min–P.Max) or Fixed (single value) */}
+                {periodDurationMode === 'fixed' ? (
+                  <div style={{ flex: '0 0 90px' }}>
+                    <div style={FL}>Duration (min)</div>
+                    <NumInput className="b-input" value={periodDur} min={10} max={240} onChange={handlePeriodDurChange}
+                      style={{ width: '100%', textAlign: 'center', fontFamily: "'DM Mono',monospace", fontWeight: 800, fontSize: 16 }} />
+                  </div>
+                ) : (
+                  <>
+                    {/* Period Min */}
+                    <div style={{ flex: '0 0 80px' }}>
+                      <div style={FL}>P. Min (min)</div>
+                      <NumInput className="b-input" value={periodDurMin} min={10} max={periodDur - 5}
+                        onChange={v => setPeriodDurMin(Math.min(v, periodDur - 5))}
+                        style={{ width: '100%', textAlign: 'center', fontFamily: "'DM Mono',monospace", fontWeight: 800, fontSize: 16 }} />
+                    </div>
+                    {/* Period Max */}
+                    <div style={{ flex: '0 0 80px' }}>
+                      <div style={FL}>P. Max (min)</div>
+                      <NumInput className="b-input" value={periodDur} min={periodDurMin + 5} max={240} onChange={handlePeriodDurChange}
+                        style={{ width: '100%', textAlign: 'center', fontFamily: "'DM Mono',monospace", fontWeight: 800, fontSize: 16 }} />
+                    </div>
+                  </>
+                )}
+                {/* Range / Fixed toggle */}
+                <div style={{ flex: '0 0 86px' }}>
+                  <div style={FL}>Mode</div>
+                  <div style={{ display: 'flex', border: '1px solid #E5E7EB', borderRadius: 6, overflow: 'hidden', height: 30 }}>
+                    {(['range', 'fixed'] as const).map(m => (
+                      <button key={m} type="button"
+                        onClick={() => {
+                          setPeriodDurationMode(m)
+                          if (m === 'fixed') { setPeriodDurMin(periodDur); applyDurToAll() }
+                        }}
+                        title={m === 'fixed' ? 'Every period exactly this length' : 'Periods can vary between P.Min and P.Max'}
+                        style={{
+                          flex: 1, border: 'none', cursor: 'pointer', fontSize: 10.5, fontWeight: 700,
+                          background: periodDurationMode === m ? '#7C6FE0' : '#fff',
+                          color: periodDurationMode === m ? '#fff' : '#6B7280',
+                        }}>
+                        {m === 'fixed' ? 'Fixed' : 'Range'}
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 {/* Max periods */}
                 <div style={{ flex: '0 0 78px' }}>
-                  <div style={FL}>Max / day</div>
+                  <div style={{ ...FL, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span>Max / day</span>
+                    {!maxPeriodsAuto && (
+                      <span onClick={() => { setMaxPeriodsAuto(true); recomputeAutoMaxPeriods() }}
+                        title="Let Max/day be derived from the bell window again"
+                        style={{ color: '#7C6FE0', cursor: 'pointer', fontWeight: 700, fontSize: 9.5 }}>
+                        ↺ Auto
+                      </span>
+                    )}
+                  </div>
                   <NumInput className="b-input" value={maxPeriods} min={1} max={16} onChange={handleMaxPeriodsChange}
                     style={{ width: '100%', textAlign: 'center', fontFamily: "'DM Mono',monospace", fontWeight: 800, fontSize: 16 }} />
+                  <div style={FH}>{maxPeriodsAuto ? 'auto-fit to window' : 'manually set'}</div>
                 </div>
                 {/* Format */}
                 <div style={{ flex: '0 0 72px' }}>
