@@ -4682,7 +4682,7 @@ export function StepBell() {
                       <span style={{ fontSize: 18, flexShrink: 0, marginTop: 1 }}>🍎</span>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 2 }}>
-                          Morning break
+                          Break
                           {morningBreak && (
                             <span style={{
                               marginLeft: 8, fontSize: 10, fontWeight: 700,
@@ -4695,7 +4695,7 @@ export function StepBell() {
                           )}
                         </div>
                         <div style={{ fontSize: 10, color: '#9CA3AF', lineHeight: 1.6 }}>
-                          A short pause for breakfast or a snack — common in day-boarding schools. Helps young children settle in before the first block of lessons.
+                          An extra short pause anywhere in the day — for a snack, stretch, or settling-in time. Place it near the start or the end of the day, wherever it's needed.
                         </div>
                       </div>
                     </div>
@@ -4737,16 +4737,17 @@ export function StepBell() {
                       </button>
                     </div>
 
-                    {/* Sub-picker: exactly after which point? — shown when break is enabled */}
+                    {/* Sub-picker: exactly after which point? — shown when break is enabled.
+                        Covers the whole day (Assembly through after the last period, i.e.
+                        right before Dispersal) so the same break can sit at the start, the
+                        end, or anywhere in between. */}
                     {morningBreak && (() => {
-                      // Show Assembly + up to 4 periods (sensible max for a morning break)
-                      const maxPos = Math.min(maxPeriods - 1, 4)
                       const positions = [
                         { pos: 0, label: 'Assembly', sub: 'Before P1' },
-                        ...Array.from({ length: maxPos }, (_, i) => ({
+                        ...Array.from({ length: maxPeriods }, (_, i) => ({
                           pos: i + 1,
                           label: `Period ${i + 1}`,
-                          sub: i === 0 ? 'Most common' : i === 1 ? 'A bit later' : '',
+                          sub: i === 0 ? 'Most common' : i === 1 ? 'A bit later' : i === maxPeriods - 1 ? 'End of day' : '',
                         })),
                       ]
                       return (
