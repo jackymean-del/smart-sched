@@ -363,6 +363,30 @@ function mergeTTLists(server: TTEntry[], local: TTEntry[]): TTEntry[] {
   const localOnly = local.filter(t => !ids.has(t.id))
   return [...localOnly, ...server].sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
 }
+
+/** Build a TTEntry by inspecting the CURRENT wizard store — used to "adopt"
+ *  work that exists only because the user reached /wizard directly (e.g. a
+ *  sidebar link), bypassing the New-timetable dialog entirely. Without this,
+ *  that work has no TTEntry/id and never appears on the dashboard. */
+function buildEntryFromCurrentStore(id: string): TTEntry {
+  const s = useTimetableStore.getState() as any
+  return {
+    id,
+    name: s.config?.timetableName || 'Recovered timetable',
+    status: 'draft',
+    wizardStep: s.step || 1,
+    approxClasses: (s.sections ?? []).length,
+    approxTeachers: (s.staff ?? []).length,
+    approxSubjects: (s.subjects ?? s.legacySubjects ?? []).length,
+    approxRooms: (s.rooms ?? []).length,
+    board: s.config?.board || 'CBSE',
+    startDate: s.config?.startDate || '',
+    endDate: s.config?.endDate || '',
+    createdAt: Date.now(),
+    fromGrade: s.config?.fromGrade,
+    toGrade: s.config?.toGrade,
+  }
+}
 function getActiveTTId(): string | null {
   return localStorage.getItem(ACTIVE_TT_KEY)
 }
@@ -1057,20 +1081,37 @@ export function DashboardPage() {
     const local = loadLocalTTList()
     if (local.length) setTTList(local)
     ttRepo.fetchTimetables()
-      .then(serverList => {
+      .then(async serverList => {
         if (cancelled) return
-        const merged = mergeTTLists(serverList as TTEntry[], local)
-        setTTList(merged)
-        saveTTList(merged)
-        // Only reset the wizard store when the active timetable belongs to no
-        // one in the MERGED list (prevents wiping a freshly-created draft that
-        // hasn't finished syncing to the server yet).
+        let merged = mergeTTLists(serverList as TTEntry[], local)
+
         const activeId = getActiveTTId()
         const ownsActive = !!activeId && merged.some(t => t.id === activeId)
-        if (!ownsActive) {
+        const s = useTimetableStore.getState() as any
+        const hasRealWork = Boolean(s.config?.timetableName) || (s.sections ?? []).length > 0
+
+        if (!ownsActive && hasRealWork) {
+          // Real wizard work with no matching TTEntry (e.g. reached /wizard
+          // directly) — adopt it into the list instead of losing it.
+          let entry = buildEntryFromCurrentStore(
+            activeId || (Date.now().toString(36) + Math.random().toString(36).slice(2, 6))
+          )
+          if (SERVER_BACKED) {
+            try { entry = { ...entry, id: await ttRepo.createTimetable(entry, buildSnapshot()) } }
+            catch { /* keep local id; a later save will retry the server sync */ }
+          }
+          merged = [entry, ...merged]
+          setActiveTTId(entry.id)
+          saveTTSnapshot(entry.id)
+        } else if (!ownsActive && activeId) {
+          // Dangling pointer to a deleted/foreign timetable with nothing to
+          // recover — safe to clear.
           useTimetableStore.getState().resetAll()
           setActiveTTId(null)
         }
+
+        setTTList(merged)
+        saveTTList(merged)
       })
       .catch(() => { /* offline — local cache already shown */ })
     return () => { cancelled = true }

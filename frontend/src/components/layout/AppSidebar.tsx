@@ -30,7 +30,7 @@ interface NavItem {
 // Flat 7-item nav per the schedU wireframe spec — bullet-dot pill style.
 // Two groups visually separated by a hairline, no group labels.
 const NAV_PRIMARY: NavItem[] = [
-  { icon: <span />, label: 'Create new',   href: '/wizard' },
+  { icon: <span />, label: 'Create new',   href: '/dashboard?new=1' },
   { icon: <span />, label: 'Guide',        href: '/guide' },
   { icon: <span />, label: 'Master',       href: '/master-data' },
 ]
@@ -215,7 +215,7 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
 
       {/* ── New Timetable CTA ── */}
       <div style={{ padding: collapsed ? '10px 6px' : '12px 10px', flexShrink: 0 }}>
-        <a href="/wizard" title={collapsed ? 'New Timetable' : undefined} style={{ textDecoration: 'none' }}>
+        <a href="/dashboard?new=1" title={collapsed ? 'New Timetable' : undefined} style={{ textDecoration: 'none' }}>
           <button style={{
             width: '100%', padding: collapsed ? '8px 0' : '8px 12px',
             borderRadius: 8, border: 'none',
