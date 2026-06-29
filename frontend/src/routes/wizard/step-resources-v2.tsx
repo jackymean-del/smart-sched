@@ -25,7 +25,7 @@ import { makeId } from '@/components/master/EntityGrids'
 import { TeachersPanel } from '@/components/resources/TeachersPanel'
 import { ClassesPanel }  from '@/components/resources/ClassesPanel'
 import { SubjectsPanel, generateShortName, inferCategory } from '@/components/resources/SubjectsPanel'
-import { suggestSlotsPerWeek, normalizeBoardType, getGrade, getGradeGroup, standardSubjectsForSection, type CurriculumBoard } from '@/components/resources/curriculum'
+import { suggestSlotsPerWeek, normalizeBoardType, getGrade, getGradeGroup, standardSubjectsForSection, subjectAppliesToSections, type CurriculumBoard } from '@/components/resources/curriculum'
 import { RoomsPanel, type RoomExt } from '@/components/resources/RoomsPanel'
 import { runAIAssignment, type AISnapshot } from '@/components/resources/aiEngine'
 import {
@@ -178,7 +178,7 @@ const DEFAULT_SUBJECTS: Array<{ name: string; cat: string; ppw: number; short?: 
   { name: 'EVS',                      cat: 'Compulsory',   ppw: 4 },
   // ── Lower school (I–VIII) ────────────────────────────────────────────────────
   { name: 'Science',                  cat: 'Compulsory',   ppw: 5 },
-  { name: 'Social Studies',           cat: 'Compulsory',   ppw: 5,  short: 'SST'  },
+  { name: 'Social Science',           cat: 'Compulsory',   ppw: 5,  short: 'SSC'  },
   { name: 'Hindi',                    cat: 'Language',     ppw: 4,  short: 'HIN'  },
   { name: 'Sanskrit / MIL',           cat: 'Language',     ppw: 3,  short: 'SANS' },
   { name: 'Odia / Regional Language', cat: 'Language',     ppw: 3,  short: 'ODI'  },
@@ -235,7 +235,7 @@ function buildDefaultSubjects(board: CurriculumBoard = 'CBSE', sections: Section
   ])
   // Subjects that are lower-school focused (drop when school is XI-XII only)
   const PRESRSEC_SUBJECTS = new Set([
-    'Science','Social Studies','Hindi','Sanskrit / MIL',
+    'Science','Social Science','Hindi','Sanskrit / MIL',
     'G.K.','Moral Science','SUPW / Life Skills','Scout & Guide',
     'Drawing','Music','Dance','Art & Craft',
     'Odia / Regional Language',
@@ -265,6 +265,11 @@ function buildDefaultSubjects(board: CurriculumBoard = 'CBSE', sections: Section
         // No pre-primary sections — drop pre-primary-only subjects
         if (PREK_ONLY_SUBJECTS.has(d.name)) return false
       }
+      // Precise check against the curriculum brain: only generate a subject if
+      // at least one CONFIGURED section actually falls in its applicable grade
+      // range (e.g. don't generate Sanskrit/Scout & Guide for an I–V-only
+      // school, and split EVS (≤ II) vs Social Science (≥ III) within primary).
+      if (sections.length > 0 && !subjectAppliesToSections(d.name, sections)) return false
       return true
     })
     .map(d => {

@@ -16,6 +16,8 @@
  *   detectStream(sectionName)                            — stream classification
  */
 
+import { parseGradeLevel } from '@/lib/gradeParse'
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type CurriculumBoard = 'CBSE' | 'ICSE' | 'IB' | 'Cambridge' | 'Custom'
 export type GradeGroup      = 'preK' | 'primary' | 'middle' | 'secondary' | 'srSec'
@@ -179,7 +181,7 @@ export const SHORT_MAP: Record<string, string> = {
   'English Literature':       'ENG LIT',
   'Science':                  'SCI',
   'Social Studies':           'SST',
-  'Social Science':           'SOC SCI',
+  'Social Science':           'SSC',
   // Sciences
   'Physics':                  'PHY',
   'Chemistry':                'CHEM',
@@ -386,10 +388,10 @@ export const CURRICULUM: Record<string, SubjectRule> = {
     hint: 'Same as G.K. — general awareness for pre-primary through middle',
   },
   'Scout & Guide': {
-    grades: ['primary','middle','secondary'],
+    grades: ['middle','secondary'],
     isActivity: true,
-    slots: { primary: 1, middle: 1, secondary: 1 },
-    hint: 'Co-curricular — Indian school operational practice',
+    slots: { middle: 1, secondary: 1 },
+    hint: 'Co-curricular — typically introduced from middle school (VI), not earlier primary grades',
   },
   'Drawing': {
     grades: ['primary','middle','secondary'],
@@ -433,7 +435,7 @@ export const CURRICULUM: Record<string, SubjectRule> = {
     grades: ['preK','primary'],
     slots:     { preK: 3, primary: 4 },
     icseSlots: { preK: 3, primary: 5 },
-    hint: 'Environmental Studies — CBSE: pre-primary + primary (Nursery–V); ICSE: greater emphasis through V',
+    hint: 'Environmental Studies — Nursery through Class II only; Social Science takes over from Class III (see GRADE_LEVEL_OVERRIDES below)',
   },
   // 'Environmental Studies' intentionally omitted.
   // "EST" in Indian school timetables = Extra Study Time (a free/self-study period),
@@ -533,11 +535,11 @@ export const CURRICULUM: Record<string, SubjectRule> = {
     cambridgeSlots:  { primary: 4, middle: 5 },
     hint: 'Unified Science — typically I–V (primary) or I–VIII (middle); Physics/Chemistry/Biology take over from IX or VI depending on school. Adjust per your board.',
   },
-  'Social Studies': {
-    grades: ['middle','secondary'],
-    slots:     { middle: 5, secondary: 5 },
-    icseSlots: { middle: 4, secondary: 4 },
-    hint: 'SST (History + Geography + Civics/Pol.Sci combined) — CBSE VI–X; ICSE splits these separately',
+  'Social Science': {
+    grades: ['primary','middle','secondary'],
+    slots:     { primary: 4, middle: 5, secondary: 5 },
+    icseSlots: { primary: 4, middle: 4, secondary: 4 },
+    hint: 'SSC (History + Geography + Civics/Pol.Sci combined) — Class III–X; replaces EVS from Class III (see GRADE_LEVEL_OVERRIDES below)',
   },
 
   // ── Secondary (IX–X) — science disciplines ────────────────────────────────────
@@ -772,6 +774,45 @@ function getRule(subjectName: string): SubjectRule | undefined {
 }
 
 /**
+ * Numeric-grade overrides for subjects whose applicability splits WITHIN a
+ * single grade-group band — e.g. EVS and Social Science both fall in the
+ * 'primary' band (I–V), but EVS only runs through Class II while Social
+ * Science picks up from Class III. The grades[] band alone can't express
+ * that split, so these predicates narrow it down to the exact grade level
+ * (parsed via the shared grade parser, so it works with any class naming).
+ */
+const GRADE_LEVEL_OVERRIDES: Record<string, (level: number) => boolean> = {
+  'EVS':            (level) => level <= 2,   // Nursery through Class II
+  'Social Science': (level) => level >= 3,   // Class III and up
+}
+
+function passesGradeLevelOverride(subjectName: string, gradeLabel: string): boolean {
+  const override = GRADE_LEVEL_OVERRIDES[subjectName]
+  if (!override) return true
+  const level = parseGradeLevel(gradeLabel)
+  return level === null ? true : override(level)
+}
+
+/**
+ * Whether a subject's curriculum rule applies to ANY of the given sections —
+ * respecting both the grade-group band AND any numeric-grade override above.
+ * Unknown subjects (no rule) default to applicable, so custom/manually-added
+ * subjects are never silently dropped. Used to generate ONLY subjects that
+ * are actually relevant to the grade range the user configured — e.g. don't
+ * generate "Social Science" or "Sanskrit / MIL" (middle/secondary only) for
+ * a school that only has Classes I–V.
+ */
+export function subjectAppliesToSections(subjectName: string, sections: ReadonlyArray<SectionLike>): boolean {
+  const rule = getRule(subjectName)
+  if (!rule) return true
+  return sections.some(sec => {
+    const grade = getGrade(sec.name)
+    if (!rule.grades.includes(getGradeGroup(grade))) return false
+    return passesGradeLevelOverride(subjectName, grade)
+  })
+}
+
+/**
  * AI Subject ↔ Class Mapping
  *
  * Returns the section names that this subject should be assigned to,
@@ -796,6 +837,7 @@ export function suggestClassesForSubject(
       const grade = getGrade(sec.name)
       const group = getGradeGroup(grade)
       if (!rule.grades.includes(group)) return false
+      if (!passesGradeLevelOverride(subjectName, grade)) return false
       // Stream check applies only to srSec sections. The section's explicit
       // stream (Classes tab) is authoritative; resolveStream falls back to the
       // name only when no stream is set. Each subject must declare 'general' in
@@ -907,23 +949,30 @@ const STD_PREK = [
   'Art & Craft', 'Music', 'Physical Education', 'G.K.',
 ]
 
-/** Primary (I–V) — CBSE keeps EVS through V; Science/SST begin at VI. */
-const STD_PRIMARY = [
+/** Junior Primary (I–II) — EVS still combines science + social themes. */
+const STD_PRIMARY_JUNIOR = [
   'English', 'Mathematics', 'EVS', 'Hindi',
   'Computer Science', 'G.K.', 'Art & Craft', 'Music',
   'Physical Education', 'Library',
 ]
 
-/** Middle (VI–VIII) — unified Science + Social Studies, three languages. */
+/** Senior Primary (III–V) — EVS splits into Science + Social Science. */
+const STD_PRIMARY_SENIOR = [
+  'English', 'Mathematics', 'Science', 'Social Science', 'Hindi',
+  'Computer Science', 'G.K.', 'Art & Craft', 'Music',
+  'Physical Education', 'Library',
+]
+
+/** Middle (VI–VIII) — unified Science + Social Science, three languages. */
 const STD_MIDDLE = [
-  'English', 'Mathematics', 'Science', 'Social Studies',
+  'English', 'Mathematics', 'Science', 'Social Science',
   'Hindi', 'Sanskrit', 'Computer Science', 'Art & Craft',
   'Physical Education', 'Library',
 ]
 
 /** Secondary (IX–X) — board-exam core + IT skill + health/PE. */
 const STD_SECONDARY = [
-  'English', 'Mathematics', 'Science', 'Social Studies',
+  'English', 'Mathematics', 'Science', 'Social Science',
   'Hindi', 'Information Technology', 'Physical Education',
 ]
 
@@ -959,10 +1008,15 @@ export function standardSubjectsForSection(
   _board: CurriculumBoard = 'CBSE',
 ): string[] {
   const sec: SectionLike = typeof section === 'string' ? { name: section } : section
-  const group = getGradeGroup(getGrade(sec.name))
+  const grade = getGrade(sec.name)
+  const group = getGradeGroup(grade)
   switch (group) {
     case 'preK':      return STD_PREK
-    case 'primary':   return STD_PRIMARY
+    case 'primary': {
+      // I–II keep EVS; III–V split into Science + Social Science.
+      const level = parseGradeLevel(grade)
+      return (level !== null && level <= 2) ? STD_PRIMARY_JUNIOR : STD_PRIMARY_SENIOR
+    }
     case 'middle':    return STD_MIDDLE
     case 'secondary': return STD_SECONDARY
     case 'srSec':     return STD_SRSEC[resolveStream(sec)] ?? STD_SRSEC.general
