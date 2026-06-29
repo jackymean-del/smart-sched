@@ -2135,6 +2135,12 @@ export function StepBell() {
   const [morningBreak,    setMorningBreak]    = useState<boolean>(() => _saved?.morningBreak    ?? false)
   const [morningBreakPos, setMorningBreakPos] = useState<number>( () => _saved?.morningBreakPos ?? 1)   // 0 = assembly, 1 = P1, 2 = P2 …
   const [morningBreakDur, setMorningBreakDur] = useState<number>( () => _saved?.morningBreakDur ?? 15)
+  // "+ Add another break" inline picker — transient UI only, not persisted.
+  // Inserts a real break ROW directly into the grid (via insertBreak), so it
+  // shows up in the main schedule table with its own duration/delete controls.
+  const [addingBreak,  setAddingBreak]  = useState(false)
+  const [newBreakPos,  setNewBreakPos]  = useState(1)
+  const [newBreakDur,  setNewBreakDur]  = useState(10)
   const [shiftName,  setShiftName]  = useState<string>(  () => _saved?.shiftName ?? 'Main Shift')
 
   const [startTime,  setStartTime]  = useState<string>(  () => _saved?.startTime ?? (config.startTime ?? '09:00'))
@@ -3251,14 +3257,14 @@ export function StepBell() {
     setEditingTime(null)
   }
 
-  const insertBreak = (afterIndex: number, name: string) => {
+  const insertBreak = (afterIndex: number, name: string, duration?: number) => {
     const type: RowType =
       /lunch/i.test(name)             ? 'lunch'
       : /assembl/i.test(name)         ? 'assembly'
       : /dispersal|dismiss/i.test(name) ? 'dispersal'
       : 'short-break'
     const defaultDur: Record<RowType, number> = { assembly: 10, teaching: 40, 'short-break': 10, lunch: 30, dispersal: 10 }
-    const newRow: BellRow = { id: makeId(), name, type, duration: defaultDur[type], classes: [...activeClassKeys] }
+    const newRow: BellRow = { id: makeId(), name, type, duration: duration ?? defaultDur[type], classes: [...activeClassKeys] }
     setBellCustomized(true)
     setDisplayRows(prev => { const n = [...prev]; n.splice(afterIndex + 1, 0, newRow); return n })
   }
@@ -4817,6 +4823,71 @@ export function StepBell() {
                         <span style={{ fontSize: 10, color: '#B45309' }}>Typically 10–20 min</span>
                       </div>
                     )}
+
+                    {/* + Add another break — inserts an independent break row directly
+                        into the schedule grid (own duration/delete controls there),
+                        so multiple breaks (e.g. one near the start, one near the end)
+                        can coexist instead of just the single break above. */}
+                    <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px dashed #FDE68A' }}>
+                      {!addingBreak ? (
+                        <button onClick={() => setAddingBreak(true)}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'none', border: 'none', cursor: 'pointer', color: '#B45309', fontSize: 11, fontWeight: 700, fontFamily: 'inherit', padding: 0 }}>
+                          <Plus size={12} /> Add another break
+                        </button>
+                      ) : (
+                        <div style={{ background: '#fff', border: '1px solid #FDE68A', borderRadius: 8, padding: 10 }}>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: '#B45309', letterSpacing: 0.3, textTransform: 'uppercase' as const, marginBottom: 6 }}>
+                            New break — place after…
+                          </div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 5, marginBottom: 10 }}>
+                            {[
+                              { pos: 0, label: 'Assembly' },
+                              ...Array.from({ length: maxPeriods }, (_, i) => ({ pos: i + 1, label: `Period ${i + 1}` })),
+                            ].map(({ pos, label }) => {
+                              const active = newBreakPos === pos
+                              return (
+                                <button key={pos} onClick={() => setNewBreakPos(pos)}
+                                  style={{
+                                    padding: '5px 12px', borderRadius: 20,
+                                    border: active ? '2px solid #F59E0B' : '1.5px solid #E5E7EB',
+                                    background: active ? '#FEF3C7' : '#fff',
+                                    cursor: 'pointer', fontFamily: 'inherit', fontSize: 11, fontWeight: 600,
+                                    color: active ? '#92400E' : '#6B7280',
+                                  }}>
+                                  {label}
+                                </button>
+                              )
+                            })}
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                            <span style={{ fontSize: 11, color: '#92400E', fontWeight: 600 }}>Duration</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                              <button onClick={() => setNewBreakDur(d => Math.max(5, d - 5))}
+                                style={{ width: 24, height: 24, borderRadius: 6, border: '1px solid #FDE68A', background: '#fff', cursor: 'pointer', color: '#B45309', fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit' }}>−</button>
+                              <span style={{ minWidth: 42, textAlign: 'center' as const, fontSize: 13, fontWeight: 700, color: '#92400E', fontFamily: "'DM Mono', monospace" }}>{newBreakDur} min</span>
+                              <button onClick={() => setNewBreakDur(d => Math.min(60, d + 5))}
+                                style={{ width: 24, height: 24, borderRadius: 6, border: '1px solid #FDE68A', background: '#fff', cursor: 'pointer', color: '#B45309', fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit' }}>+</button>
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <button onClick={() => {
+                                const afterIndex = newBreakPos === 0
+                                  ? displayRows.findIndex(r => r.type === 'assembly')
+                                  : displayRows.findIndex(r => r.id === `p${newBreakPos}` || r.name === `Period ${newBreakPos}`)
+                                if (afterIndex >= 0) insertBreak(afterIndex, 'Break', newBreakDur)
+                                setAddingBreak(false)
+                              }}
+                              style={{ flex: 1, padding: '7px 12px', borderRadius: 7, border: 'none', background: '#F59E0B', color: '#fff', fontWeight: 700, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>
+                              Add break
+                            </button>
+                            <button onClick={() => setAddingBreak(false)}
+                              style={{ padding: '7px 12px', borderRadius: 7, border: '1px solid #E5E7EB', background: '#fff', color: '#6B7280', fontWeight: 600, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   {/* Lunch break mode chooser */}
