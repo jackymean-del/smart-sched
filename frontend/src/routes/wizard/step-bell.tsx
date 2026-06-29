@@ -4981,9 +4981,9 @@ export function StepBell() {
                       </div>
                       <div style={{ display: 'flex', gap: 7 }}>
                         {([
-                          { val: 'regular',    label: 'Regular',       sub: `${periodDur} min`, desc: 'Normal period, unaffected' },
-                          { val: 'match-lunch',label: 'Match lunch',   sub: `${lunchBreakDur} min`, desc: 'Period equals lunch duration — bells align cleanly' },
-                          { val: 'custom',     label: 'Custom',        sub: '',                 desc: 'Set your own duration' },
+                          { val: 'regular',    label: 'Regular',       sub: '', desc: 'Normal period, unaffected' },
+                          { val: 'match-lunch',label: 'Match lunch',   sub: '', desc: 'Period equals lunch duration — bells align cleanly' },
+                          { val: 'custom',     label: 'Custom',        sub: '', desc: 'Set your own duration' },
                         ] as const).map(opt => {
                           const active = concurrentMode === opt.val
                           return (
