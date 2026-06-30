@@ -1,7 +1,0 @@
-node_modules
-dist
-.vercel
-.git
-*.log
-.env
-.env.*
