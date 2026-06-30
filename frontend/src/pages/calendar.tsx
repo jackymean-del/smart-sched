@@ -176,10 +176,10 @@ export function CalendarPage() {
             <div style={{ textAlign: 'center', padding: '40px 20px' }}>
               <div style={{ fontSize: 36, marginBottom: 12 }}>📋</div>
               <p style={{ fontSize: 14, color: '#5B5A6E', fontWeight: 600, margin: '0 0 6px' }}>
-                No timetable generated yet
+                No schedule generated yet
               </p>
               <p style={{ fontSize: 13, color: '#8B87AD', margin: '0 0 18px' }}>
-                Complete the wizard to generate a timetable — it will appear here automatically.
+                Complete the wizard to generate a schedule — it will appear here automatically.
               </p>
               <a href="/dashboard" style={{
                 display: 'inline-block', padding: '8px 20px',

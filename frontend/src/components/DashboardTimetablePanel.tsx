@@ -78,7 +78,7 @@ export function DashboardTimetablePanel() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <BookOpen size={16} color="#7C6FE0" />
             <h2 style={{ fontSize: 15, fontWeight: 700, color: '#13111E', margin: 0 }}>
-              Active timetable
+              Active schedule
             </h2>
           </div>
           <a

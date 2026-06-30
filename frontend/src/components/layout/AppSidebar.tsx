@@ -29,7 +29,7 @@ interface NavItem {
 
 const NAV_PRIMARY: NavItem[] = [
   { icon: <span />, label: 'Dashboard',   href: '/dashboard' },
-  { icon: <span />, label: 'Timetable',   href: '/timetable' },
+  { icon: <span />, label: 'Schedule',    href: '/timetable' },
   { icon: <span />, label: 'Calendar',    href: '/calendar' },
   { icon: <span />, label: 'Master Data', href: '/master-data' },
   { icon: <span />, label: 'Insights',    href: '/insights' },
@@ -214,9 +214,9 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
         </div>
       )}
 
-      {/* ── New Timetable CTA ── */}
+      {/* ── New Schedule CTA ── */}
       <div style={{ padding: collapsed ? '10px 6px' : '12px 10px', flexShrink: 0 }}>
-        <a href="/dashboard?new=1" title={collapsed ? 'New Timetable' : undefined} style={{ textDecoration: 'none' }}>
+        <a href="/dashboard?new=1" title={collapsed ? 'New Schedule' : undefined} style={{ textDecoration: 'none' }}>
           <button style={{
             width: '100%', padding: collapsed ? '8px 0' : '8px 12px',
             borderRadius: 8, border: 'none',
@@ -227,7 +227,7 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
             gap: 6,
           }}>
             <Sparkles size={13} />
-            {!collapsed && 'New Timetable'}
+            {!collapsed && 'New Schedule'}
           </button>
         </a>
       </div>

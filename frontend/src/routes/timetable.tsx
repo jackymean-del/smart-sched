@@ -908,7 +908,7 @@ const InsightBanner = React.memo(function InsightBanner({ message, onClose }:{ m
     }}>
       <span style={{ fontSize:16, flexShrink:0 }}>↕️</span>
       <div style={{ flex:1, fontSize:12.5, color:"#065f46", lineHeight:1.55 }}>
-        <span style={{ fontWeight:700 }}>Timetable swapped — </span>{message}
+        <span style={{ fontWeight:700 }}>Schedule swapped — </span>{message}
       </div>
       <button onClick={onClose}
         style={{ flexShrink:0, background:"none", border:"none", cursor:"pointer",
@@ -3262,7 +3262,7 @@ export function TimetablePage() {
   const renderPrintDoc = () => {
     if (!printJob) return null
     const { type } = printJob
-    const typeLabel = type === "class" ? "Class Timetable" : type === "teacher" ? "Teacher Timetable" : "Room Timetable"
+    const typeLabel = type === "class" ? "Class Schedule" : type === "teacher" ? "Teacher Schedule" : "Room Schedule"
     const entities = type === "class" ? sections.map(s => s.name)
       : type === "teacher" ? staff.map(s => s.name)
       : allRooms
@@ -3498,7 +3498,7 @@ export function TimetablePage() {
   if (!periods.length) return (
     <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"calc(100vh - 52px)", flexDirection:"column" as const, gap:16 }}>
       <div style={{ fontSize:48 }}>📅</div>
-      <div style={{ fontSize:18, color:"#4B5275", fontFamily:"'Plus Jakarta Sans',Georgia,serif" }}>No timetable generated yet</div>
+      <div style={{ fontSize:18, color:"#4B5275", fontFamily:"'Plus Jakarta Sans',Georgia,serif" }}>No schedule generated yet</div>
       <button onClick={() => window.location.href="/wizard"} style={{ padding:"10px 24px", borderRadius:8, border:"none", background:"#7C6FE0", color:"#fff", fontSize:14, fontWeight:600, cursor:"pointer" }}>✨ Go to Wizard</button>
     </div>
   )
@@ -3703,9 +3703,9 @@ export function TimetablePage() {
                   Print / PDF
                 </div>
                 {[
-                  ["Class-wise Timetable",   ()=>triggerPrint("class","individual")],
-                  ["Teacher-wise Timetable", ()=>triggerPrint("teacher","individual")],
-                  ["Room-wise Timetable",    ()=>triggerPrint("room","individual")],
+                  ["Class-wise Schedule",   ()=>triggerPrint("class","individual")],
+                  ["Teacher-wise Schedule", ()=>triggerPrint("teacher","individual")],
+                  ["Room-wise Schedule",    ()=>triggerPrint("room","individual")],
                 ].map(([label, fn]) => (
                   <button key={label as string}
                     onClick={() => { (fn as ()=>void)(); setShowExportMenu(false) }}
@@ -3732,7 +3732,7 @@ export function TimetablePage() {
               style={{ position:"fixed" as const, inset:0, zIndex:500, background:"rgba(19,17,30,0.45)", display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
               <div onClick={e=>e.stopPropagation()}
                 style={{ width:"100%", maxWidth:460, background:"#fff", borderRadius:14, border:"1px solid #E8E4FF", boxShadow:"0 16px 48px rgba(124,111,224,0.2)", padding:24 }}>
-                <div style={{ fontSize:16, fontWeight:700, color:"#13111E", marginBottom:6 }}>🔗 Share this timetable</div>
+                <div style={{ fontSize:16, fontWeight:700, color:"#13111E", marginBottom:6 }}>🔗 Share this schedule</div>
 
                 {!shareUrl ? (
                   <>
@@ -3945,12 +3945,12 @@ export function TimetablePage() {
 
         {/* ══ Inline guide ═════════════════════════════════════════════ */}
         <div style={{ padding:"0 16px", flexShrink:0 }}>
-          <StepGuide title="Timetable View" tips={[
+          <StepGuide title="Schedule View" tips={[
             'Switch between Section, Faculty, Room and Subject tabs to see the schedule from each perspective.',
             'Toggle Faculty and Room labels on/off using the Show buttons in the toolbar.',
             'In Traditional mode, click any cell to edit or swap that period.',
             'Use the Short toggle for compact abbreviations — useful when printing.',
-            'Click Publish to lock the timetable and make it visible on the Calendar page.',
+            'Click Publish to lock the schedule and make it visible on the Calendar page.',
           ]} />
         </div>
 
@@ -4370,7 +4370,7 @@ export function TimetablePage() {
           onClick={e => { if (e.target===e.currentTarget) setPublishConfirm(false) }}>
           <div style={{ background:"#fff", borderRadius:14, padding:"28px 32px", maxWidth:420, width:"100%", boxShadow:"0 20px 60px rgba(0,0,0,0.2)", animation:"ecmSlideIn 0.18s ease" }}>
             <div style={{ fontSize:22, marginBottom:6 }}>📣</div>
-            <div style={{ fontSize:17, fontWeight:700, color:"#1e293b", marginBottom:6 }}>Publish Timetable?</div>
+            <div style={{ fontSize:17, fontWeight:700, color:"#1e293b", marginBottom:6 }}>Publish Schedule?</div>
 
             {/* Timetable summary */}
             <div style={{ background:"#FAFAFE", border:"1px solid #E8E4FF", borderRadius:8, padding:"12px 14px", marginBottom:16, fontSize:12 }}>
@@ -4391,7 +4391,7 @@ export function TimetablePage() {
             </div>
 
             <div style={{ fontSize:12, color:"#4B5275", marginBottom:20, lineHeight:1.5 }}>
-              Publishing makes this timetable the active schedule. You can still edit individual cells after publishing. This action can be reversed by regenerating.
+              Publishing makes this schedule the active one. You can still edit individual cells after publishing. This action can be reversed by regenerating.
             </div>
             <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
               <button onClick={() => setPublishConfirm(false)}
@@ -4427,5 +4427,5 @@ function SectionHeader({ name, classTeacher, meta }: { name:string; classTeacher
 }
 
 function EmptyState({ label }: { label:string }) {
-  return <div style={{ padding:40, textAlign:"center" as const, color:"#8B87AD", fontSize:13 }}>No timetable data for <strong>{label}</strong></div>
+  return <div style={{ padding:40, textAlign:"center" as const, color:"#8B87AD", fontSize:13 }}>No schedule data for <strong>{label}</strong></div>
 }

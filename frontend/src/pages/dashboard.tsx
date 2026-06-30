@@ -456,7 +456,7 @@ function CreateTimetableModal({
   const handleOpen = () => {
     const entry: TTEntry = {
       id:              Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-      name:            name.trim() || 'Untitled Timetable',
+      name:            name.trim() || 'Untitled Schedule',
       status:          'draft',
       wizardStep:      0,
       approxClasses:   classCount,
@@ -548,7 +548,7 @@ function CreateTimetableModal({
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20 }}>
           <div>
             <h2 style={{ fontSize: 17, fontWeight: 700, color: '#13111E', marginBottom: 4 }}>
-              Create new timetable
+              Create new schedule
             </h2>
             <p style={{ fontSize: 13, color: '#6B7280' }}>
               AI will generate all defaults — you only refine.
@@ -567,14 +567,14 @@ function CreateTimetableModal({
         {/* ── Timetable name ── */}
         <div style={{ marginBottom: 16 }}>
           <label style={lbl}>
-            Timetable name <span style={{ color: '#EF4444' }}>*</span>
+            Schedule name <span style={{ color: '#EF4444' }}>*</span>
           </label>
           <input
             className="ct-input"
             type="text"
             value={name}
             onChange={e => setName(e.target.value)}
-            placeholder="e.g. AY 2025–26 · Main Timetable"
+            placeholder="e.g. AY 2025–26 · Main Schedule"
           />
         </div>
 
@@ -852,7 +852,7 @@ function EditTimetableModal({
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
               <Pencil size={16} color="#7C6FE0" />
-              <h2 style={{ fontSize: 17, fontWeight: 700, color: '#13111E', margin: 0 }}>Edit timetable</h2>
+              <h2 style={{ fontSize: 17, fontWeight: 700, color: '#13111E', margin: 0 }}>Edit schedule</h2>
             </div>
             <p style={{ fontSize: 13, color: '#6B7280', margin: 0 }}>
               Update the basic setup for <strong>{tt.name}</strong>
@@ -872,10 +872,10 @@ function EditTimetableModal({
 
         {/* Name */}
         <div style={{ marginBottom: 16 }}>
-          <label style={lbl}>Timetable name <span style={{ color: '#EF4444' }}>*</span></label>
+          <label style={lbl}>Schedule name <span style={{ color: '#EF4444' }}>*</span></label>
           <input
             type="text" value={name} onChange={e => setName(e.target.value)}
-            placeholder="e.g. AY 2025–26 · Main Timetable" autoFocus
+            placeholder="e.g. AY 2025–26 · Main Schedule" autoFocus
             style={{
               width: '100%', padding: '9px 12px', border: '1px solid #D1D5DB', borderRadius: 7,
               fontSize: 14, fontFamily: 'inherit', color: '#13111E',
@@ -1271,8 +1271,8 @@ export function DashboardPage() {
     setActiveTTId(t.id)
     alert(
       `✅ "${t.name}" data has been secured.\n\n` +
-      `Your generated timetable, staff, classes and subjects are preserved.\n\n` +
-      `Please open the timetable and go through Step 2 (Bell Timing) and ` +
+      `Your generated schedule, staff, classes and subjects are preserved.\n\n` +
+      `Please open the schedule and go through Step 2 (Bell Timing) and ` +
       `Step 3 (Class-wise Breaks) to restore the correct lunch break configuration.`
     )
     // Refresh list UI
@@ -1404,7 +1404,7 @@ export function DashboardPage() {
 
   const stats = [
     {
-      label: 'Timetables',
+      label: 'Schedules',
       value: ttList.filter(t => t.status !== 'archived').length,
       sub: [activeTTs && `${activeTTs} active`, draftTTs && `${draftTTs} draft`].filter(Boolean).join(' · ') || 'None yet',
       red: false,
@@ -1500,7 +1500,7 @@ export function DashboardPage() {
         <nav style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '0 16px', flex: 1 }}>
           {([
             { key: 'dashboard',  label: 'Dashboard'  },
-            { key: 'timetables', label: 'Timetables' },
+            { key: 'timetables', label: 'Schedules'  },
             { key: 'resources',  label: 'Resources'  },
             { key: 'reports',    label: 'Reports'    },
           ] as { key: NavTab; label: string }[]).map(t => (
@@ -1732,7 +1732,7 @@ export function DashboardPage() {
                   cursor: 'pointer', fontFamily: 'inherit',
                 }}
               >
-                <Plus size={14} /> New timetable
+                <Plus size={14} /> New schedule
               </button>
             </div>
           </div>
@@ -1760,7 +1760,7 @@ export function DashboardPage() {
           {/* Timetables */}
           <div style={{ marginBottom: 24 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-              <h2 style={{ fontSize: 15, fontWeight: 700, color: '#13111E' }}>Your timetables</h2>
+              <h2 style={{ fontSize: 15, fontWeight: 700, color: '#13111E' }}>Your schedules</h2>
               <span style={{ fontSize: 12, color: '#9CA3AF' }}>{ttList.length} total</span>
             </div>
 
@@ -1770,10 +1770,10 @@ export function DashboardPage() {
                 padding: '10px 14px', marginBottom: 10, fontSize: 12.5, color: '#92400E',
               }}>
                 {syncIssue === 'auth-401'
-                  ? '⚠️ Couldn’t verify your sign-in with the server (401). Showing locally-saved timetables only — they may not be backed up yet. This usually means the backend auth key is out of date.'
+                  ? '⚠️ Couldn’t verify your sign-in with the server (401). Showing locally-saved schedules only — they may not be backed up yet. This usually means the backend auth key is out of date.'
                   : syncIssue === 'offline'
-                  ? '⚠️ Couldn’t reach the server — showing locally-saved timetables only.'
-                  : `⚠️ Server error (${syncIssue.replace('http-', '')}) — showing locally-saved timetables only.`}
+                  ? '⚠️ Couldn’t reach the server — showing locally-saved schedules only.'
+                  : `⚠️ Server error (${syncIssue.replace('http-', '')}) — showing locally-saved schedules only.`}
               </div>
             )}
 
@@ -1812,8 +1812,8 @@ export function DashboardPage() {
                   padding: '32px 16px', textAlign: 'center',
                 }}>
                   <CalendarDays size={28} color="#D1D5DB" style={{ margin: '0 auto 10px' }} />
-                  <div style={{ fontSize: 14, fontWeight: 600, color: '#6B7280', marginBottom: 4 }}>No timetables yet</div>
-                  <div style={{ fontSize: 12, color: '#9CA3AF' }}>Click "+ New timetable" to create one</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: '#6B7280', marginBottom: 4 }}>No schedules yet</div>
+                  <div style={{ fontSize: 12, color: '#9CA3AF' }}>Click "+ New schedule" to create one</div>
                 </div>
               )}
               {ttList.map(tt => {
@@ -1909,7 +1909,7 @@ export function DashboardPage() {
                     {/* Edit button — all rows */}
                     <button
                       onClick={() => setEditingTT(tt)}
-                      title="Edit timetable settings"
+                      title="Edit schedule settings"
                       style={{
                         width: 28, height: 28, borderRadius: 6, flexShrink: 0,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -1925,7 +1925,7 @@ export function DashboardPage() {
                     {/* Duplicate button — all rows */}
                     <button
                       onClick={() => handleDuplicate(tt)}
-                      title="Duplicate timetable"
+                      title="Duplicate schedule"
                       style={{
                         width: 28, height: 28, borderRadius: 6, flexShrink: 0,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -1941,7 +1941,7 @@ export function DashboardPage() {
                     {/* Delete button — all rows */}
                     <button
                       onClick={() => setConfirmDelete(confirmDelete === tt.id ? null : tt.id)}
-                      title="Delete timetable"
+                      title="Delete schedule"
                       style={{
                         width: 28, height: 28, borderRadius: 6, flexShrink: 0,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
