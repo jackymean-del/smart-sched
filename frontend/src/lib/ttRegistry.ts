@@ -72,12 +72,11 @@ const TT_SNAPSHOT_FIELDS = [
  * if the user didn't come via the dashboard's "Continue" button.
  * No-op when the store already has data (classTT non-empty).
  */
-export function loadActiveTimetableIntoStore(): void {
+export async function loadActiveTimetableIntoStore(): Promise<void> {
   const id = getActiveTimetableId()
   if (!id) return
 
-  // Avoid importing the store at module level (circular dep risk) — use dynamic import.
-  const { useTimetableStore } = require('@/store/timetableStore')
+  const { useTimetableStore } = await import('@/store/timetableStore')
   const state = useTimetableStore.getState()
 
   // Already populated — nothing to do.
