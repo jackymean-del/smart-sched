@@ -373,7 +373,7 @@ function SectionRow({ sec, onUpdate, onDelete, onScopeClick, existingStreams, in
       onMouseLeave={e => (e.currentTarget.style.background = '')}
     >
       {/* Class name + stream pill */}
-      <td style={{ ...TD, paddingLeft: indent ? 44 : undefined }}>
+      <td style={{ ...TD, paddingLeft: indent ? 72 : 52 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
           {editingName ? (
             <input ref={nameRef} value={tmpName} onChange={e => setTmpName(e.target.value)}
@@ -1327,17 +1327,17 @@ export function ClassesPanel({ sections, setSections, onScopeClick }: {
             <div style={{ fontSize: 11.5, color: '#C4C0DC' }}>Use “Bulk Create”, “+ Stream” or “+ Group” above to add classes.</div>
           </div>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+          <table style={{ width: '100%', maxWidth: 860, borderCollapse: 'collapse', tableLayout: 'fixed' }}>
             <colgroup>
               <col />
-              <col style={{ width: 110 }} />
-              <col style={{ width: 160 }} />
+              <col style={{ width: 120 }} />
+              <col style={{ width: 190 }} />
             </colgroup>
             <thead>
               <tr>
                 <th style={TH}>Class</th>
                 <th style={{ ...TH, textAlign: 'center' }}>Strength</th>
-                <th style={{ ...TH, textAlign: 'center' }}>Actions</th>
+                <th style={{ ...TH, textAlign: 'center', whiteSpace: 'nowrap' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -1404,7 +1404,7 @@ export function ClassesPanel({ sections, setSections, onScopeClick }: {
                       const gradeIds   = new Set(gradeSecs.map(s => s.id))
                       const gradeCollapsed = collapsedGrades.has(grade)
                       const gradeHdrCell: React.CSSProperties = {
-                        padding: '8px 14px 8px 28px',
+                        padding: '8px 14px 8px 36px',
                         background: 'linear-gradient(90deg, #EFEBFF 0%, #F6F3FF 60%, #FAF9FF 100%)',
                         borderBottom: '1px solid #E4DEFF',
                       }
