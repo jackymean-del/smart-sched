@@ -12,9 +12,10 @@
  * "If a user understands one table, they understand the whole platform."
  */
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useTimetableStore } from '@/store/timetableStore'
 import { useAuthStore } from '@/store/authStore'
+import { loadActiveTimetableIntoStore, saveActiveTimetableSnapshot } from '@/lib/ttRegistry'
 import type { Subject, Section, Staff, SectionStrength, ScopeMatrix } from '@/types'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { ExportControls } from '@/components/ExportControls'
@@ -83,6 +84,21 @@ export function MasterDataPage() {
       })))
     }
   }, [rooms])
+
+  // ── Per-timetable resources ────────────────────────────────────
+  // Resources (classes, subjects, teachers, rooms, strengths) are scoped to the
+  // ACTIVE timetable, not shared globally. On mount we hydrate this timetable's
+  // saved resources; on every edit we autosave them back to that timetable's
+  // snapshot so switching timetables never mixes one school's data with another.
+  useEffect(() => { loadActiveTimetableIntoStore() }, [])
+
+  const skipFirstSave = useRef(false)
+  useEffect(() => {
+    // Skip the initial render (post-hydration) — only persist real edits.
+    if (!skipFirstSave.current) { skipFirstSave.current = true; return }
+    const t = setTimeout(() => saveActiveTimetableSnapshot(), 600)
+    return () => clearTimeout(t)
+  }, [sections, staff, subjects, storedRooms, sectionStrengths])
 
   // Auth gate
   if (!user) { window.location.href = '/login'; return null }

@@ -11,6 +11,7 @@
 import { useAuthStore } from '@/store/authStore'
 import { useTimetableStore } from '@/store/timetableStore'
 import { timetableApi } from '@/api/client'
+import { saveTimetableSnapshot } from '@/api/timetables'
 import { CLERK_ENABLED } from '@/lib/clerk'
 
 const TTLIST_KEY = 'schedu-tt-list'
@@ -65,11 +66,17 @@ export function markActiveTimetableUnpublished(): void {
 }
 
 const TT_SNAPSHOT_PFX = 'schedu-tt-snap-'
+// Must mirror dashboard.tsx's TT_SNAPSHOT_FIELDS so load/save here round-trip
+// the SAME data the dashboard persists — including resources (sections, staff,
+// subjects, rooms, strengths) and the elective-grouping data. Missing any field
+// here means it silently won't survive a per-timetable save/restore.
 const TT_SNAPSHOT_FIELDS = [
   'step','config','sections','staff','subjects','breaks','periods',
   'classTT','teacherTT','substitutions','conflicts','suggestions',
   'optionalConfigs','subjectPools','participantPools','rooms',
   'facilities','teacherPools',
+  'subjectGroups','subjectCombinations','dynamicLearningGroups',
+  'sectionStrengths','subjectGroupingRules','subjectAllocations',
 ]
 
 /**
@@ -106,4 +113,31 @@ export function loadActiveTimetableIntoStore(): void {
       ;(state as any)[setter](snap![field])
     }
   })
+}
+
+/**
+ * Persist the CURRENT store state as the active timetable's snapshot, scoped to
+ * that timetable (and this user). Lets pages outside the dashboard — notably
+ * Master Data — save resource edits PER TIMETABLE instead of leaking them into
+ * the single global persisted store. No-op when there's no active timetable.
+ *
+ * Writes the same per-user namespaced key loadActiveTimetableIntoStore() reads
+ * first, and best-effort mirrors to the server when Clerk auth is on.
+ */
+export function saveActiveTimetableSnapshot(): void {
+  const id = getActiveTimetableId()
+  if (!id) return
+
+  const state = useTimetableStore.getState() as unknown as Record<string, unknown>
+  const snap: Record<string, unknown> = {}
+  TT_SNAPSHOT_FIELDS.forEach(f => { snap[f] = state[f] })
+
+  const uid = useAuthStore.getState().user?.id ?? ''
+  try {
+    localStorage.setItem(`${TT_SNAPSHOT_PFX}${uid}:${id}`, JSON.stringify(snap))
+  } catch { /* quota full — silently ignore */ }
+
+  if (CLERK_ENABLED) {
+    saveTimetableSnapshot(id, snap).catch(() => { /* offline / transient */ })
+  }
 }
