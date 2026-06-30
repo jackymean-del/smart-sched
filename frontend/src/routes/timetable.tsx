@@ -9,6 +9,7 @@ import { shiftPeriod, rebuildTeacherTT } from "@/lib/aiEngine"
 import { useExport } from "@/hooks/useExport"
 import { buildShareSnapshot, createShareLink } from "@/lib/share"
 import type { Period } from "@/types"
+import { StepGuide } from "@/components/StepGuide"
 
 type ViewMode = "class" | "teacher" | "subject" | "room"
 
@@ -3928,6 +3929,17 @@ export function TimetablePage() {
             </button>
           </div>
         )}
+
+        {/* ══ Inline guide ═════════════════════════════════════════════ */}
+        <div style={{ padding:"0 16px", flexShrink:0 }}>
+          <StepGuide title="Timetable View" tips={[
+            'Switch between Section, Faculty, Room and Subject tabs to see the schedule from each perspective.',
+            'Toggle Faculty and Room labels on/off using the Show buttons in the toolbar.',
+            'In Traditional mode, click any cell to edit or swap that period.',
+            'Use the Short toggle for compact abbreviations — useful when printing.',
+            'Click Publish to lock the timetable and make it visible on the Calendar page.',
+          ]} />
+        </div>
 
         {/* ══ Content area ═════════════════════════════════════════════ */}
         <div style={{ flex:1, overflow:"hidden", display:"flex", flexDirection:"column" as const, position:"relative" as const }}

@@ -28,6 +28,7 @@ import {
 import {
   GraduationCap, BookOpen, Users, Building2, Grid3x3, Sparkles,
 } from 'lucide-react'
+import { StepGuide } from '@/components/StepGuide'
 
 type Tab = 'classes' | 'subjects' | 'teachers' | 'rooms' | 'strengths'
 
@@ -161,6 +162,48 @@ export function MasterDataPage() {
             )
           })}
         </div>
+
+        {/* Inline guide — content varies per tab */}
+        {tab === 'classes' && (
+          <StepGuide title="Classes & Sections" tips={[
+            'Each row is one section (e.g., Class I-A). Add as many sections as your school has.',
+            'The Grade column helps the AI assign age-appropriate subjects automatically.',
+            'Use the Scope button (⊞) to restrict a class to certain days or periods.',
+            'Paste directly from a spreadsheet using the Paste button in the toolbar.',
+          ]} />
+        )}
+        {tab === 'subjects' && (
+          <StepGuide title="Subjects" tips={[
+            'Periods/Week sets how many times per week this subject runs for each assigned section.',
+            'Short Name is displayed in the timetable grid — keep it 2–4 characters (e.g., MATH, ENG).',
+            'Category groups subjects for reporting and AI balancing (Core, Activity, Language…).',
+            'Use the Scope button to restrict a subject to specific days or time slots.',
+          ]} />
+        )}
+        {tab === 'teachers' && (
+          <StepGuide title="Teachers" tips={[
+            'The Subjects column lists which subjects this teacher can teach — comma-separated.',
+            'Max Periods/Week is the safe workload cap. The AI will never assign more than this.',
+            'Use the Scope button to mark a teacher\'s unavailable slots (e.g., part-time schedules).',
+            'If a subject has no available teacher within the cap, you\'ll see a staffing alert in the wizard.',
+          ]} />
+        )}
+        {tab === 'rooms' && (
+          <StepGuide title="Rooms" tips={[
+            'Lab rooms (Computer Lab, Science Lab, etc.) are auto-matched to lab subjects by the AI.',
+            'Capacity helps the AI avoid over-assigning a room beyond what it can seat.',
+            'Use the Scope button to restrict a room to certain days or periods (e.g., shared hall).',
+            'You don\'t need a room per section — one room can be shared across multiple classes.',
+          ]} />
+        )}
+        {tab === 'strengths' && (
+          <StepGuide title="Section Strengths" tips={[
+            'Enter student counts per subject per section — only needed when subjects are optional or streamed.',
+            'Leave at 0 for subjects that are mandatory for all students in that section.',
+            'Non-zero values let the AI detect elective groups and size teacher pools accurately.',
+            'The Total column is auto-summed but can be overridden if your section size differs.',
+          ]} />
+        )}
 
         {/* Tab content */}
         {tab === 'classes'   && <ClassesGrid  sections={sections}  setSections={setSections}  staff={staff} onScope={(s) => setScopeTarget({ kind: 'Section', entity: s })} onBulkScope={() => setScopeTarget({ kind: 'BulkSection', entity: { id: '__bulk__', name: 'All Classes' } })} />}
