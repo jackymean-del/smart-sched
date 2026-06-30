@@ -17,6 +17,7 @@ import * as ttRepo from '@/api/timetables'
 import { BrandedLoader } from '@/components/BrandedLoader'
 import { useOrgProfile } from '@/store/orgProfile'
 import { parseGradeLevel, toRoman, tidyGradeLabel } from '@/lib/gradeParse'
+import { GradeInput } from '@/components/GradeInput'
 import { AppFooter } from '@/components/AppFooter'
 import { ExportControls } from '@/components/ExportControls'
 import type { ExportSheet } from '@/lib/exportData'
@@ -629,28 +630,9 @@ function CreateTimetableModal({
         <div style={{ marginBottom: 6 }}>
           <label style={lbl}>Class range <span style={{ color: '#EF4444' }}>*</span></label>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <input
-              className="ct-input"
-              list="schedu-grade-suggestions"
-              value={fromGrade}
-              onChange={e => setFromGrade(e.target.value)}
-              onBlur={e => setFromGrade(tidyGradeLabel(e.target.value))}
-              placeholder="From — e.g. Class-I"
-            />
-            <input
-              className="ct-input"
-              list="schedu-grade-suggestions"
-              value={toGrade}
-              onChange={e => setToGrade(e.target.value)}
-              onBlur={e => setToGrade(tidyGradeLabel(e.target.value))}
-              placeholder="To — e.g. Class-X"
-            />
+            <GradeInput className="ct-input" value={fromGrade} onChange={setFromGrade} placeholder="From — e.g. Class-I" />
+            <GradeInput className="ct-input" value={toGrade}   onChange={setToGrade}   placeholder="To — e.g. Class-X" />
           </div>
-          <datalist id="schedu-grade-suggestions">
-            {['Nursery', 'LKG', 'UKG', ...Array.from({ length: 12 }, (_, i) => `Class-${toRoman(i + 1)}`)].map(g => (
-              <option key={g} value={g} />
-            ))}
-          </datalist>
           <p style={{ fontSize: 12, color: '#6B7280', marginTop: 6 }}>
             Type your own naming — “Class-I”, “Grade 1”, “KG1”, “PP2”, “Nursery”, “Form 1”, “Year 7”. schedU adapts to your convention, tidies the spacing, and groups the levels automatically.
           </p>
@@ -943,24 +925,15 @@ function EditTimetableModal({
           <label style={lbl}>Class range <span style={{ color: '#EF4444' }}>*</span></label>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             {([
-              { label: 'From', val: fromGrade, set: setFromGrade },
-              { label: 'To',   val: toGrade,   set: setToGrade   },
+              { label: 'From', val: fromGrade, set: setFromGrade, ph: 'e.g. Nursery' },
+              { label: 'To',   val: toGrade,   set: setToGrade,   ph: 'e.g. Class XII' },
             ] as const).map(f => (
               <div key={f.label}>
                 <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 4 }}>{f.label}</div>
-                <input
-                  list="schedu-grade-options"
-                  value={f.val}
-                  onChange={e => f.set(e.target.value)}
-                  style={selectStyle}
-                  placeholder={f.label === 'From' ? 'e.g. Nursery' : 'e.g. Class XII'}
-                />
+                <GradeInput value={f.val} onChange={f.set} style={selectStyle} placeholder={f.ph} />
               </div>
             ))}
           </div>
-          <datalist id="schedu-grade-options">
-            {GRADES.map(g => <option key={g} value={g} />)}
-          </datalist>
           {(!fromGrade || !toGrade) && (
             <p style={{ fontSize: 11.5, color: '#F59E0B', marginTop: 6, fontWeight: 500 }}>
               ⚠ Please set both grade boundaries.
