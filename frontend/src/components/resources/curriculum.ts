@@ -239,7 +239,6 @@ export const SHORT_MAP: Record<string, string> = {
   'Physical Education':       'PE',
   'Art & Craft':              'ART',
   'Fine Arts':                'FINE ART',
-  'Drawing':                  'DRW',
   'Music':                    'MUS',
   'Dance':                    'DANCE',
   'Library':                  'LIB',
@@ -393,12 +392,6 @@ export const CURRICULUM: Record<string, SubjectRule> = {
     isActivity: true,
     slots: { middle: 1, secondary: 1 },
     hint: 'Co-curricular — typically introduced from middle school (VI), not earlier primary grades',
-  },
-  'Drawing': {
-    grades: ['primary','middle','secondary'],
-    isActivity: true,
-    slots: { primary: 2, middle: 1, secondary: 1 },
-    hint: 'Technical / fine arts drawing — primary through Class X',
   },
   'SUPW / Life Skills': {
     grades: ['middle','secondary'],

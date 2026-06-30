@@ -185,7 +185,7 @@ function assignRoomSubjects(rooms: RoomExt[], subjects: Subject[]): RoomExt[] {
     .filter(s => ['Computer Science', 'Informatics Practices', 'Information Technology', 'Artificial Intelligence'].includes(s.name))
     .map(s => s.name)
   const libSubjects = subjects.filter(s => s.name === 'Library').map(s => s.name)
-  const artSubjects = subjects.filter(s => ['Art & Craft', 'Drawing', 'Fine Arts'].includes(s.name)).map(s => s.name)
+  const artSubjects = subjects.filter(s => ['Art & Craft', 'Fine Arts'].includes(s.name)).map(s => s.name)
   const musicSubjects = subjects.filter(s => ['Music', 'Dance'].includes(s.name)).map(s => s.name)
   const peSubjects = subjects.filter(s => ['Physical Education', 'Yoga & Health', 'Scout & Guide'].includes(s.name)).map(s => s.name)
 
