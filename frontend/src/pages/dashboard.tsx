@@ -20,6 +20,7 @@ import { parseGradeLevel, toRoman, tidyGradeLabel } from '@/lib/gradeParse'
 import { GradeInput } from '@/components/GradeInput'
 import { AppFooter } from '@/components/AppFooter'
 import { ExportControls } from '@/components/ExportControls'
+import { DashboardTimetablePanel } from '@/components/DashboardTimetablePanel'
 import type { ExportSheet } from '@/lib/exportData'
 import {
   Home, CalendarDays, Calendar, BarChart2,
@@ -1965,6 +1966,11 @@ export function DashboardPage() {
               })}
             </div>
           </div>
+
+          {/* Active timetable — inline read-only view (Section/Faculty/Subject/
+              Room filters + faculty/room toggles). Renders only when an active
+              timetable with data exists. */}
+          <DashboardTimetablePanel />
 
           {/* Quick actions */}
           <div>
