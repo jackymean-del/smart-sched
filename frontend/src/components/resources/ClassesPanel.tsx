@@ -1329,9 +1329,9 @@ export function ClassesPanel({ sections, setSections, onScopeClick }: {
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
             <colgroup>
-              <col />
-              <col style={{ width: 120 }} />
-              <col style={{ width: 190 }} />
+              <col style={{ width: '60%' }} />
+              <col style={{ width: '10%' }} />
+              <col style={{ width: '30%' }} />
             </colgroup>
             <thead>
               <tr>
