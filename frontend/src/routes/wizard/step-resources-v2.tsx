@@ -450,17 +450,62 @@ export function StepResourcesV2() {
     const maxPeriods = boardPeriods[board] ?? 28
     setAiStatus('Assigning teacher workloads & subjects…')
     await sleep(480)
-    // Apply the board-standard cap BEFORE assigning, so pickTeacher's hard cap
-    // (and any staffing-gap calculation) reflects the cap teachers will
-    // actually have — not a stale/default value overwritten afterwards.
-    const cappedStaff = (staff as any[]).map(t => ({ ...t, maxPeriodsPerWeek: maxPeriods }))
-    const result = runAIAssignment(subjects, sections, cappedStaff, rooms, board)
+
+    // Pass 1 — assign with existing teachers (capped to board standard)
+    let workingStaff: any[] = (staff as any[]).map(t => ({ ...t, maxPeriodsPerWeek: maxPeriods }))
+    let result = runAIAssignment(subjects, sections, workingStaff, rooms, board)
+
+    // Pass 2 — for every gap, synthesize exactly the needed teachers and
+    // directly pre-assign the unmet classes to them.  We do NOT re-run the
+    // full engine here: doing so would reset all load tracking from scratch,
+    // letting the new (empty) teachers be grabbed by high-priority core subjects
+    // first — the gap subjects would lose again.  Instead we preserve the
+    // pass-1 assignments and inject the gap teachers on top.
+    if (result.staffingGaps.length > 0) {
+      setAiStatus('Creating additional teachers for uncovered subjects…')
+      await sleep(300)
+
+      const newTeachers: any[] = []
+      const ts = Date.now()
+
+      for (const gap of result.staffingGaps) {
+        const count = gap.suggestedExtraTeachers
+        const shortBase = gap.subject.replace(/[^A-Za-z0-9]/g, '').slice(0, 5).toUpperCase()
+        const chunkSize = Math.ceil(gap.classes.length / count)
+
+        for (let i = 0; i < count; i++) {
+          const assignedClasses = gap.classes.slice(i * chunkSize, (i + 1) * chunkSize)
+          if (!assignedClasses.length) continue
+          const n = i + 1
+          newTeachers.push({
+            id: `ai-gen-${gap.subject.replace(/\s+/g, '-').toLowerCase()}-${n}-${ts + i}`,
+            name: `${gap.subject} Teacher ${n}`,
+            shortName: `${shortBase}${n}`,
+            role: 'Teacher',
+            subjects: [gap.subject],
+            classes: assignedClasses,
+            isClassTeacher: '',
+            maxPeriodsPerWeek: maxPeriods,
+            subjectMappings: [{ subject: gap.subject, classes: assignedClasses }],
+          })
+        }
+      }
+
+      // Merge: pass-1 assignments intact + new gap teachers pre-assigned
+      result = { ...result, staff: [...result.staff, ...newTeachers], staffingGaps: [] }
+    }
+
+    const newCount = result.staff.length - (staff as any[]).length
     setStaff(result.staff)
     setStaffingGaps(result.staffingGaps)
-    setAiStatus('✓ Faculty assignments updated')
+    setAiStatus(
+      newCount > 0
+        ? `✓ All classes assigned · ${newCount} teacher${newCount !== 1 ? 's' : ''} auto-created`
+        : '✓ Faculty assignments updated'
+    )
     setAiLoading(false)
     setFacultyAiApplied(true)
-    setTimeout(() => { setAiStatus(''); setFacultyAiApplied(false) }, 3500)
+    setTimeout(() => { setAiStatus(''); setFacultyAiApplied(false) }, 4500)
   }
 
   async function handleRoomsAIAssign() {
