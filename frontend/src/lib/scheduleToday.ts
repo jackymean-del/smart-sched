@@ -17,8 +17,12 @@ export interface TodayPeriodRow {
   uncovered: number   // count of sections needing a sub in this period slot
 }
 
-export interface UncoveredSlot {
-  teacher: string; section: string; periodId: string; periodName: string
+/** A (teacher, section, period) slot affected by a leave — with enough detail
+ *  (subject, class, time) to act on without opening the full editor. */
+export interface AffectedSlot {
+  teacher: string; section: string; subject: string
+  periodId: string; periodName: string; startMin: number; endMin: number
+  coveredBy?: string   // set once a substitute is arranged
 }
 
 export interface TodaySummary {
@@ -27,7 +31,8 @@ export interface TodaySummary {
   periodRows: TodayPeriodRow[]
   periodsToday: number          // non-break period slots today
   teachersOnLeave: string[]
-  uncoveredSlots: UncoveredSlot[]
+  uncoveredSlots: AffectedSlot[]
+  coveredSlots: AffectedSlot[]
   conflicts: number
 }
 
@@ -45,7 +50,19 @@ export function computeTodaySummary(params: {
   const teachersOnLeave = teachersOnLeaveOn(leaves, isoDate)
   const onLeaveSet = new Set(teachersOnLeave)
 
-  const uncoveredSlots: UncoveredSlot[] = []
+  // Period → wall-clock minutes, computed first so affected slots carry a
+  // real time (not just a period id) — needed to sort/display them usefully.
+  const [sh = 9, sm = 0] = (config?.startTime ?? '09:00').split(':').map(Number)
+  const periodTimes: Record<string, { startMin: number; endMin: number }> = {}
+  let mins = sh * 60 + sm
+  for (const p of periods) {
+    const startMin = mins, endMin = mins + (p.duration ?? 45)
+    periodTimes[p.id] = { startMin, endMin }
+    mins = endMin
+  }
+
+  const uncoveredSlots: AffectedSlot[] = []
+  const coveredSlots: AffectedSlot[] = []
   const uncoveredByPeriod: Record<string, number> = {}
 
   if (isWorkDay) {
@@ -54,21 +71,29 @@ export function computeTodaySummary(params: {
       for (const p of periods) {
         const c = sd[p.id]
         if (!c?.subject || !c.teacher || !onLeaveSet.has(c.teacher)) continue
-        const covered = substitutions[`${s.name}|${dayKey}|${p.id}`]
-        if (covered) continue
-        uncoveredSlots.push({ teacher: c.teacher, section: s.name, periodId: p.id, periodName: p.name ?? p.id })
-        uncoveredByPeriod[p.id] = (uncoveredByPeriod[p.id] ?? 0) + 1
+        const t = periodTimes[p.id] ?? { startMin: 0, endMin: 0 }
+        const coveredBy = substitutions[`${s.name}|${dayKey}|${p.id}`]
+        const slot: AffectedSlot = {
+          teacher: c.teacher, section: s.name, subject: c.subject,
+          periodId: p.id, periodName: p.name ?? p.id,
+          startMin: t.startMin, endMin: t.endMin, coveredBy,
+        }
+        if (coveredBy) {
+          coveredSlots.push(slot)
+        } else {
+          uncoveredSlots.push(slot)
+          uncoveredByPeriod[p.id] = (uncoveredByPeriod[p.id] ?? 0) + 1
+        }
       }
     }
+    uncoveredSlots.sort((a, b) => a.startMin - b.startMin)
+    coveredSlots.sort((a, b) => a.startMin - b.startMin)
   }
 
-  const [sh = 9, sm = 0] = (config?.startTime ?? '09:00').split(':').map(Number)
-  let mins = sh * 60 + sm
   const periodRows: TodayPeriodRow[] = periods.map((p: any) => {
-    const startMin = mins, endMin = mins + (p.duration ?? 45)
-    mins = endMin
+    const t = periodTimes[p.id] ?? { startMin: mins, endMin: mins }
     return {
-      id: p.id, name: p.name ?? p.id, startMin, endMin,
+      id: p.id, name: p.name ?? p.id, startMin: t.startMin, endMin: t.endMin,
       isBreak: p.type === 'break', uncovered: uncoveredByPeriod[p.id] ?? 0,
     }
   })
@@ -76,7 +101,7 @@ export function computeTodaySummary(params: {
   return {
     dayKey, isWorkDay, periodRows,
     periodsToday: isWorkDay ? periodRows.filter(r => !r.isBreak).length : 0,
-    teachersOnLeave, uncoveredSlots, conflicts,
+    teachersOnLeave, uncoveredSlots, coveredSlots, conflicts,
   }
 }
 
